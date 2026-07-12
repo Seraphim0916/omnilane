@@ -76,11 +76,9 @@ flowchart LR
 | 🚰 coding-overflow | Grok 4.5 | — (off) | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
-The **backup** is the next candidate in the lane's `routing.yaml` chain —
-what dispatch falls back to when the first-choice vendor CLI is not installed.
-
-Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
-next candidate or `off`.
+The **backup** is the next candidate in the lane's `routing.yaml` chain — what
+dispatch falls back to when the first-choice vendor CLI is not installed. Every
+lane is such a chain; when nothing in it is installed the lane degrades to `off`.
 
 > **Where is Claude Fable 5?** Deliberately not in the defaults: the top
 > Claude tier is usually the *main loop itself*, not a dispatched worker, and
@@ -176,8 +174,9 @@ gate via the `exec` vendor:
 `OUTPUT_FILE` (see `scripts/runners/run-exec.sh`).
 
 Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
-`4` no vendor CLI available in the chain, `86` nested dispatch refused,
-`87` lock timeout; otherwise the worker's own exit code passes through.
+`4` no vendor CLI available in the chain, `5` too few successful Round 1
+voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
+lock timeout; otherwise the worker's own exit code passes through.
 
 ## 🎭 Modes
 
