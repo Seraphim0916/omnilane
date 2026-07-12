@@ -1,8 +1,21 @@
+<div align="center">
+
 # omnilane
 
-[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+**One routing table, every harness.**
 
-[繁體中文](README.zh-TW.md)
+Route every subtask to the best model across<br/>
+**Claude Code · Codex · Grok Build · Antigravity** — on your existing subscriptions.
+
+[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
+[![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)
+
+**English** · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
+</div>
+
+---
 
 One routing table, every harness. omnilane lets the main loop of **any** agentic
 CLI — Claude Code, OpenAI Codex, Grok Build, Google Antigravity — classify

@@ -1,0 +1,152 @@
+<div align="center">
+
+# omnilane
+
+**ルーティングテーブルは一枚、ハーネスは全部。**
+
+あらゆるサブタスクを最適なモデルへ自動振り分け——<br/>
+**Claude Code · Codex · Grok Build · Antigravity**、既存のサブスクリプションのままで。
+
+[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
+[![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)
+
+[English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · **日本語** · [한국어](README.ko.md)
+
+</div>
+
+---
+
+omnilane は、**どの** agentic CLI——Claude Code、OpenAI Codex、Grok Build、
+Google Antigravity——のメインループでも、サブタスクをレーン(lane)に分類し、
+各レーンをその作業が最も得意なベンダー CLI へ自動ディスパッチさせる仕組みです。
+既存のサブスクリプションログインをそのまま使います。
+
+```
+                ┌────────────── routing.yaml(一枚のテーブル)────────┐
+ メインループ ─┤ hardest-coding → Codex Sol      taste-final → Claude │
+ (任意の CLI)  │ bulk-mechanical → Codex Terra   long-context → Gemini│
+                │ triage → Codex Luna             live-search → Grok   │
+                └────────────── scripts/dispatch.sh ───────────────────┘
+```
+
+## 仕組み
+
+- **`routing.yaml`** — レーン → ベンダー+モデル+推論エフォート。
+  一つのファイルを四つのハーネスが共有します。
+- **フォールバックチェーン** — レーンには複数の候補を並べられます
+  (`codex … | claude … | off`)。実際にインストールされている最初のベンダー
+  CLI が選ばれるため、一〜二社の契約でも同じテーブルが機能します。
+- **`scripts/dispatch.sh <レーン> "<タスク>"`** — テーブルを解決し、
+  該当ベンダーの CLI をヘッドレスで起動します。
+- **`skills/omnilane/SKILL.md`** — 四つのハーネス共通のスキル:
+  自分のモデルを特定し、自分のレーンは自前で実行、残りはディスパッチ。
+
+## レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
+
+| レーン | 第一候補 | 用途 |
+|---|---|---|
+| hardest-coding | GPT-5.6 Sol (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
+| bulk-mechanical | GPT-5.6 Terra (max) | リファクタ、移行、テスト、大規模スイープ |
+| triage | GPT-5.6 Luna (medium) | 大量の一次スクリーニング |
+| hard-judgment | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
+| taste-final | Claude Opus 4.8 | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
+| ui-draft | GPT-5.6 Sol (xhigh) | デザインシステム/参考画像がある場合の UI ドラフト |
+| long-context | Gemini 3.1 Pro (High) | 100 万トークン級の長文統合——分析専用、agentic ループ禁止 |
+| fast-agentic | Gemini 3.5 Flash (High) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| live-search | Grok 4.5 | リアルタイム X/ウェブ検索とソーシャル文脈 |
+| coding-overflow | Grok 4.5 | Codex クォータ逼迫時の中級コーディング逃し弁 |
+| arbitrate | (デフォルト無効) | マルチモデル相互レビューゲート——自前のものを接続 |
+
+## インストール
+
+前提:ルーティングしたいベンダー CLI(`codex`、`claude`、`grok`、`agy`)が
+ログイン済みで `PATH` 上にあること——**持っている分だけで OK**、
+足りないレーンは自動的に降格します。
+
+最速:`./install.sh` — 本機の CLI を検出してスキルを接続し、残りのプラグイン
+コマンドを表示、実効ルーティングを出力し、最後に対話式設定メニューを
+提案します(`--uninstall` で元に戻せます)。手動接続:
+
+- **Claude Code**:プラグインとしてインストール(`/route`、`/route-jobs`
+  コマンド付き)、または `skills/omnilane` を `~/.claude/skills/` へ。
+- **Codex**:`skills/omnilane` を `~/.codex/skills/` へ配置/リンク。
+- **Grok Build**:`grok plugin install <このリポジトリ> --trust`
+- **Antigravity**:`agy plugin install <このリポジトリ>`(先に
+  `agy plugin validate` で確認)
+
+## カスタマイズ
+
+三層、すべて任意:
+
+1. **対話メニュー** — `scripts/configure.sh` が全レーンを表示し、レーンごとに
+   ベンダー → モデル → エフォートを選択(候補リスト+自由入力)、結果を
+   `~/.omnilane/routing.local.yaml` に書き込みます。
+2. **`~/.omnilane/routing.local.yaml`** — 手書きのオーバーライド。
+   書式は `routing.yaml` と同じで、ローカルが優先。
+3. **`~/.omnilane/local.sh`** — マシン固有のバイナリパス、プロキシ、認証
+   ラッパー。全ランナーが読み込み、コミットされません。
+
+確認はいつでも:
+
+```
+scripts/dispatch.sh --list     # 実効テーブル(フォールバック解決を注記)
+```
+
+## コマンドリファレンス
+
+```
+dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+            [--model M] [--effort E] LANE "TASK"   # "-" で stdin から読む
+dispatch.sh --list
+jobs.sh list | status ID | result ID
+configure.sh                                        # 対話式レーンメニュー
+```
+
+終了コード:`2` 使い方エラー、`3` レーン無効(off)、`4` チェーン内に利用可能な
+CLI なし、`86` ネストディスパッチ拒否、`87` ロック待ちタイムアウト。
+それ以外はワーカー自身の終了コードを透過。
+
+## モード
+
+- **advise(デフォルト)** — 読み取り専用ワーカー。Codex は read-only
+  サンドボックス、Claude は Read/Glob/Grep のみ、Grok は plan モード。
+- **work** — 指定した `--workdir` 内でのみファイル編集可。Codex は
+  workspace-write、Claude は編集自動承認、Gemini は accept-edits モード。
+
+## 安全機構
+
+- **ネストディスパッチ禁止** — ワーカーの再ディスパッチを拒否
+  (`OMNILANE_DEPTH` ガード、終了コード 86)。
+- **Codex 直列化ロック** — 同一ターゲットディレクトリへの codex
+  ディスパッチはキューイング。クラッシュ残留ロックは所有者 PID で検出し
+  安全に奪取。
+- **ウォッチドッグ** — 全ワーカーは `timeout`/`gtimeout`、どちらも無ければ
+  perl-alarm フォールバック下で実行(素の macOS がこのケース)。
+- **バックグラウンドジョブ** — `--background` ワーカーは独立した process
+  group で動き、呼び出し元の終了後も生存。kill された場合は終了コードを
+  記録し、`jobs.sh status` が `dead` を報告。
+- **ペイロード上限** — 巨大なタスクテキストは自動で頭尾トランケート。
+
+## デフォルト値と出典
+
+デフォルトのレーン割当は Artificial Analysis の 2026-07 スナップショット
+(AA サイトの生レコードと各社公式価格ページで照合済み)と公開の比較レビューに
+基づきます。これは意見であって法則ではありません——設定メニューと
+`routing.local.yaml` はそのためにあります。
+
+## 既知の制限
+
+- **Antigravity の print モードにおけるツール呼び出しは現行 CLI ビルドで
+  不安定**(拒否または invalid-argument)。long-context レーンの本来の用途
+  (本文をタスクに貼り込む長文統合)には影響しません。
+- **Grok に推論エフォートのつまみはありません**。effort 欄はインターフェース
+  互換のためだけに存在し、無視されます。
+- Codex の work モードは非 git ディレクトリで一度ハングしました。
+  原因判明まで git 作業ディレクトリ(通常のケース)で使ってください。
+
+## ステータス
+
+初期段階ですがレビュー済み:shell コアは外部モデルレビュー(11 件の指摘を
+全修正)と敵対的検証を通過。Grok/Antigravity のコマンドシェル挙動は CLI の
+バージョンで変わる可能性があります。issue と PR を歓迎します。

@@ -1,8 +1,21 @@
+<div align="center">
+
 # omnilane
 
-[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+**一張路由表,四個執行框架通用。**
 
-[English](README.md)
+把每個子任務自動派給最強的模型——<br/>
+**Claude Code · Codex · Grok Build · Antigravity**,直接用你既有的訂閱。
+
+[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+[![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
+[![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)
+
+[English](README.md) · **繁體中文** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
+</div>
+
+---
 
 一張路由表,四個執行框架通用。omnilane 讓**任何**一個 agentic CLI——Claude Code、
 OpenAI Codex、Grok Build、Google Antigravity——的主迴圈把子任務分類到通道(lane),
