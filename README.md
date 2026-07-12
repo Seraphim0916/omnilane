@@ -69,7 +69,14 @@ rest of the table degrades automatically.
 
 Quickest: `./install.sh` — symlinks the skill for the CLIs it finds, prints
 the plugin commands for the rest, shows your effective routing, and offers the
-interactive lane configurator (`--uninstall` reverses it). Manual wiring:
+interactive lane configurator (`--uninstall` reverses it). The installer
+speaks English, 繁體中文, 简体中文, 日本語 and 한국어 (auto-detected from
+your locale; force with `OMNILANE_LANG=zh-TW` etc.). It also offers an
+optional per-CLI **routing reminder**: a marked, reversible block appended to
+each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
+`~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
+versions) so the main loop remembers to consult the table; non-interactive
+installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.

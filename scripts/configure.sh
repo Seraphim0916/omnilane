@@ -5,6 +5,7 @@ set -euo pipefail
 # by hand for scripted/non-interactive setups.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/i18n.sh"
 
 LOCAL_FILE="$OMNILANE_HOME/routing.local.yaml"
 
@@ -21,19 +22,19 @@ pick() { # title, options... -> prints the chosen value
   local opts=("$@") i choice
   echo "$title" >&2
   for i in "${!opts[@]}"; do printf '  %d) %s\n' "$((i + 1))" "${opts[$i]}" >&2; done
-  printf '  c) custom (type your own)\n' >&2
+  printf '%s\n' "$(msg cfg_custom)" >&2
   while true; do
     read -rp "> " choice || choice=""
-    [[ -z "$choice" ]] && { echo "aborted" >&2; exit 1; }
+    [[ -z "$choice" ]] && { echo "$(msg cfg_aborted)" >&2; exit 1; }
     if [[ "$choice" == "c" ]]; then
-      read -rp "custom value: " choice || choice=""
+      read -rp "$(msg cfg_custom_value)" choice || choice=""
       [[ -n "$choice" ]] && { printf '%s' "$choice"; return; }
       continue
     fi
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#opts[@]} )); then
       printf '%s' "${opts[$((choice - 1))]}"; return
     fi
-    echo "pick 1-${#opts[@]} or c" >&2
+    echo "$(msgf cfg_pick_or_c "${#opts[@]}")" >&2
   done
 }
 
@@ -42,21 +43,21 @@ while IFS= read -r line; do
   [[ "$line" =~ ^([a-z][a-z0-9-]*): ]] && LANES+=("${BASH_REMATCH[1]}")
 done < "$OMNILANE_REPO/routing.yaml"
 
-echo "omnilane lane configurator — current effective routing:"
+echo "$(msg cfg_title)"
 bash "$OMNILANE_REPO/scripts/dispatch.sh" --list
 echo
 
 OVERRIDES=()
 while true; do
-  echo "Pick a lane number to override, or press Enter to finish:"
+  echo "$(msg cfg_pick_lane)"
   for i in "${!LANES[@]}"; do printf '  %d) %s\n' "$((i + 1))" "${LANES[$i]}"; done
   read -rp "lane> " n || n=""
   [[ -z "$n" ]] && break
   if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 1 || n > ${#LANES[@]} )); then
-    echo "pick 1-${#LANES[@]} or Enter"; continue
+    echo "$(msgf cfg_pick_range "${#LANES[@]}")"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "vendor for '$lane':" codex claude grok gemini "vote (multi-model panel)" "exec (your own script/gate)" off)"
+  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini "vote (multi-model panel)" "exec (your own script/gate)" off)"
   [[ "$vendor" == exec* ]] && vendor="exec"
   [[ "$vendor" == vote* ]] && vendor="vote"
   if [[ "$vendor" == "off" ]]; then
@@ -64,29 +65,29 @@ while true; do
     echo "-> $lane: off"; echo; continue
   fi
   case "$vendor" in
-    codex)  model="$(pick "model:" "${CODEX_MODELS[@]}")";  effort="$(pick "effort:" "${CODEX_EFFORTS[@]}")" ;;
-    claude) model="$(pick "model:" "${CLAUDE_MODELS[@]}")"; effort="$(pick "effort:" "${CLAUDE_EFFORTS[@]}")" ;;
-    gemini) model="$(pick "model:" "${GEMINI_MODELS[@]}")"; effort="-" ;;
-    grok)   model="$(pick "model:" "${GROK_MODELS[@]}")";   effort="-" ;;
+    codex)  model="$(pick "$(msg cfg_model)" "${CODEX_MODELS[@]}")";  effort="$(pick "$(msg cfg_effort)" "${CODEX_EFFORTS[@]}")" ;;
+    claude) model="$(pick "$(msg cfg_model)" "${CLAUDE_MODELS[@]}")"; effort="$(pick "$(msg cfg_effort)" "${CLAUDE_EFFORTS[@]}")" ;;
+    gemini) model="$(pick "$(msg cfg_model)" "${GEMINI_MODELS[@]}")"; effort="-" ;;
+    grok)   model="$(pick "$(msg cfg_model)" "${GROK_MODELS[@]}")";   effort="-" ;;
     vote)   while true; do
-              count="$(pick "how many voters? (each costs one call per round)" "1" "2" "3" "4")"
+              count="$(pick "$(msg cfg_voters_count)" "1" "2" "3" "4")"
               [[ "$count" =~ ^[1-4]$ ]] && break
-              echo "voters must be 1-4" >&2
+              echo "$(msg cfg_voters_range)" >&2
             done
             model=""; remaining=(codex claude grok gemini)
             for ((s = 1; s <= count; s++)); do
-              v="$(pick "voter $s:" "${remaining[@]}")"
+              v="$(pick "$(msgf cfg_voter_n "$s")" "${remaining[@]}")"
               model+="${model:+,}$v"
               next=()
               for r in "${remaining[@]}"; do [[ "$r" == "$v" ]] || next+=("$r"); done
               remaining=("${next[@]}")
             done
-            effort="$(pick "rounds (2 = voters rebut each other):" "1" "2")"
+            effort="$(pick "$(msg cfg_rounds)" "1" "2")"
             [[ "$effort" == "1" ]] && effort="-" ;;
-    exec)   read -rp "script path (gets MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE): " model || model=""
-            [[ -n "$model" ]] || { echo "empty path, skipped"; continue; }
+    exec)   read -rp "$(msg cfg_exec_path)" model || model=""
+            [[ -n "$model" ]] || { echo "$(msg cfg_empty_path)"; continue; }
             effort="-" ;;
-    *)      model="$(pick "model:" "custom")";              effort="-" ;;
+    *)      model="$(pick "$(msg cfg_model)" "custom")";              effort="-" ;;
   esac
   [[ "$model" == *" "* ]] && model="\"$model\""
   OVERRIDES+=("$lane: $vendor $model $effort")
@@ -94,7 +95,7 @@ while true; do
   echo
 done
 
-[[ ${#OVERRIDES[@]} -gt 0 ]] || { echo "no changes."; exit 0; }
+[[ ${#OVERRIDES[@]} -gt 0 ]] || { echo "$(msg cfg_no_changes)"; exit 0; }
 
 mkdir -p "$OMNILANE_HOME"
 [[ -f "$LOCAL_FILE" ]] && cp "$LOCAL_FILE" "$LOCAL_FILE.bak"
@@ -105,5 +106,5 @@ mkdir -p "$OMNILANE_HOME"
   [[ -f "$LOCAL_FILE.bak" ]] && grep -v '^#' "$LOCAL_FILE.bak" || true
 } > "$LOCAL_FILE"
 
-echo "wrote $LOCAL_FILE — effective routing now:"
+echo "$(msgf cfg_wrote "$LOCAL_FILE")"
 bash "$OMNILANE_REPO/scripts/dispatch.sh" --list
