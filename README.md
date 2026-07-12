@@ -100,12 +100,20 @@ scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 ## Command reference
 
 ```
+omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
+                                               # (install.sh links it into ~/.local/bin)
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--model M] [--effort E] LANE "TASK"   # "-" reads task from stdin
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
 ```
+
+The `arbitrate` lane (and any other) can point at your own executable via the
+`exec` vendor: `arbitrate: exec /path/to/your-vote-script -` — the script
+receives `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict
+to `OUTPUT_FILE` (see `scripts/runners/run-exec.sh`). That is the hook for
+multi-model review gates.
 
 Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
 `4` no vendor CLI available in the chain, `86` nested dispatch refused,

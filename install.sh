@@ -50,6 +50,16 @@ if command -v agy >/dev/null 2>&1; then
     echo "  agy plugin validate \"$REPO\" && agy plugin install \"$REPO\""
   fi
 fi
+# Global wrapper so commands work from any directory: omnilane list|route|jobs|configure
+BIN_DST="$HOME/.local/bin/omnilane"
+if [[ "$UNINSTALL" == "--uninstall" ]]; then
+  [[ -L "$BIN_DST" ]] && rm "$BIN_DST" && echo "removed $BIN_DST"
+else
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$REPO/bin/omnilane" "$BIN_DST"
+  echo "linked $BIN_DST  (make sure ~/.local/bin is on your PATH)"
+fi
+
 [[ "$found_any" == 1 ]] || { echo "no supported CLI (claude/codex/grok/agy) on PATH"; exit 1; }
 
 if [[ "$UNINSTALL" != "--uninstall" ]]; then

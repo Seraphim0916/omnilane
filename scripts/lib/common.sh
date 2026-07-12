@@ -53,6 +53,9 @@ vendor_bin() { # vendor -> binary (honors local.sh overrides)
 }
 
 vendor_available() {
+  # "exec" is the bring-your-own-gate vendor: the model field is a script path,
+  # checked at dispatch time (the chain resolver cannot see it here).
+  [[ "$1" == "exec" ]] && return 0
   local b; b="$(vendor_bin "$1")"
   [[ -n "$b" ]] && command -v "$b" >/dev/null 2>&1
 }

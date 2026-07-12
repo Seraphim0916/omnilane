@@ -22,4 +22,5 @@ long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high 
 fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops
 live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
 coding-overflow: grok grok-4.5 - | off          # codex-quota relief valve: mid-tier coding (AA 72.45); verify factual claims (hallucination 0.54)
-arbitrate:       off - -                        # pluggable multi-voter gate; point at your own reviewer stack
+arbitrate:       off - -                        # pluggable gate — plug your own: `arbitrate: exec /path/to/your-vote-script -`
+                                                # the script gets: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE (see runners/run-exec.sh)

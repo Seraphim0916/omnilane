@@ -10,11 +10,11 @@ LOCAL_FILE="$OMNILANE_HOME/routing.local.yaml"
 
 # Curated suggestions only — "c" always allows free text so new models work.
 CODEX_MODELS=("gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna")
-CODEX_EFFORTS=("xhigh" "max" "high" "medium" "low")
+CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
 CLAUDE_MODELS=("claude-opus-4-8" "claude-sonnet-5" "claude-haiku-4-5")
-CLAUDE_EFFORTS=("high" "medium" "low" "-")
-GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Low)")
-GROK_MODELS=("grok-4.5")
+CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
+GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.1 Pro (Low)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Medium)" "Gemini 3.5 Flash (Low)")
+GROK_MODELS=("grok-4.5" "grok-4.3")
 
 pick() { # title, options... -> prints the chosen value
   local title="$1"; shift
@@ -56,7 +56,8 @@ while true; do
     echo "pick 1-${#LANES[@]} or Enter"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "vendor for '$lane':" codex claude grok gemini off)"
+  vendor="$(pick "vendor for '$lane':" codex claude grok gemini "exec (your own script/gate)" off)"
+  [[ "$vendor" == exec* ]] && vendor="exec"
   if [[ "$vendor" == "off" ]]; then
     OVERRIDES+=("$lane: off - -")
     echo "-> $lane: off"; echo; continue
@@ -66,6 +67,9 @@ while true; do
     claude) model="$(pick "model:" "${CLAUDE_MODELS[@]}")"; effort="$(pick "effort:" "${CLAUDE_EFFORTS[@]}")" ;;
     gemini) model="$(pick "model:" "${GEMINI_MODELS[@]}")"; effort="-" ;;
     grok)   model="$(pick "model:" "${GROK_MODELS[@]}")";   effort="-" ;;
+    exec)   read -rp "script path (gets MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE): " model || model=""
+            [[ -n "$model" ]] || { echo "empty path, skipped"; continue; }
+            effort="-" ;;
     *)      model="$(pick "model:" "custom")";              effort="-" ;;
   esac
   [[ "$model" == *" "* ]] && model="\"$model\""

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# omnilane — global entrypoint so commands work from any directory.
+
+SELF="${BASH_SOURCE[0]}"
+while [[ -L "$SELF" ]]; do SELF="$(readlink "$SELF")"; done
+REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  list)      exec bash "$REPO/scripts/dispatch.sh" --list ;;
+  route|dispatch) exec bash "$REPO/scripts/dispatch.sh" "$@" ;;
+  jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
+  configure) exec bash "$REPO/scripts/configure.sh" "$@" ;;
+  help|--help|-h)
+    cat <<'EOF'
+omnilane — one routing table, every harness
+
+  omnilane list                         effective routing table
+  omnilane route [flags] LANE "TASK"    dispatch a task (see dispatch.sh)
+  omnilane jobs  list|status ID|result ID
+  omnilane configure                    interactive lane menu
+EOF
+    ;;
+  *) echo "omnilane: unknown command '$cmd' (try: omnilane help)" >&2; exit 2 ;;
+esac
