@@ -1,0 +1,18 @@
+# omniroute — single routing table shared by every harness (CC / Codex / Grok / Antigravity)
+# Format: one lane per line ->  lane: vendor model effort
+#   vendor  = codex | claude | grok | gemini
+#   effort  = codex reasoning effort / claude --effort / agy thinking suffix / (grok: ignored)
+# Override any line in ~/.omniroute/routing.local.yaml (same format; local wins).
+# Benchmarks behind these defaults: Artificial Analysis dual charts 2026-07
+# (Coding Index vs cost-per-task + Intelligence Index vs blended price).
+
+hardest-coding:  codex gpt-5.6-sol xhigh        # AA coding leader (78.2); xhigh beats max on coding at lower cost
+bulk-mechanical: codex gpt-5.6-terra max        # ~Fable-class coding score at ~1/5 the cost; high is a dead tier
+triage:          codex gpt-5.6-luna medium      # high-volume scans; bump xhigh when real comprehension needed
+hard-judgment:   codex gpt-5.6-sol max          # AA Intelligence 58.7 — second only to Fable 5
+taste-final:     claude claude-opus-4-8 high    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
+ui-draft:        codex gpt-5.6-sol xhigh        # only with a design system / reference images; open-ended visual taste -> taste-final
+long-context:    gemini "Gemini 3.1 Pro (High)" -  # 1M-token synthesis; agy native model string
+fast-agentic:    gemini "Gemini 3.5 Flash (High)" - # speed + agentic tool loops (GDPval-AA family best)
+live-search:     grok grok-4.5 -                # native X/web search lane
+arbitrate:       off - -                        # pluggable multi-voter gate; point at your own reviewer stack

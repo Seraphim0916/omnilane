@@ -1,0 +1,7 @@
+{
+  "name": "omniroute",
+  "version": "0.1.0",
+  "description": "One routing table, every harness: classify subtasks into lanes and auto-dispatch each lane to the best vendor CLI (Codex, Claude Code, Grok Build, Antigravity) with background jobs, depth guard, and serialized codex dispatch.",
+  "author": { "name": "Seraphim0916" },
+  "skills": "./skills/"
+}
