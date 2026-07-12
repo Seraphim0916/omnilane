@@ -8,6 +8,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
+: "$EFFORT" # parity with the uniform runner interface; effort rides in the model string
 
 AGY_BIN="${AGY_BIN:-agy}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"

@@ -7,6 +7,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
+: "$EFFORT" # parity with the uniform runner interface; Grok has no effort knob
 
 GROK_BIN="${GROK_BIN:-grok}"
 TIMEOUT_CMD="$(resolve_timeout_cmd)"

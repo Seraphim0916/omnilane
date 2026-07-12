@@ -3,6 +3,7 @@
 
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
 OMNILANE_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export OMNILANE_REPO
 
 # Optional local overlay: proxies, auth wrappers, per-machine binaries.
 # Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
