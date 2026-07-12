@@ -36,6 +36,12 @@ set +e
 RC=$?
 set -e
 
+# Watchdog kill with an empty progress log = codex produced nothing at all;
+# the usual cause is a quota-window 429 retry loop, which codex retries silently.
+if [[ ("$RC" -eq 142 || "$RC" -eq 124) && ! -s "${OUTPUT_FILE}.progress.log" ]]; then
+  echo "omnilane: codex timed out after ${RUN_TIMEOUT}s with no output — likely a usage-limit retry loop; check your codex quota window and retry" >> "${OUTPUT_FILE}.stderr.log"
+fi
+
 if [[ -f "${OUTPUT_FILE}.tmp" ]]; then
   strip_ansi "${OUTPUT_FILE}.tmp"
   mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
