@@ -25,7 +25,7 @@ Run `scripts/dispatch.sh --list` to see the effective table (local overrides win
 | hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
 | taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
-| long-context | Gemini 3.1 Pro (High) | 1M-token synthesis across giant docs |
+| long-context | Gemini 3.1 Pro (High) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
 | arbitrate | (pluggable, off by default) | Multi-voter review gate — wire your own |
@@ -58,4 +58,5 @@ Run `scripts/dispatch.sh --list` to see the effective table (local overrides win
 - **Gemini Flash main**: fast agentic/multimodal loops are yours; never
   self-assign top judgment.
 - **Gemini 3.1 Pro main**: 1M-context synthesis is yours; route almost
-  everything else to the stronger lanes.
+  everything else to the stronger lanes. Never take agentic tool-loop chains
+  (bottom-tier agentic score) — hand those to fast-agentic or a codex lane.
