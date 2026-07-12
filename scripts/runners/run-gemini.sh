@@ -16,9 +16,10 @@ CAPACITY_PATTERN='MODEL_CAPACITY_EXHAUSTED|No capacity available for model|rateL
 
 truncate_payload "$PROMPT_FILE" 140000
 
-# advise mode runs in a neutral scratch workspace so repo/global agent personas
-# do not color the answer; work mode runs inside the target WORKDIR.
-if [[ "$MODE" == "advise" ]]; then
+# Both modes run inside the target WORKDIR so the worker can actually see the
+# repo it is asked about. Tradeoff: repo-level agent personas may color advise
+# answers; set OMNILANE_GEMINI_SCRATCH=1 to run advise in a neutral scratch dir.
+if [[ "$MODE" == "advise" && "${OMNILANE_GEMINI_SCRATCH:-0}" == "1" ]]; then
   RUN_DIR="$OMNILANE_HOME/agy-scratch"
   mkdir -p "$RUN_DIR/.agents"; : > "$RUN_DIR/.agents/AGENTS.md"
 else

@@ -10,7 +10,6 @@ MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE=
 : "$EFFORT" # parity with the uniform runner interface; Grok has no effort knob
 
 GROK_BIN="${GROK_BIN:-grok}"
-TIMEOUT_CMD="$(resolve_timeout_cmd)"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 MAX_ATTEMPTS="${OMNILANE_GROK_MAX_ATTEMPTS:-5}"
 
@@ -30,7 +29,7 @@ ARGS=(--cwd "$WORKDIR" --model "$MODEL"
 RC=0; attempt=1
 while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
   set +e
-  OMNILANE_DEPTH=1 ${TIMEOUT_CMD:+$TIMEOUT_CMD $RUN_TIMEOUT} \
+  OMNILANE_DEPTH=1 run_with_timeout "$RUN_TIMEOUT" \
     "$GROK_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
   RC=$?
   set -e
@@ -41,6 +40,12 @@ while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
   fi
   attempt=$((attempt + 1))
 done
+
+# Empty output after all retries is a failure, not a silent rc=0 success.
+if ! grep -q '[^[:space:]]' "${OUTPUT_FILE}.tmp" 2>/dev/null; then
+  echo "omnilane: grok produced no output after $MAX_ATTEMPTS attempts" >> "${OUTPUT_FILE}.stderr.log"
+  [[ "$RC" -eq 0 ]] && RC=1
+fi
 
 [[ -f "${OUTPUT_FILE}.tmp" ]] && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true

@@ -88,6 +88,8 @@ done
 LANE="${1:?usage: dispatch.sh [flags] LANE \"TASK\"}"
 TASK="${2:?missing task text (use - for stdin)}"
 [[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name '$LANE'" >&2; exit 2; }
+# A typo like --mode advice must not fall through to the write-enabled branch.
+[[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode '$MODE' (advise|work)" >&2; exit 2; }
 
 depth_guard
 
@@ -115,13 +117,15 @@ JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
 mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
+jesc() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
 printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$LANE" "$VENDOR" "$MODEL" "$EFFORT" "$MODE" "$WORKDIR" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
+  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
 
 run_job() {
   local rc=0
-  # Two concurrent codex exec in one cwd corrupt its job index — serialize.
-  [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex
+  current_pid > "$JOB_DIR/pid"
+  # Two concurrent codex exec in one target dir corrupt its job index — serialize.
+  [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
   set +e
   "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   rc=$?
