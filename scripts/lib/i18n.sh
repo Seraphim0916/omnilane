@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # omnilane i18n — interactive-surface strings for install.sh / configure.sh.
 # Language picked from OMNILANE_LANG, else LC_ALL/LANG, else macOS AppleLocale.
 # bash 3.2 compatible (no associative arrays). LLM-facing text stays English.

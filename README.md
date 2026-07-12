@@ -2,10 +2,11 @@
 
 # omnilane
 
-**One routing table, every harness.**
+### One routing table, every harness.
 
-Route every subtask to the best model across<br/>
-**Claude Code · Codex · Grok Build · Antigravity** — on your existing subscriptions.
+*Your main loop stops guessing which model to use.*<br/>
+Every subtask goes to the model that is actually best at it — across<br/>
+**Claude Code · Codex · Grok Build · Antigravity**, on the subscriptions you already pay for.
 
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
@@ -17,20 +18,37 @@ Route every subtask to the best model across<br/>
 
 ---
 
-One routing table, every harness. omnilane lets the main loop of **any** agentic
-CLI — Claude Code, OpenAI Codex, Grok Build, Google Antigravity — classify
-subtasks into lanes and automatically dispatch each lane to the best vendor's
-CLI, using your existing subscription logins.
-
-```
-            ┌────────────── routing.yaml (one table) ──────────────┐
- main loop ─┤ hardest-coding → Codex Sol      taste-final → Claude │
- (any CLI)  │ bulk-mechanical → Codex Terra   long-context → Gemini│
-            │ triage → Codex Luna             live-search → Grok   │
-            └────────────── scripts/dispatch.sh ───────────────────┘
+```bash
+git clone https://github.com/Seraphim0916/omnilane && cd omnilane
+./install.sh          # finds your CLIs, links the skill, speaks your language
+omnilane route hardest-coding "fix the flaky auth token refresh"
 ```
 
-## How it works
+omnilane lets the main loop of **any** agentic CLI classify subtasks into
+lanes and dispatch each lane to the best vendor's CLI — headlessly, using
+your existing subscription logins:
+
+```mermaid
+flowchart LR
+    M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
+    T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
+    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
+    T -->|taste-final| C3["Claude — Opus 4.8"]
+    T -->|long-context| C4["Gemini — 3.1 Pro"]
+    T -->|live-search| C5["Grok — 4.5"]
+    T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
+```
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **One table**<br/>four harnesses share it | 🪂 **Fallback chains**<br/>degrades to the CLIs you have | 🗳️ **Opinion panel**<br/>multi-model vote for big calls |
+| 🔒 **Safety rails**<br/>locks · watchdogs · no nesting | 🌏 **Five languages**<br/>the installer speaks your locale | ↩️ **Reversible**<br/>`--uninstall` undoes everything |
+
+</div>
+
+## 🧭 How it works
 
 - **`routing.yaml`** — lane → vendor + model + effort. One file, read by every
   harness.
@@ -42,26 +60,26 @@ CLI, using your existing subscription logins.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
 
-## Lanes (defaults — run `scripts/dispatch.sh --list` for your effective table)
+## 🛤️ Lanes (defaults — run `scripts/dispatch.sh --list` for your effective table)
 
 | Lane | First choice | When |
 |---|---|---|
-| hardest-coding | GPT-5.6 Sol (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| bulk-mechanical | GPT-5.6 Terra (max) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| triage | GPT-5.6 Luna (medium) | High-volume scans, first-pass filtering |
-| hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, style arbitration |
-| ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images |
-| long-context | Gemini 3.1 Pro (High) | 1M-token synthesis — analysis only, never agentic loops |
-| fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
-| live-search | Grok 4.5 | Realtime X/web search and social context |
-| coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding |
-| arbitrate | off (opt-in vote panel) | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-5.6 Luna (medium) | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, style arbitration |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images |
+| 📚 long-context | Gemini 3.1 Pro (High) | 1M-token synthesis — analysis only, never agentic loops |
+| ⚡ fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
+| 📡 live-search | Grok 4.5 | Realtime X/web search and social context |
+| 🚰 coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding |
+| 🗳️ arbitrate | off (opt-in vote panel) | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
 next candidate or `off`.
 
-## Install
+## 🚀 Install
 
 Requirements: the vendor CLIs you want to route to, logged in (`codex`,
 `claude`, `grok`, `agy`) and on `PATH` — install only the ones you have; the
@@ -85,7 +103,7 @@ installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 - **Antigravity**: `agy plugin install <this repo>` (check first with
   `agy plugin validate <this repo>`)
 
-## Configure
+## ⚙️ Configure
 
 Three layers, all optional:
 
@@ -104,7 +122,7 @@ Check the result any time:
 scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 ```
 
-## Command reference
+## 📖 Command reference
 
 ```
 omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
@@ -133,7 +151,7 @@ Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
 `4` no vendor CLI available in the chain, `86` nested dispatch refused,
 `87` lock timeout; otherwise the worker's own exit code passes through.
 
-## Modes
+## 🎭 Modes
 
 - **advise** (default) — read-only worker. Codex runs in a read-only sandbox;
   Claude gets only Read/Glob/Grep; Grok runs in plan mode. Use for reviews,
@@ -142,7 +160,7 @@ Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
   Codex gets a workspace-write sandbox; Claude auto-accepts edits; Gemini runs
   in accept-edits mode.
 
-## Safety rails
+## 🔒 Safety rails
 
 - **No nested dispatch** — workers cannot fan out again (`OMNILANE_DEPTH`
   guard, exit 86): no runaway agent-calls-agent quota chains.
@@ -158,14 +176,14 @@ Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
 - **Payload caps** — oversized task text is truncated head+tail before it can
   blow a worker's context.
 
-## Defaults and provenance
+## 📊 Defaults and provenance
 
 Default lane assignments follow Artificial Analysis coding/intelligence data
 (2026-07 snapshot, cross-checked against AA site records and vendor pricing
 pages) plus published head-to-head reviews; they are opinions, not laws — the
 configurator and `routing.local.yaml` exist so you can disagree.
 
-## Known limitations
+## ⚠️ Known limitations
 
 - **Antigravity tool calls in print mode are unstable** in current CLI builds
   (tool calls may be denied or rejected with invalid-argument errors). The
@@ -176,7 +194,7 @@ configurator and `routing.local.yaml` exist so you can disagree.
 - Codex work mode in a non-git directory has hung in one test; use a git
   working directory (the normal case) until this is pinned down.
 
-## Status
+## 🌱 Status
 
 Early but reviewed: the shell core has been through an external model review
 (11 findings fixed) plus an adversarial verification pass. Runner interfaces
