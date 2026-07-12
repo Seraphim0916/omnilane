@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# omniroute runner: Google Antigravity CLI (agy)
+# omnilane runner: Google Antigravity CLI (agy)
 # Usage: run-gemini.sh MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE
 # MODEL is agy's native display string, e.g. "Gemini 3.1 Pro (High)" — the
 # thinking level rides inside the model string, so EFFORT is parity-only.
@@ -10,7 +10,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
 
 AGY_BIN="${AGY_BIN:-agy}"
-RUN_TIMEOUT="${OMNIROUTE_TIMEOUT:-600}"
+RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 CAPACITY_PATTERN='MODEL_CAPACITY_EXHAUSTED|No capacity available for model|rateLimitExceeded|RESOURCE_EXHAUSTED'
 
 truncate_payload "$PROMPT_FILE" 140000
@@ -18,7 +18,7 @@ truncate_payload "$PROMPT_FILE" 140000
 # advise mode runs in a neutral scratch workspace so repo/global agent personas
 # do not color the answer; work mode runs inside the target WORKDIR.
 if [[ "$MODE" == "advise" ]]; then
-  RUN_DIR="$OMNIROUTE_HOME/agy-scratch"
+  RUN_DIR="$OMNILANE_HOME/agy-scratch"
   mkdir -p "$RUN_DIR/.agents"; : > "$RUN_DIR/.agents/AGENTS.md"
 else
   RUN_DIR="$WORKDIR"
@@ -32,7 +32,7 @@ set +e
   cd "$RUN_DIR" || exit 127
   # Headless cannot answer OAuth prompts; strip API keys to stay on CLI login.
   env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
-    NO_BROWSER=1 OMNIROUTE_DEPTH=1 \
+    NO_BROWSER=1 OMNILANE_DEPTH=1 \
     "$AGY_BIN" --dangerously-skip-permissions ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
     --print-timeout "${RUN_TIMEOUT}s" \
     --print "$(cat "$PROMPT_FILE")" \
@@ -42,7 +42,7 @@ RC=$?
 set -e
 
 if grep -Eiq "$CAPACITY_PATTERN" "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log" 2>/dev/null; then
-  echo "omniroute: gemini capacity exhausted" >> "${OUTPUT_FILE}.stderr.log"
+  echo "omnilane: gemini capacity exhausted" >> "${OUTPUT_FILE}.stderr.log"
   RC=126
 fi
 

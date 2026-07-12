@@ -1,9 +1,9 @@
 ---
-name: omniroute
+name: omnilane
 description: 'Universal model-routing table + cross-vendor dispatch for ANY harness (Claude Code, Codex, Grok Build, Antigravity). Use when delegating subtasks, choosing a model for work, planning multi-part tasks, or when asked about model routing, delegate, dispatch, which model, tier selection, escalate, 派工, 模型路由. One routing table; the main loop self-executes its own lane and shells out to every other vendor via dispatch.sh.'
 ---
 
-# omniroute — one routing table, every harness
+# omnilane — one routing table, every harness
 
 You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identical:
 
@@ -37,7 +37,7 @@ Run `scripts/dispatch.sh --list` to see the effective table (local overrides win
 - **Every dispatched task states acceptance criteria and the exact verification
   command.** Do not accept "done" without evidence.
 - **No nested dispatch**: workers must not fan out again (enforced via
-  `OMNIROUTE_DEPTH`). Escalate back to the main loop instead.
+  `OMNILANE_DEPTH`). Escalate back to the main loop instead.
 - **Same-directory codex dispatches are serialized automatically** (lock);
   do not try to parallelize them yourself.
 - Escalate without asking: two failed attempts on a lane → move one lane up

@@ -1,0 +1,14 @@
+# Copy to ~/.omnilane/local.sh — sourced by every runner. Never committed.
+# Use it for machine-specific binaries, proxies, and auth. Examples:
+
+# Absolute paths when the CLIs are not on the runners' PATH:
+# CLAUDE_BIN=/opt/homebrew/bin/claude
+# CODEX_BIN="$HOME/.local/bin/codex"
+# GROK_BIN=/usr/local/bin/grok
+# AGY_BIN=/usr/local/bin/agy
+
+# Route a vendor CLI through a local proxy:
+# export ANTHROPIC_BASE_URL=http://127.0.0.1:8080
+
+# Cap runner wall-clock (seconds):
+# OMNILANE_TIMEOUT=600

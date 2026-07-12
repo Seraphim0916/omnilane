@@ -1,8 +1,8 @@
 ---
-description: Check omniroute background dispatch jobs (list, status, result)
+description: Check omnilane background dispatch jobs (list, status, result)
 ---
 
-Check omniroute background jobs.
+Check omnilane background jobs.
 
 Input: `$ARGUMENTS` — empty for a listing, or a job id (optionally prefixed
 with `status`/`result`).

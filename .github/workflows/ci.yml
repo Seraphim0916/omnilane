@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash syntax
+        run: |
+          for f in scripts/dispatch.sh scripts/jobs.sh scripts/lib/common.sh scripts/runners/*.sh install.sh; do
+            bash -n "$f"
+          done
+      - name: shellcheck
+        run: shellcheck -S warning scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
+      - name: routing table smoke
+        run: |
+          out="$(bash scripts/dispatch.sh --list)"
+          echo "$out"
+          test "$(printf '%s\n' "$out" | wc -l)" -ge 8
+      - name: no stale project name
+        run: |
+          ! grep -ri 'omniroute' --exclude-dir=.git --exclude-dir=.github .

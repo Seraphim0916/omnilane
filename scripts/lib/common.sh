@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# omniroute shared helpers — sourced by dispatch.sh and runners.
+# omnilane shared helpers — sourced by dispatch.sh and runners.
 
-OMNIROUTE_HOME="${OMNIROUTE_HOME:-$HOME/.omniroute}"
-OMNIROUTE_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
+OMNILANE_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Optional local overlay: proxies, auth wrappers, per-machine binaries.
-# Publishable default is plain CLIs on PATH; power users add ~/.omniroute/local.sh.
-[[ -f "$OMNIROUTE_HOME/local.sh" ]] && source "$OMNIROUTE_HOME/local.sh"
+# Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
+[[ -f "$OMNILANE_HOME/local.sh" ]] && source "$OMNILANE_HOME/local.sh"
 
 resolve_timeout_cmd() {
   if command -v timeout &>/dev/null; then echo "timeout";
@@ -16,9 +16,9 @@ resolve_timeout_cmd() {
 
 # Depth guard: a dispatched worker must not fan out again (quota-burn chains).
 depth_guard() {
-  local depth="${OMNIROUTE_DEPTH:-0}"
+  local depth="${OMNILANE_DEPTH:-0}"
   if [[ "$depth" -ge 1 ]]; then
-    echo "omniroute: refusing nested dispatch (OMNIROUTE_DEPTH=$depth)" >&2
+    echo "omnilane: refusing nested dispatch (OMNILANE_DEPTH=$depth)" >&2
     exit 86
   fi
 }
@@ -28,16 +28,16 @@ depth_guard() {
 acquire_cwd_lock() {
   local vendor="$1" key lockdir waited=0
   key="$(pwd | shasum | cut -c1-12)-$vendor"
-  lockdir="$OMNIROUTE_HOME/locks/$key"
-  mkdir -p "$OMNIROUTE_HOME/locks"
+  lockdir="$OMNILANE_HOME/locks/$key"
+  mkdir -p "$OMNILANE_HOME/locks"
   while ! mkdir "$lockdir" 2>/dev/null; do
     sleep 2; waited=$((waited + 2))
-    if [[ "$waited" -ge "${OMNIROUTE_LOCK_TIMEOUT:-600}" ]]; then
-      echo "omniroute: lock timeout for $vendor in $(pwd)" >&2; exit 87
+    if [[ "$waited" -ge "${OMNILANE_LOCK_TIMEOUT:-600}" ]]; then
+      echo "omnilane: lock timeout for $vendor in $(pwd)" >&2; exit 87
     fi
   done
-  OMNIROUTE_LOCKDIR="$lockdir"
-  trap 'rmdir "$OMNIROUTE_LOCKDIR" 2>/dev/null || true' EXIT
+  OMNILANE_LOCKDIR="$lockdir"
+  trap 'rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true' EXIT
 }
 
 # Cap payload so a runaway prompt cannot blow a worker's context.

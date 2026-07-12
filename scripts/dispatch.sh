@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# omniroute dispatch — one routing table, any harness.
+# omnilane dispatch — one routing table, any harness.
 #
 # Usage:
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
@@ -16,7 +16,7 @@ OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""
 
 print_effective_routing() {
   local seen=" " f lane
-  for f in "$OMNIROUTE_HOME/routing.local.yaml" "$OMNIROUTE_REPO/routing.yaml"; do
+  for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
     [[ -f "$f" ]] || continue
     while IFS= read -r line; do
       [[ "$line" =~ ^([a-z-]+): ]] || continue
@@ -47,12 +47,12 @@ TASK="${2:?missing task text (use - for stdin)}"
 depth_guard
 
 SPEC=""
-for f in "$OMNIROUTE_HOME/routing.local.yaml" "$OMNIROUTE_REPO/routing.yaml"; do
+for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
   [[ -f "$f" ]] || continue
   SPEC="$(grep -E "^${LANE}:" "$f" | head -1 | sed 's/#.*$//' | cut -d: -f2-)" || true
   [[ -n "${SPEC// /}" ]] && break
 done
-[[ -n "${SPEC// /}" ]] || { echo "omniroute: unknown lane '$LANE' (try --list)" >&2; exit 2; }
+[[ -n "${SPEC// /}" ]] || { echo "omnilane: unknown lane '$LANE' (try --list)" >&2; exit 2; }
 
 # Routing files are operator-trusted config; eval supports quoted model strings.
 eval "FIELDS=( $SPEC )"
@@ -61,14 +61,14 @@ VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"
 
 if [[ "$VENDOR" == "off" ]]; then
-  echo "omniroute: lane '$LANE' is disabled in routing config" >&2; exit 3
+  echo "omnilane: lane '$LANE' is disabled in routing config" >&2; exit 3
 fi
-RUNNER="$OMNIROUTE_REPO/scripts/runners/run-$VENDOR.sh"
-[[ -x "$RUNNER" ]] || { echo "omniroute: no runner for vendor '$VENDOR'" >&2; exit 2; }
+RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
+[[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
-mkdir -p "$OMNIROUTE_HOME/jobs"
+mkdir -p "$OMNILANE_HOME/jobs"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
-JOB_DIR="$OMNIROUTE_HOME/jobs/$JOB_ID"
+JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
 mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# omniroute runner: Claude Code CLI
+# omnilane runner: Claude Code CLI
 # Usage: run-claude.sh MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
@@ -9,7 +9,7 @@ MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE=
 
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 TIMEOUT_CMD="$(resolve_timeout_cmd)"
-RUN_TIMEOUT="${OMNIROUTE_TIMEOUT:-600}"
+RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
 truncate_payload "$PROMPT_FILE" 102400
 
@@ -26,7 +26,7 @@ set +e
 (
   cd "$WORKDIR" || exit 127
   ${TIMEOUT_CMD:+$TIMEOUT_CMD $RUN_TIMEOUT} env \
-    OMNIROUTE_DEPTH=1 \
+    OMNILANE_DEPTH=1 \
     "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
 )
 RC=$?

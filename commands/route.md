@@ -1,11 +1,11 @@
 ---
-description: Dispatch a task to the best vendor per the omniroute routing table (lane-based cross-CLI dispatch)
+description: Dispatch a task to the best vendor per the omnilane routing table (lane-based cross-CLI dispatch)
 ---
 
-Dispatch work through the omniroute routing table.
+Dispatch work through the omnilane routing table.
 
 Input: `$ARGUMENTS` — either `<lane> <task text>` or just a task description
-(then classify it into a lane yourself using the `omniroute` skill's lane table;
+(then classify it into a lane yourself using the `omnilane` skill's lane table;
 run `scripts/dispatch.sh --list` from the plugin root to see effective lanes).
 
 Steps:

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# omniroute background-job helper.
+# omnilane background-job helper.
 # Usage: jobs.sh list | status JOB_ID | result JOB_ID
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
-JOBS="$OMNIROUTE_HOME/jobs"
+JOBS="$OMNILANE_HOME/jobs"
 
 case "${1:-}" in
   list)

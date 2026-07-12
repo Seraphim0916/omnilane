@@ -1,0 +1,6 @@
+# Copy to ~/.omnilane/routing.local.yaml — lines here override routing.yaml.
+# Same format: lane: vendor model effort
+
+# Example: send triage to a cheaper local setup and disable the grok lane.
+# triage:      codex gpt-5.6-luna low
+# live-search: off - -
