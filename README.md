@@ -56,7 +56,7 @@ CLI, using your existing subscription logins.
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding |
-| arbitrate | (off by default) | Multi-voter review gate — wire your own |
+| arbitrate | vote: codex+claude+grok | Built-in opinion panel for big calls — one call PER VOTER per round; you chair the verdict |
 
 Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
 next candidate or `off`.
@@ -109,11 +109,18 @@ jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
 ```
 
-The `arbitrate` lane (and any other) can point at your own executable via the
-`exec` vendor: `arbitrate: exec /path/to/your-vote-script -` — the script
-receives `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict
-to `OUTPUT_FILE` (see `scripts/runners/run-exec.sh`). That is the hook for
-multi-model review gates.
+**Big decisions get a panel, not a person.** The `arbitrate` lane defaults to
+the built-in `vote` vendor: the same question goes to every installed voter
+(`arbitrate: vote codex,claude,grok -`), the opinions come back side by side,
+and the calling model chairs the verdict. Set the effort field to `2` for a
+debate round — every voter sees the whole panel and rebuts only the
+disagreements. Add `gemini` for a four-voter panel. It costs one call per
+voter per round — turn it off with `arbitrate: off - -` in
+`routing.local.yaml` if that is too rich. Power users can swap in their own
+gate via the `exec` vendor:
+`arbitrate: exec /path/to/script -` — the script receives
+`MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict to
+`OUTPUT_FILE` (see `scripts/runners/run-exec.sh`).
 
 Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
 `4` no vendor CLI available in the chain, `86` nested dispatch refused,
@@ -149,9 +156,7 @@ Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
 Default lane assignments follow Artificial Analysis coding/intelligence data
 (2026-07 snapshot, cross-checked against AA site records and vendor pricing
 pages) plus published head-to-head reviews; they are opinions, not laws — the
-configurator and `routing.local.yaml` exist so you can disagree. The
-`arbitrate` lane is off by default: wire it to your own multi-model review
-gate if you have one.
+configurator and `routing.local.yaml` exist so you can disagree.
 
 ## Known limitations
 

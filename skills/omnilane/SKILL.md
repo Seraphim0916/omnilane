@@ -31,7 +31,7 @@ so the same table works with any subset of subscriptions.
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding; verify factual claims |
-| arbitrate | (pluggable, off by default) | Multi-voter review gate — wire your own |
+| arbitrate | vote: codex+claude+grok | Built-in opinion panel for big calls — one quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other); add gemini for a 4-voter panel |
 
 ## Rules
 

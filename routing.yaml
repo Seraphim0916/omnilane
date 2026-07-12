@@ -22,5 +22,7 @@ long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high 
 fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops
 live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
 coding-overflow: grok grok-4.5 - | off          # codex-quota relief valve: mid-tier coding (AA 72.45); verify factual claims (hallucination 0.54)
-arbitrate:       off - -                        # pluggable gate — plug your own: `arbitrate: exec /path/to/your-vote-script -`
-                                                # the script gets: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE (see runners/run-exec.sh)
+arbitrate:       vote codex,claude,grok -       # built-in opinion panel: asks every installed voter, main loop chairs.
+                                                # COSTS ONE CALL PER VOTER PER ROUND. 4-voter: vote codex,claude,grok,gemini
+                                                # Debate round (each voter rebuts the others): set the effort field to 2.
+                                                # Disable: `arbitrate: off - -`. Custom gate: `arbitrate: exec /path/to/script -`

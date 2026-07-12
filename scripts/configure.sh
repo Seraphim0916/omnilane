@@ -56,8 +56,9 @@ while true; do
     echo "pick 1-${#LANES[@]} or Enter"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "vendor for '$lane':" codex claude grok gemini "exec (your own script/gate)" off)"
+  vendor="$(pick "vendor for '$lane':" codex claude grok gemini "vote (multi-model panel)" "exec (your own script/gate)" off)"
   [[ "$vendor" == exec* ]] && vendor="exec"
+  [[ "$vendor" == vote* ]] && vendor="vote"
   if [[ "$vendor" == "off" ]]; then
     OVERRIDES+=("$lane: off - -")
     echo "-> $lane: off"; echo; continue
@@ -67,6 +68,9 @@ while true; do
     claude) model="$(pick "model:" "${CLAUDE_MODELS[@]}")"; effort="$(pick "effort:" "${CLAUDE_EFFORTS[@]}")" ;;
     gemini) model="$(pick "model:" "${GEMINI_MODELS[@]}")"; effort="-" ;;
     grok)   model="$(pick "model:" "${GROK_MODELS[@]}")";   effort="-" ;;
+    vote)   model="$(pick "voters (one call per voter per round!):" "codex,claude,grok" "codex,claude,grok,gemini" "codex,claude")"
+            effort="$(pick "rounds (2 = voters rebut each other):" "1" "2")"
+            [[ "$effort" == "1" ]] && effort="-" ;;
     exec)   read -rp "script path (gets MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE): " model || model=""
             [[ -n "$model" ]] || { echo "empty path, skipped"; continue; }
             effort="-" ;;
