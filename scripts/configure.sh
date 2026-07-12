@@ -17,6 +17,17 @@ CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
 GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.1 Pro (Low)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Medium)" "Gemini 3.5 Flash (Low)")
 GROK_MODELS=("grok-4.5" "grok-4.3")
 
+custom_value_is_safe() {
+  case "$1" in
+    *'$'*|*'`'*|*'"'*|*'\'*|*'#'*|*'|'*|*$'\r'*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+warn_unsafe_value() {
+  echo 'omnilane: unsafe custom value (not allowed: $ ` " \ # |)' >&2
+}
+
 pick() { # title, options... -> prints the chosen value
   local title="$1"; shift
   local opts=("$@") i choice
@@ -28,7 +39,10 @@ pick() { # title, options... -> prints the chosen value
     [[ -z "$choice" ]] && { echo "$(msg cfg_aborted)" >&2; exit 1; }
     if [[ "$choice" == "c" ]]; then
       read -rp "$(msg cfg_custom_value)" choice || choice=""
-      [[ -n "$choice" ]] && { printf '%s' "$choice"; return; }
+      if [[ -n "$choice" ]] && custom_value_is_safe "$choice"; then
+        printf '%s' "$choice"; return
+      fi
+      [[ -n "$choice" ]] && warn_unsafe_value
       continue
     fi
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#opts[@]} )); then
@@ -89,7 +103,12 @@ while true; do
             effort="-" ;;
     *)      model="$(pick "$(msg cfg_model)" "custom")";              effort="-" ;;
   esac
-  [[ "$model" == *" "* ]] && model="\"$model\""
+  if ! custom_value_is_safe "$vendor" || ! custom_value_is_safe "$model" ||
+     ! custom_value_is_safe "$effort" ||
+     [[ "$vendor" == *[[:space:]]* || "$effort" == *[[:space:]]* ]]; then
+    warn_unsafe_value; continue
+  fi
+  [[ "$model" == *[[:space:]]* ]] && model="\"$model\""
   OVERRIDES+=("$lane: $vendor $model $effort")
   echo "-> $lane: $vendor $model $effort"
   echo

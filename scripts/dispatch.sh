@@ -29,22 +29,52 @@ raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
   return 1
 }
 
+# Split one routing segment without invoking the shell. Double quotes group a
+# model containing spaces; every other character is literal data.
+parse_lane_segment() {
+  local input="$1" token="" ch i in_quote=0 have_token=0
+  PARSED_FIELDS=()
+  for ((i = 0; i < ${#input}; i++)); do
+    ch="${input:i:1}"
+    case "$ch" in
+      '"')
+        if [[ "$in_quote" -eq 1 ]]; then in_quote=0; else in_quote=1; fi
+        have_token=1
+        ;;
+      ' '|$'\t')
+        if [[ "$in_quote" -eq 1 ]]; then
+          token="$token$ch"
+        elif [[ "$have_token" -eq 1 ]]; then
+          PARSED_FIELDS+=("$token"); token=""; have_token=0
+        fi
+        ;;
+      *) token="$token$ch"; have_token=1 ;;
+    esac
+  done
+  [[ "$in_quote" -eq 0 ]] || return 1
+  [[ "$have_token" -eq 1 ]] && PARSED_FIELDS+=("$token")
+  [[ ${#PARSED_FIELDS[@]} -gt 0 ]]
+}
+
 # Pick the first candidate whose vendor CLI is present ("off" always matches).
-# Sets RESOLVED_SPEC / RESOLVED_IDX / RESOLVED_TOTAL; rc 1 = nothing available.
+# Sets RESOLVED_SPEC / RESOLVED_FIELDS / RESOLVED_IDX / RESOLVED_TOTAL.
 resolve_chain() {
   local chain="$1" seg i=0
-  RESOLVED_SPEC=""; RESOLVED_IDX=0; RESOLVED_TOTAL=0
-  local SEGS=()
+  RESOLVED_SPEC=""; RESOLVED_IDX=0; RESOLVED_TOTAL=0; RESOLVED_FIELDS=()
+  local SEGS=() F=()
   IFS='|' read -ra SEGS <<< "$chain"
   RESOLVED_TOTAL="${#SEGS[@]}"
   for seg in "${SEGS[@]}"; do
     i=$((i + 1))
     [[ -n "${seg// /}" ]] || continue
-    # Routing files are operator-trusted config; eval supports quoted model strings.
-    local F=()
-    eval "F=( $seg )"
+    parse_lane_segment "$seg" || {
+      echo "omnilane: malformed quoted routing segment: $seg" >&2
+      return 2
+    }
+    F=("${PARSED_FIELDS[@]}")
     if [[ "${F[0]:-}" == "off" ]] || vendor_available "${F[0]:-}"; then
-      RESOLVED_SPEC="$seg"; RESOLVED_IDX="$i"; return 0
+      RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}")
+      RESOLVED_IDX="$i"; return 0
     fi
   done
   return 1
@@ -100,7 +130,7 @@ resolve_chain "$CHAIN" || {
   exit 4
 }
 
-eval "FIELDS=( $RESOLVED_SPEC )"
+FIELDS=("${RESOLVED_FIELDS[@]}")
 VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_MODEL" ]] && MODEL="$OVERRIDE_MODEL"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"

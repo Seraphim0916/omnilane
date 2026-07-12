@@ -30,12 +30,33 @@ instruction_file() { # vendor -> the CLI's global instruction file (may vary by 
 }
 
 remove_hook() { # file [quiet]
-  local f="$1" tmp
+  local f="$1" tmp starts ends start_line end_line
   [[ -f "$f" ]] || return 0
-  grep -qF "$HOOK_START" "$f" || return 0
+  starts="$(grep -xcF "$HOOK_START" "$f" || true)"
+  ends="$(grep -xcF "$HOOK_END" "$f" || true)"
+  [[ "$starts" -eq 0 && "$ends" -eq 0 ]] && return 0
+  if [[ "$starts" -ne 1 || "$ends" -ne 1 ]]; then
+    echo "omnilane: warning: malformed routing reminder markers in $f (start=$starts end=$ends); file unchanged" >&2
+    return 2
+  fi
+  start_line="$(grep -nxF "$HOOK_START" "$f" | cut -d: -f1)"
+  end_line="$(grep -nxF "$HOOK_END" "$f" | cut -d: -f1)"
+  if [[ "$start_line" -ge "$end_line" ]]; then
+    echo "omnilane: warning: routing reminder markers out of order in $f; file unchanged" >&2
+    return 2
+  fi
   tmp="$(mktemp)"
   awk -v s="$HOOK_START" -v e="$HOOK_END" \
-    'index($0, s) {skip = 1} !skip {print} index($0, e) {skip = 0}' "$f" > "$tmp"
+    '$0 == s {
+       # A non-empty preceding record means install supplied the line ending;
+       # restore that original last line without adding one.
+       if (pending && previous != "") printf "%s", previous
+       pending = 0; skip = 1; next
+     }
+     $0 == e {skip = 0; next}
+     skip {next}
+     {if (pending) print previous; previous = $0; pending = 1}
+     END {if (pending) print previous}' "$f" > "$tmp"
   # cat-over instead of mv: keeps the inode, so instruction files that are
   # symlinks (common in synced setups) stay symlinks.
   cat "$tmp" > "$f"
