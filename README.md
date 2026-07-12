@@ -1,5 +1,7 @@
 # omnilane
 
+[繁體中文](README.zh-TW.md)
+
 One routing table, every harness. omnilane lets the main loop of **any** agentic
 CLI — Claude Code, OpenAI Codex, Grok Build, Google Antigravity — classify
 subtasks into lanes and automatically dispatch each lane to the best vendor's
