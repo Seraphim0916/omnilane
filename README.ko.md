@@ -44,7 +44,7 @@ flowchart LR
 | | | |
 |:---:|:---:|:---:|
 | 🧭 **테이블 하나**<br/>네 개 하네스가 공유 | 🪂 **폴백 체인**<br/>가진 CLI 로 자동 강등 | 🗳️ **의견 패널**<br/>중대한 결정은 멀티모델 투표 |
-| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치기가 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
+| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치 프로그램이 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
 
 </div>
 
@@ -72,7 +72,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | 실시간 X/웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.5 | Codex 쿼터 소진 시 중급 코딩 릴리프 밸브 |
+| 🚰 coding-overflow | Grok 4.5 | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off(옵트인) | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
 
 > **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다:
@@ -88,7 +88,7 @@ flowchart LR
 
 가장 빠른 방법: `./install.sh` — 로컬 CLI 를 감지해 스킬을 연결하고, 나머지
 플러그인 명령을 안내하며, 실효 라우팅을 출력한 뒤 대화형 설정 메뉴를
-제안합니다(`--uninstall` 로 되돌리기). 설치 화면은 시스템 언어에 따라
+제안합니다(`--uninstall` 로 되돌리기). 설치 프로그램은 시스템 언어에 따라
 영/번체/간체/일/한을 자동 선택합니다(`OMNILANE_LANG=ko` 로 강제 가능).
 또한 각 CLI 지침 파일(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 `~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — 경로는 CLI 버전에 따라 다를
@@ -167,7 +167,7 @@ CLI 없음, `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
   (거부 또는 invalid-argument). 본문을 태스크에 붙여 넣는 장문 통합이라는
   long-context 레인 본연의 용도에는 영향이 없습니다.
 - **Grok 에는 추론 강도 조절이 없습니다**. effort 필드는 인터페이스 호환용.
-- Codex work 모드가 비 git 디렉터리에서 한 차례 행에 걸렸습니다. 원인 규명
+- Codex work 모드가 비 git 디렉터리에서 한 차례 멈춘 적이 있습니다. 원인 규명
   전까지 git 작업 디렉터리(일반적인 경우)에서 사용하세요.
 
 ## 🌱 상태

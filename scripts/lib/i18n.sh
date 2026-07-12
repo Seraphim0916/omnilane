@@ -41,7 +41,7 @@ msg() { # key -> localized string ({} = placeholder, see msgf)
     overrides_header)
       case "$L" in zh-TW) echo "本機覆寫檔都在 ~/.omnilane/(永不進版控):";; zh-CN) echo "本机覆盖文件都在 ~/.omnilane/(永不进版本控制):";; ja) echo "マシン固有の設定は ~/.omnilane/ に置かれます(コミットされません):";; ko) echo "머신별 설정은 ~/.omnilane/ 에 있습니다(커밋되지 않음):";; *) echo "Per-machine overrides live in ~/.omnilane/ (never committed):";; esac ;;
     overrides_routing)
-      case "$L" in zh-TW) echo "routing.local.yaml — 覆寫任何通道(見 routing.local.yaml.example)";; zh-CN) echo "routing.local.yaml — 覆盖任意通道(见 routing.local.yaml.example)";; ja) echo "routing.local.yaml — 任意のレーンを上書き(routing.local.yaml.example 参照)";; ko) echo "routing.local.yaml — 레인 오버라이드(routing.local.yaml.example 참고)";; *) echo "routing.local.yaml — override any lane (see routing.local.yaml.example)";; esac ;;
+      case "$L" in zh-TW) echo "routing.local.yaml — 覆寫任何通道(見 routing.local.yaml.example)";; zh-CN) echo "routing.local.yaml — 覆盖任意通道(见 routing.local.yaml.example)";; ja) echo "routing.local.yaml — 任意のレーンをオーバーライド(routing.local.yaml.example 参照)";; ko) echo "routing.local.yaml — 레인 오버라이드(routing.local.yaml.example 참고)";; *) echo "routing.local.yaml — override any lane (see routing.local.yaml.example)";; esac ;;
     overrides_local)
       case "$L" in zh-TW) echo "local.sh           — 執行器用的執行檔路徑/環境變數(見 local.sh.example)";; zh-CN) echo "local.sh           — 执行器用的可执行文件路径/环境变量(见 local.sh.example)";; ja) echo "local.sh           — ランナー用のバイナリ/環境変数(local.sh.example 参照)";; ko) echo "local.sh           — 러너용 바이너리/환경 변수(local.sh.example 참고)";; *) echo "local.sh           — binaries/env for the runners (see local.sh.example)";; esac ;;
     effective)
