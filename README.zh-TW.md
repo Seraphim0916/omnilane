@@ -8,6 +8,8 @@
 每個子任務都派給真正最擅長它的模型——橫跨<br/>
 **Claude Code · Codex · Grok Build · Antigravity**,直接用你已經在付的訂閱。
 
+<img src="docs/hero.zh-TW.png" alt="omnilane 把每個子任務派給 Claude Code、Codex、Grok、Antigravity 中最擅長的模型" width="820"/>
+
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
 [![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)

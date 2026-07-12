@@ -8,6 +8,8 @@
 すべてのサブタスクを、その作業が本当に得意なモデルへ——<br/>
 **Claude Code · Codex · Grok Build · Antigravity** を横断、いまのサブスクリプションのままで。
 
+<img src="docs/hero.ja.png" alt="omnilane が各サブタスクを Claude Code・Codex・Grok・Antigravity の最適なモデルへ振り分ける" width="820"/>
+
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
 [![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)

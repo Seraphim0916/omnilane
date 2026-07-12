@@ -8,6 +8,8 @@
 모든 서브태스크를 그 일을 정말 잘하는 모델에게——<br/>
 **Claude Code · Codex · Grok Build · Antigravity** 를 가로질러, 이미 내고 있는 구독 그대로.
 
+<img src="docs/hero.ko.png" alt="omnilane 이 각 서브태스크를 Claude Code·Codex·Grok·Antigravity 중 가장 잘하는 모델로 보냅니다" width="820"/>
+
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
 [![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)

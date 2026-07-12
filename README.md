@@ -8,6 +8,8 @@
 Every subtask goes to the model that is actually best at it — across<br/>
 **Claude Code · Codex · Grok Build · Antigravity**, on the subscriptions you already pay for.
 
+<img src="docs/hero.png" alt="omnilane routes each subtask to the best model across Claude Code, Codex, Grok and Antigravity" width="820"/>
+
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
 [![license](https://img.shields.io/github/license/Seraphim0916/omnilane)](LICENSE)
 [![version](https://img.shields.io/github/v/tag/Seraphim0916/omnilane?label=version)](https://github.com/Seraphim0916/omnilane/tags)
