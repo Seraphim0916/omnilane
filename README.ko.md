@@ -61,25 +61,47 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-| 레인 | 1순위 모델 | 용도 |
-|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
-| 🧹 triage | GPT-5.6 Luna (medium) | 대량 1차 선별 |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
-| ✒️ taste-final | Claude Opus 4.8 (high) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
-| 📚 long-context | Gemini 3.1 Pro (High) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
-| ⚡ fast-agentic | Gemini 3.5 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.5 | 실시간 X/웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.5 | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
-| 🗳️ arbitrate | off(옵트인) | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
+| 레인 | 1순위 모델 | 백업 | 용도 |
+|---|---|---|---|
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
+| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 대량 1차 선별 |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
+| ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
+| ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.5 | —(off) | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
+
+**백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
+디스패치가 강등되는 대상입니다.
 
 > **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다:
 > Claude 최상위 티어는 보통 *메인 루프 자신*이지 디스패치되는 워커가 아니며,
 > 가격도 Opus 보다 높습니다. 설정 메뉴의 모델 목록에는 있으니 원하면 직접
 > 라우팅하세요(예: `routing.local.yaml` 에
 > `taste-final: claude claude-fable-5 high`).
+
+<details>
+<summary><b>👉 어떤 레인을 직접 실행하나요? 메인 모델을 선택하세요</b></summary>
+
+<br/>
+
+위 표는 벤더 중립적입니다——레인의 *최적* 모델은 누가 운전하든 바뀌지
+않습니다. 바뀌는 것은 어떤 레인을 **직접 실행**하는지(이미 그 모델이므로
+추가 호출 없음)와 **디스패치**하는지입니다. CLI 의 `omnilane` 스킬이 해당
+행을 자동 적용하며, 이것은 사람이 보는 버전입니다.
+
+- **Claude Code · Fable 5** — 직접 실행: hard-judgment, taste-final, 정확성이 최우선인 난이도 높은 수정. 디스패치: 기계적 코딩 물량 → Codex, 장문 → Gemini, 실시간 검색 → Grok.
+- **Claude Code · Opus 4.8** — 직접 실행: taste-final. hard-judgment 은 Codex Sol 로(순수 지능 점수가 Opus 보다 높음), 모든 코딩은 Codex 레인, 장문 → Gemini, 실시간 검색 → Grok.
+- **Codex · Sol** — 직접 실행: hardest-coding, hard-judgment, ui-draft. 디스패치: taste-final → Claude, 장문 → Gemini, 실시간 검색 → Grok, 대량 작업 → Codex Terra.
+- **Codex · Terra** — 직접 실행: bulk-mechanical. 정말 가장 어려운 부분은 Sol 로 에스컬레이션; taste → Claude, 장문 → Gemini, 실시간 검색 → Grok.
+- **Grok Build · Grok 4.5** — 직접 실행: live-search, coding-overflow(중급 코딩). 어려운 작업은 모두 Codex/Claude/Gemini 로——먼저 모든 API 시그니처와 인용 사실을 검증.
+- **Antigravity · Gemini** — 직접 실행: long-context(3.1 Pro), fast-agentic(Flash). 코딩/판단/문장은 Codex/Claude 로; 실시간 검색 → Grok. 3.1 Pro 에서는 agentic 툴 루프 체인을 절대 맡지 않음.
+
+</details>
 
 ## 🚀 설치
 

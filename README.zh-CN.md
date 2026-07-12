@@ -58,24 +58,44 @@ flowchart LR
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
-| 通道 | 首选模型 | 用途 |
-|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | 最难的实现、深度调试、正确性攸关的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | 重构、迁移、测试、大面积扫描——机械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (medium) | 高量初筛、第一轮过滤 |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | 架构仲裁、深度推理、第二意见 |
-| ✒️ taste-final | Claude Opus 4.8 (high) | 对外文字、prompt 与文档打磨、风格终审 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |
-| 📚 long-context | Gemini 3.1 Pro (High) | 百万 token 长文整合——仅限分析,不派 agentic 长链 |
-| ⚡ fast-agentic | Gemini 3.5 Flash (High) | 快速多步骤 agentic 循环、多模态检查 |
-| 📡 live-search | Grok 4.5 | 实时 X/网络搜索与社群脉络 |
-| 🚰 coding-overflow | Grok 4.5 | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
-| 🗳️ arbitrate | off(可选评审团) | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
+| 通道 | 首选模型 | 备选模型 | 用途 |
+|---|---|---|---|
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 最难的实现、深度调试、正确性攸关的修改 |
+| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重构、迁移、测试、大面积扫描——机械耐力活 |
+| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 高量初筛、第一轮过滤 |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | 架构仲裁、深度推理、第二意见 |
+| ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 百万 token 长文整合——仅限分析,不派 agentic 长链 |
+| ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 快速多步骤 agentic 循环、多模态检查 |
+| 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
+| 🚰 coding-overflow | Grok 4.5 | —(off) | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
+| 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
+
+**备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。
 
 > **Claude Fable 5 去哪了?** 默认表刻意不放:Claude 顶级档通常就是*主循环本人*,
 > 不是被派发的工人,且定价高于 Opus。设置菜单的模型清单里有它——
 > 不同意就自己路由过去(例如在 `routing.local.yaml` 写
 > `taste-final: claude claude-fable-5 high`)。
+
+<details>
+<summary><b>👉 哪些通道你自己跑?选你的主控模型</b></summary>
+
+<br/>
+
+上面那张表跟厂商无关——一条通道的*最佳*模型不会因为谁在主控而改变。会变的是
+你哪些通道**自己做**(你本来就是那个模型,省一次调用)、哪些**派出去**。你 CLI 里
+的 `omnilane` 技能会自动套对的那一行,这里是给人看的版本。
+
+- **Claude Code · Fable 5** — 自己做:hard-judgment、taste-final、最吃正确性的硬修。派出去:机械编码量 → Codex、长文 → Gemini、实时搜索 → Grok。
+- **Claude Code · Opus 4.8** — 自己做:taste-final。hard-judgment 派给 Codex Sol(智力分高于 Opus)、所有编码走 Codex 通道、长文 → Gemini、实时搜索 → Grok。
+- **Codex · Sol** — 自己做:hardest-coding、hard-judgment、ui-draft。派出去:taste-final → Claude、长文 → Gemini、实时搜索 → Grok、粗活 → Codex Terra。
+- **Codex · Terra** — 自己做:bulk-mechanical。真正最硬的往上升给 Sol;taste → Claude、长文 → Gemini、实时搜索 → Grok。
+- **Grok Build · Grok 4.5** — 自己做:live-search、coding-overflow(中量级编码)。所有硬活派给 Codex/Claude/Gemini——先验每个 API 签名与引用事实。
+- **Antigravity · Gemini** — 自己做:long-context(3.1 Pro)、fast-agentic(Flash)。编码/判断/文字派给 Codex/Claude;实时搜索 → Grok。3.1 Pro 绝不接 agentic 工具长链。
+
+</details>
 
 ## 🚀 安装
 

@@ -1,6 +1,36 @@
 # Copy to ~/.omnilane/routing.local.yaml — lines here override routing.yaml.
-# Same format: lane: vendor model effort
+# Same format: lane: vendor model effort   (first match per lane wins)
 
 # Example: send triage to a cheaper local setup and disable the grok lane.
 # triage:      codex gpt-5.6-luna low
 # live-search: off - -
+
+# ── Starter profiles ─────────────────────────────────────────────
+# Uncomment ONE block that matches what you actually subscribe to.
+# You never need every vendor — unmatched lanes fall back down the chain
+# in routing.yaml automatically.
+
+# Profile: Claude-only (no Codex/Gemini/Grok) — route everything to Claude.
+# hardest-coding:  claude claude-opus-4-8 high
+# bulk-mechanical: claude claude-sonnet-5 high
+# triage:          claude claude-haiku-4-5 -
+# hard-judgment:   claude claude-opus-4-8 high
+# ui-draft:        claude claude-opus-4-8 high
+# long-context:    claude claude-opus-4-8 high
+# fast-agentic:    claude claude-sonnet-5 high
+# live-search:     off - -
+# coding-overflow: off - -
+
+# Profile: Claude Code (Fable 5) as the main loop — let Fable keep judgment/taste,
+# push only coding volume out to Codex.
+# hard-judgment:   claude claude-fable-5 high
+# taste-final:     claude claude-fable-5 high
+
+# Profile: Codex-heavy (Sol main) — keep the hard lanes on Codex, Claude for taste.
+# taste-final:     claude claude-opus-4-8 high
+# long-context:    codex gpt-5.6-sol high
+
+# Profile: no Codex subscription — promote Claude/Gemini into the coding lanes.
+# hardest-coding:  claude claude-opus-4-8 high
+# bulk-mechanical: gemini "Gemini 3.5 Flash (High)" -
+# triage:          gemini "Gemini 3.5 Flash (Low)" -
