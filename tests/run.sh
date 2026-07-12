@@ -13,17 +13,18 @@ pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 
 test_safe_routing_parser() {
-  local name="safe routing parser" home proof_bt proof_sub out
+  local name="safe routing parser" home proof_bt proof_sub proof_effort out
   home="$TEST_ROOT/parser"; mkdir -p "$home"
-  proof_bt="$home/backtick-ran"; proof_sub="$home/subshell-ran"
+  proof_bt="$home/backtick-ran"; proof_sub="$home/subshell-ran"; proof_effort="$home/effort-ran"
   {
     printf 'triage: vote "Gemini 3.1 Pro (High)" 1\n'
     printf 'payload-sub: vote "$(printf injected > %s)" 1\n' "$proof_sub"
     printf 'payload-bt: vote "`printf injected > %s`" 1\n' "$proof_bt"
+    printf 'payload-effort: vote literal "$(printf injected > %s)"\n' "$proof_effort"
   } > "$home/routing.local.yaml"
 
   out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --list 2>&1)"
-  if [[ -e "$proof_sub" || -e "$proof_bt" ]]; then
+  if [[ -e "$proof_sub" || -e "$proof_bt" || -e "$proof_effort" ]]; then
     fail "$name" "routing text executed as shell"
   elif [[ "$out" != *'vote "Gemini 3.1 Pro (High)" 1'* ]]; then
     fail "$name" "quoted model was not preserved"
@@ -197,7 +198,7 @@ run_fake_vote() {
 }
 
 test_round2_failure_is_nonzero() {
-  local name="round 2 total failure is nonzero" repo home tmp rc leftovers
+  local name="round 2 total failure exits 6 and cleans temp" repo home tmp rc leftovers
   repo="$TEST_ROOT/vote-fail-repo"; home="$TEST_ROOT/vote-fail-home"; tmp="$TEST_ROOT/vote-fail-tmp"
   make_fake_vote_repo "$repo"
   FAKE_ROUND2_FAIL=1 run_fake_vote "$repo" "$home" "$tmp" "$home/output" > "$TEST_ROOT/vote-fail.log" 2>&1
@@ -213,7 +214,7 @@ test_round2_failure_is_nonzero() {
 }
 
 test_round2_untrusted_boundary_and_cleanup() {
-  local name="round 2 untrusted boundary and cleanup" repo home tmp capture leftovers
+  local name="round 2 fences hostile opinion and cleans temp" repo home tmp capture leftovers
   repo="$TEST_ROOT/vote-ok-repo"; home="$TEST_ROOT/vote-ok-home"; tmp="$TEST_ROOT/vote-ok-tmp"
   make_fake_vote_repo "$repo"
   run_fake_vote "$repo" "$home" "$tmp" "$home/output" > "$TEST_ROOT/vote-ok.log" 2>&1 || {
