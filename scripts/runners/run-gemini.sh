@@ -29,13 +29,20 @@ fi
 MODEL_ARGS=()
 [[ -n "$MODEL" && "$MODEL" != "-" ]] && MODEL_ARGS=(--model "$MODEL")
 
+# Without an execution mode, print mode denies tool calls outright:
+# plan = read-only tools (advise), accept-edits = file edits allowed (work).
+if [[ "$MODE" == "advise" ]]; then MODE_ARGS=(--mode plan); else MODE_ARGS=(--mode accept-edits); fi
+
 set +e
 (
   cd "$RUN_DIR" || exit 127
   # Headless cannot answer OAuth prompts; strip API keys to stay on CLI login.
+  # --add-dir registers RUN_DIR as the active workspace; without it agy's
+  # sandbox denies every tool call (run_command/view_file) in print mode.
   env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
     NO_BROWSER=1 OMNILANE_DEPTH=1 \
-    "$AGY_BIN" --dangerously-skip-permissions ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+    "$AGY_BIN" --dangerously-skip-permissions --add-dir "$RUN_DIR" \
+    "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
     --print-timeout "${RUN_TIMEOUT}s" \
     --print "$(cat "$PROMPT_FILE")" \
     > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"

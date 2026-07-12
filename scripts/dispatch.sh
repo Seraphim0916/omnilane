@@ -135,7 +135,17 @@ run_job() {
 }
 
 if [[ "$BACKGROUND" == "1" ]]; then
-  ( run_job ) >/dev/null 2>&1 &
+  # set -m gives the worker its own process group so it survives the caller's
+  # exit and group-wide signals; traps persist a best-effort exit code so
+  # jobs.sh never reports a killed worker as still running.
+  set -m
+  (
+    trap 'echo 129 > "$JOB_DIR/exit"; exit 129' HUP
+    trap 'echo 143 > "$JOB_DIR/exit"; exit 143' TERM
+    run_job
+  ) < /dev/null > "$JOB_DIR/worker.log" 2>&1 &
+  disown
+  set +m
   echo "$JOB_ID"
   exit 0
 fi

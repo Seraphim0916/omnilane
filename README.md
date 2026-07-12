@@ -17,26 +17,25 @@ CLI, using your existing subscription logins.
 
 ## How it works
 
-- **`routing.yaml`** — lane → vendor + model + effort. Override any lane in
-  `~/.omnilane/routing.local.yaml`.
+- **`routing.yaml`** — lane → vendor + model + effort. One file, read by every
+  harness.
 - **Fallback chains** — a lane can list candidates
   (`codex … | claude … | off`); dispatch picks the first vendor CLI you actually
   have, so the default table works even with a single subscription.
 - **`scripts/dispatch.sh <lane> "<task>"`** — resolves the lane and shells out
-  to the vendor's CLI headlessly. `--background` + `scripts/jobs.sh` for long
-  tasks; `--mode work --workdir DIR` when the worker may edit files.
+  to the vendor's CLI headlessly.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
-- Safety rails built in: read-only workers by default, no nested dispatch
-  (depth guard), same-directory codex dispatches serialized, payload caps.
 
 ## Install
 
 Requirements: the vendor CLIs you want to route to, logged in (`codex`,
-`claude`, `grok`, `agy`) and on `PATH`.
+`claude`, `grok`, `agy`) and on `PATH` — install only the ones you have; the
+rest of the table degrades automatically.
 
-Quickest: `./install.sh` — symlinks the skill for the CLIs it finds and prints
-the plugin commands for the rest (`--uninstall` reverses it). Manual wiring:
+Quickest: `./install.sh` — symlinks the skill for the CLIs it finds, prints
+the plugin commands for the rest, shows your effective routing, and offers the
+interactive lane configurator (`--uninstall` reverses it). Manual wiring:
 
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
@@ -45,18 +44,87 @@ the plugin commands for the rest (`--uninstall` reverses it). Manual wiring:
 - **Antigravity**: `agy plugin install <this repo>` (check first with
   `agy plugin validate <this repo>`)
 
-Per-machine binaries, proxies, or auth wrappers go in `~/.omnilane/local.sh`
-(sourced by every runner; never committed) — see `local.sh.example` and
-`routing.local.yaml.example`.
+## Configure
+
+Three layers, all optional:
+
+1. **Interactive menu** — `scripts/configure.sh` lists your lanes, lets you
+   pick vendor → model → effort per lane from suggestions (or free text for
+   future models), and writes the result to `~/.omnilane/routing.local.yaml`.
+   `install.sh` offers to run it at the end of a normal install.
+2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
+   as `routing.yaml`; local lines win. See `routing.local.yaml.example`.
+3. **`~/.omnilane/local.sh`** — per-machine binaries, proxies, auth wrappers;
+   sourced by every runner, never committed. See `local.sh.example`.
+
+Check the result any time:
+
+```
+scripts/dispatch.sh --list     # effective table, fallback resolution annotated
+```
+
+## Command reference
+
+```
+dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+            [--model M] [--effort E] LANE "TASK"   # "-" reads task from stdin
+dispatch.sh --list
+jobs.sh list | status ID | result ID
+configure.sh                                        # interactive lane menu
+```
+
+Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
+`4` no vendor CLI available in the chain, `86` nested dispatch refused,
+`87` lock timeout; otherwise the worker's own exit code passes through.
+
+## Modes
+
+- **advise** (default) — read-only worker. Codex runs in a read-only sandbox;
+  Claude gets only Read/Glob/Grep; Grok runs in plan mode. Use for reviews,
+  questions, second opinions.
+- **work** — the worker may edit files, only inside the `--workdir` you name.
+  Codex gets a workspace-write sandbox; Claude auto-accepts edits; Gemini runs
+  in accept-edits mode.
+
+## Safety rails
+
+- **No nested dispatch** — workers cannot fan out again (`OMNILANE_DEPTH`
+  guard, exit 86): no runaway agent-calls-agent quota chains.
+- **Serialized codex** — same-target-directory codex dispatches queue behind a
+  lock keyed on the normalized workdir; stale locks from crashed jobs are
+  detected by owner PID and stolen safely.
+- **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
+  fallback when neither exists (stock macOS), so a hung CLI cannot block
+  forever (`OMNILANE_TIMEOUT`, default 600s).
+- **Background lifecycle** — `--background` workers run in their own process
+  group and survive the caller's exit; killed workers record an exit code, and
+  `jobs.sh status` reports `dead` instead of `running` forever.
+- **Payload caps** — oversized task text is truncated head+tail before it can
+  blow a worker's context.
 
 ## Defaults and provenance
 
 Default lane assignments follow Artificial Analysis coding/intelligence data
-(2026-07) plus published head-to-head reviews; they are opinions, not laws —
-edit `routing.yaml` to taste. The `arbitrate` lane is off by default: wire it
-to your own multi-model review gate if you have one.
+(2026-07 snapshot, cross-checked against AA site records and vendor pricing
+pages) plus published head-to-head reviews; they are opinions, not laws — the
+configurator and `routing.local.yaml` exist so you can disagree. The
+`arbitrate` lane is off by default: wire it to your own multi-model review
+gate if you have one.
+
+## Known limitations
+
+- **Antigravity tool calls in print mode are unstable** in current CLI builds
+  (tool calls may be denied or rejected with invalid-argument errors). The
+  long-context lane is designed for content-you-paste-in synthesis, which is
+  unaffected; for repo *inspection* prefer the claude/codex candidates.
+- **Grok has no reasoning-effort knob**; the effort field is accepted for
+  interface parity and ignored.
+- Codex work mode in a non-git directory has hung in one test; use a git
+  working directory (the normal case) until this is pinned down.
 
 ## Status
 
-Early. Runner interfaces are stable; Grok/Antigravity command-shell behavior
-may vary across CLI versions. Issues and PRs welcome.
+Early but reviewed: the shell core has been through an external model review
+(11 findings fixed) plus an adversarial verification pass. Runner interfaces
+are stable; Grok/Antigravity command-shell behavior may vary across CLI
+versions. Issues and PRs welcome.

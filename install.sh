@@ -60,4 +60,9 @@ if [[ "$UNINSTALL" != "--uninstall" ]]; then
   echo
   echo "Effective routing on this machine (fallback chains resolved):"
   bash "$REPO/scripts/dispatch.sh" --list
+  if [[ -t 0 && -t 1 ]]; then
+    echo
+    read -rp "Customize lane -> model assignments now? [y/N] " ans || ans=""
+    case "$ans" in y|Y|yes|YES) bash "$REPO/scripts/configure.sh" ;; esac
+  fi
 fi
