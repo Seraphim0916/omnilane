@@ -56,7 +56,7 @@ CLI, using your existing subscription logins.
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding |
-| arbitrate | vote: codex+claude+grok | Built-in opinion panel for big calls — one call PER VOTER per round; you chair the verdict |
+| arbitrate | off (opt-in vote panel) | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
 next candidate or `off`.
@@ -109,14 +109,14 @@ jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
 ```
 
-**Big decisions get a panel, not a person.** The `arbitrate` lane defaults to
-the built-in `vote` vendor: the same question goes to every installed voter
-(`arbitrate: vote codex,claude,grok -`), the opinions come back side by side,
-and the calling model chairs the verdict. Set the effort field to `2` for a
-debate round — every voter sees the whole panel and rebuts only the
-disagreements. Add `gemini` for a four-voter panel. It costs one call per
-voter per round — turn it off with `arbitrate: off - -` in
-`routing.local.yaml` if that is too rich. Power users can swap in their own
+**Big decisions can get a panel, not a person.** The `arbitrate` lane ships
+**disabled** — a panel costs one call per voter per round, so it is opt-in.
+Enable it with `arbitrate: vote codex,claude,grok -` in `routing.local.yaml`,
+or through the configurator, which lets you pick any 1-4 voters from
+codex/claude/grok/gemini. The same question then goes to every voter, the
+opinions come back side by side, and the calling model chairs the verdict.
+Set the effort field to `2` for a debate round — every voter sees the whole
+panel and rebuts only the disagreements. Power users can swap in their own
 gate via the `exec` vendor:
 `arbitrate: exec /path/to/script -` — the script receives
 `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict to

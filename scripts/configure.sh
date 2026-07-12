@@ -68,7 +68,19 @@ while true; do
     claude) model="$(pick "model:" "${CLAUDE_MODELS[@]}")"; effort="$(pick "effort:" "${CLAUDE_EFFORTS[@]}")" ;;
     gemini) model="$(pick "model:" "${GEMINI_MODELS[@]}")"; effort="-" ;;
     grok)   model="$(pick "model:" "${GROK_MODELS[@]}")";   effort="-" ;;
-    vote)   model="$(pick "voters (one call per voter per round!):" "codex,claude,grok" "codex,claude,grok,gemini" "codex,claude")"
+    vote)   while true; do
+              count="$(pick "how many voters? (each costs one call per round)" "1" "2" "3" "4")"
+              [[ "$count" =~ ^[1-4]$ ]] && break
+              echo "voters must be 1-4" >&2
+            done
+            model=""; remaining=(codex claude grok gemini)
+            for ((s = 1; s <= count; s++)); do
+              v="$(pick "voter $s:" "${remaining[@]}")"
+              model+="${model:+,}$v"
+              next=()
+              for r in "${remaining[@]}"; do [[ "$r" == "$v" ]] || next+=("$r"); done
+              remaining=("${next[@]}")
+            done
             effort="$(pick "rounds (2 = voters rebut each other):" "1" "2")"
             [[ "$effort" == "1" ]] && effort="-" ;;
     exec)   read -rp "script path (gets MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE): " model || model=""

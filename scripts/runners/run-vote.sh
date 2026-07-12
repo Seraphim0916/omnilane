@@ -45,11 +45,12 @@ truncate_payload "$PROMPT_FILE" 100000
 
 : > "$OUTPUT_FILE"
 printf '# Round 1 — independent opinions\n\n' >> "$OUTPUT_FILE"
-ok=0; OK_VOTERS=()
+ok=0; requested=0; OK_VOTERS=()
 IFS=',' read -ra LIST <<< "$VENDORS"
 for v in "${LIST[@]}"; do
   v="${v// /}"
   [[ -n "$v" ]] || continue
+  requested=$((requested + 1))
   if [[ "$v" == "exec" || "$v" == "vote" ]] || ! vendor_available "$v"; then
     printf '## %s — not installed, skipped\n\n' "$v" >> "$OUTPUT_FILE"
     continue
@@ -63,8 +64,10 @@ for v in "${LIST[@]}"; do
   fi
 done
 
-if [[ "$ok" -lt 2 ]]; then
-  echo "omnilane: vote needs >=2 successful voters (got $ok)" >&2
+# A deliberately configured single-voter panel is a plain second opinion — allow it.
+min_ok=2; [[ "$requested" -le 1 ]] && min_ok=1
+if [[ "$ok" -lt "$min_ok" ]]; then
+  echo "omnilane: vote needs >=$min_ok successful voters (got $ok)" >&2
   exit 5
 fi
 
