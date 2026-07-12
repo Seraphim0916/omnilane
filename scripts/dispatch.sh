@@ -5,25 +5,69 @@ set -euo pipefail
 # Usage:
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
 #               [--model M] [--effort E] LANE "TASK TEXT"
-#   dispatch.sh --list            # show effective routing (local overrides applied)
+#   dispatch.sh --list            # effective routing: local overrides + fallback resolution
 #
 # TASK TEXT of "-" reads the task from stdin.
+#
+# A lane line may hold a fallback chain:
+#   lane: vendor model effort | vendor model effort | off
+# The first candidate whose vendor CLI exists on this machine wins, so the same
+# table degrades gracefully for people with fewer subscriptions.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
 OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""
 
+raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
+  local lane="$1" f line
+  for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+    [[ -f "$f" ]] || continue
+    line="$(grep -E "^${lane}:" "$f" | head -1 | sed 's/#.*$//' | cut -d: -f2-)" || true
+    [[ -n "${line// /}" ]] && { printf '%s\n' "$line"; return 0; }
+  done
+  return 1
+}
+
+# Pick the first candidate whose vendor CLI is present ("off" always matches).
+# Sets RESOLVED_SPEC / RESOLVED_IDX / RESOLVED_TOTAL; rc 1 = nothing available.
+resolve_chain() {
+  local chain="$1" seg i=0
+  RESOLVED_SPEC=""; RESOLVED_IDX=0; RESOLVED_TOTAL=0
+  local SEGS=()
+  IFS='|' read -ra SEGS <<< "$chain"
+  RESOLVED_TOTAL="${#SEGS[@]}"
+  for seg in "${SEGS[@]}"; do
+    i=$((i + 1))
+    [[ -n "${seg// /}" ]] || continue
+    # Routing files are operator-trusted config; eval supports quoted model strings.
+    local F=()
+    eval "F=( $seg )"
+    if [[ "${F[0]:-}" == "off" ]] || vendor_available "${F[0]:-}"; then
+      RESOLVED_SPEC="$seg"; RESOLVED_IDX="$i"; return 0
+    fi
+  done
+  return 1
+}
+
 print_effective_routing() {
-  local seen=" " f lane
+  local seen=" " f line lane chain spec note
   for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
     [[ -f "$f" ]] || continue
     while IFS= read -r line; do
-      [[ "$line" =~ ^([a-z-]+): ]] || continue
+      [[ "$line" =~ ^([a-z][a-z0-9-]*): ]] || continue
       lane="${BASH_REMATCH[1]}"
       [[ "$seen" == *" $lane "* ]] && continue
       seen="$seen$lane "
-      printf '%s\n' "${line%%#*}"
+      chain="${line%%#*}"; chain="${chain#*:}"
+      if resolve_chain "$chain"; then
+        spec="$(printf '%s' "$RESOLVED_SPEC" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        note=""
+        [[ "$RESOLVED_IDX" -gt 1 ]] && note="   # fallback ($RESOLVED_IDX/$RESOLVED_TOTAL)"
+        printf '%-17s%s%s\n' "$lane:" "$spec" "$note"
+      else
+        printf '%-17s%s\n' "$lane:" "unavailable   # no vendor CLI found in chain"
+      fi
     done < "$f"
   done
 }
@@ -43,19 +87,18 @@ done
 
 LANE="${1:?usage: dispatch.sh [flags] LANE \"TASK\"}"
 TASK="${2:?missing task text (use - for stdin)}"
+[[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name '$LANE'" >&2; exit 2; }
 
 depth_guard
 
-SPEC=""
-for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
-  [[ -f "$f" ]] || continue
-  SPEC="$(grep -E "^${LANE}:" "$f" | head -1 | sed 's/#.*$//' | cut -d: -f2-)" || true
-  [[ -n "${SPEC// /}" ]] && break
-done
-[[ -n "${SPEC// /}" ]] || { echo "omnilane: unknown lane '$LANE' (try --list)" >&2; exit 2; }
+CHAIN="$(raw_lane_line "$LANE")" || { echo "omnilane: unknown lane '$LANE' (try --list)" >&2; exit 2; }
+resolve_chain "$CHAIN" || {
+  echo "omnilane: no vendor CLI available for lane '$LANE' (chain:$CHAIN)." >&2
+  echo "omnilane: install a vendor CLI or override the lane in ~/.omnilane/routing.local.yaml" >&2
+  exit 4
+}
 
-# Routing files are operator-trusted config; eval supports quoted model strings.
-eval "FIELDS=( $SPEC )"
+eval "FIELDS=( $RESOLVED_SPEC )"
 VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_MODEL" ]] && MODEL="$OVERRIDE_MODEL"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"
@@ -72,8 +115,8 @@ JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
 mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
-printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","mode":"%s","workdir":"%s","started":"%s"}\n' \
-  "$LANE" "$VENDOR" "$MODEL" "$EFFORT" "$MODE" "$WORKDIR" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
+printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+  "$LANE" "$VENDOR" "$MODEL" "$EFFORT" "$MODE" "$WORKDIR" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
 
 run_job() {
   local rc=0

@@ -15,6 +15,21 @@ resolve_timeout_cmd() {
   else echo ""; fi
 }
 
+vendor_bin() { # vendor -> binary (honors local.sh overrides)
+  case "$1" in
+    codex)  echo "${CODEX_BIN:-codex}" ;;
+    claude) echo "${CLAUDE_BIN:-claude}" ;;
+    grok)   echo "${GROK_BIN:-grok}" ;;
+    gemini) echo "${AGY_BIN:-agy}" ;;
+    *)      echo "" ;;
+  esac
+}
+
+vendor_available() {
+  local b; b="$(vendor_bin "$1")"
+  [[ -n "$b" ]] && command -v "$b" >/dev/null 2>&1
+}
+
 # Depth guard: a dispatched worker must not fan out again (quota-burn chains).
 depth_guard() {
   local depth="${OMNILANE_DEPTH:-0}"
@@ -27,18 +42,26 @@ depth_guard() {
 # Same-cwd serial lock for codex: two concurrent `codex exec` in one repo
 # corrupt the job index and cross-pollute pytest. mkdir is the portable lock.
 acquire_cwd_lock() {
-  local vendor="$1" key lockdir waited=0
+  local vendor="$1" key lockdir waited=0 owner
   key="$(pwd | shasum | cut -c1-12)-$vendor"
   lockdir="$OMNILANE_HOME/locks/$key"
   mkdir -p "$OMNILANE_HOME/locks"
   while ! mkdir "$lockdir" 2>/dev/null; do
+    # Steal the lock if its owner is gone (crash / kill -9 leaves the dir behind).
+    owner="$(cat "$lockdir/pid" 2>/dev/null || true)"
+    if [[ -n "$owner" ]] && ! kill -0 "$owner" 2>/dev/null; then
+      rm "$lockdir/pid" 2>/dev/null || true
+      rmdir "$lockdir" 2>/dev/null || true
+      continue
+    fi
     sleep 2; waited=$((waited + 2))
     if [[ "$waited" -ge "${OMNILANE_LOCK_TIMEOUT:-600}" ]]; then
       echo "omnilane: lock timeout for $vendor in $(pwd)" >&2; exit 87
     fi
   done
+  echo $$ > "$lockdir/pid"
   OMNILANE_LOCKDIR="$lockdir"
-  trap 'rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true' EXIT
+  trap 'rm "$OMNILANE_LOCKDIR/pid" 2>/dev/null; rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true' EXIT
 }
 
 # Cap payload so a runaway prompt cannot blow a worker's context.

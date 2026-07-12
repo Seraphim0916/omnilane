@@ -57,4 +57,7 @@ if [[ "$UNINSTALL" != "--uninstall" ]]; then
   echo "Per-machine overrides live in ~/.omnilane/ (never committed):"
   echo "  routing.local.yaml — override any lane (see routing.local.yaml.example)"
   echo "  local.sh           — binaries/env for the runners (see local.sh.example)"
+  echo
+  echo "Effective routing on this machine (fallback chains resolved):"
+  bash "$REPO/scripts/dispatch.sh" --list
 fi

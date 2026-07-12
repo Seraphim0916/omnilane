@@ -14,6 +14,8 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
 
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
+Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,
+so the same table works with any subset of subscriptions.
 
 ## Lanes (defaults; see routing.yaml for the live values)
 
@@ -28,6 +30,7 @@ Run `scripts/dispatch.sh --list` to see the effective table (local overrides win
 | long-context | Gemini 3.1 Pro (High) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
+| coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | (pluggable, off by default) | Multi-voter review gate — wire your own |
 
 ## Rules
@@ -42,6 +45,9 @@ Run `scripts/dispatch.sh --list` to see the effective table (local overrides win
   do not try to parallelize them yourself.
 - Escalate without asking: two failed attempts on a lane → move one lane up
   (triage → bulk-mechanical → hardest-coding).
+- Vendor quota exhausted (429 / "stream disconnected" / usage-limit message):
+  send mid-tier coding through coding-overflow instead; never silently downgrade
+  hardest-coding — wait or escalate to the user.
 
 ## Per-model notes (apply the row matching YOUR main model)
 

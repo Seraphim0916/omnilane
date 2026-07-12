@@ -19,6 +19,9 @@ CLI, using your existing subscription logins.
 
 - **`routing.yaml`** — lane → vendor + model + effort. Override any lane in
   `~/.omnilane/routing.local.yaml`.
+- **Fallback chains** — a lane can list candidates
+  (`codex … | claude … | off`); dispatch picks the first vendor CLI you actually
+  have, so the default table works even with a single subscription.
 - **`scripts/dispatch.sh <lane> "<task>"`** — resolves the lane and shells out
   to the vendor's CLI headlessly. `--background` + `scripts/jobs.sh` for long
   tasks; `--mode work --workdir DIR` when the worker may edit files.

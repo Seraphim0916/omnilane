@@ -1,7 +1,9 @@
 # omnilane — single routing table shared by every harness (CC / Codex / Grok / Antigravity)
-# Format: one lane per line ->  lane: vendor model effort
+# Format: one lane per line ->  lane: vendor model effort [| vendor model effort | off]
 #   vendor  = codex | claude | grok | gemini
 #   effort  = codex reasoning effort / claude --effort / agy thinking suffix / (grok: ignored)
+#   Fallback chain: the first candidate whose vendor CLI is installed wins, so the
+#   same table degrades gracefully when you only subscribe to one or two vendors.
 # Override any line in ~/.omnilane/routing.local.yaml (same format; local wins).
 # Provenance (audited 2026-07-12): defaults follow Artificial Analysis data, 2026-07
 # snapshot. Verified against AA site records + vendor pricing pages: Intelligence &
@@ -10,13 +12,14 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding:  codex gpt-5.6-sol xhigh        # AA coding leader (78.35); xhigh beats max (77.39) at lower cost — verified
-bulk-mechanical: codex gpt-5.6-terra max        # coding 76.66 ~= Fable-class at a fraction of the cost; high is a dead tier
-triage:          codex gpt-5.6-luna medium      # high-volume scans; bump xhigh when real comprehension needed
-hard-judgment:   codex gpt-5.6-sol max          # AA Intelligence 58.9 — second only to Fable 5 (59.9, fallback composite)
-taste-final:     claude claude-opus-4-8 high    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
-ui-draft:        codex gpt-5.6-sol xhigh        # only with a design system / reference images; open-ended visual taste -> taste-final
-long-context:    gemini "Gemini 3.1 Pro (High)" -  # 1M-token synthesis ONLY — never agentic loops (AA agentic 21.4); agy native model string
-fast-agentic:    gemini "Gemini 3.5 Flash (High)" - # speed + agentic tool loops (GDPval-AA family best)
-live-search:     grok grok-4.5 -                # native X/web search lane
+hardest-coding:  codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # AA coding 78.35; xhigh beats max (77.39) at lower cost — verified
+bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini "Gemini 3.5 Flash (High)" -  # Terra 76.66 ~= Fable-class at a fraction of the cost
+triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.5 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans
+hard-judgment:   codex gpt-5.6-sol max | claude claude-opus-4-8 high    # Sol max Intelligence 58.9 — second only to Fable 5 (59.9, fallback composite)
+taste-final:     claude claude-opus-4-8 high | codex gpt-5.6-sol max    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
+ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # only with a design system / reference images; open-ended visual taste -> taste-final
+long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high | codex gpt-5.6-sol high  # 1M-token synthesis ONLY — never agentic loops (AA agentic 21.4)
+fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops
+live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
+coding-overflow: grok grok-4.5 - | off          # codex-quota relief valve: mid-tier coding (AA 72.45); verify factual claims (hallucination 0.54)
 arbitrate:       off - -                        # pluggable multi-voter gate; point at your own reviewer stack

@@ -12,10 +12,14 @@ CODEX_BIN="${CODEX_BIN:-codex}"
 TIMEOUT_CMD="$(resolve_timeout_cmd)"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
-ARGS=(exec -m "$MODEL" -o "${OUTPUT_FILE}.tmp")
+# --skip-git-repo-check: the operator chose WORKDIR explicitly; codex would
+# otherwise refuse any directory that is not a trusted git repo.
+ARGS=(exec -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 if [[ "$MODE" == "advise" ]]; then
-  ARGS+=(--ephemeral --skip-git-repo-check -s read-only)
+  ARGS+=(--ephemeral -s read-only)
+else
+  ARGS+=(-s workspace-write)
 fi
 
 truncate_payload "$PROMPT_FILE" 140000
