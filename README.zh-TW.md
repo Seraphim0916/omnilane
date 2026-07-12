@@ -1,5 +1,7 @@
 # omnilane
 
+[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+
 [English](README.md)
 
 一張路由表,四個執行框架通用。omnilane 讓**任何**一個 agentic CLI——Claude Code、

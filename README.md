@@ -1,5 +1,7 @@
 # omnilane
 
+[![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
+
 [繁體中文](README.zh-TW.md)
 
 One routing table, every harness. omnilane lets the main loop of **any** agentic
@@ -26,6 +28,25 @@ CLI, using your existing subscription logins.
   to the vendor's CLI headlessly.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
+
+## Lanes (defaults — run `scripts/dispatch.sh --list` for your effective table)
+
+| Lane | First choice | When |
+|---|---|---|
+| hardest-coding | GPT-5.6 Sol (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| bulk-mechanical | GPT-5.6 Terra (max) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| triage | GPT-5.6 Luna (medium) | High-volume scans, first-pass filtering |
+| hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, style arbitration |
+| ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images |
+| long-context | Gemini 3.1 Pro (High) | 1M-token synthesis — analysis only, never agentic loops |
+| fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
+| live-search | Grok 4.5 | Realtime X/web search and social context |
+| coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding |
+| arbitrate | (off by default) | Multi-voter review gate — wire your own |
+
+Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
+next candidate or `off`.
 
 ## Install
 
