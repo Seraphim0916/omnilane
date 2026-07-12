@@ -64,13 +64,18 @@ flowchart LR
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | 重構、搬遷、測試、大面積掃描——機械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (medium) | 高量初篩、第一輪過濾 |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | 架構仲裁、深度推理、第二意見 |
-| ✒️ taste-final | Claude Opus 4.8 | 對外文字、prompt 與文件打磨、風格終審 |
+| ✒️ taste-final | Claude Opus 4.8 (high) | 對外文字、prompt 與文件打磨、風格終審 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | 有設計規範/參考圖時的 UI 出稿;開放式視覺品味交給 taste-final |
 | 📚 long-context | Gemini 3.1 Pro (High) | 百萬 token 長文整合——僅限分析,不派 agentic 長鏈 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | 快速多步驟 agentic 迴圈、多模態檢查 |
 | 📡 live-search | Grok 4.5 | 即時 X/網路搜尋與社群脈絡 |
 | 🚰 coding-overflow | Grok 4.5 | Codex 額度吃緊時的中量級編碼溢流道;事實性宣稱須另行查證 |
 | 🗳️ arbitrate | off(選配評審團) | 內建意見評審團,重大決定用——預設關閉,要用在 `routing.local.yaml` 開;每評審每輪燒一次額度 |
+
+> **Claude Fable 5 去哪了?** 預設表刻意不放:Claude 頂級檔通常就是*主迴圈本人*,
+> 不是被派發的工人,而且定價高於 Opus。設定選單的模型清單有列它——
+> 不同意就自己路由過去(例如在 `routing.local.yaml` 寫
+> `taste-final: claude claude-fable-5 high`)。
 
 ## 🚀 安裝
 

@@ -68,7 +68,7 @@ flowchart LR
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (medium) | High-volume scans, first-pass filtering |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, style arbitration |
+| ✒️ taste-final | Claude Opus 4.8 (high) | User-facing prose, prompt/doc polish, style arbitration |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images |
 | 📚 long-context | Gemini 3.1 Pro (High) | 1M-token synthesis — analysis only, never agentic loops |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
@@ -78,6 +78,12 @@ flowchart LR
 
 Each lane is a fallback chain in `routing.yaml`; missing CLIs degrade to the
 next candidate or `off`.
+
+> **Where is Claude Fable 5?** Deliberately not in the defaults: the top
+> Claude tier is usually the *main loop itself*, not a dispatched worker, and
+> it prices above Opus. It is offered in the configurator's model menu —
+> route to it if you disagree (e.g. `taste-final: claude claude-fable-5 high`
+> in `routing.local.yaml`).
 
 ## 🚀 Install
 

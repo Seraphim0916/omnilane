@@ -68,13 +68,19 @@ flowchart LR
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | リファクタ、移行、テスト、大規模スイープ |
 | 🧹 triage | GPT-5.6 Luna (medium) | 大量の一次スクリーニング |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Opus 4.8 | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
+| ✒️ taste-final | Claude Opus 4.8 (high) | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | デザインシステム/参考画像がある場合の UI ドラフト |
 | 📚 long-context | Gemini 3.1 Pro (High) | 100 万トークン級の長文統合——分析専用、agentic ループ禁止 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.5 | リアルタイム X/ウェブ検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.5 | Codex クォータ逼迫時の中級コーディング逃し弁 |
 | 🗳️ arbitrate | off(オプトイン) | 内蔵オピニオンパネル(重大な判断用)——デフォルト無効。`routing.local.yaml` で有効化;投票者×ラウンドごとに 1 コール消費 |
+
+> **Claude Fable 5 はどこ?** 意図的にデフォルト表に入れていません:Claude の
+> 最上位ティアは通常*メインループ自身*であり、ディスパッチされるワーカーでは
+> ないため(価格も Opus より上)。設定メニューのモデル一覧には載っているので、
+> 使いたければ自分でルーティングできます(例:`routing.local.yaml` に
+> `taste-final: claude claude-fable-5 high`)。
 
 ## 🚀 インストール
 

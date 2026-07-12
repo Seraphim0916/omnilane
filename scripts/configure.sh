@@ -12,7 +12,7 @@ LOCAL_FILE="$OMNILANE_HOME/routing.local.yaml"
 # Curated suggestions only — "c" always allows free text so new models work.
 CODEX_MODELS=("gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna")
 CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
-CLAUDE_MODELS=("claude-opus-4-8" "claude-sonnet-5" "claude-haiku-4-5")
+CLAUDE_MODELS=("claude-opus-4-8" "claude-fable-5" "claude-sonnet-5" "claude-haiku-4-5")
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
 GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.1 Pro (Low)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Medium)" "Gemini 3.5 Flash (Low)")
 GROK_MODELS=("grok-4.5" "grok-4.3")

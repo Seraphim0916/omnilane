@@ -67,13 +67,19 @@ flowchart LR
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
 | 🧹 triage | GPT-5.6 Luna (medium) | 대량 1차 선별 |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
-| ✒️ taste-final | Claude Opus 4.8 | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
+| ✒️ taste-final | Claude Opus 4.8 (high) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
 | 📚 long-context | Gemini 3.1 Pro (High) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | 실시간 X/웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.5 | Codex 쿼터 소진 시 중급 코딩 릴리프 밸브 |
 | 🗳️ arbitrate | off(옵트인) | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
+
+> **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다:
+> Claude 최상위 티어는 보통 *메인 루프 자신*이지 디스패치되는 워커가 아니며,
+> 가격도 Opus 보다 높습니다. 설정 메뉴의 모델 목록에는 있으니 원하면 직접
+> 라우팅하세요(예: `routing.local.yaml` 에
+> `taste-final: claude claude-fable-5 high`).
 
 ## 🚀 설치
 

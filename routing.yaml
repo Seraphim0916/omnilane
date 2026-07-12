@@ -26,3 +26,8 @@ arbitrate:       off - -                        # opinion panel is OPT-IN: it co
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.
                                                 # Custom gate: `arbitrate: exec /path/to/script -`
+# Claude Fable 5 (claude-fable-5) is deliberately absent from the defaults: the top Claude tier
+# is usually the MAIN LOOP itself, not a dispatched worker, and it prices above Opus. If you want
+# to route to it anyway, pick it in the configurator or set e.g.
+#   taste-final: claude claude-fable-5 high
+# in ~/.omnilane/routing.local.yaml.

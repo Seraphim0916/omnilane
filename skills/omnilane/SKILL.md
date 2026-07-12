@@ -25,13 +25,18 @@ so the same table works with any subset of subscriptions.
 | bulk-mechanical | GPT-5.6 Terra (max) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (medium) | High-volume scans, first-pass filtering |
 | hard-judgment | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 4.8 | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| taste-final | Claude Opus 4.8 (high) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | ui-draft | GPT-5.6 Sol (xhigh) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
 | long-context | Gemini 3.1 Pro (High) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
 | fast-agentic | Gemini 3.5 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | off (opt-in vote panel) | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
+
+Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
+top Claude tier is usually the main loop itself, not a dispatched worker. To
+route to it anyway, select it in the configurator or override a lane in
+`~/.omnilane/routing.local.yaml` (e.g. `taste-final: claude claude-fable-5 high`).
 
 ## Rules
 
