@@ -11,5 +11,10 @@
 # Route a vendor CLI through a local proxy:
 # export ANTHROPIC_BASE_URL=http://127.0.0.1:8080
 
-# Cap runner wall-clock (seconds):
-# OMNILANE_TIMEOUT=600
+# Cap runner wall-clock (seconds). Global default for every lane:
+# export OMNILANE_TIMEOUT=600
+# Per-lane override — lane upper-cased with "-" turned into "_". A one-off
+# `--timeout SEC` on the dispatch call still wins over both of these:
+# export OMNILANE_TIMEOUT_TRIAGE=600
+# export OMNILANE_TIMEOUT_HARD_JUDGMENT=1200
+# export OMNILANE_TIMEOUT_LONG_CONTEXT=1800

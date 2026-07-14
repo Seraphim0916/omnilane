@@ -156,7 +156,7 @@ scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
                                                # (install.sh links it into ~/.local/bin)
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--model M] [--effort E] LANE "TASK"   # "-" reads task from stdin
+            [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" reads task from stdin
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
@@ -198,7 +198,10 @@ lock timeout; otherwise the worker's own exit code passes through.
   detected by owner PID and stolen safely.
 - **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
   fallback when neither exists (stock macOS), so a hung CLI cannot block
-  forever (`OMNILANE_TIMEOUT`, default 600s).
+  forever. The cap resolves per task, highest priority first: `--timeout
+  SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane upper-cased with
+  `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the global
+  `OMNILANE_TIMEOUT`, default 600s.
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
   `jobs.sh status` reports `dead` instead of `running` forever.

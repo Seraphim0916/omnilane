@@ -4,7 +4,7 @@ set -euo pipefail
 #
 # Usage:
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-#               [--model M] [--effort E] LANE "TASK TEXT"
+#               [--model M] [--effort E] [--timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
 #
 # TASK TEXT of "-" reads the task from stdin.
@@ -13,11 +13,16 @@ set -euo pipefail
 #   lane: vendor model effort | vendor model effort | off
 # The first candidate whose vendor CLI exists on this machine wins, so the same
 # table degrades gracefully for people with fewer subscriptions.
+#
+# Watchdog seconds resolve per task, highest priority first:
+#   --timeout SECONDS  >  OMNILANE_TIMEOUT_<LANE>  >  OMNILANE_TIMEOUT  >  600
+# The per-lane knob is the lane upper-cased with "-" turned into "_"
+# (hard-judgment -> OMNILANE_TIMEOUT_HARD_JUDGMENT), so it can live in local.sh.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
-OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""
+OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
   local lane="$1" f line
@@ -110,6 +115,7 @@ while [[ $# -gt 0 ]]; do
     --workdir) WORKDIR="$2"; shift 2 ;;
     --model) OVERRIDE_MODEL="$2"; shift 2 ;;
     --effort) OVERRIDE_EFFORT="$2"; shift 2 ;;
+    --timeout) OVERRIDE_TIMEOUT="$2"; shift 2 ;;
     -*) echo "unknown flag: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -141,6 +147,20 @@ fi
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
+# Watchdog seconds: --timeout > per-lane OMNILANE_TIMEOUT_<LANE> > OMNILANE_TIMEOUT > 600.
+# Resolve here and export so every runner (and vote's sub-runners) inherits the
+# same value without a per-runner code change; they already read OMNILANE_TIMEOUT.
+TIMEOUT="$OVERRIDE_TIMEOUT"
+if [[ -z "$TIMEOUT" ]]; then
+  LANE_TIMEOUT_VAR="OMNILANE_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
+  TIMEOUT="${!LANE_TIMEOUT_VAR:-}"
+fi
+[[ -n "$TIMEOUT" ]] || TIMEOUT="${OMNILANE_TIMEOUT:-600}"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+  echo "omnilane: invalid timeout '$TIMEOUT' (want a positive integer of seconds)" >&2; exit 2
+}
+export OMNILANE_TIMEOUT="$TIMEOUT"
+
 mkdir -p "$OMNILANE_HOME/jobs"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
@@ -148,8 +168,8 @@ mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
 jesc() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
-printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
+printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$TIMEOUT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
 
 run_job() {
   local rc=0
