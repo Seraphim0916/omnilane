@@ -180,6 +180,27 @@ EOF
   fi
 }
 
+test_consult_lane_and_configurator() {
+  local name="consult lane stays multi-vendor" home listed
+  home="$TEST_ROOT/consult"; mkdir -p "$home"
+  listed="$(OMNILANE_HOME="$home" CODEX_BIN=/usr/bin/true CLAUDE_BIN=/usr/bin/true \
+    GROK_BIN=/usr/bin/true AGY_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --list 2>&1)"
+  printf '\n' | HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    CODEX_BIN=/usr/bin/true CLAUDE_BIN=/usr/bin/true \
+    GROK_BIN=/usr/bin/true AGY_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/configure.sh" > "$home/configure.out" 2>&1
+
+  if [[ "$listed" != *'consult:'* ||
+        "$listed" != *'codex gpt-5.6-sol max'* ]]; then
+    fail "$name" "consult lane missing from effective routing"
+  elif grep -Eq '^  [0-9]+\) consult$' "$home/configure.out"; then
+    fail "$name" "single-candidate configurator exposed consult"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -352,6 +373,7 @@ test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
+test_consult_lane_and_configurator
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline

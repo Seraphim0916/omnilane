@@ -17,6 +17,7 @@ bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini 
 triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.5 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans
 hard-judgment:   codex gpt-5.6-sol max | claude claude-opus-4-8 high    # Sol max Intelligence 58.9 — second only to Fable 5 (59.9, fallback composite)
 taste-final:     claude claude-opus-4-8 high | codex gpt-5.6-sol max    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
+consult:         codex gpt-5.6-sol max | claude claude-opus-4-8 high | grok grok-4.5 - | gemini "Gemini 3.1 Pro (High)" -  # direct named-model consultation; use --vendor to prevent fallback
 ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # only with a design system / reference images; open-ended visual taste -> taste-final
 long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high | codex gpt-5.6-sol high  # 1M-token synthesis ONLY — never agentic loops (AA agentic 21.4)
 fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops

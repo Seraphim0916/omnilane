@@ -54,7 +54,10 @@ pick() { # title, options... -> prints the chosen value
 
 LANES=()
 while IFS= read -r line; do
-  [[ "$line" =~ ^([a-z][a-z0-9-]*): ]] && LANES+=("${BASH_REMATCH[1]}")
+  if [[ "$line" =~ ^([a-z][a-z0-9-]*): ]]; then
+    lane="${BASH_REMATCH[1]}"
+    [[ "$lane" == "consult" ]] || LANES+=("$lane")
+  fi
 done < "$OMNILANE_REPO/routing.yaml"
 
 echo "$(msg cfg_title)"
