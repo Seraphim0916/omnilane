@@ -171,6 +171,10 @@ scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 ```
 omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
                                                # (install.sh links it into ~/.local/bin)
+omnilane ui start                              # start/reuse the local Live UI; print its URL
+omnilane ui status                             # report whether the Live UI is running
+omnilane ui url                                # print the current authenticated local URL
+omnilane ui stop                               # stop the Live UI
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" reads task from stdin
 dispatch.sh --list
@@ -197,6 +201,15 @@ the chain or the requested vendor is configured but its CLI is unavailable,
 `5` too few successful Round 1
 voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
 lock timeout; otherwise the worker's own exit code passes through.
+
+## 🖥️ Live UI
+
+The Live UI is an optional local observer; core routing does not need Python,
+and only this UI requires Python 3.9 or newer. It binds only to `127.0.0.1`,
+uses a random token, and is read-only. The board shows each job's task
+(`task.txt`) and public result (`out.txt`), but never raw worker or vendor logs.
+Start it explicitly with `omnilane ui start`, and run `omnilane ui stop` when
+you are finished.
 
 ## 🎭 Modes
 

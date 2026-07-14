@@ -164,6 +164,10 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 ## 📖 명령 레퍼런스
 
 ```
+omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시
+omnilane ui status                             # Live UI 실행 상태 표시
+omnilane ui url                                # 현재 인증된 로컬 URL 표시
+omnilane ui stop                               # Live UI 중지
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" 는 stdin 에서 읽기
 dispatch.sh --list
@@ -176,6 +180,14 @@ configure.sh                                        # 대화형 레인 메뉴
 CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라운드 반박 전부 실패,
 `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
 그 외에는 워커 자신의 종료 코드를 그대로 전달.
+
+## 🖥️ Live UI
+
+Live UI 는 선택 사항인 로컬 관찰 화면입니다. 핵심 라우팅에는 Python 이 필요 없고,
+이 UI 에만 Python 3.9 이상이 필요합니다. `127.0.0.1` 에만 바인딩하고 무작위
+토큰으로 보호하며 읽기 전용입니다. 각 잡의 태스크(`task.txt`)와 공개 결과
+(`out.txt`)를 표시하지만 워커나 벤더의 원시 로그는 표시하지 않습니다. 필요할 때만
+`omnilane ui start` 로 시작하고, 사용 후에는 `omnilane ui stop` 으로 중지하십시오.
 
 ## 🎭 모드
 

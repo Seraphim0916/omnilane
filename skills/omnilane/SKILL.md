@@ -85,6 +85,15 @@ Consultation defaults to `advise`. Use `--mode work --workdir <dir>` only for
 an explicit edit request. Missing explicit targets fail clearly; never remove
 `--vendor` to obtain a fallback.
 
+## Live UI is observation only
+
+The optional Live UI is a read-only observer, not a prompt or dispatch path.
+It displays existing jobs' `task.txt` and public `out.txt`, but never raw logs;
+it cannot interpret natural language, choose routes, dispatch, retry, cancel,
+delete jobs, or edit configuration. Natural-language interpretation and
+dispatch stay in this skill and the CLI. Manage the local board with
+`omnilane ui start|status|url|stop`, and stop it when monitoring is finished.
+
 ## Rules
 
 - **Dispatch in `advise` mode by default** (read-only worker). Use `--mode work`

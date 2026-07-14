@@ -9,6 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
       - name: bash syntax
         run: |
           for f in scripts/dispatch.sh scripts/jobs.sh scripts/lib/common.sh scripts/runners/*.sh install.sh; do
@@ -21,7 +25,11 @@ jobs:
           out="$(bash scripts/dispatch.sh --list)"
           echo "$out"
           test "$(printf '%s\n' "$out" | wc -l)" -ge 8
-      - name: unit tests
+      - name: Python syntax
+        run: python -m py_compile scripts/ui.py tests/test_ui.py
+      - name: Python unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py'
+      - name: shell unit tests
         run: |
           OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
             bash tests/run.sh
