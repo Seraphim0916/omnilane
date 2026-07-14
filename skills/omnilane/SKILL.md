@@ -12,6 +12,9 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 3. **If the lane's model is you, self-execute.** Otherwise dispatch:
    `<repo>/scripts/dispatch.sh [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
+   A deep task whose CLI call may outrun the 600s per-call watchdog can raise its
+   cap with `--timeout <seconds>` (e.g. `--timeout 1200` for hard-judgment /
+   long-context). It bounds each CLI call, not the whole dispatch.
 
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
 Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,

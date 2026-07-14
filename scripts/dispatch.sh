@@ -4,7 +4,7 @@ set -euo pipefail
 #
 # Usage:
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-#               [--model M] [--effort E] LANE "TASK TEXT"
+#               [--model M] [--effort E] [--timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
 #
 # TASK TEXT of "-" reads the task from stdin.
@@ -13,11 +13,20 @@ set -euo pipefail
 #   lane: vendor model effort | vendor model effort | off
 # The first candidate whose vendor CLI exists on this machine wins, so the same
 # table degrades gracefully for people with fewer subscriptions.
+#
+# The watchdog caps EACH CLI invocation, highest priority first:
+#   --timeout SECONDS  >  OMNILANE_TIMEOUT_<LANE>  >  OMNILANE_TIMEOUT  >  600
+# The per-lane knob is the lane upper-cased with "-" turned into "_"
+# (hard-judgment -> OMNILANE_TIMEOUT_HARD_JUDGMENT), so it can live in local.sh.
+# This is a per-call hang-guard, NOT a whole-job budget: a retrying vendor
+# (grok, up to OMNILANE_GROK_MAX_ATTEMPTS) or the vote panel (voters x rounds)
+# spawns several CLI calls, so total wall-clock can be a multiple of this value.
+# For a true end-to-end deadline that is a separate, future control.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
-OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""
+OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
   local lane="$1" f line
@@ -106,10 +115,18 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --list) print_effective_routing; exit 0 ;;
     --background) BACKGROUND=1; shift ;;
-    --mode) MODE="$2"; shift 2 ;;
-    --workdir) WORKDIR="$2"; shift 2 ;;
-    --model) OVERRIDE_MODEL="$2"; shift 2 ;;
-    --effort) OVERRIDE_EFFORT="$2"; shift 2 ;;
+    --mode|--workdir|--model|--effort|--timeout)
+      # Value-taking flags: a missing value must be a clean usage error (exit 2),
+      # not a `set -u` "unbound variable" crash on $2.
+      [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
+      case "$1" in
+        --mode) MODE="$2" ;;
+        --workdir) WORKDIR="$2" ;;
+        --model) OVERRIDE_MODEL="$2" ;;
+        --effort) OVERRIDE_EFFORT="$2" ;;
+        --timeout) OVERRIDE_TIMEOUT="$2" ;;
+      esac
+      shift 2 ;;
     -*) echo "unknown flag: $1" >&2; exit 2 ;;
     *) break ;;
   esac
@@ -141,6 +158,21 @@ fi
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
+# Watchdog seconds: --timeout > per-lane OMNILANE_TIMEOUT_<LANE> > OMNILANE_TIMEOUT > 600.
+# Resolve here and export so every runner (and vote's sub-runners) inherits the
+# same value without a per-runner code change; they already read OMNILANE_TIMEOUT.
+# This bounds each runner CLI call, not the whole dispatch (see header note).
+TIMEOUT="$OVERRIDE_TIMEOUT"
+if [[ -z "$TIMEOUT" ]]; then
+  LANE_TIMEOUT_VAR="OMNILANE_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
+  TIMEOUT="${!LANE_TIMEOUT_VAR:-}"
+fi
+[[ -n "$TIMEOUT" ]] || TIMEOUT="${OMNILANE_TIMEOUT:-600}"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+  echo "omnilane: invalid timeout '$TIMEOUT' (want a positive integer of seconds)" >&2; exit 2
+}
+export OMNILANE_TIMEOUT="$TIMEOUT"
+
 mkdir -p "$OMNILANE_HOME/jobs"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
@@ -148,8 +180,9 @@ mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
 jesc() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
-printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
+# meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
+printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$TIMEOUT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
 
 run_job() {
   local rc=0

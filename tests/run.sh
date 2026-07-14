@@ -70,6 +70,50 @@ test_configure_quotes_model_with_spaces() {
   fi
 }
 
+test_watchdog_timeout_resolution() {
+  local name="watchdog timeout precedence" home gate d600 d900 dlane dflag rc_bad rc_zero
+  home="$TEST_ROOT/timeout"; mkdir -p "$home"
+  gate="$home/gate.sh"
+  # exec gate: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE. Echo the watchdog
+  # value dispatch exported, so stdout reveals the resolved OMNILANE_TIMEOUT.
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "${OMNILANE_TIMEOUT:-unset}" > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec %s -\n' "$gate" > "$home/routing.local.yaml"
+
+  d600="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" probe x 2>/dev/null)"
+  d900="$(OMNILANE_HOME="$home" OMNILANE_TIMEOUT=900 bash "$ROOT/scripts/dispatch.sh" probe x 2>/dev/null)"
+  dlane="$(OMNILANE_HOME="$home" OMNILANE_TIMEOUT=900 OMNILANE_TIMEOUT_PROBE=1234 bash "$ROOT/scripts/dispatch.sh" probe x 2>/dev/null)"
+  dflag="$(OMNILANE_HOME="$home" OMNILANE_TIMEOUT=900 OMNILANE_TIMEOUT_PROBE=1234 bash "$ROOT/scripts/dispatch.sh" --timeout 55 probe x 2>/dev/null)"
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout abc probe x >/dev/null 2>&1; rc_bad=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 0 probe x >/dev/null 2>&1; rc_zero=$?
+  # A value-taking flag with no value must be a clean usage error, not a crash.
+  local rc_missing missing_out
+  missing_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 2>&1)"; rc_missing=$?
+
+  if [[ "$d600" != "600" ]]; then
+    fail "$name" "default should be 600, got '$d600'"
+  elif [[ "$d900" != "900" ]]; then
+    fail "$name" "OMNILANE_TIMEOUT should win over default, got '$d900'"
+  elif [[ "$dlane" != "1234" ]]; then
+    fail "$name" "per-lane OMNILANE_TIMEOUT_PROBE should beat global, got '$dlane'"
+  elif [[ "$dflag" != "55" ]]; then
+    fail "$name" "--timeout should beat every env source, got '$dflag'"
+  elif [[ "$rc_bad" -ne 2 ]]; then
+    fail "$name" "non-numeric --timeout should exit 2, got $rc_bad"
+  elif [[ "$rc_zero" -ne 2 ]]; then
+    fail "$name" "--timeout 0 should exit 2, got $rc_zero"
+  elif [[ "$rc_missing" -ne 2 ]]; then
+    fail "$name" "--timeout with no value should exit 2, got $rc_missing"
+  elif [[ "$missing_out" != *"needs a value"* ]]; then
+    fail "$name" "--timeout with no value should print a readable error"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -240,6 +284,7 @@ test_round2_untrusted_boundary_and_cleanup() {
 test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
+test_watchdog_timeout_resolution
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline

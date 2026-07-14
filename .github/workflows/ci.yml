@@ -21,6 +21,8 @@ jobs:
           out="$(bash scripts/dispatch.sh --list)"
           echo "$out"
           test "$(printf '%s\n' "$out" | wc -l)" -ge 8
+      - name: unit tests
+        run: bash tests/run.sh
       - name: no stale project name
         run: |
           ! grep -ri 'omniroute' --exclude-dir=.git --exclude-dir=.github .

@@ -148,7 +148,7 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 
 ```
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--model M] [--effort E] LANE "TASK"   # "-" 는 stdin 에서 읽기
+            [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" 는 stdin 에서 읽기
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # 대화형 레인 메뉴
@@ -172,7 +172,12 @@ CLI 없음, `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
 - **Codex 직렬화 락** — 같은 대상 디렉터리로의 codex 디스패치는 큐잉.
   크래시로 남은 락은 소유자 PID 로 감지해 안전하게 회수.
 - **워치독** — 모든 워커는 `timeout`/`gtimeout`, 둘 다 없으면 perl-alarm
-  폴백 아래에서 실행(순정 macOS 가 이 경우).
+  폴백 아래에서 실행(순정 macOS 가 이 경우). 상한은 **CLI 호출마다** 적용되며
+  우선순위는 `--timeout SECONDS` > 레인별 `OMNILANE_TIMEOUT_<LANE>`(예:
+  `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 전역 `OMNILANE_TIMEOUT`(기본 600 초)
+  순입니다. 이것은 호출 단위 행 방지 장치이지 작업 전체 예산이 아닙니다.
+  재시도하는 벤더(grok)나 vote 패널(투표자 × 라운드)은 여러 번 호출하므로
+  전체 소요 시간은 이 값의 몇 배가 될 수 있습니다.
 - **백그라운드 잡 수명주기** — `--background` 워커는 독립 process group 에서
   돌며 호출자가 종료해도 살아남습니다. kill 되면 종료 코드를 기록하고
   `jobs.sh status` 가 `dead` 를 보고.
