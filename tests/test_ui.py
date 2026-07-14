@@ -610,5 +610,58 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("omnilane ui", help_result.stdout)
 
 
+class FrontendContractTests(unittest.TestCase):
+    def setUp(self):
+        self.ui_root = ROOT / "ui"
+        self.html = (self.ui_root / "index.html").read_text(encoding="utf-8")
+        self.css = (self.ui_root / "styles.css").read_text(encoding="utf-8")
+        self.javascript = (self.ui_root / "app.js").read_text(encoding="utf-8")
+
+    def test_assets_are_local_and_render_untrusted_data_as_text(self):
+        combined = self.html + "\n" + self.css + "\n" + self.javascript
+        self.assertNotRegex(self.html, r'''(?:src|href)=["'](?:https?:)?//''')
+        self.assertNotIn("@import", self.css)
+        self.assertNotRegex(self.css, r"\burl\s*\(")
+        for forbidden in (
+            "innerHTML",
+            "insertAdjacentHTML",
+            "document.write",
+            "eval(",
+            "new Function",
+        ):
+            self.assertNotIn(forbidden, combined)
+        self.assertNotRegex(self.html, r"<style(?:\s|>)")
+        self.assertNotRegex(self.html, r"<script(?![^>]*\bsrc=)[^>]*>")
+        self.assertIn("textContent", self.javascript)
+
+    def test_token_auth_and_live_event_contract_are_literal(self):
+        for literal in (
+            'fragment.get("token")',
+            "window.sessionStorage.setItem",
+            "window.history.replaceState",
+            'Authorization: "Bearer " + state.token',
+            'new EventSource("/api/events?token=" + encodeURIComponent(state.token))',
+            'requestJson("/api/jobs")',
+        ):
+            self.assertIn(literal, self.javascript)
+        self.assertNotIn("localStorage", self.javascript)
+
+    def test_visual_contract_has_one_route_signal_and_reduced_motion(self):
+        self.assertIn("LANE → VENDOR → MODEL → STATE", self.html)
+        self.assertEqual(1, self.html.count('class="route-signal"'))
+        self.assertIn('@media (prefers-reduced-motion: reduce)', self.css)
+        self.assertNotRegex(self.css, r"gradient\s*\(")
+        self.assertNotIn("backdrop-filter", self.css)
+        self.assertIn('.route-track[data-state="running"] .route-signal', self.css)
+
+    def test_javascript_dom_ids_exist_in_html(self):
+        referenced = set(
+            re.findall(r'document\.getElementById\("([A-Za-z0-9_-]+)"\)', self.javascript)
+        )
+        declared = set(re.findall(r'\bid="([A-Za-z0-9_-]+)"', self.html))
+        self.assertTrue(referenced)
+        self.assertEqual(set(), referenced - declared)
+
+
 if __name__ == "__main__":
     unittest.main()
