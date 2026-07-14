@@ -7,16 +7,24 @@ the Python standard library so `omnilane ui` has no package-manager runtime.
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import argparse
+from datetime import datetime, timezone
 import errno
+import fcntl
 import heapq
 import hmac
+import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import re
+import secrets
+import signal
 import socket
 import stat
+import subprocess
+import sys
 import threading
 import time
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -679,3 +687,463 @@ class LiveRequestHandler(BaseHTTPRequestHandler):
     def _send_security_headers(self):
         for name, value in SECURITY_HEADERS.items():
             self.send_header(name, value)
+
+
+class UIRuntimeError(Exception):
+    """A safe lifecycle operation could not be completed."""
+
+
+class UIRuntime:
+    """Own one protected loopback listener for one OMNILANE_HOME."""
+
+    def __init__(self, home=None):
+        selected_home = home or os.environ.get("OMNILANE_HOME") or "~/.omnilane"
+        self.home = Path(selected_home).expanduser().absolute()
+        self.runtime_dir = self.home / "ui"
+        self.state_path = self.runtime_dir / "state.json"
+        self.lock_path = self.runtime_dir / "lifecycle.lock"
+        self.log_path = self.runtime_dir / "server.log"
+        self.jobs_path = self.home / "jobs"
+        self.static_root = Path(__file__).resolve().parents[1] / "ui"
+
+    def ensure_runtime_dir(self):
+        try:
+            self.runtime_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            info = os.lstat(self.runtime_dir)
+        except OSError as exc:
+            raise UIRuntimeError("cannot create protected runtime directory") from exc
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise UIRuntimeError("runtime path is not a safe directory")
+        os.chmod(self.runtime_dir, 0o700)
+
+    @contextmanager
+    def lifecycle_lock(self):
+        self.ensure_runtime_dir()
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        fd = None
+        try:
+            fd = os.open(self.lock_path, flags, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise UIRuntimeError("lifecycle lock is not a regular file")
+            os.fchmod(fd, 0o600)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except (OSError, UIRuntimeError) as exc:
+            if fd is not None:
+                os.close(fd)
+            raise UIRuntimeError("cannot acquire lifecycle lock") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    def read_state(self):
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(self.state_path, flags)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise UIRuntimeError("state path is unsafe") from exc
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 32768:
+                raise UIRuntimeError("state file is invalid")
+            if stat.S_IMODE(info.st_mode) & 0o077:
+                raise UIRuntimeError("state file permissions are too open")
+            data = self._read_fd(fd, 32769)
+        finally:
+            os.close(fd)
+        if len(data) > 32768:
+            raise UIRuntimeError("state file is too large")
+        try:
+            value = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def write_state(self, state_value):
+        self.ensure_runtime_dir()
+        data = json.dumps(
+            state_value, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        temp_path = self.runtime_dir / (
+            ".state-{}-{}.tmp".format(os.getpid(), secrets.token_hex(8))
+        )
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        fd = None
+        try:
+            fd = os.open(temp_path, flags, 0o600)
+            os.fchmod(fd, 0o600)
+            self._write_fd(fd, data)
+            os.fsync(fd)
+            os.close(fd)
+            fd = None
+            os.replace(temp_path, self.state_path)
+            os.chmod(self.state_path, 0o600)
+        except OSError as exc:
+            raise UIRuntimeError("cannot write protected state") from exc
+        finally:
+            if fd is not None:
+                os.close(fd)
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+
+    def clear_state(self, expected_server_id=None):
+        try:
+            info = os.lstat(self.state_path)
+        except FileNotFoundError:
+            return False
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            raise UIRuntimeError("state path is unsafe")
+        if expected_server_id is not None:
+            current = self.read_state()
+            if not current or current.get("serverId") != expected_server_id:
+                return False
+        os.unlink(self.state_path)
+        return True
+
+    def open_log(self):
+        self.ensure_runtime_dir()
+        flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_APPEND
+            | getattr(os, "O_NOFOLLOW", 0)
+        )
+        fd = None
+        try:
+            fd = os.open(self.log_path, flags, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise UIRuntimeError("server log is not a regular file")
+            os.fchmod(fd, 0o600)
+            return fd
+        except (OSError, UIRuntimeError) as exc:
+            if fd is not None:
+                os.close(fd)
+            raise UIRuntimeError("cannot open protected server log") from exc
+
+    @staticmethod
+    def complete_state(state_value):
+        if not isinstance(state_value, dict):
+            return False
+        required = ("serverId", "token", "pid", "port")
+        if any(key not in state_value for key in required):
+            return False
+        if not isinstance(state_value["serverId"], str) or len(state_value["serverId"]) < 8:
+            return False
+        if not isinstance(state_value["token"], str) or len(state_value["token"]) < 16:
+            return False
+        pid = state_value["pid"]
+        port = state_value["port"]
+        return (
+            not isinstance(pid, bool)
+            and isinstance(pid, int)
+            and 1 <= pid <= PID_MAX
+            and not isinstance(port, bool)
+            and isinstance(port, int)
+            and 1 <= port <= 65535
+            and state_value.get("apiVersion") == 1
+        )
+
+    def health(self, state_value, timeout=0.6):
+        if not self.complete_state(state_value):
+            return None
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", state_value["port"], timeout=timeout
+        )
+        try:
+            connection.request(
+                "GET",
+                "/api/health",
+                headers={
+                    "Authorization": "Bearer " + state_value["token"],
+                    "Host": "127.0.0.1:{}".format(state_value["port"]),
+                },
+            )
+            response = connection.getresponse()
+            body = response.read(65537)
+            if response.status != 200 or len(body) > 65536:
+                return None
+            payload = json.loads(body.decode("utf-8"))
+        except (OSError, ValueError, UnicodeDecodeError, http.client.HTTPException):
+            return None
+        finally:
+            connection.close()
+        if not isinstance(payload, dict) or not payload.get("ok"):
+            return None
+        if (
+            payload.get("serverId") != state_value["serverId"]
+            or payload.get("pid") != state_value["pid"]
+            or payload.get("port") != state_value["port"]
+        ):
+            return None
+        return payload
+
+    @staticmethod
+    def url(state_value):
+        return "http://127.0.0.1:{}/#token={}".format(
+            state_value["port"], state_value["token"]
+        )
+
+    @staticmethod
+    def _read_fd(fd, count):
+        chunks = []
+        remaining = count
+        while remaining > 0:
+            chunk = os.read(fd, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        return b"".join(chunks)
+
+    @staticmethod
+    def _write_fd(fd, data):
+        offset = 0
+        while offset < len(data):
+            offset += os.write(fd, data[offset:])
+
+
+def utc_now():
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z"
+    )
+
+
+def start_ui(runtime, requested_port):
+    with runtime.lifecycle_lock():
+        state_value = runtime.read_state()
+        if state_value is not None and runtime.health(state_value):
+            print("Live UI already running: {}".format(runtime.url(state_value)))
+            return 0
+        runtime.clear_state()
+
+        server_id = secrets.token_urlsafe(18)
+        token = secrets.token_urlsafe(32)
+        initial_state = {
+            "apiVersion": 1,
+            "serverId": server_id,
+            "token": token,
+            "pid": None,
+            "port": None,
+            "requestedPort": requested_port,
+            "started": utc_now(),
+        }
+        runtime.write_state(initial_state)
+        log_fd = runtime.open_log()
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "serve",
+            "--server-id",
+            server_id,
+            "--port",
+            str(requested_port),
+        ]
+        child = None
+        try:
+            child = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=log_fd,
+                stderr=log_fd,
+                start_new_session=True,
+                close_fds=True,
+                env=os.environ.copy(),
+            )
+        except OSError:
+            runtime.clear_state(expected_server_id=server_id)
+            raise
+        finally:
+            os.close(log_fd)
+
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline and child.poll() is None:
+            candidate = runtime.read_state()
+            if (
+                candidate
+                and candidate.get("serverId") == server_id
+                and candidate.get("pid") == child.pid
+                and runtime.health(candidate)
+            ):
+                print("Live UI started: {}".format(runtime.url(candidate)))
+                return 0
+            time.sleep(0.05)
+
+        if child.poll() is None:
+            child.terminate()
+            try:
+                child.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait(timeout=2)
+        runtime.clear_state(expected_server_id=server_id)
+        raise UIRuntimeError("server failed to start; inspect {}".format(runtime.log_path))
+
+
+def status_ui(runtime):
+    with runtime.lifecycle_lock():
+        state_value = runtime.read_state()
+        if state_value is not None and runtime.health(state_value):
+            print("running pid={} port={}".format(state_value["pid"], state_value["port"]))
+            return 0
+        print("stopped")
+        return 1
+
+
+def url_ui(runtime):
+    with runtime.lifecycle_lock():
+        state_value = runtime.read_state()
+        if state_value is None or not runtime.health(state_value):
+            raise UIRuntimeError("Live UI is not running")
+        print(runtime.url(state_value))
+        return 0
+
+
+def stop_ui(runtime):
+    with runtime.lifecycle_lock():
+        state_value = runtime.read_state()
+        if state_value is None:
+            if runtime.clear_state():
+                print("stale state cleared; no process signalled")
+            else:
+                print("stopped")
+            return 0
+        first_health = runtime.health(state_value)
+        second_health = runtime.health(state_value) if first_health else None
+        if not first_health or not second_health:
+            runtime.clear_state()
+            print("stale state cleared; no process signalled")
+            return 0
+        try:
+            os.kill(state_value["pid"], signal.SIGTERM)
+        except ProcessLookupError:
+            runtime.clear_state(expected_server_id=state_value["serverId"])
+            print("stopped")
+            return 0
+        deadline = time.monotonic() + 6.0
+        while time.monotonic() < deadline:
+            if runtime.health(state_value, timeout=0.2) is None:
+                runtime.clear_state(expected_server_id=state_value["serverId"])
+                print("stopped")
+                return 0
+            time.sleep(0.05)
+        raise UIRuntimeError("server did not stop; state retained")
+
+
+def serve_ui(runtime, server_id, requested_port):
+    state_value = runtime.read_state()
+    if not state_value or state_value.get("serverId") != server_id:
+        raise UIRuntimeError("startup state does not match this server")
+    token = state_value.get("token")
+    if not isinstance(token, str) or len(token) < 16:
+        raise UIRuntimeError("startup token is invalid")
+    try:
+        server = LiveHTTPServer(
+            ("127.0.0.1", requested_port),
+            JobStore(runtime.jobs_path),
+            token,
+            server_id,
+            runtime.static_root,
+        )
+    except OSError as exc:
+        if requested_port == 0 or exc.errno != errno.EADDRINUSE:
+            raise
+        server = LiveHTTPServer(
+            ("127.0.0.1", 0),
+            JobStore(runtime.jobs_path),
+            token,
+            server_id,
+            runtime.static_root,
+        )
+
+    current = runtime.read_state()
+    if not current or current.get("serverId") != server_id:
+        server.broadcaster.stop()
+        server.server_close()
+        raise UIRuntimeError("startup state changed before bind completed")
+    current.update(
+        {
+            "apiVersion": 1,
+            "pid": os.getpid(),
+            "port": server.server_address[1],
+        }
+    )
+    runtime.write_state(current)
+
+    def request_shutdown(_signum, _frame):
+        threading.Thread(target=server.stop, daemon=True).start()
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGHUP, request_shutdown)
+    try:
+        server.serve_forever(poll_interval=0.2)
+    finally:
+        server.stop_event.set()
+        server.broadcaster.stop()
+        server.server_close()
+        with runtime.lifecycle_lock():
+            runtime.clear_state(expected_server_id=server_id)
+    return 0
+
+
+def parse_port(value):
+    try:
+        port = int(value, 10)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("port must be an integer") from exc
+    if not 0 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 0 and 65535")
+    return port
+
+
+def main(argv=None):
+    if sys.version_info < (3, 9):
+        print("omnilane ui: Python 3.9 or newer is required", file=sys.stderr)
+        return 1
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    runtime = UIRuntime()
+    try:
+        if arguments[:1] == ["serve"]:
+            private = argparse.ArgumentParser(prog="omnilane ui serve")
+            private.add_argument("serve")
+            private.add_argument("--server-id", required=True)
+            private.add_argument("--port", type=parse_port, required=True)
+            parsed = private.parse_args(arguments)
+            return serve_ui(runtime, parsed.server_id, parsed.port)
+
+        parser = argparse.ArgumentParser(prog="omnilane ui")
+        commands = parser.add_subparsers(dest="command", required=True)
+        start_parser = commands.add_parser("start")
+        start_parser.add_argument("--port", type=parse_port, default=8765)
+        commands.add_parser("status")
+        commands.add_parser("url")
+        commands.add_parser("stop")
+        parsed = parser.parse_args(arguments)
+        if parsed.command == "start":
+            return start_ui(runtime, parsed.port)
+        if parsed.command == "status":
+            return status_ui(runtime)
+        if parsed.command == "url":
+            return url_ui(runtime)
+        return stop_ui(runtime)
+    except UIRuntimeError as exc:
+        print("omnilane ui: {}".format(exc), file=sys.stderr)
+        return 1
+    except (OSError, ValueError) as exc:
+        print("omnilane ui: lifecycle operation failed", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

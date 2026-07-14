@@ -6,8 +6,14 @@ import http.client
 import json
 import os
 from pathlib import Path
+import re
+import socket
+import stat
+import subprocess
+import sys
 import tempfile
 import threading
+import time
 import unittest
 
 
@@ -395,6 +401,213 @@ class HTTPServerTests(unittest.TestCase):
         finally:
             for connection, _response in streams:
                 connection.close()
+
+
+class LifecycleTests(unittest.TestCase):
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory(prefix="omnilane-ui-life-")
+        self.home = Path(self.tempdir.name)
+        self.env = os.environ.copy()
+        self.env["OMNILANE_HOME"] = str(self.home)
+        self.env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    def tearDown(self):
+        self.run_ui("stop", check=False)
+        self.tempdir.cleanup()
+
+    def run_ui(self, *arguments, check=True, timeout=12):
+        result = subprocess.run(
+            [sys.executable, str(UI_SCRIPT)] + list(arguments),
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+        if check and result.returncode != 0:
+            self.fail(
+                "ui command failed {}: {}".format(
+                    result.returncode, result.stderr or result.stdout
+                )
+            )
+        return result
+
+    @staticmethod
+    def url_from_output(output):
+        match = re.search(r"http://127\.0\.0\.1:[0-9]+/#token=[A-Za-z0-9_-]+", output)
+        if not match:
+            raise AssertionError("missing Live UI URL: " + output)
+        return match.group(0)
+
+    @staticmethod
+    def matching_server_processes():
+        listing = subprocess.check_output(
+            ["ps", "-ax", "-o", "pid=,command="], text=True
+        )
+        needle = str(UI_SCRIPT)
+        return {
+            int(line.split(None, 1)[0])
+            for line in listing.splitlines()
+            if needle in line and " serve " in line
+        }
+
+    def test_start_reuse_status_url_stop_and_permissions(self):
+        jobs = self.home / "jobs"
+        job_id = "20260714-140000-800-1"
+        job = jobs / job_id
+        job.mkdir(parents=True)
+        (job / "meta.json").write_text(
+            json.dumps({"lane": "triage", "vendor": "codex", "timeout": 600}),
+            encoding="utf-8",
+        )
+        (job / "task.txt").write_text("LIFECYCLE-TASK-CANARY", encoding="utf-8")
+        (job / "out.txt").write_text("LIFECYCLE-OUTPUT-CANARY", encoding="utf-8")
+        (job / "exit").write_text("0", encoding="ascii")
+
+        busy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        busy.bind(("127.0.0.1", 0))
+        busy.listen(1)
+        busy_port = busy.getsockname()[1]
+        try:
+            started = self.run_ui("start", "--port", str(busy_port))
+        finally:
+            busy.close()
+
+        url = self.url_from_output(started.stdout)
+        state_path = self.home / "ui" / "state.json"
+        log_path = self.home / "ui" / "server.log"
+        lock_path = self.home / "ui" / "lifecycle.lock"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertNotEqual(busy_port, state["port"])
+        self.assertEqual(0o700, stat.S_IMODE((self.home / "ui").stat().st_mode))
+        for path in (state_path, log_path, lock_path):
+            self.assertEqual(0o600, stat.S_IMODE(path.stat().st_mode), str(path))
+        command = subprocess.check_output(
+            ["ps", "-p", str(state["pid"]), "-o", "command="], text=True
+        )
+        self.assertNotIn(state["token"], command)
+
+        status_result = self.run_ui("status")
+        self.assertIn("running", status_result.stdout)
+        self.assertNotIn("http://", status_result.stdout)
+        self.assertNotIn(state["token"], status_result.stdout)
+        url_result = self.run_ui("url")
+        self.assertEqual(url, url_result.stdout.strip())
+        reused = self.run_ui("start")
+        self.assertEqual(url, self.url_from_output(reused.stdout))
+        state_after = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertEqual(state["serverId"], state_after["serverId"])
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", state["port"], timeout=3
+        )
+        connection.request(
+            "GET",
+            "/api/jobs/" + job_id,
+            headers={"Authorization": "Bearer " + state["token"]},
+        )
+        response = connection.getresponse()
+        self.assertEqual(200, response.status)
+        response.read()
+        connection.close()
+        stream = http.client.HTTPConnection("127.0.0.1", state["port"], timeout=3)
+        stream.request("GET", "/api/events?token=" + state["token"])
+        stream_response = stream.getresponse()
+        self.assertEqual(200, stream_response.status)
+        stream.close()
+
+        stopped = self.run_ui("stop")
+        self.assertIn("stopped", stopped.stdout)
+        self.assertFalse(state_path.exists())
+        with self.assertRaises(OSError):
+            socket.create_connection(("127.0.0.1", state["port"]), timeout=0.5)
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+        self.assertNotIn(state["token"], log_text)
+        self.assertNotIn("?token=", log_text)
+        self.assertNotIn("LIFECYCLE-TASK-CANARY", log_text)
+        self.assertNotIn("LIFECYCLE-OUTPUT-CANARY", log_text)
+
+    def test_concurrent_starts_create_one_server(self):
+        before = self.matching_server_processes()
+        command = [sys.executable, str(UI_SCRIPT), "start", "--port", "0"]
+        first = subprocess.Popen(
+            command,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        second = subprocess.Popen(
+            command,
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        first_out, first_err = first.communicate(timeout=12)
+        second_out, second_err = second.communicate(timeout=12)
+        self.assertEqual(0, first.returncode, first_err)
+        self.assertEqual(0, second.returncode, second_err)
+        self.assertEqual(self.url_from_output(first_out), self.url_from_output(second_out))
+        new_servers = self.matching_server_processes() - before
+        self.assertEqual(1, len(new_servers))
+
+        self.run_ui("stop")
+        deadline = time.time() + 3
+        while time.time() < deadline and (
+            self.matching_server_processes() & new_servers
+        ):
+            time.sleep(0.05)
+        self.assertFalse(self.matching_server_processes() & new_servers)
+
+    def test_stale_state_never_signals_recorded_pid(self):
+        sleeper = subprocess.Popen(["sleep", "30"])
+        runtime = self.home / "ui"
+        runtime.mkdir(mode=0o700)
+        state_path = runtime / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "apiVersion": 1,
+                    "serverId": "stale-server",
+                    "token": "stale-token-value",
+                    "pid": sleeper.pid,
+                    "port": 65534,
+                    "started": "2026-07-14T14:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+        state_path.chmod(0o600)
+        try:
+            result = self.run_ui("stop")
+            self.assertIn("stale", result.stdout)
+            self.assertIsNone(sleeper.poll())
+            self.assertFalse(state_path.exists())
+        finally:
+            sleeper.terminate()
+            sleeper.wait(timeout=3)
+
+    def test_global_entrypoint_routes_ui(self):
+        result = subprocess.run(
+            [str(ROOT / "bin" / "omnilane"), "ui", "status"],
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5,
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("stopped", result.stdout)
+        help_result = subprocess.run(
+            [str(ROOT / "bin" / "omnilane"), "help"],
+            env=self.env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=5,
+        )
+        self.assertIn("omnilane ui", help_result.stdout)
 
 
 if __name__ == "__main__":
