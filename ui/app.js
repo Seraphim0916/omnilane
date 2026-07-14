@@ -59,6 +59,7 @@
     hasSnapshot: false,
     unauthorized: false,
     authProbeInFlight: false,
+    reconnectTimer: null,
   };
 
   function readToken() {
@@ -634,6 +635,10 @@
   }
 
   function closeEventStream() {
+    if (state.reconnectTimer !== null) {
+      window.clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
     if (state.eventSource) {
       state.eventSource.close();
       state.eventSource = null;
@@ -657,9 +662,22 @@
       }
     });
     source.onerror = function () {
-      if (!state.unauthorized) {
-        showReconnecting();
-        probeAuthorization();
+      if (state.unauthorized) {
+        return;
+      }
+      showReconnecting();
+      probeAuthorization();
+      if (
+        source.readyState === EventSource.CLOSED &&
+        state.eventSource === source &&
+        state.reconnectTimer === null
+      ) {
+        state.reconnectTimer = window.setTimeout(function () {
+          state.reconnectTimer = null;
+          if (!state.unauthorized && state.eventSource === source) {
+            openEventStream();
+          }
+        }, 3000);
       }
     };
   }

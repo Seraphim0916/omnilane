@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import select
 import signal
 import socket
 import stat
@@ -442,7 +443,7 @@ class LiveHTTPServer(ThreadingHTTPServer):
         static_root,
         *,
         poll_interval=1.0,
-        keepalive_interval=15.0,
+        keepalive_interval=3.0,
     ):
         host, _port = server_address
         if host != "127.0.0.1":
@@ -630,14 +631,21 @@ class LiveRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self._send_security_headers()
-            self.send_header("Connection", "keep-alive")
+            self.send_header("Connection", "close")
             self.end_headers()
             version, snapshot = self.server.broadcaster.current()
             self._write_sse_snapshot(snapshot)
+            next_keepalive = time.monotonic() + self.server.keepalive_interval
             while not self.server.stop_event.is_set():
+                if self._client_disconnected():
+                    break
+                wait_timeout = min(
+                    0.25,
+                    max(0.0, next_keepalive - time.monotonic()),
+                )
                 next_version, next_snapshot, changed = (
                     self.server.broadcaster.wait_for_change(
-                        version, self.server.keepalive_interval
+                        version, wait_timeout
                     )
                 )
                 if self.server.stop_event.is_set():
@@ -645,12 +653,31 @@ class LiveRequestHandler(BaseHTTPRequestHandler):
                 if changed:
                     version = next_version
                     self._write_sse_snapshot(next_snapshot)
-                else:
+                    next_keepalive = (
+                        time.monotonic() + self.server.keepalive_interval
+                    )
+                elif time.monotonic() >= next_keepalive:
                     self.wfile.write(b": keepalive\n\n")
                     self.wfile.flush()
+                    next_keepalive = (
+                        time.monotonic() + self.server.keepalive_interval
+                    )
         finally:
             self.server.sse_slots.release()
             self.close_connection = True
+
+    def _client_disconnected(self):
+        try:
+            readable, _writable, _exceptional = select.select(
+                [self.connection], [], [], 0
+            )
+            if not readable:
+                return False
+            return self.connection.recv(1, socket.MSG_PEEK) == b""
+        except (BlockingIOError, InterruptedError):
+            return False
+        except (OSError, ValueError):
+            return True
 
     def _write_sse_snapshot(self, snapshot):
         payload = json.dumps(
@@ -681,7 +708,7 @@ class LiveRequestHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        if body:
+        if body and self.command != "HEAD":
             self.wfile.write(body)
 
     def _send_security_headers(self):
@@ -889,6 +916,47 @@ class UIRuntime:
             return None
         return payload
 
+    def recorded_server_process_exists(self, state_value):
+        pid = state_value.get("pid") if isinstance(state_value, dict) else None
+        server_id = (
+            state_value.get("serverId") if isinstance(state_value, dict) else None
+        )
+        if (
+            isinstance(pid, bool)
+            or not isinstance(pid, int)
+            or pid < 1
+            or not isinstance(server_id, str)
+        ):
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        except (OSError, ValueError) as exc:
+            return getattr(exc, "errno", None) != errno.ESRCH
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "command="],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=1,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            # A live but uninspectable PID is ambiguous. Retaining state is
+            # safer than orphaning a possibly healthy authenticated server.
+            return True
+        command = result.stdout
+        return (
+            result.returncode == 0
+            and str(Path(__file__).resolve()) in command
+            and " serve " in command
+            and "--server-id " + server_id in command
+        )
+
     @staticmethod
     def url(state_value):
         return "http://127.0.0.1:{}/#token={}".format(
@@ -926,6 +994,13 @@ def start_ui(runtime, requested_port):
         if state_value is not None and runtime.health(state_value):
             print("Live UI already running: {}".format(runtime.url(state_value)))
             return 0
+        if state_value is not None and runtime.recorded_server_process_exists(
+            state_value
+        ):
+            raise UIRuntimeError(
+                "recorded server process is alive but health failed; "
+                "state retained and no replacement started"
+            )
         runtime.clear_state()
 
         server_id = secrets.token_urlsafe(18)
@@ -940,7 +1015,11 @@ def start_ui(runtime, requested_port):
             "started": utc_now(),
         }
         runtime.write_state(initial_state)
-        log_fd = runtime.open_log()
+        try:
+            log_fd = runtime.open_log()
+        except UIRuntimeError:
+            runtime.clear_state(expected_server_id=server_id)
+            raise
         command = [
             sys.executable,
             str(Path(__file__).resolve()),
@@ -1022,6 +1101,11 @@ def stop_ui(runtime):
         first_health = runtime.health(state_value)
         second_health = runtime.health(state_value) if first_health else None
         if not first_health or not second_health:
+            if runtime.recorded_server_process_exists(state_value):
+                raise UIRuntimeError(
+                    "recorded server process is alive but health failed; "
+                    "state retained and no process signalled"
+                )
             runtime.clear_state()
             print("stale state cleared; no process signalled")
             return 0
@@ -1141,7 +1225,7 @@ def main(argv=None):
         print("omnilane ui: {}".format(exc), file=sys.stderr)
         return 1
     except (OSError, ValueError) as exc:
-        print("omnilane ui: lifecycle operation failed", file=sys.stderr)
+        print("omnilane ui: lifecycle operation failed: {}".format(exc), file=sys.stderr)
         return 1
 
 

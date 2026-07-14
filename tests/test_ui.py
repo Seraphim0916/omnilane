@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import socket
 import stat
 import subprocess
@@ -359,6 +360,25 @@ class HTTPServerTests(unittest.TestCase):
         self.assert_security_headers(response)
         connection.close()
 
+    def test_head_has_no_response_body(self):
+        client = socket.create_connection(("127.0.0.1", self.port), timeout=3)
+        request = (
+            "HEAD /api/jobs HTTP/1.1\r\n"
+            "Host: 127.0.0.1:{}\r\n"
+            "Connection: close\r\n\r\n"
+        ).format(self.port)
+        client.sendall(request.encode("ascii"))
+        chunks = []
+        while True:
+            chunk = client.recv(4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        client.close()
+        headers, body = b"".join(chunks).split(b"\r\n\r\n", 1)
+        self.assertIn(b"405 Method Not Allowed", headers)
+        self.assertEqual(b"", body)
+
     def test_sse_shares_body_free_changed_snapshots(self):
         first_connection, first_response = self.open_sse()
         second_connection, second_response = self.open_sse()
@@ -399,8 +419,21 @@ class HTTPServerTests(unittest.TestCase):
             ninth_response.read()
             ninth_connection.close()
         finally:
-            for connection, _response in streams:
+            for connection, response in streams:
+                response.close()
                 connection.close()
+        recovered = False
+        deadline = time.time() + 2
+        while time.time() < deadline and not recovered:
+            connection, response = self.open_sse()
+            if response.status == 200:
+                recovered = True
+            else:
+                response.read()
+            connection.close()
+            if not recovered:
+                time.sleep(0.05)
+        self.assertTrue(recovered, "SSE capacity did not recover after clients closed")
 
 
 class LifecycleTests(unittest.TestCase):
@@ -588,6 +621,46 @@ class LifecycleTests(unittest.TestCase):
             sleeper.terminate()
             sleeper.wait(timeout=3)
 
+    def test_unresponsive_recorded_server_retains_state(self):
+        self.run_ui("start", "--port", "0")
+        state_path = self.home / "ui" / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        os.kill(state["pid"], signal.SIGSTOP)
+        try:
+            stopped = self.run_ui("stop", check=False)
+            self.assertEqual(1, stopped.returncode)
+            self.assertIn("state retained", stopped.stderr)
+            self.assertTrue(state_path.exists())
+        finally:
+            os.kill(state["pid"], signal.SIGCONT)
+            deadline = time.time() + 3
+            while time.time() < deadline:
+                if self.run_ui("status", check=False).returncode == 0:
+                    break
+                time.sleep(0.05)
+            self.run_ui("stop", check=False)
+
+    def test_unresponsive_recorded_server_blocks_replacement(self):
+        self.run_ui("start", "--port", "0")
+        state_path = self.home / "ui" / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        os.kill(state["pid"], signal.SIGSTOP)
+        try:
+            restarted = self.run_ui("start", "--port", "0", check=False)
+            self.assertEqual(1, restarted.returncode)
+            self.assertIn("state retained", restarted.stderr)
+            retained = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(state["serverId"], retained["serverId"])
+            self.assertEqual(state["pid"], retained["pid"])
+        finally:
+            os.kill(state["pid"], signal.SIGCONT)
+            deadline = time.time() + 3
+            while time.time() < deadline:
+                if self.run_ui("status", check=False).returncode == 0:
+                    break
+                time.sleep(0.05)
+            self.run_ui("stop", check=False)
+
     def test_global_entrypoint_routes_ui(self):
         result = subprocess.run(
             [str(ROOT / "bin" / "omnilane"), "ui", "status"],
@@ -645,6 +718,8 @@ class FrontendContractTests(unittest.TestCase):
         ):
             self.assertIn(literal, self.javascript)
         self.assertNotIn("localStorage", self.javascript)
+        self.assertIn("EventSource.CLOSED", self.javascript)
+        self.assertIn("window.setTimeout", self.javascript)
 
     def test_visual_contract_has_one_route_signal_and_reduced_motion(self):
         self.assertIn("LANE → VENDOR → MODEL → STATE", self.html)

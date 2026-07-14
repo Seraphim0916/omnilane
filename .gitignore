@@ -1,3 +1,5 @@
 jobs/
 locks/
 *.stderr.log
+__pycache__/
+*.py[cod]
