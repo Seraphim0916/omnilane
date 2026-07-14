@@ -2,10 +2,12 @@
 """Tests for the optional local Omnilane Live UI."""
 
 import importlib.util
+import http.client
 import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 
 
@@ -171,6 +173,228 @@ class JobStoreTests(unittest.TestCase):
         self.assertEqual("invalid", by_id[meta_id]["state"])
         self.assertEqual("invalid", by_id[pid_id]["state"])
         self.assertEqual("invalid", by_id[exit_id]["state"])
+
+
+class HTTPServerTests(unittest.TestCase):
+    REQUIRED_HEADERS = (
+        "Cache-Control",
+        "Content-Security-Policy",
+        "Referrer-Policy",
+        "X-Content-Type-Options",
+        "X-Frame-Options",
+    )
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory(prefix="omnilane-ui-http-")
+        self.home = Path(self.tempdir.name)
+        self.jobs = self.home / "jobs"
+        self.static = self.home / "static"
+        self.jobs.mkdir()
+        self.static.mkdir()
+        (self.static / "index.html").write_text("<h1>LOCAL BOARD</h1>", encoding="utf-8")
+        (self.static / "styles.css").write_text("body{}", encoding="utf-8")
+        (self.static / "app.js").write_text("'use strict';", encoding="utf-8")
+        self.job_id = "20260714-130000-700-1"
+        job = self.jobs / self.job_id
+        job.mkdir()
+        (job / "meta.json").write_text(
+            json.dumps(
+                {
+                    "lane": "hard-judgment",
+                    "vendor": "claude",
+                    "model": "claude-opus-4-8",
+                    "effort": "high",
+                    "timeout": 1800,
+                    "mode": "advise",
+                    "workdir": "/tmp/project",
+                    "candidate": "2/4",
+                    "started": "2026-07-14T13:00:00Z",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (job / "task.txt").write_text("HTTP-TASK-CANARY", encoding="utf-8")
+        (job / "out.txt").write_text("HTTP-OUTPUT-CANARY", encoding="utf-8")
+        (job / "exit").write_text("0", encoding="ascii")
+        self.token = "test-token-that-is-not-logged"
+        self.server = ui.LiveHTTPServer(
+            ("127.0.0.1", 0),
+            ui.JobStore(self.jobs),
+            self.token,
+            "test-server-id",
+            self.static,
+            poll_interval=0.05,
+            keepalive_interval=0.5,
+        )
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.port = self.server.server_address[1]
+
+    def tearDown(self):
+        self.server.stop()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+        self.tempdir.cleanup()
+
+    def request(self, method, path, *, token=None, host=None):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        headers = {}
+        if token is not None:
+            headers["Authorization"] = "Bearer " + token
+        if host is not None:
+            headers["Host"] = host
+        connection.request(method, path, headers=headers)
+        response = connection.getresponse()
+        body = response.read()
+        return connection, response, body
+
+    def assert_security_headers(self, response):
+        for header in self.REQUIRED_HEADERS:
+            self.assertTrue(response.getheader(header), header)
+        self.assertIsNone(response.getheader("Access-Control-Allow-Origin"))
+
+    @staticmethod
+    def read_sse_event(response):
+        event_name = None
+        data = None
+        while True:
+            line = response.fp.readline()
+            if not line:
+                raise AssertionError("SSE stream ended before an event")
+            decoded = line.decode("utf-8").rstrip("\r\n")
+            if decoded.startswith("event: "):
+                event_name = decoded[7:]
+            elif decoded.startswith("data: "):
+                data = json.loads(decoded[6:])
+            elif decoded == "" and data is not None:
+                return event_name, data
+
+    def open_sse(self):
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        path = "/api/events?token=" + self.token
+        connection.request("GET", path)
+        response = connection.getresponse()
+        return connection, response
+
+    def test_static_auth_host_methods_and_detail_contract(self):
+        connection, response, body = self.request("GET", "/")
+        self.assertEqual(200, response.status)
+        self.assertIn(b"LOCAL BOARD", body)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, _ = self.request("GET", "/api/jobs")
+        self.assertEqual(401, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, body = self.request(
+            "GET", "/api/jobs", token=self.token
+        )
+        self.assertEqual(200, response.status)
+        self.assertNotIn(b"HTTP-TASK-CANARY", body)
+        self.assertNotIn(b"HTTP-OUTPUT-CANARY", body)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, body = self.request(
+            "GET", "/api/jobs/" + self.job_id, token=self.token
+        )
+        self.assertEqual(200, response.status)
+        self.assertIn(b"HTTP-TASK-CANARY", body)
+        self.assertIn(b"HTTP-OUTPUT-CANARY", body)
+        connection.close()
+
+        connection, response, _ = self.request(
+            "GET", "/api/jobs/%2e%2e%2fsecret", token=self.token
+        )
+        self.assertEqual(404, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, _ = self.request(
+            "POST", "/api/jobs", token=self.token
+        )
+        self.assertEqual(405, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, _ = self.request("TRACE", "/api/jobs")
+        self.assertEqual(405, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+        connection, response, _ = self.request(
+            "GET",
+            "/api/jobs",
+            token=self.token,
+            host="attacker.invalid",
+        )
+        self.assertEqual(421, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+    def test_health_and_unknown_route(self):
+        connection, response, body = self.request(
+            "GET", "/api/health", token=self.token
+        )
+        payload = json.loads(body)
+        self.assertEqual(200, response.status)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(os.getpid(), payload["pid"])
+        self.assertEqual(self.port, payload["port"])
+        self.assertEqual("test-server-id", payload["serverId"])
+        connection.close()
+
+        connection, response, _ = self.request(
+            "GET", "/api/no-such-route", token=self.token
+        )
+        self.assertEqual(404, response.status)
+        self.assert_security_headers(response)
+        connection.close()
+
+    def test_sse_shares_body_free_changed_snapshots(self):
+        first_connection, first_response = self.open_sse()
+        second_connection, second_response = self.open_sse()
+        self.assertEqual(200, first_response.status)
+        self.assertEqual(200, second_response.status)
+        self.assert_security_headers(first_response)
+        first_initial = self.read_sse_event(first_response)
+        second_initial = self.read_sse_event(second_response)
+        self.assertEqual(first_initial, second_initial)
+        encoded = json.dumps(first_initial)
+        self.assertNotIn("HTTP-TASK-CANARY", encoded)
+        self.assertNotIn("HTTP-OUTPUT-CANARY", encoded)
+        changes_before = self.server.broadcaster.change_count
+
+        with (self.jobs / self.job_id / "out.txt").open("a", encoding="utf-8") as handle:
+            handle.write(" changed")
+
+        first_changed = self.read_sse_event(first_response)
+        second_changed = self.read_sse_event(second_response)
+        self.assertEqual(first_changed, second_changed)
+        self.assertEqual(changes_before + 1, self.server.broadcaster.change_count)
+        encoded = json.dumps(first_changed)
+        self.assertNotIn("HTTP-TASK-CANARY", encoded)
+        self.assertNotIn("HTTP-OUTPUT-CANARY", encoded)
+        first_connection.close()
+        second_connection.close()
+
+    def test_ninth_sse_connection_is_rejected(self):
+        streams = []
+        try:
+            for _ in range(8):
+                connection, response = self.open_sse()
+                self.assertEqual(200, response.status)
+                streams.append((connection, response))
+            ninth_connection, ninth_response = self.open_sse()
+            self.assertEqual(503, ninth_response.status)
+            self.assert_security_headers(ninth_response)
+            ninth_response.read()
+            ninth_connection.close()
+        finally:
+            for connection, _response in streams:
+                connection.close()
 
 
 if __name__ == "__main__":
