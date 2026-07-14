@@ -7,7 +7,11 @@ consult the omnilane routing table: run `omnilane list` (or
 subtask into a lane. If the lane's first available model is the one you are
 running as, self-execute; otherwise dispatch it headlessly:
 
-    omnilane route [--mode work] [--workdir DIR] <lane> "<task>"
+    omnilane route [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"
+
+If the user explicitly names Claude, Codex, Grok, Gemini, or a canonical model
+alias, use the omnilane skill's consult rules and keep `--vendor` in the
+dispatch; an explicit target must not silently fall back.
 
 Lane definitions, modes, and safety rules live in the `omnilane` skill.
 Workers must never dispatch again (nested dispatch is refused, exit 86).

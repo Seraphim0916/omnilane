@@ -17,7 +17,8 @@ case "$cmd" in
 omnilane — one routing table, every harness
 
   omnilane list                         effective routing table
-  omnilane route [flags] LANE "TASK"    dispatch a task (see dispatch.sh)
+  omnilane route [--vendor V] [flags] LANE "TASK"
+                                        dispatch or consult a model
   omnilane jobs  list|status ID|result ID
   omnilane configure                    interactive lane menu
 EOF

@@ -10,7 +10,7 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 1. **Identify your main model.** You know which model you are running as.
 2. **Split the work into subtasks and classify each into a lane** (table below).
 3. **If the lane's model is you, self-execute.** Otherwise dispatch:
-   `<repo>/scripts/dispatch.sh [--mode work] [--workdir DIR] <lane> "<task>"`
+   `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    A deep task whose CLI call may outrun the 600s per-call watchdog can raise its
    cap with `--timeout <seconds>` (e.g. `--timeout 1200` for hard-judgment /
@@ -32,6 +32,7 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 | triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | High-volume scans, first-pass filtering |
 | hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | Architecture arbitration, deep reasoning, second opinions |
 | taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
 | long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
 | fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
@@ -43,6 +44,46 @@ Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
 top Claude tier is usually the main loop itself, not a dispatched worker. To
 route to it anyway, select it in the configurator or override a lane in
 `~/.omnilane/routing.local.yaml` (e.g. `taste-final: claude claude-fable-5 high`).
+
+## Natural-language consultation
+
+Users may speak normally; they do not need lane names.
+
+1. Capability-only question (`which model`, `what can Claude do`, `哪個模型`,
+   `誰適合`) → classify the need, then answer with the first available model
+   shown for that lane by `dispatch.sh --list`; do not dispatch unless execution
+   is also requested.
+2. Generic vendor name (`Claude`, `Codex`, `Grok`, `Gemini`) → run
+   `dispatch.sh --vendor <vendor> consult "<task>"`.
+3. Canonical model alias → pass its vendor, model, and effort from the table
+   below. Never silently substitute another model family.
+4. No named target → classify into an existing lane and dispatch normally.
+5. Unknown or ambiguous nickname → ask for clarification; do not guess or run.
+
+| Alias | Vendor | Model | Effort |
+|---|---|---|---|
+| Opus | claude | claude-opus-4-8 | high |
+| Fable | claude | claude-fable-5 | high |
+| Sonnet | claude | claude-sonnet-5 | high |
+| Haiku | claude | claude-haiku-4-5 | - |
+| Sol | codex | gpt-5.6-sol | max |
+| Terra | codex | gpt-5.6-terra | max |
+| Luna | codex | gpt-5.6-luna | medium |
+| Grok 4.5 | grok | grok-4.5 | - |
+| Gemini Pro | gemini | Gemini 3.1 Pro (High) | - |
+| Gemini Flash | gemini | Gemini 3.5 Flash (High) | - |
+
+Examples:
+
+- Ask Opus to challenge this architecture →
+  `dispatch.sh --vendor claude --model claude-opus-4-8 --effort high consult "challenge this architecture"`
+- 請 Grok 查最新公開資訊 →
+  `dispatch.sh --vendor grok consult "查最新公開資訊"`
+- 哪個模型適合檢查大型 repo？ → answer only; do not dispatch.
+
+Consultation defaults to `advise`. Use `--mode work --workdir <dir>` only for
+an explicit edit request. Missing explicit targets fail clearly; never remove
+`--vendor` to obtain a fallback.
 
 ## Rules
 
