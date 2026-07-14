@@ -114,6 +114,72 @@ EOF
   fi
 }
 
+test_vendor_selector() {
+  local name="explicit vendor selector" home bin selected automatic
+  local rc_absent rc_unavailable rc_invalid rc_missing missing_out
+  home="$TEST_ROOT/vendor-selector"; bin="$home/bin"
+  mkdir -p "$home" "$bin"
+
+  cat > "$bin/fake-codex" <<'EOF'
+#!/usr/bin/env bash
+out=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+printf 'codex selected\n' > "$out"
+EOF
+  cat > "$bin/fake-claude" <<'EOF'
+#!/usr/bin/env bash
+printf 'claude selected %s\n' "$*"
+EOF
+  chmod +x "$bin/fake-codex" "$bin/fake-claude"
+
+  printf 'probe: codex codex-default low | claude claude-default high | grok grok-default -\n' \
+    > "$home/routing.local.yaml"
+
+  selected="$(OMNILANE_HOME="$home" CODEX_BIN="$bin/fake-codex" \
+    CLAUDE_BIN="$bin/fake-claude" GROK_BIN="$bin/missing-grok" \
+    bash "$ROOT/scripts/dispatch.sh" --vendor claude --model claude-override \
+      --effort max probe x 2>/dev/null)"
+  automatic="$(OMNILANE_HOME="$home" CODEX_BIN="$bin/fake-codex" \
+    CLAUDE_BIN="$bin/fake-claude" GROK_BIN="$bin/missing-grok" \
+    bash "$ROOT/scripts/dispatch.sh" probe x 2>/dev/null)"
+
+  OMNILANE_HOME="$home" CODEX_BIN="$bin/fake-codex" \
+    bash "$ROOT/scripts/dispatch.sh" --vendor gemini probe x >/dev/null 2>&1
+  rc_absent=$?
+  OMNILANE_HOME="$home" CODEX_BIN="$bin/fake-codex" GROK_BIN="$bin/missing-grok" \
+    bash "$ROOT/scripts/dispatch.sh" --vendor grok probe x >/dev/null 2>&1
+  rc_unavailable=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" \
+    --vendor vote probe x >/dev/null 2>&1
+  rc_invalid=$?
+  missing_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --vendor 2>&1)"
+  rc_missing=$?
+
+  if [[ "$selected" != claude\ selected* ]]; then
+    fail "$name" "requested Claude was not selected: $selected"
+  elif [[ "$selected" != *'--model claude-override'* ||
+          "$selected" != *'--effort max'* ]]; then
+    fail "$name" "model or effort override was lost: $selected"
+  elif [[ "$automatic" != "codex selected" ]]; then
+    fail "$name" "normal fallback changed: $automatic"
+  elif [[ "$rc_absent" -ne 2 ]]; then
+    fail "$name" "absent vendor should exit 2, got $rc_absent"
+  elif [[ "$rc_unavailable" -ne 4 ]]; then
+    fail "$name" "missing requested CLI should exit 4, got $rc_unavailable"
+  elif [[ "$rc_invalid" -ne 2 ]]; then
+    fail "$name" "invalid vendor should exit 2, got $rc_invalid"
+  elif [[ "$rc_missing" -ne 2 || "$missing_out" != *"needs a value"* ]]; then
+    fail "$name" "missing --vendor value did not fail cleanly"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -285,6 +351,7 @@ test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
+test_vendor_selector
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
