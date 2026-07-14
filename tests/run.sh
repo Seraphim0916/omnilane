@@ -89,6 +89,9 @@ EOF
   dflag="$(OMNILANE_HOME="$home" OMNILANE_TIMEOUT=900 OMNILANE_TIMEOUT_PROBE=1234 bash "$ROOT/scripts/dispatch.sh" --timeout 55 probe x 2>/dev/null)"
   OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout abc probe x >/dev/null 2>&1; rc_bad=$?
   OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 0 probe x >/dev/null 2>&1; rc_zero=$?
+  # A value-taking flag with no value must be a clean usage error, not a crash.
+  local rc_missing missing_out
+  missing_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 2>&1)"; rc_missing=$?
 
   if [[ "$d600" != "600" ]]; then
     fail "$name" "default should be 600, got '$d600'"
@@ -102,6 +105,10 @@ EOF
     fail "$name" "non-numeric --timeout should exit 2, got $rc_bad"
   elif [[ "$rc_zero" -ne 2 ]]; then
     fail "$name" "--timeout 0 should exit 2, got $rc_zero"
+  elif [[ "$rc_missing" -ne 2 ]]; then
+    fail "$name" "--timeout with no value should exit 2, got $rc_missing"
+  elif [[ "$missing_out" != *"needs a value"* ]]; then
+    fail "$name" "--timeout with no value should print a readable error"
   else
     pass "$name"
   fi

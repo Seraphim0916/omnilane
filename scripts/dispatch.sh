@@ -111,11 +111,18 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --list) print_effective_routing; exit 0 ;;
     --background) BACKGROUND=1; shift ;;
-    --mode) MODE="$2"; shift 2 ;;
-    --workdir) WORKDIR="$2"; shift 2 ;;
-    --model) OVERRIDE_MODEL="$2"; shift 2 ;;
-    --effort) OVERRIDE_EFFORT="$2"; shift 2 ;;
-    --timeout) OVERRIDE_TIMEOUT="$2"; shift 2 ;;
+    --mode|--workdir|--model|--effort|--timeout)
+      # Value-taking flags: a missing value must be a clean usage error (exit 2),
+      # not a `set -u` "unbound variable" crash on $2.
+      [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
+      case "$1" in
+        --mode) MODE="$2" ;;
+        --workdir) WORKDIR="$2" ;;
+        --model) OVERRIDE_MODEL="$2" ;;
+        --effort) OVERRIDE_EFFORT="$2" ;;
+        --timeout) OVERRIDE_TIMEOUT="$2" ;;
+      esac
+      shift 2 ;;
     -*) echo "unknown flag: $1" >&2; exit 2 ;;
     *) break ;;
   esac
