@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -u
 
+# Tests own their dispatch environment. Inherited recursion guards or watchdog
+# overrides must not turn a healthy suite into a host-dependent false failure.
+unset OMNILANE_DEPTH OMNILANE_TIMEOUT
+for inherited_timeout in "${!OMNILANE_TIMEOUT_@}"; do
+  unset "$inherited_timeout"
+done
+unset inherited_timeout
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-tests.XXXXXX")"
 PASS=0

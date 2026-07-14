@@ -22,7 +22,9 @@ jobs:
           echo "$out"
           test "$(printf '%s\n' "$out" | wc -l)" -ge 8
       - name: unit tests
-        run: bash tests/run.sh
+        run: |
+          OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
+            bash tests/run.sh
       - name: no stale project name
         run: |
           ! grep -ri 'omniroute' --exclude-dir=.git --exclude-dir=.github .
