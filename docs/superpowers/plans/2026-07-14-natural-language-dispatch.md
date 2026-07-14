@@ -507,4 +507,3 @@ Expected: clean diff, clean worktree, only scoped commits.
 Reject any path that silently falls back after --vendor, accepts exec/vote/off as target, exposes consult in configure.sh, substitutes another family for Opus, or has a test that fails to prove the selected runner and overrides.
 
 Expected: no P0/P1. Fix evidence-backed findings, repeat Steps 1-4, then commit the precise fix.
-
