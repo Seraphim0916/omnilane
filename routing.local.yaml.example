@@ -5,6 +5,11 @@
 # triage:      codex gpt-5.6-luna low
 # live-search: off - -
 
+# consult is a multi-vendor direct-target chain. configure.sh intentionally
+# skips it because that menu writes one candidate per lane. If overriding it,
+# retain every vendor you want to address by name:
+# consult: codex gpt-5.6-sol max | claude claude-opus-4-8 high | grok grok-4.5 - | gemini "Gemini 3.1 Pro (High)" -
+
 # ── Starter profiles ─────────────────────────────────────────────
 # Uncomment ONE block that matches what you actually subscribe to.
 # You never need every vendor — unmatched lanes fall back down the chain

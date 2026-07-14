@@ -57,8 +57,9 @@ flowchart LR
 - **Fallback chains** — a lane can list candidates
   (`codex … | claude … | off`); dispatch picks the first vendor CLI you actually
   have, so the default table works even with a single subscription.
-- **`scripts/dispatch.sh <lane> "<task>"`** — resolves the lane and shells out
-  to the vendor's CLI headlessly.
+- **`scripts/dispatch.sh [--vendor V] <lane> "<task>"`** — resolves the lane
+  and shells out to the vendor's CLI headlessly. `--vendor` selects one named
+  vendor without fallback.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
 
@@ -71,6 +72,7 @@ flowchart LR
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | High-volume scans, first-pass filtering |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | Architecture arbitration, deep reasoning, second opinions |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
+| 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis — analysis only, never agentic loops |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
@@ -87,6 +89,19 @@ lane is such a chain; when nothing in it is installed the lane degrades to `off`
 > it prices above Opus. It is offered in the configurator's model menu —
 > route to it if you disagree (e.g. `taste-final: claude claude-fable-5 high`
 > in `routing.local.yaml`).
+
+### Natural-language consultation
+
+With the `omnilane` skill or `/route`, you can ask normally: **“Ask Opus to
+challenge this architecture.”** The Agent Skill interprets the request; this
+is not a free-form shell parser in `dispatch.sh`.
+
+- A capability-only question recommends the first available model for the
+  matching lane and makes no model call.
+- A generic vendor name uses that vendor's configured candidate in `consult`.
+- A canonical alias such as Opus pins its exact model family from the skill
+  table. If an explicit target is absent or unavailable, the command fails
+  clearly instead of falling back to another vendor or family.
 
 <details>
 <summary><b>👉 Which lanes do you run yourself? Pick your main model</b></summary>
@@ -135,10 +150,11 @@ installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
 Three layers, all optional:
 
-1. **Interactive menu** — `scripts/configure.sh` lists your lanes, lets you
+1. **Interactive menu** — `scripts/configure.sh` lists configurable lanes, lets you
    pick vendor → model → effort per lane from suggestions (or free text for
    future models), and writes the result to `~/.omnilane/routing.local.yaml`.
-   `install.sh` offers to run it at the end of a normal install.
+   It intentionally skips the multi-vendor `consult` lane; edit that one by
+   hand if needed. `install.sh` offers to run the menu at the end of a normal install.
 2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
    as `routing.yaml`; local lines win. See `routing.local.yaml.example`.
 3. **`~/.omnilane/local.sh`** — per-machine binaries, proxies, auth wrappers;
@@ -156,7 +172,7 @@ scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
                                                # (install.sh links it into ~/.local/bin)
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" reads task from stdin
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" reads task from stdin
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
@@ -175,8 +191,10 @@ gate via the `exec` vendor:
 `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict to
 `OUTPUT_FILE` (see `scripts/runners/run-exec.sh`).
 
-Exit codes: `2` bad usage (unknown lane / bad mode), `3` lane disabled (off),
-`4` no vendor CLI available in the chain, `5` too few successful Round 1
+Exit codes: `2` bad usage (including an invalid vendor or a requested vendor
+absent from the lane), `3` lane disabled (off), `4` no vendor CLI available in
+the chain or the requested vendor is configured but its CLI is unavailable,
+`5` too few successful Round 1
 voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
 lock timeout; otherwise the worker's own exit code passes through.
 

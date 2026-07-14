@@ -56,8 +56,9 @@ flowchart LR
 - **폴백 체인** — 한 레인에 후보를 여러 개 나열할 수 있습니다
   (`codex … | claude … | off`). 실제로 설치된 첫 번째 벤더 CLI 가 선택되므로
   한두 개 구독만 있어도 같은 테이블이 동작합니다.
-- **`scripts/dispatch.sh <레인> "<태스크>"`** — 테이블을 해석해 해당 벤더
-  CLI 를 헤드리스로 실행합니다.
+- **`scripts/dispatch.sh [--vendor V] <레인> "<태스크>"`** — 테이블을 해석해
+  해당 벤더 CLI 를 헤드리스로 실행합니다. `--vendor` 는 지정한 벤더로
+  고정하며 폴백하지 않습니다.
 - **`skills/omnilane/SKILL.md`** — 네 하네스 공용 스킬: 자기 모델을 파악하고,
   자기 레인은 직접 수행, 나머지는 디스패치.
 
@@ -70,6 +71,7 @@ flowchart LR
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 대량 1차 선별 |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
+| 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
@@ -85,6 +87,19 @@ flowchart LR
 > 가격도 Opus 보다 높습니다. 설정 메뉴의 모델 목록에는 있으니 원하면 직접
 > 라우팅하세요(예: `routing.local.yaml` 에
 > `taste-final: claude claude-fable-5 high`).
+
+### 자연어 상담
+
+`omnilane` 스킬이나 `/route` 에서 **“Opus에게 이 아키텍처를 비판적으로 검토해
+달라고 해줘.”** 처럼 평범하게 요청할 수 있습니다. 자연어는 Agent Skill 이
+해석하며, `dispatch.sh` 에 자유 형식 shell 파서를 추가하는 방식이 아닙니다.
+
+- 모델의 기능만 묻는 질문에는 해당 레인에서 현재 첫 번째로 사용 가능한 모델을
+  답하고 모델 호출은 하지 않습니다.
+- 일반 벤더명은 그 벤더에 대해 `consult` 에 설정된 후보를 사용합니다.
+- Opus 같은 표준 모델 별칭은 스킬 표의 정확한 모델 제품군으로 고정합니다.
+  명시한 대상이 없거나 CLI 를 사용할 수 없으면 명확히 실패하며 다른 벤더나
+  모델 제품군으로 폴백하지 않습니다.
 
 <details>
 <summary><b>👉 어떤 레인을 직접 실행하나요? 메인 모델을 선택하세요</b></summary>
@@ -130,9 +145,10 @@ flowchart LR
 
 세 계층, 모두 선택 사항:
 
-1. **대화형 메뉴** — `scripts/configure.sh` 가 전체 레인을 보여 주고, 레인마다
+1. **대화형 메뉴** — `scripts/configure.sh` 가 설정 가능한 레인을 보여 주고, 레인마다
    벤더 → 모델 → 추론 강도를 고르게 한 뒤(추천 목록+자유 입력) 결과를
-   `~/.omnilane/routing.local.yaml` 에 기록합니다.
+   `~/.omnilane/routing.local.yaml` 에 기록합니다. 다중 벤더 `consult` 는
+   의도적으로 제외되며, 바꾸려면 수동으로 편집합니다.
 2. **`~/.omnilane/routing.local.yaml`** — 수동 오버라이드. 형식은
    `routing.yaml` 과 동일, 로컬 우선.
 3. **`~/.omnilane/local.sh`** — 머신 전용 바이너리 경로, 프록시, 인증 래퍼.
@@ -148,14 +164,15 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 
 ```
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" 는 stdin 에서 읽기
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" 는 stdin 에서 읽기
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # 대화형 레인 메뉴
 ```
 
-종료 코드: `2` 사용법 오류, `3` 레인 비활성(off), `4` 체인에 사용 가능한
-CLI 없음, `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
+종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
+`3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
+CLI 를 사용할 수 없음, `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
 그 외에는 워커 자신의 종료 코드를 그대로 전달.
 
 ## 🎭 모드
