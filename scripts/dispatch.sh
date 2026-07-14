@@ -14,10 +14,14 @@ set -euo pipefail
 # The first candidate whose vendor CLI exists on this machine wins, so the same
 # table degrades gracefully for people with fewer subscriptions.
 #
-# Watchdog seconds resolve per task, highest priority first:
+# The watchdog caps EACH CLI invocation, highest priority first:
 #   --timeout SECONDS  >  OMNILANE_TIMEOUT_<LANE>  >  OMNILANE_TIMEOUT  >  600
 # The per-lane knob is the lane upper-cased with "-" turned into "_"
 # (hard-judgment -> OMNILANE_TIMEOUT_HARD_JUDGMENT), so it can live in local.sh.
+# This is a per-call hang-guard, NOT a whole-job budget: a retrying vendor
+# (grok, up to OMNILANE_GROK_MAX_ATTEMPTS) or the vote panel (voters x rounds)
+# spawns several CLI calls, so total wall-clock can be a multiple of this value.
+# For a true end-to-end deadline that is a separate, future control.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
@@ -157,6 +161,7 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # Watchdog seconds: --timeout > per-lane OMNILANE_TIMEOUT_<LANE> > OMNILANE_TIMEOUT > 600.
 # Resolve here and export so every runner (and vote's sub-runners) inherits the
 # same value without a per-runner code change; they already read OMNILANE_TIMEOUT.
+# This bounds each runner CLI call, not the whole dispatch (see header note).
 TIMEOUT="$OVERRIDE_TIMEOUT"
 if [[ -z "$TIMEOUT" ]]; then
   LANE_TIMEOUT_VAR="OMNILANE_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
@@ -175,6 +180,7 @@ mkdir -p "$JOB_DIR"
 
 if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
 jesc() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
+# meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
 printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
   "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$TIMEOUT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
 

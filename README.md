@@ -198,10 +198,13 @@ lock timeout; otherwise the worker's own exit code passes through.
   detected by owner PID and stolen safely.
 - **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
   fallback when neither exists (stock macOS), so a hung CLI cannot block
-  forever. The cap resolves per task, highest priority first: `--timeout
-  SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane upper-cased with
-  `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the global
-  `OMNILANE_TIMEOUT`, default 600s.
+  forever. The cap applies to **each CLI invocation**, highest priority first:
+  `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
+  upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
+  global `OMNILANE_TIMEOUT`, default 600s. It is a per-call hang-guard, not a
+  whole-job budget: a retrying vendor (grok) or the `vote` panel (voters ×
+  rounds) makes several calls, so total wall-clock can be a multiple of this
+  value.
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
   `jobs.sh status` reports `dead` instead of `running` forever.

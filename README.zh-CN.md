@@ -166,9 +166,11 @@ configure.sh                                        # 交互通道菜单
   workdir 为键);崩溃残留的锁以所有者 PID 检测后安全接管。
 - **看门狗** — 每个工作端跑在 `timeout`/`gtimeout` 之下,两者皆无时退到
   perl-alarm 后备(原生 macOS 就是这种情况),卡死的 CLI 不会挂一整晚。
-  上限按任务解析,优先级从高到低:`--timeout SECONDS` > 单通道
+  上限作用于**每次 CLI 调用**,优先级从高到低:`--timeout SECONDS` > 单通道
   `OMNILANE_TIMEOUT_<LANE>`(通道名大写、`-` 换成 `_`,如
   `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 全局 `OMNILANE_TIMEOUT`(默认 600 秒)。
+  它是单次调用的防卡死看门狗,不是整个任务的时间预算:会重试的 vendor(grok)
+  或 vote 面板(评审 × 轮次)会发起多次调用,总耗时可能是该值的数倍。
 - **后台作业生命周期** — `--background` 的工作端跑在自己的 process group,
   调用端退出也不受影响;被杀会落盘退出码,`jobs.sh status` 会报 `dead`
   而不是永远显示 `running`。

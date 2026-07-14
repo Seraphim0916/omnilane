@@ -176,10 +176,12 @@ CLI なし、`86` ネストディスパッチ拒否、`87` ロック待ちタイ
   ディスパッチはキューイング。クラッシュ残留ロックは所有者 PID で検出し
   安全に奪取。
 - **ウォッチドッグ** — 全ワーカーは `timeout`/`gtimeout`、どちらも無ければ
-  perl-alarm フォールバック下で実行(素の macOS がこのケース)。上限はタスク
-  ごとに解決され、優先順位は `--timeout SECONDS` > レーン別
+  perl-alarm フォールバック下で実行(素の macOS がこのケース)。上限は
+  **CLI 呼び出しごと** に適用され、優先順位は `--timeout SECONDS` > レーン別
   `OMNILANE_TIMEOUT_<LANE>`(例 `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > グローバル
-  `OMNILANE_TIMEOUT`(既定 600 秒)。
+  `OMNILANE_TIMEOUT`(既定 600 秒)。これは呼び出し単位のハングガードであり、
+  ジョブ全体の予算ではありません。リトライするベンダー(grok)や vote パネル
+  (投票者 × ラウンド)は複数回呼び出すため、総実時間はこの値の数倍になり得ます。
 - **バックグラウンドジョブ** — `--background` ワーカーは独立した process
   group で動き、呼び出し元の終了後も生存。kill された場合は終了コードを
   記録し、`jobs.sh status` が `dead` を報告。

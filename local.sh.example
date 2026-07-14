@@ -11,7 +11,8 @@
 # Route a vendor CLI through a local proxy:
 # export ANTHROPIC_BASE_URL=http://127.0.0.1:8080
 
-# Cap runner wall-clock (seconds). Global default for every lane:
+# Watchdog cap for EACH CLI invocation (seconds), not a whole-job budget —
+# a retrying vendor (grok) or the vote panel makes several calls. Global default:
 # export OMNILANE_TIMEOUT=600
 # Per-lane override — lane upper-cased with "-" turned into "_". A one-off
 # `--timeout SEC` on the dispatch call still wins over both of these:

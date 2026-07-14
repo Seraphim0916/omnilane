@@ -15,7 +15,8 @@ Steps:
      worker must edit files, and pass an explicit `--workdir`.
    - Long task? Add `--background`, report the job id, and poll later with
      `scripts/jobs.sh status|result <id>`.
-   - Deep task that may outrun the 600s watchdog? Raise its cap with
-     `--timeout <seconds>` (e.g. `--timeout 1200`).
+   - Deep task whose CLI call may outrun the 600s per-call watchdog? Raise its
+     cap with `--timeout <seconds>` (e.g. `--timeout 1200`). It bounds each CLI
+     call, not the whole dispatch.
 3. Relay the worker's output. Judge it against the acceptance criteria you put
    in the task — do not accept "done" without evidence.
