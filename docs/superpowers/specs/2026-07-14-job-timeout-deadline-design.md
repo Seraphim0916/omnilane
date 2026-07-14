@@ -1,7 +1,7 @@
 # Whole-job timeout design
 
 Date: 2026-07-14
-Status: proposed, revision 2 after adversarial review
+Status: implemented locally from revision 2; remote CI pending
 
 ## Context
 

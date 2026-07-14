@@ -11,9 +11,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: bash syntax
         run: |
-          for f in scripts/dispatch.sh scripts/jobs.sh scripts/lib/common.sh scripts/runners/*.sh install.sh; do
+          for f in scripts/dispatch.sh scripts/jobs.sh scripts/lib/*.sh scripts/runners/*.sh install.sh; do
             bash -n "$f"
           done
+      - name: perl syntax
+        run: perl -c scripts/lib/job-timeout.pl
       - name: shellcheck
         run: shellcheck -S warning scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
       - name: routing table smoke
