@@ -186,7 +186,8 @@ omnilane ui status                             # report whether the Live UI is r
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" reads task from stdin
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 configure.sh                                        # interactive lane menu
@@ -210,7 +211,8 @@ absent from the lane), `3` lane disabled (off), `4` no vendor CLI available in
 the chain or the requested vendor is configured but its CLI is unavailable,
 `5` too few successful Round 1
 voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
-lock timeout; otherwise the worker's own exit code passes through.
+lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
+code passes through.
 
 ## 🖥️ Live UI
 
@@ -256,6 +258,12 @@ raw worker or vendor logs.
   whole-job budget: a retrying vendor (grok) or the `vote` panel (voters ×
   rounds) makes several calls, so total wall-clock can be a multiple of this
   value.
+- **Whole-job fuse** — optional `--job-timeout SECONDS` caps lock wait plus all
+  retries, voters, and rounds under one process-group supervisor. Priority is
+  flag > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > disabled.
+  Expiry cleans the supervised process group and returns 124. For a deep audit
+  of a fubon-autotrade-sized repository, start around 2–4 hours (7200–14400s)
+  with a 30-minute per-call watchdog; these are recommendations, not defaults.
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
   `jobs.sh status` reports `dead` instead of `running` forever.

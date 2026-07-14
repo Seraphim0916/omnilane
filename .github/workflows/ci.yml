@@ -15,9 +15,11 @@ jobs:
           python-version: "3.9"
       - name: bash syntax
         run: |
-          for f in bin/omnilane scripts/dispatch.sh scripts/jobs.sh scripts/lib/common.sh scripts/runners/*.sh install.sh; do
+          for f in bin/omnilane scripts/dispatch.sh scripts/jobs.sh scripts/lib/*.sh scripts/runners/*.sh install.sh; do
             bash -n "$f"
           done
+      - name: perl syntax
+        run: perl -c scripts/lib/job-timeout.pl
       - name: shellcheck
         run: shellcheck -S warning bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
       - name: routing table smoke
