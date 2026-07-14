@@ -92,9 +92,9 @@ lane is such a chain; when nothing in it is installed the lane degrades to `off`
 
 ### Natural-language consultation
 
-With the `omnilane` skill or `/route`, you can ask normally: **“Ask Opus to
-challenge this architecture.”** The Agent Skill interprets the request; this
-is not a free-form shell parser in `dispatch.sh`.
+With the `omnilane` skill or `/route`, you can ask normally:
+**“Ask Opus to challenge this architecture.”** The Agent Skill interprets the
+request; this is not a free-form shell parser in `dispatch.sh`.
 
 - A capability-only question recommends the first available model for the
   matching lane and makes no model call.
