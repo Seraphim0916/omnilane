@@ -122,6 +122,69 @@ EOF
   fi
 }
 
+test_depth_and_grok_retry_env_validation() {
+  local name="depth and Grok retry env validation" home gate fake prompt marker out
+  local rc_depth_text rc_depth_negative rc_nested rc_valid value rc_bad
+  home="$TEST_ROOT/env-validation"; mkdir -p "$home"
+  gate="$home/gate.sh"; marker="$home/ran"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'gate\n' > "$5"
+touch "$ENV_VALIDATION_MARKER"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec %s -\n' "$gate" > "$home/routing.local.yaml"
+
+  OMNILANE_HOME="$home" OMNILANE_DEPTH=abc ENV_VALIDATION_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" probe x > "$home/depth-text.out" 2>&1
+  rc_depth_text=$?
+  OMNILANE_HOME="$home" OMNILANE_DEPTH=-1 ENV_VALIDATION_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" probe x > "$home/depth-negative.out" 2>&1
+  rc_depth_negative=$?
+  OMNILANE_HOME="$home" OMNILANE_DEPTH=1 ENV_VALIDATION_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" probe x > "$home/depth-nested.out" 2>&1
+  rc_nested=$?
+  out="$(OMNILANE_HOME="$home" OMNILANE_DEPTH=0 ENV_VALIDATION_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+  rc_valid=$?
+
+  /bin/rm "$marker"
+  fake="$home/fake-grok"; prompt="$home/prompt"
+  printf 'question\n' > "$prompt"
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+touch "$ENV_VALIDATION_MARKER"
+printf 'answer\n'
+EOF
+  chmod +x "$fake"
+  for value in abc 0 -1 21 999999999; do
+    OMNILANE_HOME="$home" GROK_BIN="$fake" OMNILANE_GROK_MAX_ATTEMPTS="$value" \
+      ENV_VALIDATION_MARKER="$marker" /bin/bash "$ROOT/scripts/runners/run-grok.sh" \
+        advise /tmp grok-test - "$prompt" "$home/out-$value" \
+        > "$home/grok-$value.out" 2>&1
+    rc_bad=$?
+    if [[ "$rc_bad" -ne 2 ]] || ! grep -q 'OMNILANE_GROK_MAX_ATTEMPTS' "$home/grok-$value.out"; then
+      fail "$name" "invalid Grok attempts '$value' did not fail cleanly (rc=$rc_bad)"
+      return
+    fi
+  done
+
+  if [[ "$rc_depth_text" -ne 2 || "$rc_depth_negative" -ne 2 ]]; then
+    fail "$name" "invalid depths should exit 2 (got $rc_depth_text/$rc_depth_negative)"
+  elif ! grep -q 'OMNILANE_DEPTH' "$home/depth-text.out" ||
+       ! grep -q 'OMNILANE_DEPTH' "$home/depth-negative.out"; then
+    fail "$name" "invalid depth errors did not name the setting"
+  elif [[ "$rc_nested" -ne 86 ]]; then
+    fail "$name" "depth 1 should retain nested-dispatch exit 86, got $rc_nested"
+  elif [[ "$rc_valid" -ne 0 || "$out" != "gate" ]]; then
+    fail "$name" "depth 0 no longer dispatched normally (rc=$rc_valid, out=$out)"
+  elif [[ -e "$marker" ]]; then
+    fail "$name" "an invalid Grok retry value launched the provider"
+  else
+    pass "$name"
+  fi
+}
+
 test_vendor_selector() {
   local name="explicit vendor selector" home bin selected automatic
   local rc_absent rc_unavailable rc_invalid rc_missing missing_out
@@ -380,6 +443,7 @@ test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
+test_depth_and_grok_retry_env_validation
 test_vendor_selector
 test_consult_lane_and_configurator
 test_incomplete_marker_fails_closed

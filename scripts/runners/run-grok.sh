@@ -12,6 +12,10 @@ MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE=
 GROK_BIN="${GROK_BIN:-grok}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 MAX_ATTEMPTS="${OMNILANE_GROK_MAX_ATTEMPTS:-5}"
+[[ "$MAX_ATTEMPTS" =~ ^([1-9]|1[0-9]|20)$ ]] || {
+  echo "omnilane: invalid OMNILANE_GROK_MAX_ATTEMPTS '$MAX_ATTEMPTS' (want 1..20)" >&2
+  exit 2
+}
 
 # Subscription OAuth path: an exhausted API key in env causes 403s.
 unset XAI_API_KEY 2>/dev/null || true
