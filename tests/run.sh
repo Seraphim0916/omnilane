@@ -20,6 +20,10 @@ trap cleanup_test_root EXIT
 pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 
+file_mode() {
+  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"
+}
+
 test_safe_routing_parser() {
   local name="safe routing parser" home proof_bt proof_sub proof_effort out
   home="$TEST_ROOT/parser"; mkdir -p "$home"
@@ -209,6 +213,72 @@ test_consult_lane_and_configurator() {
   fi
 }
 
+test_private_job_artifacts_and_valid_metadata() {
+  local name="private job artifacts and valid metadata" home gate workdir effort job_id job_dir
+  local deadline path mode bad=""
+  home="$TEST_ROOT/private-jobs"; mkdir -p "$home"
+  gate="$home/gate.sh"
+  workdir="$home/中文-line
+break"
+  effort=$'高\nwith\ttab\rand-cr\033and-escape'
+  mkdir -p "$workdir"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'private output\n' > "$5"
+printf 'private stderr\n' >&2
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec %s -\n' "$gate" > "$home/routing.local.yaml"
+
+  job_id="$(umask 022; OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" --background --workdir "$workdir" \
+      --effort "$effort" probe 'private prompt')"
+  job_dir="$home/jobs/$job_id"
+  deadline=$((SECONDS + 10))
+  while [[ ! -f "$job_dir/exit" && "$SECONDS" -lt "$deadline" ]]; do sleep 1; done
+
+  if [[ ! -f "$job_dir/exit" ]]; then
+    fail "$name" "background job did not finish"
+    return
+  fi
+  if [[ "$(file_mode "$home/jobs")" != "700" ]]; then
+    fail "$name" "jobs directory mode is $(file_mode "$home/jobs"), want 700"
+    return
+  fi
+  if [[ "$(file_mode "$job_dir")" != "700" ]]; then
+    fail "$name" "job directory mode is $(file_mode "$job_dir"), want 700"
+    return
+  fi
+  while IFS= read -r path; do
+    mode="$(file_mode "$path")"
+    [[ "$mode" == "600" ]] || { bad="$path:$mode"; break; }
+  done < <(find "$job_dir" -type f -print)
+  if [[ -n "$bad" ]]; then
+    fail "$name" "job file is not owner-only: $bad"
+    return
+  fi
+  if ! EXPECTED_WORKDIR="$workdir" EXPECTED_EFFORT="$effort" \
+    python3 - "$job_dir/meta.json" <<'PY'
+import json
+import os
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    metadata = json.load(handle)
+assert metadata["workdir"] == os.environ["EXPECTED_WORKDIR"], (
+    repr(metadata["workdir"]), repr(os.environ["EXPECTED_WORKDIR"])
+)
+assert metadata["effort"] == os.environ["EXPECTED_EFFORT"], (
+    repr(metadata["effort"]), repr(os.environ["EXPECTED_EFFORT"])
+)
+PY
+  then
+    fail "$name" "meta.json is invalid or did not round-trip control characters"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -382,6 +452,7 @@ test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
+test_private_job_artifacts_and_valid_metadata
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline

@@ -212,26 +212,74 @@ fi
 export OMNILANE_TIMEOUT="$TIMEOUT"
 
 mkdir -p "$OMNILANE_HOME/jobs"
+# Prompts and model answers may contain private source code or credentials.
+# Keep the privacy boundary on Omnilane's own job store instead of changing the
+# runner umask, which would also affect files a model creates in --mode work.
+chmod 700 "$OMNILANE_HOME/jobs"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$OMNILANE_HOME/jobs/$JOB_ID"
-mkdir -p "$JOB_DIR"
+mkdir -m 700 "$JOB_DIR"
 
-if [[ "$TASK" == "-" ]]; then cat > "$JOB_DIR/task.txt"; else printf '%s\n' "$TASK" > "$JOB_DIR/task.txt"; fi
-jesc() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
+if [[ "$TASK" == "-" ]]; then
+  (umask 077; cat > "$JOB_DIR/task.txt")
+else
+  (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
+fi
+
+json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      '\\') out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
+        # Only non-negative C0 bytes are JSON control characters.
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$LANE" "$VENDOR" "$(jesc "$MODEL")" "$EFFORT" "$TIMEOUT" "$MODE" "$(jesc "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json"
+(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+  "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \
+  "$(json_escape "$EFFORT")" "$TIMEOUT" "$(json_escape "$MODE")" \
+  "$(json_escape "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
+  "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+
+secure_job_files() {
+  find "$JOB_DIR" -type f -exec chmod 600 {} +
+}
+
+finish_job() {
+  local rc="$1"
+  secure_job_files
+  (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+}
 
 run_job() {
   local rc=0
-  current_pid > "$JOB_DIR/pid"
+  (umask 077; current_pid > "$JOB_DIR/pid")
   # Two concurrent codex exec in one target dir corrupt its job index — serialize.
   [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
   set +e
   "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   rc=$?
   set -e
-  echo "$rc" > "$JOB_DIR/exit"
+  finish_job "$rc"
   return "$rc"
 }
 
@@ -240,9 +288,10 @@ if [[ "$BACKGROUND" == "1" ]]; then
   # exit and group-wide signals; traps persist a best-effort exit code so
   # jobs.sh never reports a killed worker as still running.
   set -m
+  (umask 077; : > "$JOB_DIR/worker.log")
   (
-    trap 'echo 129 > "$JOB_DIR/exit"; exit 129' HUP
-    trap 'echo 143 > "$JOB_DIR/exit"; exit 143' TERM
+    trap 'finish_job 129; exit 129' HUP
+    trap 'finish_job 143; exit 143' TERM
     run_job
   ) < /dev/null > "$JOB_DIR/worker.log" 2>&1 &
   disown
