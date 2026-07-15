@@ -209,6 +209,38 @@ test_consult_lane_and_configurator() {
   fi
 }
 
+test_doctor_is_read_only_and_reports_failures() {
+  local name="doctor is read-only and actionable" home good bad out rc_good rc_bad
+  home="$TEST_ROOT/doctor-home"; good="$TEST_ROOT/doctor-good"; bad="$TEST_ROOT/doctor-bad"
+  mkdir -p "$good/scripts" "$bad"
+  cat > "$good/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  chmod +x "$good/scripts/dispatch.sh"
+  printf 'triage: exec /bin/true -\n' > "$good/routing.yaml"
+
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
+    /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
+  rc_good=$?
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$bad" \
+    /bin/bash "$ROOT/bin/omnilane" doctor > "$TEST_ROOT/doctor-bad.out" 2>&1
+  rc_bad=$?
+
+  if [[ "$rc_good" -ne 0 ]]; then
+    fail "$name" "healthy fixture returned $rc_good: $out"
+  elif [[ "$out" != *'PASS  routing'* || "$out" != *'WARN  state'* ||
+          "$out" != *'0 failed'* ]]; then
+    fail "$name" "healthy report lacked routing/state/summary: $out"
+  elif [[ -e "$home/.omnilane" ]]; then
+    fail "$name" "doctor created the missing state directory"
+  elif [[ "$rc_bad" -ne 1 ]] || ! grep -q 'FAIL  dispatch' "$TEST_ROOT/doctor-bad.out"; then
+    fail "$name" "missing dispatch was not a clear exit-1 failure"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -382,6 +414,7 @@ test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
+test_doctor_is_read_only_and_reports_failures
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline

@@ -17,6 +17,8 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    long-context). It bounds each CLI call, not the whole dispatch.
 
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
+When routing is unexpectedly unavailable, run `bin/omnilane doctor` before
+changing configuration; it reports state and dependencies without repairing them.
 Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,
 so the same table works with any subset of subscriptions.
 
