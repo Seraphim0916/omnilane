@@ -33,14 +33,18 @@ for file in bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh inst
   bash -n "$file"
 done
 shellcheck -S warning bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
-python3 -m py_compile scripts/ui.py tests/test_ui.py
+perl -c scripts/lib/job-timeout.pl
+python3 -m py_compile scripts/ui.py tests/test_ui.py tests/test_ci_policy.py tests/ui_browser_harness.py
 python3 -m unittest discover -s tests -p 'test_*.py'
 bash tests/run.sh
 bash scripts/dispatch.sh --list
 ```
 
-If a dependency such as ShellCheck or a real browser is unavailable, say so in
-the pull request instead of treating the missing check as passed.
+The browser CI job installs `tests/requirements-browser.txt`, installs bundled
+Chromium with Playwright, sets `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1`, and runs
+`tests.test_ui.FrontendBrowserBehaviorTests`. If a dependency such as
+ShellCheck or a real browser is unavailable locally, say so in the pull request
+instead of treating the missing check as passed.
 
 ## Pull requests
 
