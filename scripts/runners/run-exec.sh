@@ -14,8 +14,12 @@ MODE="$1"; WORKDIR="$2"; SCRIPT="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE
 
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
-SCRIPT="${SCRIPT/#\~/$HOME}"
-[[ -x "$SCRIPT" ]] || { echo "omnilane: exec gate not found or not executable: $SCRIPT" >&2; exit 2; }
+expand_home_path "$SCRIPT"
+SCRIPT="$EXPANDED_PATH"
+[[ -f "$SCRIPT" && -x "$SCRIPT" ]] || {
+  echo "omnilane: exec gate not found or not executable: $SCRIPT" >&2
+  exit 2
+}
 
 truncate_payload "$PROMPT_FILE" 140000
 

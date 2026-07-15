@@ -221,6 +221,52 @@ EOF
   fi
 }
 
+test_exec_gate_path_boundaries() {
+  local name="exec gate path boundaries" home user_home good wrong directory out_directory out_named out_home
+  home="$TEST_ROOT/exec-paths"
+  user_home="$home/user-home"
+  good="$home/good.sh"
+  wrong="${user_home}other/gate.sh"
+  directory="$home/executable-directory"
+  mkdir -p "$home" "$user_home" "$(dirname "$wrong")" "$directory"
+  cat > "$good" <<'EOF'
+#!/usr/bin/env bash
+printf 'good gate\n' > "$5"
+EOF
+  cat > "$wrong" <<'EOF'
+#!/usr/bin/env bash
+printf 'wrong named-tilde expansion\n' > "$5"
+EOF
+  cat > "$user_home/home-gate.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'home gate\n' > "$5"
+EOF
+  chmod +x "$good" "$wrong" "$user_home/home-gate.sh" "$directory"
+
+  printf 'probe: exec "%s" - | exec "%s" -\n' "$directory" "$good" \
+    > "$home/routing.local.yaml"
+  out_directory="$(HOME="$user_home" OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+  printf 'probe: exec "~other/gate.sh" - | exec "%s" -\n' "$good" \
+    > "$home/routing.local.yaml"
+  out_named="$(HOME="$user_home" OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+  printf 'probe: exec "~/home-gate.sh" - | exec "%s" -\n' "$good" \
+    > "$home/routing.local.yaml"
+  out_home="$(HOME="$user_home" OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+
+  if [[ "$out_directory" != "good gate" ]]; then
+    fail "$name" "executable directory did not fall back: $out_directory"
+  elif [[ "$out_named" != "good gate" ]]; then
+    fail "$name" "named-user tilde was expanded as current HOME: $out_named"
+  elif [[ "$out_home" != "home gate" ]]; then
+    fail "$name" "~/ gate did not resolve against HOME: $out_home"
+  else
+    pass "$name"
+  fi
+}
+
 test_consult_lane_and_configurator() {
   local name="consult lane stays multi-vendor" home listed
   home="$TEST_ROOT/consult"; mkdir -p "$home"
@@ -980,6 +1026,7 @@ test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
 test_exec_gate_fallback
+test_exec_gate_path_boundaries
 test_consult_lane_and_configurator
 test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata

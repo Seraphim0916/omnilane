@@ -69,8 +69,9 @@ parse_lane_segment() {
 routing_candidate_available() {
   local vendor="$1" model="${2:-}" script
   if [[ "$vendor" == "exec" ]]; then
-    script="${model/#\~/$HOME}"
-    [[ -n "$script" && -x "$script" ]]
+    expand_home_path "$model"
+    script="$EXPANDED_PATH"
+    [[ -n "$script" && -f "$script" && -x "$script" ]]
   else
     vendor_available "$vendor"
   fi

@@ -74,6 +74,13 @@ vendor_available() {
   [[ -n "$b" ]] && command -v "$b" >/dev/null 2>&1
 }
 
+expand_home_path() {
+  case "$1" in
+    "~/"*) EXPANDED_PATH="$HOME/${1:2}" ;;
+    *)     EXPANDED_PATH="$1" ;;
+  esac
+}
+
 # Depth guard: a dispatched worker must not fan out again (quota-burn chains).
 depth_guard() {
   local depth="${OMNILANE_DEPTH:-0}"
