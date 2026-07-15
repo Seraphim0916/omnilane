@@ -209,6 +209,70 @@ test_consult_lane_and_configurator() {
   fi
 }
 
+test_jobs_cli_rejects_escape_and_handles_empty_store() {
+  local name="jobs CLI stays inside its store" home outside valid_id out listed unsafe_list status result
+  local rc_empty rc_traversal rc_link rc_missing rc_result
+  home="$TEST_ROOT/jobs-cli"; outside="$TEST_ROOT/outside-job"
+  mkdir -p "$home" "$outside"
+
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  rc_empty=$?
+
+  printf '0\n' > "$outside/exit"
+  printf 'OUTSIDE-CANARY\n' > "$outside/out.txt"
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result ../outside-job \
+    > "$home/traversal.out" 2>&1
+  rc_traversal=$?
+
+  mkdir -p "$home/jobs"
+  valid_id="20260715-120000-123-456"
+  ln -s "$outside" "$home/jobs/$valid_id"
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result "$valid_id" \
+    > "$home/link.out" 2>&1
+  rc_link=$?
+
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status \
+    > "$home/missing.out" 2>&1
+  rc_missing=$?
+
+  rm "$home/jobs/$valid_id"
+  mkdir "$home/jobs/$valid_id"
+  printf '0\n' > "$home/jobs/$valid_id/exit"
+  printf 'SAFE-RESULT\n' > "$home/jobs/$valid_id/out.txt"
+  ln -s "$outside/out.txt" "$home/jobs/$valid_id/meta.json"
+  unsafe_list="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  rm "$home/jobs/$valid_id/meta.json"
+  printf '{"lane":"probe"}\n' > "$home/jobs/$valid_id/meta.json"
+  listed="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  status="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$valid_id" 2>&1)"
+  result="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result "$valid_id" 2>&1)"
+  rc_result=$?
+
+  if [[ "$rc_empty" -ne 0 || -n "$out" ]]; then
+    fail "$name" "empty list should succeed silently (rc=$rc_empty, out=$out)"
+  elif [[ "$rc_traversal" -ne 2 ]]; then
+    fail "$name" "path traversal should be usage error 2, got $rc_traversal"
+  elif grep -q 'OUTSIDE-CANARY' "$home/traversal.out"; then
+    fail "$name" "path traversal disclosed an outside result"
+  elif [[ "$rc_link" -ne 1 ]]; then
+    fail "$name" "symlink job should be rejected as missing, got $rc_link"
+  elif grep -q 'OUTSIDE-CANARY' "$home/link.out"; then
+    fail "$name" "symlink job disclosed an outside result"
+  elif [[ "$rc_missing" -ne 2 ]] || ! grep -qi 'usage' "$home/missing.out"; then
+    fail "$name" "missing job ID did not fail with a clean usage error"
+  elif [[ "$unsafe_list" == *'OUTSIDE-CANARY'* ]]; then
+    fail "$name" "symlink metadata disclosed an outside file"
+  elif [[ "$listed" != *"$valid_id"* || "$listed" != *'"lane":"probe"'* ]]; then
+    fail "$name" "valid job was missing from list: $listed"
+  elif [[ "$status" != "done exit=0" ]]; then
+    fail "$name" "valid job status changed: $status"
+  elif [[ "$rc_result" -ne 0 || "$result" != "SAFE-RESULT" ]]; then
+    fail "$name" "valid job result changed (rc=$rc_result, out=$result)"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -490,6 +554,7 @@ test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
+test_jobs_cli_rejects_escape_and_handles_empty_store
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks
