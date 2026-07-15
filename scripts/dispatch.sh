@@ -28,6 +28,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
+ORIGINAL_ARGC=$#
 
 usage_error() {
   echo 'usage: dispatch.sh [flags] LANE "TASK"' >&2
@@ -139,7 +140,7 @@ print_effective_routing() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list)
-      [[ $# -eq 1 ]] || usage_error
+      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
       print_effective_routing; exit 0 ;;
     --background) BACKGROUND=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout)

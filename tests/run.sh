@@ -127,7 +127,7 @@ EOF
 }
 
 test_dispatch_positional_usage_contract() {
-  local name="dispatch positional usage contract" home gate rc_none rc_task rc_extra rc_list
+  local name="dispatch positional usage contract" home gate rc_none rc_task rc_extra rc_list rc_list_prefixed
   home="$TEST_ROOT/dispatch-usage"; mkdir -p "$home"
   gate="$home/gate.sh"
   cat > "$gate" <<'EOF'
@@ -149,6 +149,9 @@ EOF
   OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --list extra \
     > "$home/list.out" 2>&1
   rc_list=$?
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --background --list \
+    > "$home/list-prefixed.out" 2>&1
+  rc_list_prefixed=$?
 
   if [[ "$rc_none" -ne 2 ]] || ! grep -qi 'usage' "$home/none.out"; then
     fail "$name" "missing lane was not a readable exit 2"
@@ -158,6 +161,8 @@ EOF
     fail "$name" "unquoted multiword task was silently accepted"
   elif [[ "$rc_list" -ne 2 ]] || ! grep -qi 'usage' "$home/list.out"; then
     fail "$name" "--list accepted unexpected arguments"
+  elif [[ "$rc_list_prefixed" -ne 2 ]] || ! grep -qi 'usage' "$home/list-prefixed.out"; then
+    fail "$name" "--list accepted a preceding flag"
   elif [[ -d "$home/jobs" ]]; then
     fail "$name" "invalid invocations created job state"
   else
