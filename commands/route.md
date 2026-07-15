@@ -28,5 +28,8 @@ Steps:
    - Deep task whose CLI call may outrun the 600s per-call watchdog? Raise its
      cap with `--timeout <seconds>` (e.g. `--timeout 1200`). It bounds each CLI
      call, not the whole dispatch.
+   - Need one aggregate fuse across lock wait, retries, voters, and rounds? Add
+     `--job-timeout <seconds>`. Deep full-repository audits typically need
+     7200–14400 seconds; it is disabled by default and expiry returns 124.
 4. Relay the worker's output. Judge it against the acceptance criteria you put
    in the task — do not accept "done" without evidence.

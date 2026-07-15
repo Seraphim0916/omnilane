@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage:
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
-#               LANE "TASK TEXT"
+#               [--job-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
 #
 # TASK TEXT of "-" reads the task from stdin.
@@ -22,12 +22,13 @@ set -euo pipefail
 # This is a per-call hang-guard, NOT a whole-job budget: a retrying vendor
 # (grok, up to OMNILANE_GROK_MAX_ATTEMPTS) or the vote panel (voters x rounds)
 # spawns several CLI calls, so total wall-clock can be a multiple of this value.
-# For a true end-to-end deadline that is a separate, future control.
+# A separate --job-timeout can cap lock wait plus all calls in this dispatch.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
+OVERRIDE_JOB_TIMEOUT=""
 ORIGINAL_ARGC=$#
 
 usage_error() {
@@ -143,7 +144,7 @@ while [[ $# -gt 0 ]]; do
       [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
       print_effective_routing; exit 0 ;;
     --background) BACKGROUND=1; shift ;;
-    --mode|--workdir|--vendor|--model|--effort|--timeout)
+    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
       [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
@@ -154,6 +155,7 @@ while [[ $# -gt 0 ]]; do
         --model) OVERRIDE_MODEL="$2" ;;
         --effort) OVERRIDE_EFFORT="$2" ;;
         --timeout) OVERRIDE_TIMEOUT="$2" ;;
+        --job-timeout) OVERRIDE_JOB_TIMEOUT="$2" ;;
       esac
       shift 2 ;;
     -*) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -236,6 +238,31 @@ fi
 }
 export OMNILANE_TIMEOUT="$TIMEOUT"
 
+# Optional whole-job seconds: flag > per-lane env > global env > disabled.
+# Validate lexically only. Bash arithmetic recursively evaluates variable text,
+# so untrusted timeout text must never enter [[ -gt ]] or $((...)).
+JOB_TIMEOUT="$OVERRIDE_JOB_TIMEOUT"
+if [[ -z "$JOB_TIMEOUT" ]]; then
+  LANE_JOB_TIMEOUT_VAR="OMNILANE_JOB_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
+  JOB_TIMEOUT="${!LANE_JOB_TIMEOUT_VAR:-}"
+fi
+[[ -n "$JOB_TIMEOUT" ]] || JOB_TIMEOUT="${OMNILANE_JOB_TIMEOUT:-}"
+if [[ -n "$JOB_TIMEOUT" && ! "$JOB_TIMEOUT" =~ ^[1-9][0-9]{0,8}$ ]]; then
+  echo "omnilane: invalid job timeout (want 1..999999999 seconds)" >&2
+  exit 2
+fi
+JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
+JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
+JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
+unset OMNILANE_JOB_SUPERVISED
+[[ -x "$JOB_WORKER" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
+if [[ -n "$JOB_TIMEOUT" ]]; then
+  [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: whole-job timeout supervisor is unavailable" >&2; exit 2; }
+  command -v perl &>/dev/null || { echo "omnilane: --job-timeout requires perl" >&2; exit 2; }
+  perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
+    >/dev/null 2>&1 || { echo "omnilane: perl lacks whole-job timeout support" >&2; exit 2; }
+fi
+
 JOBS_ROOT="$OMNILANE_HOME/jobs"
 mkdir -p "$OMNILANE_HOME"
 if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
@@ -291,9 +318,9 @@ json_escape() {
   printf '%s' "$out"
 }
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
   "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \
-  "$(json_escape "$EFFORT")" "$TIMEOUT" "$(json_escape "$MODE")" \
+  "$(json_escape "$EFFORT")" "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
   "$(json_escape "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
   "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
 
@@ -310,10 +337,15 @@ finish_job() {
 run_job() {
   local rc=0
   write_current_pid_file "$JOB_DIR/pid"
-  # Two concurrent codex exec in one target dir corrupt its job index — serialize.
-  [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
   set +e
-  "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
+  if [[ -n "$JOB_TIMEOUT" ]]; then
+    OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
+      "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+      "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
+  else
+    "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+      "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
+  fi
   rc=$?
   set -e
   finish_job "$rc"

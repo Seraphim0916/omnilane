@@ -22,3 +22,11 @@
 
 # Grok retries an empty response; keep the explicit cost bound between 1 and 20.
 # export OMNILANE_GROK_MAX_ATTEMPTS=5
+
+# Optional whole-job fuse: lock wait + every retry/voter/round share this cap.
+# Disabled by default. A one-off `--job-timeout SEC` wins over these values.
+# For a deep full-repository audit, 2–4 hours is a starting range, not a default:
+# export OMNILANE_JOB_TIMEOUT=10800
+# export OMNILANE_JOB_TIMEOUT_HARD_JUDGMENT=14400
+# Pair it with a per-call guard such as:
+# export OMNILANE_TIMEOUT_HARD_JUDGMENT=1800

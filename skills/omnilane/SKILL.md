@@ -17,6 +17,9 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    A deep task whose CLI call may outrun the 600s per-call watchdog can raise its
    cap with `--timeout <seconds>` (e.g. `--timeout 1200` for hard-judgment /
    long-context). It bounds each CLI call, not the whole dispatch.
+   For one aggregate fuse across lock wait, retries, voters, and rounds, add
+   `--job-timeout <seconds>`. It is disabled by default; deep full-repository
+   audits typically need 7200–14400 seconds, and expiry returns 124.
 
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
 Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,

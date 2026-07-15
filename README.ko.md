@@ -178,7 +178,8 @@ omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" 는 stdin 에서 읽기
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            LANE "TASK"                              # "-" 는 stdin 에서 읽기
 dispatch.sh --list
 jobs.sh list | status ID | result ID
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
@@ -188,7 +189,7 @@ configure.sh                                        # 대화형 레인 메뉴
 종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
 `3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
 CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라운드 반박 전부 실패,
-`86` 중첩 디스패치 거부, `87` 락 대기 타임아웃.
+`86` 중첩 디스패치 거부, `87` 락 대기 타임아웃, `124` 전체 잡 타임아웃.
 그 외에는 워커 자신의 종료 코드를 그대로 전달.
 
 ## 🖥️ Live UI
@@ -229,6 +230,12 @@ omnilane ui stop     # 정상 중지
   순입니다. 이것은 호출 단위 행 방지 장치이지 작업 전체 예산이 아닙니다.
   재시도하는 벤더(grok)나 vote 패널(투표자 × 라운드)은 여러 번 호출하므로
   전체 소요 시간은 이 값의 몇 배가 될 수 있습니다.
+- **전체 잡 퓨즈** — 선택형 `--job-timeout SECONDS` 는 락 대기, 재시도,
+  모든 투표자와 라운드를 하나의 process group 감독 아래 제한합니다. 우선순위는
+  플래그 > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 비활성입니다.
+  만료 시 감독 중인 그룹을 정리하고 124를 반환합니다. 대규모 저장소 심층 검사는
+  2–4시간(7200–14400초), 호출별 워치독은 30분부터 시작하는 것을 권장합니다.
+  하드코딩된 기본값은 아닙니다.
 - **백그라운드 잡 수명주기** — `--background` 워커는 독립 process group 에서
   돌며 호출자가 종료해도 살아남습니다. kill 되면 종료 코드를 기록하고
   `jobs.sh status` 가 `dead` 를 보고.

@@ -20,6 +20,15 @@ resolve_timeout_cmd() {
 # so a hung vendor CLI cannot silently block forever.
 run_with_timeout() { # seconds, command...
   local secs="$1"; shift
+  # GNU timeout creates a nested process group. Under the whole-job supervisor,
+  # keep calls in its isolated group so one outer signal reaches every runner.
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+    command -v perl &>/dev/null || {
+      echo "omnilane: supervised timeout requires perl" >&2; return 125
+    }
+    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
+    return $?
+  fi
   local t; t="$(resolve_timeout_cmd)"
   if [[ -n "$t" ]]; then
     "$t" "$secs" "$@"
