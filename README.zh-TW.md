@@ -173,6 +173,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] 通道 "任務"    # "-" 表示從 stdin 讀任務
 dispatch.sh --list
 jobs.sh list | status 工作ID | result 工作ID
+jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 configure.sh                                        # 互動通道選單
 ```
 

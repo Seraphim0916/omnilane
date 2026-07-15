@@ -12,6 +12,8 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 3. **If the lane's model is you, self-execute.** Otherwise dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
+   Preview old completed-job cleanup with `scripts/jobs.sh prune --keep <N>`;
+   deletion requires the explicit `--apply` flag and never targets running jobs.
    A deep task whose CLI call may outrun the 600s per-call watchdog can raise its
    cap with `--timeout <seconds>` (e.g. `--timeout 1200` for hard-judgment /
    long-context). It bounds each CLI call, not the whole dispatch.

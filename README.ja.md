@@ -184,6 +184,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] LANE "TASK"   # "-" で stdin から読む
 dispatch.sh --list
 jobs.sh list | status ID | result ID
+jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー
 ```
 
