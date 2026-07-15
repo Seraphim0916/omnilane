@@ -85,8 +85,8 @@ vendor_available() {
 
 expand_home_path() {
   case "$1" in
-    "~/"*) EXPANDED_PATH="$HOME/${1:2}" ;;
-    *)     EXPANDED_PATH="$1" ;;
+    \~/*) printf '%s' "$HOME/${1#\~/}" ;;
+    *)    printf '%s' "$1" ;;
   esac
 }
 
