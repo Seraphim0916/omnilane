@@ -126,6 +126,45 @@ EOF
   fi
 }
 
+test_dispatch_positional_usage_contract() {
+  local name="dispatch positional usage contract" home gate rc_none rc_task rc_extra rc_list
+  home="$TEST_ROOT/dispatch-usage"; mkdir -p "$home"
+  gate="$home/gate.sh"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'local-only\n' > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'triage: exec %s -\n' "$gate" > "$home/routing.local.yaml"
+
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    > "$home/none.out" 2>&1
+  rc_none=$?
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" triage \
+    > "$home/task.out" 2>&1
+  rc_task=$?
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" triage audit whole repo \
+    > "$home/extra.out" 2>&1
+  rc_extra=$?
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --list extra \
+    > "$home/list.out" 2>&1
+  rc_list=$?
+
+  if [[ "$rc_none" -ne 2 ]] || ! grep -qi 'usage' "$home/none.out"; then
+    fail "$name" "missing lane was not a readable exit 2"
+  elif [[ "$rc_task" -ne 2 ]] || ! grep -qi 'missing task' "$home/task.out"; then
+    fail "$name" "missing task was not a readable exit 2"
+  elif [[ "$rc_extra" -ne 2 ]] || ! grep -qi 'quote' "$home/extra.out"; then
+    fail "$name" "unquoted multiword task was silently accepted"
+  elif [[ "$rc_list" -ne 2 ]] || ! grep -qi 'usage' "$home/list.out"; then
+    fail "$name" "--list accepted unexpected arguments"
+  elif [[ -d "$home/jobs" ]]; then
+    fail "$name" "invalid invocations created job state"
+  else
+    pass "$name"
+  fi
+}
+
 test_vendor_selector() {
   local name="explicit vendor selector" home bin selected automatic
   local rc_absent rc_unavailable rc_invalid rc_missing missing_out
@@ -1024,6 +1063,7 @@ test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
+test_dispatch_positional_usage_contract
 test_vendor_selector
 test_exec_gate_fallback
 test_exec_gate_path_boundaries

@@ -29,6 +29,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 
+usage_error() {
+  echo 'usage: dispatch.sh [flags] LANE "TASK"' >&2
+  exit 2
+}
+
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
   local lane="$1" f line
   for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
@@ -133,7 +138,9 @@ print_effective_routing() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --list) print_effective_routing; exit 0 ;;
+    --list)
+      [[ $# -eq 1 ]] || usage_error
+      print_effective_routing; exit 0 ;;
     --background) BACKGROUND=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
@@ -153,8 +160,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-LANE="${1:?usage: dispatch.sh [flags] LANE \"TASK\"}"
-TASK="${2:?missing task text (use - for stdin)}"
+[[ $# -ge 1 ]] || usage_error
+[[ $# -ge 2 ]] || { echo "omnilane: missing task text (use - for stdin)" >&2; exit 2; }
+[[ $# -eq 2 ]] || {
+  echo 'omnilane: unexpected extra arguments; quote a multiword task' >&2
+  exit 2
+}
+LANE="$1"
+TASK="$2"
 [[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name '$LANE'" >&2; exit 2; }
 # A typo like --mode advice must not fall through to the write-enabled branch.
 [[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode '$MODE' (advise|work)" >&2; exit 2; }
