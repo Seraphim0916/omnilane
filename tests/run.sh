@@ -216,6 +216,39 @@ make_fake_installer_home() {
   chmod +x "$home/bin/codex"
 }
 
+test_installer_usage_is_fail_closed() {
+  local name="installer usage is fail-closed" unknown help extra rc_unknown rc_help rc_extra
+  unknown="$TEST_ROOT/installer-unknown"; help="$TEST_ROOT/installer-help"
+  extra="$TEST_ROOT/installer-extra"
+  make_fake_installer_home "$unknown"
+  make_fake_installer_home "$help"
+  make_fake_installer_home "$extra"
+
+  HOME="$unknown" PATH="$unknown/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --typo > "$unknown/out" 2>&1
+  rc_unknown=$?
+  HOME="$help" PATH="$help/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --help > "$help/out" 2>&1
+  rc_help=$?
+  HOME="$extra" PATH="$extra/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --uninstall extra > "$extra/out" 2>&1
+  rc_extra=$?
+
+  if [[ "$rc_unknown" -ne 2 ]] || ! grep -qi 'usage' "$unknown/out"; then
+    fail "$name" "unknown flag did not fail with readable exit 2"
+  elif [[ -e "$unknown/.local/bin/omnilane" ]]; then
+    fail "$name" "unknown flag performed an installation"
+  elif [[ "$rc_help" -ne 0 ]] || ! grep -q -- '--uninstall' "$help/out"; then
+    fail "$name" "--help did not return usage successfully"
+  elif [[ -e "$help/.local/bin/omnilane" ]]; then
+    fail "$name" "--help performed an installation"
+  elif [[ "$rc_extra" -ne 2 ]] || ! grep -qi 'usage' "$extra/out"; then
+    fail "$name" "extra uninstall argument was silently ignored"
+  else
+    pass "$name"
+  fi
+}
+
 test_incomplete_marker_fails_closed() {
   local name="malformed markers fail closed" home before after rc kind
   for kind in lone-start lone-end duplicate-start reversed; do
@@ -428,6 +461,7 @@ test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
 test_incomplete_marker_fails_closed
+test_installer_usage_is_fail_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
 test_install_uninstall_preserves_symlink

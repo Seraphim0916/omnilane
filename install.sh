@@ -10,9 +10,24 @@ set -euo pipefail
 #                                                       (default ask on a tty)
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+usage() {
+  echo "usage: ./install.sh [--uninstall]" "${1:-}" >&2
+}
+
+UNINSTALL=""
+case "$#" in
+  0) ;;
+  1)
+    case "$1" in
+      --uninstall) UNINSTALL="--uninstall" ;;
+      --help|-h) usage; exit 0 ;;
+      *) usage "(unknown argument: $1)"; exit 2 ;;
+    esac ;;
+  *) usage "(unexpected extra arguments)"; exit 2 ;;
+esac
+
 source "$REPO/scripts/lib/i18n.sh"
 SKILL_SRC="$REPO/skills/omnilane"
-UNINSTALL="${1:-}"
 
 HOOK_SRC="$REPO/hooks/routing-instruction.md"
 HOOK_START='<!-- omnilane-routing:start -->'
