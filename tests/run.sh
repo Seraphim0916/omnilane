@@ -273,6 +273,65 @@ test_jobs_cli_rejects_escape_and_handles_empty_store() {
   fi
 }
 
+test_jobs_cli_rejects_malformed_exit_metadata() {
+  local name="jobs CLI rejects malformed exit metadata" home id value status_out list_out result_out
+  local status_rc result_rc
+  home="$TEST_ROOT/jobs-invalid-exit"
+  id="20260715-120000-123-456"
+  mkdir -p "$home/jobs/$id"
+
+  for value in $'0\nINJECTED-SECOND-LINE\n' $'256\n' $'-1\n' $'not-a-number\n'; do
+    printf '%s' "$value" > "$home/jobs/$id/exit"
+    status_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$id" 2>&1)"
+    status_rc=$?
+    list_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+    result_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result "$id" 2>&1)"
+    result_rc=$?
+
+    if [[ "$status_rc" -eq 0 || "$result_rc" -eq 0 ]]; then
+      fail "$name" "invalid exit metadata was accepted (value=$(printf %q "$value"))"
+      return
+    elif [[ "$status_out$list_out$result_out" == *"INJECTED-SECOND-LINE"* ]]; then
+      fail "$name" "invalid exit metadata reached terminal output"
+      return
+    elif [[ "$list_out" != *"invalid exit metadata"* ]]; then
+      fail "$name" "list did not mark invalid exit metadata safely: $list_out"
+      return
+    fi
+  done
+  pass "$name"
+}
+
+test_jobs_cli_contains_malformed_public_metadata() {
+  local name="jobs CLI contains malformed public metadata" home id listed
+  home="$TEST_ROOT/jobs-invalid-metadata"
+  id="20260715-120000-123-456"
+  mkdir -p "$home/jobs/$id"
+  printf '0\n' > "$home/jobs/$id/exit"
+
+  printf '{"model":"模型"}\n' > "$home/jobs/$id/meta.json"
+  listed="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  if [[ "$listed" != *'"model":"模型"'* ]]; then
+    fail "$name" "valid UTF-8 metadata was rejected: $listed"
+    return
+  fi
+
+  printf '{"lane":"safe"}\nINJECTED-META-LINE\033[31m\n' > "$home/jobs/$id/meta.json"
+  listed="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  if [[ "$listed" == *"INJECTED-META-LINE"* || "$listed" != *"invalid metadata"* ]]; then
+    fail "$name" "multiline/control metadata reached terminal output: $listed"
+    return
+  fi
+
+  head -c 5000 /dev/zero | tr '\0' A > "$home/jobs/$id/meta.json"
+  listed="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list 2>&1)"
+  if [[ "$listed" != *"invalid metadata"* ]]; then
+    fail "$name" "oversized metadata was not rejected safely"
+    return
+  fi
+  pass "$name"
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -555,6 +614,8 @@ test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
 test_jobs_cli_rejects_escape_and_handles_empty_store
+test_jobs_cli_rejects_malformed_exit_metadata
+test_jobs_cli_contains_malformed_public_metadata
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks
