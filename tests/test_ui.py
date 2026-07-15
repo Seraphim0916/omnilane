@@ -27,6 +27,29 @@ ui = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ui)
 
 
+class BrowserHarnessConfigurationTests(unittest.TestCase):
+    def test_ci_can_select_playwright_bundled_chromium(self):
+        env = os.environ.copy()
+        env["OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER"] = "1"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from tests import ui_browser_harness as h; "
+                    "print(h.browser_executable or 'bundled')"
+                ),
+            ],
+            cwd=str(ROOT),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("bundled", result.stdout.strip())
+
+
 class JobStoreTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory(prefix="omnilane-ui-test-")
