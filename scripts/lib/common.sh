@@ -153,11 +153,11 @@ acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not 
   local empty_since=-1 empty_grace="${OMNILANE_LOCK_EMPTY_GRACE:-10}"
   local lock_timeout="${OMNILANE_LOCK_TIMEOUT:-600}"
   [[ "$empty_grace" =~ ^(0|[1-9][0-9]{0,5})$ ]] || {
-    echo "omnilane: invalid OMNILANE_LOCK_EMPTY_GRACE '$empty_grace'" >&2
+    echo "omnilane: invalid OMNILANE_LOCK_EMPTY_GRACE (want 0..999999)" >&2
     exit 2
   }
   [[ "$lock_timeout" =~ ^[1-9][0-9]{0,5}$ ]] || {
-    echo "omnilane: invalid OMNILANE_LOCK_TIMEOUT '$lock_timeout'" >&2
+    echo "omnilane: invalid OMNILANE_LOCK_TIMEOUT (want 1..999999)" >&2
     exit 2
   }
   dir="$(cd "$dir" 2>/dev/null && pwd -P)" || dir="$2"

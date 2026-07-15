@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 VENDOR="$1"; MODE="$2"; WORKDIR="$3"; MODEL="$4"; EFFORT="$5"
 PROMPT_FILE="$6"; OUTPUT_FILE="$7"
 
-[[ "$VENDOR" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid worker vendor '$VENDOR'" >&2; exit 2; }
+[[ "$VENDOR" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid worker vendor" >&2; exit 2; }
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 

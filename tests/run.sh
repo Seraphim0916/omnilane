@@ -87,7 +87,7 @@ test_configure_quotes_model_with_spaces() {
 }
 
 test_watchdog_timeout_resolution() {
-  local name="watchdog timeout precedence" home gate d600 d900 dlane dflag rc_bad rc_zero
+  local name="watchdog timeout precedence" home gate d600 d900 dlane dflag rc_bad rc_zero rc_control
   home="$TEST_ROOT/timeout"; mkdir -p "$home"
   gate="$home/gate.sh"
   # exec gate: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE. Echo the watchdog
@@ -105,6 +105,8 @@ EOF
   dflag="$(OMNILANE_HOME="$home" OMNILANE_TIMEOUT=900 OMNILANE_TIMEOUT_PROBE=1234 bash "$ROOT/scripts/dispatch.sh" --timeout 55 probe x 2>/dev/null)"
   OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout abc probe x >/dev/null 2>&1; rc_bad=$?
   OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 0 probe x >/dev/null 2>&1; rc_zero=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout $'\033[31mFORGED' probe x \
+    >"$home/timeout-control.out" 2>&1; rc_control=$?
   # A value-taking flag with no value must be a clean usage error, not a crash.
   local rc_missing missing_out
   missing_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --timeout 2>&1)"; rc_missing=$?
@@ -121,6 +123,8 @@ EOF
     fail "$name" "non-numeric --timeout should exit 2, got $rc_bad"
   elif [[ "$rc_zero" -ne 2 ]]; then
     fail "$name" "--timeout 0 should exit 2, got $rc_zero"
+  elif [[ "$rc_control" -ne 2 ]] || grep -q $'\033' "$home/timeout-control.out"; then
+    fail "$name" "invalid timeout leaked terminal control bytes"
   elif [[ "$rc_missing" -ne 2 ]]; then
     fail "$name" "--timeout with no value should exit 2, got $rc_missing"
   elif [[ "$missing_out" != *"needs a value"* ]]; then
@@ -611,6 +615,28 @@ test_jobs_cli_contains_malformed_public_metadata() {
     return
   fi
   pass "$name"
+}
+
+test_jobs_cli_bounds_pid_metadata() {
+  local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
+  name="jobs CLI bounds pid metadata"
+  home="$TEST_ROOT/jobs-invalid-pid"; outside="$home/outside-pid"
+  id="20260715-120000-123-456"
+  mkdir -p "$home/jobs/$id"
+  printf '%s\n' "$$" > "$outside"
+  ln -s "$outside" "$home/jobs/$id/pid"
+  symlinked="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$id" 2>&1)"
+  rm "$home/jobs/$id/pid"
+  head -c 100000 /dev/zero | tr '\0' 9 > "$home/jobs/$id/pid"
+  oversized="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$id" 2>&1)"
+
+  if [[ "$symlinked" != "dead (invalid pid metadata)" ]]; then
+    fail "$name" "symlink PID was not rejected: $symlinked"
+  elif [[ "$oversized" != "dead (invalid pid metadata)" ]]; then
+    fail "$name" "oversized PID was not rejected: $oversized"
+  else
+    pass "$name"
+  fi
 }
 
 test_jobs_prune_is_preview_first_and_preserves_running() {
@@ -1586,6 +1612,7 @@ test_consult_lane_and_configurator
 test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata
 test_jobs_cli_contains_malformed_public_metadata
+test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata
 test_dispatch_rejects_symlink_job_store

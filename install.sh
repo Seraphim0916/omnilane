@@ -21,7 +21,7 @@ case "$#" in
     case "$1" in
       --uninstall) UNINSTALL="--uninstall" ;;
       --help|-h) usage; exit 0 ;;
-      *) usage "(unknown argument: $1)"; exit 2 ;;
+      *) usage "(unknown argument)"; exit 2 ;;
     esac ;;
   *) usage "(unexpected extra arguments)"; exit 2 ;;
 esac

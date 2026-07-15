@@ -24,7 +24,7 @@ select_job() {
   local id="${1:-}"
   [[ -n "$id" ]] || usage
   [[ "$id" =~ $JOB_ID_PATTERN ]] || {
-    echo "invalid job id: $id" >&2
+    echo "invalid job id" >&2
     exit 2
   }
   JOB_DIR="$JOBS/$id"
@@ -67,6 +67,20 @@ read_public_metadata() {
     return 2
   fi
   PUBLIC_METADATA="$value"
+}
+
+read_job_pid() {
+  local path="$1" size value length
+  local LC_ALL=C
+  RECORDED_PID=""
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  size="$(wc -c < "$path" | tr -d '[:space:]')" || return 2
+  [[ "$size" =~ ^[0-9]+$ && "$size" -le 11 ]] || return 2
+  value="$(cat "$path")" || return 2
+  length="${#value}"
+  [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
+  [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
+  RECORDED_PID="$value"
 }
 
 validate_job_store
@@ -115,12 +129,17 @@ case "${1:-}" in
       }
       echo "done exit=$RECORDED_EXIT"
     else
-      pid=""
-      [[ -f "$JOB_DIR/pid" && ! -L "$JOB_DIR/pid" ]] && \
-        pid="$(cat "$JOB_DIR/pid" 2>/dev/null || true)"
-      if [[ -n "$pid" && ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+      pid=""; pid_state="missing"
+      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
+        if read_job_pid "$JOB_DIR/pid"; then
+          pid="$RECORDED_PID"; pid_state="valid"
+        else
+          pid_state="invalid"
+        fi
+      fi
+      if [[ "$pid_state" == "invalid" ]]; then
         echo "dead (invalid pid metadata)"
-      elif [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+      elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then
         echo "dead (worker gone, no exit recorded)"
       else
         echo "running"
@@ -158,7 +177,7 @@ case "${1:-}" in
       esac
     done
     [[ "$keep" =~ ^(0|[1-9][0-9]{0,8})$ ]] || {
-      echo "invalid --keep value: $keep" >&2
+      echo "invalid --keep value (want 0..999999999)" >&2
       exit 2
     }
     completed=()

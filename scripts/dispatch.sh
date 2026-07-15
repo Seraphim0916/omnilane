@@ -158,7 +158,7 @@ while [[ $# -gt 0 ]]; do
         --job-timeout) OVERRIDE_JOB_TIMEOUT="$2" ;;
       esac
       shift 2 ;;
-    -*) echo "unknown flag: $1" >&2; exit 2 ;;
+    -*) echo "omnilane: unknown flag" >&2; exit 2 ;;
     *) break ;;
   esac
 done
@@ -171,12 +171,12 @@ done
 }
 LANE="$1"
 TASK="$2"
-[[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name '$LANE'" >&2; exit 2; }
+[[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name" >&2; exit 2; }
 # A typo like --mode advice must not fall through to the write-enabled branch.
-[[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode '$MODE' (advise|work)" >&2; exit 2; }
+[[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode (advise|work)" >&2; exit 2; }
 if [[ -n "$OVERRIDE_VENDOR" ]] &&
    ! [[ "$OVERRIDE_VENDOR" =~ ^(codex|claude|grok|gemini)$ ]]; then
-  echo "omnilane: invalid vendor '$OVERRIDE_VENDOR' (codex|claude|grok|gemini)" >&2
+  echo "omnilane: invalid vendor (codex|claude|grok|gemini)" >&2
   exit 2
 fi
 
@@ -234,7 +234,7 @@ if [[ -z "$TIMEOUT" ]]; then
 fi
 [[ -n "$TIMEOUT" ]] || TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
-  echo "omnilane: invalid timeout '$TIMEOUT' (want a positive integer of seconds)" >&2; exit 2
+  echo "omnilane: invalid timeout (want a positive integer of seconds)" >&2; exit 2
 }
 export OMNILANE_TIMEOUT="$TIMEOUT"
 
