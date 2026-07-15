@@ -12,8 +12,20 @@ except ImportError:  # pragma: no cover - exercised only on minimal CI hosts
     sync_playwright = None
 
 
-CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-browser_available = sync_playwright is not None and CHROME.is_file()
+use_playwright_browser = os.environ.get("OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER") == "1"
+requested_browser = os.environ.get("OMNILANE_TEST_BROWSER", "")
+if use_playwright_browser:
+    browser_executable = None
+elif requested_browser:
+    browser_executable = Path(requested_browser)
+else:
+    browser_executable = Path(
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    )
+browser_available = sync_playwright is not None and (
+    use_playwright_browser
+    or (browser_executable is not None and browser_executable.is_file())
+)
 
 
 class BrowserHarness:
@@ -25,11 +37,13 @@ class BrowserHarness:
     @classmethod
     def setUpClass(cls):
         cls.playwright = sync_playwright().start()
-        cls.browser = cls.playwright.chromium.launch(
-            executable_path=str(CHROME),
-            headless=True,
-            args=["--disable-background-networking"],
-        )
+        launch_options = {
+            "headless": True,
+            "args": ["--disable-background-networking"],
+        }
+        if browser_executable is not None:
+            launch_options["executable_path"] = str(browser_executable)
+        cls.browser = cls.playwright.chromium.launch(**launch_options)
 
     @classmethod
     def tearDownClass(cls):
