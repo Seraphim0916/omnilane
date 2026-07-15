@@ -24,7 +24,12 @@
 # export OMNILANE_GROK_MAX_ATTEMPTS=5
 
 # Optional whole-job fuse: lock wait + every retry/voter/round share this cap.
-# Disabled by default. A one-off `--job-timeout SEC` wins over these values.
+# Disabled by default, except non-Git Codex work automatically reuses its
+# resolved per-call timeout (up to 999999999 seconds). A one-off
+# `--job-timeout SEC` wins over these values.
+# The automatic exception warns and falls back to the existing per-call
+# watchdog path if the bundled Perl supervisor is unavailable; it never makes
+# non-Git work Git-only.
 # For a deep full-repository audit, 2–4 hours is a starting range, not a default:
 # export OMNILANE_JOB_TIMEOUT=10800
 # export OMNILANE_JOB_TIMEOUT_HARD_JUDGMENT=14400

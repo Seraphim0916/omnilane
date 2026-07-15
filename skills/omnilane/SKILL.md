@@ -19,7 +19,12 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    long-context). It bounds each CLI call, not the whole dispatch.
    For one aggregate fuse across lock wait, retries, voters, and rounds, add
    `--job-timeout <seconds>`. It is disabled by default; deep full-repository
-   audits typically need 7200–14400 seconds, and expiry returns 124.
+   audits typically need 7200–14400 seconds, and expiry returns 124. The one
+   automatic exception is non-Git Codex `work`: without an explicit, lane, or
+   global job timeout, its resolved per-call timeout becomes the whole-job fuse,
+   capped at the supervisor's 999999999-second maximum. If the bundled Perl
+   supervisor is unavailable, it warns and continues through the existing
+   per-call watchdog path.
 
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
 When routing is unexpectedly unavailable, run `bin/omnilane doctor` before

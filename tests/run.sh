@@ -1063,6 +1063,190 @@ EOF
   fi
 }
 
+test_codex_nongit_work_timeout_cleans_process_group() {
+  local name="non-Git Codex work timeout cleans its process group"
+  local home workdir fake pidfile rc worker_pid="" child_pid="" job_dir=""
+  local worker_alive=no child_alive=no
+  home="$TEST_ROOT/codex-nongit-timeout"; workdir="$home/plain-dir"
+  fake="$home/fake-codex"; pidfile="$home/codex-pids"
+  mkdir -p "$home" "$workdir"
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+trap '' TERM
+sleep 30 &
+printf '%s %s\n' "$$" "$!" > "$CODEX_PID_FILE"
+wait
+EOF
+  chmod +x "$fake"
+  printf 'probe: codex fake-model low\n' > "$home/routing.local.yaml"
+
+  OMNILANE_HOME="$home" CODEX_BIN="$fake" CODEX_PID_FILE="$pidfile" \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$workdir" \
+      --timeout 1 probe x >"$home/stdout" 2>"$home/stderr"
+  rc=$?
+  if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
+  sleep 0.2
+  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
+  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
+  [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
+  job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
+
+  if [[ "$rc" -ne 124 ]]; then
+    fail "$name" "expected exit 124, got $rc"
+  elif [[ "$worker_alive" == yes || "$child_alive" == yes ]]; then
+    fail "$name" "timed-out Codex left a process alive"
+  elif [[ -z "$job_dir" ]] || ! grep -q '"job_timeout":1' "$job_dir/meta.json"; then
+    fail "$name" "resolved per-call timeout was not recorded as the job guard"
+  elif ! grep -q 'non-Git.*timed out.*supervised process group' "$home/stderr"; then
+    fail "$name" "timeout did not explain the non-Git recovery"
+  else
+    pass "$name"
+  fi
+}
+
+test_codex_nongit_automatic_timeout_scope() {
+  local name="automatic Codex timeout only covers non-Git work"
+  local plain gitdir work_home git_home poisoned_home advise_home explicit_home huge_home
+  local work_meta git_meta poisoned_meta advise_meta explicit_meta huge_meta
+  local rc_work rc_git rc_poisoned rc_advise rc_explicit rc_huge
+  plain="$TEST_ROOT/codex-timeout-scope/plain"; gitdir="$TEST_ROOT/codex-timeout-scope/repo"
+  work_home="$TEST_ROOT/codex-timeout-scope/work-home"
+  git_home="$TEST_ROOT/codex-timeout-scope/git-home"
+  poisoned_home="$TEST_ROOT/codex-timeout-scope/poisoned-home"
+  advise_home="$TEST_ROOT/codex-timeout-scope/advise-home"
+  explicit_home="$TEST_ROOT/codex-timeout-scope/explicit-home"
+  huge_home="$TEST_ROOT/codex-timeout-scope/huge-home"
+  mkdir -p "$plain" "$gitdir" "$work_home" "$git_home" "$poisoned_home" \
+    "$advise_home" "$explicit_home" "$huge_home"
+  git -C "$gitdir" init -q
+  for home in "$work_home" "$git_home" "$poisoned_home" "$advise_home" \
+    "$explicit_home" "$huge_home"; do
+    printf 'probe: codex fake-model low\n' > "$home/routing.local.yaml"
+  done
+
+  OMNILANE_HOME="$work_home" CODEX_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$plain" --timeout 7 probe x \
+      >/dev/null 2>&1; rc_work=$?
+  OMNILANE_HOME="$git_home" CODEX_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$gitdir" --timeout 7 probe x \
+      >/dev/null 2>&1; rc_git=$?
+  OMNILANE_HOME="$poisoned_home" CODEX_BIN=/usr/bin/true \
+    GIT_DIR="$plain/not-a-repository" GIT_WORK_TREE="$plain" \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$gitdir" --timeout 7 probe x \
+      >/dev/null 2>&1; rc_poisoned=$?
+  OMNILANE_HOME="$advise_home" CODEX_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --mode advise --workdir "$plain" --timeout 7 probe x \
+      >/dev/null 2>&1; rc_advise=$?
+  OMNILANE_HOME="$explicit_home" CODEX_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$plain" --timeout 7 \
+      --job-timeout 9 probe x >/dev/null 2>&1; rc_explicit=$?
+  OMNILANE_HOME="$huge_home" CODEX_BIN=/usr/bin/true \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$plain" \
+      --timeout 1000000000 probe x >/dev/null 2>&1; rc_huge=$?
+
+  work_meta="$(find "$work_home/jobs" -name meta.json -exec cat {} \;)"
+  git_meta="$(find "$git_home/jobs" -name meta.json -exec cat {} \;)"
+  poisoned_meta="$(find "$poisoned_home/jobs" -name meta.json -exec cat {} \;)"
+  advise_meta="$(find "$advise_home/jobs" -name meta.json -exec cat {} \;)"
+  explicit_meta="$(find "$explicit_home/jobs" -name meta.json -exec cat {} \;)"
+  huge_meta="$(find "$huge_home/jobs" -name meta.json -exec cat {} \;)"
+  if [[ "$rc_work/$rc_git/$rc_poisoned/$rc_advise/$rc_explicit/$rc_huge" != "0/0/0/0/0/0" ]]; then
+    fail "$name" "a quick case failed ($rc_work/$rc_git/$rc_poisoned/$rc_advise/$rc_explicit/$rc_huge)"
+  elif [[ "$work_meta" != *'"job_timeout":7'* ]]; then
+    fail "$name" "non-Git work did not inherit the per-call timeout"
+  elif [[ "$git_meta" != *'"job_timeout":null'* ]]; then
+    fail "$name" "Git work was changed"
+  elif [[ "$poisoned_meta" != *'"job_timeout":null'* ]]; then
+    fail "$name" "inherited Git environment corrupted worktree detection"
+  elif [[ "$advise_meta" != *'"job_timeout":null'* ]]; then
+    fail "$name" "non-Git advise was changed"
+  elif [[ "$explicit_meta" != *'"job_timeout":9'* ]]; then
+    fail "$name" "explicit job timeout lost precedence"
+  elif [[ "$huge_meta" != *'"job_timeout":999999999'* ]]; then
+    fail "$name" "automatic timeout did not honor the supervisor ceiling"
+  else
+    pass "$name"
+  fi
+}
+
+test_codex_nongit_explicit_job_timeout_preserves_per_call_status() {
+  local name="explicit Codex job timeout preserves a shorter per-call timeout"
+  local home workdir fake pidfile rc worker_pid="" child_pid="" job_dir=""
+  local worker_alive=no child_alive=no
+  home="$TEST_ROOT/codex-nongit-explicit-timeout"; workdir="$home/plain-dir"
+  fake="$home/fake-codex"; pidfile="$home/codex-pids"
+  mkdir -p "$home" "$workdir"
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+sleep 30 &
+printf '%s %s\n' "$$" "$!" > "$CODEX_PID_FILE"
+wait
+EOF
+  chmod +x "$fake"
+  printf 'probe: codex fake-model low\n' > "$home/routing.local.yaml"
+
+  OMNILANE_HOME="$home" CODEX_BIN="$fake" CODEX_PID_FILE="$pidfile" \
+    bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$workdir" \
+      --timeout 1 --job-timeout 5 probe x >"$home/stdout" 2>"$home/stderr"
+  rc=$?
+  if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
+  sleep 0.2
+  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
+  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
+  [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
+  job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
+
+  if [[ "$rc" -ne 142 ]]; then
+    fail "$name" "expected per-call exit 142, got $rc"
+  elif [[ "$worker_alive" == yes || "$child_alive" == yes ]]; then
+    fail "$name" "supervisor left a process alive after the shorter watchdog"
+  elif [[ -z "$job_dir" ]] || ! grep -q '"job_timeout":5' "$job_dir/meta.json"; then
+    fail "$name" "explicit job timeout was not retained"
+  elif grep -q 'timed out after 5s' "$home/stderr"; then
+    fail "$name" "shorter per-call timeout was misreported as the whole-job fuse"
+  else
+    pass "$name"
+  fi
+}
+
+test_codex_nongit_without_perl_keeps_work_available() {
+  local name="non-Git Codex work stays available without the Perl supervisor"
+  local home workdir fakebin rc job_dir=""
+  home="$TEST_ROOT/codex-nongit-no-perl"; workdir="$home/plain-dir"
+  fakebin="$home/bin"
+  mkdir -p "$home" "$workdir" "$fakebin"
+  cat > "$fakebin/timeout" <<'EOF'
+#!/usr/bin/env bash
+shift
+exec "$@"
+EOF
+  chmod +x "$fakebin/timeout"
+  printf 'probe: codex fake-model low\n' > "$home/routing.local.yaml"
+
+  (
+    perl() { return 127; }
+    export -f perl
+    PATH="$fakebin:$PATH" OMNILANE_HOME="$home" CODEX_BIN=/usr/bin/true \
+      bash "$ROOT/scripts/dispatch.sh" --mode work --workdir "$workdir" \
+        --timeout 7 probe x >"$home/stdout" 2>"$home/stderr"
+  )
+  rc=$?
+  job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
+
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "expected fallback success, got $rc"
+  elif [[ -z "$job_dir" ]] || ! grep -q '"job_timeout":null' "$job_dir/meta.json"; then
+    fail "$name" "fallback did not leave the automatic whole-job fuse disabled"
+  elif ! grep -q 'automatic non-Git Codex job guard.*unavailable.*per-call watchdog path' \
+    "$home/stderr"; then
+    fail "$name" "fallback did not explain its reduced protection"
+  else
+    pass "$name"
+  fi
+}
+
 test_job_timeout_bounds_grok_retries() {
   local name="whole-job timeout bounds Grok retry loop"
   local home fake attempts rc count
@@ -1630,6 +1814,10 @@ test_job_timeout_supervisor_kills_process_group
 test_job_timeout_supervisor_forwards_term
 test_supervised_calls_bypass_nested_gnu_timeout_group
 test_dispatch_enforces_whole_job_timeout
+test_codex_nongit_work_timeout_cleans_process_group
+test_codex_nongit_automatic_timeout_scope
+test_codex_nongit_explicit_job_timeout_preserves_per_call_status
+test_codex_nongit_without_perl_keeps_work_available
 test_job_timeout_bounds_grok_retries
 test_background_job_records_whole_job_timeout
 test_job_timeout_bounds_codex_lock_wait

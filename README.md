@@ -263,7 +263,13 @@ raw worker or vendor logs.
   value.
 - **Whole-job fuse** — optional `--job-timeout SECONDS` caps lock wait plus all
   retries, voters, and rounds under one process-group supervisor. Priority is
-  flag > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > disabled.
+  flag > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > disabled,
+  with one automatic exception: Codex `work` outside a Git worktree uses the
+  resolved per-call watchdog as its whole-job fuse when none was configured,
+  capped at the supervisor's 999999999-second maximum. This automatic guard
+  needs the bundled Perl supervisor; if unavailable, dispatch warns and keeps
+  non-Git work running through the existing per-call watchdog path, which emits
+  its own warning if no watchdog tool exists.
   Expiry cleans the supervised process group and returns 124. For a deep audit
   of a fubon-autotrade-sized repository, start around 2–4 hours (7200–14400s)
   with a 30-minute per-call watchdog; these are recommendations, not defaults.
@@ -288,8 +294,9 @@ configurator and `routing.local.yaml` exist so you can disagree.
   unaffected; for repo *inspection* prefer the claude/codex candidates.
 - **Grok has no reasoning-effort knob**; the effort field is accepted for
   interface parity and ignored.
-- Codex work mode in a non-git directory has hung in one test; use a git
-  working directory (the normal case) until this is pinned down.
+- **Non-Git Codex work is supported.** Some Codex CLI builds may stall outside
+  a Git worktree, so the automatic fuse above bounds that case and cleans the
+  supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 🌱 Status
 

@@ -237,7 +237,11 @@ fi
 }
 export OMNILANE_TIMEOUT="$TIMEOUT"
 
-# Optional whole-job seconds: flag > per-lane env > global env > disabled.
+JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
+JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
+
+# Optional whole-job seconds: flag > per-lane env > global env > automatic
+# non-Git Codex work guard > disabled.
 # Validate lexically only. Bash arithmetic recursively evaluates variable text,
 # so untrusted timeout text must never enter [[ -gt ]] or $((...)).
 JOB_TIMEOUT="$OVERRIDE_JOB_TIMEOUT"
@@ -246,13 +250,39 @@ if [[ -z "$JOB_TIMEOUT" ]]; then
   JOB_TIMEOUT="${!LANE_JOB_TIMEOUT_VAR:-}"
 fi
 [[ -n "$JOB_TIMEOUT" ]] || JOB_TIMEOUT="${OMNILANE_JOB_TIMEOUT:-}"
+CODEX_NONGIT_WORK=0
+CODEX_NONGIT_AUTO_JOB_TIMEOUT=0
+if [[ "$VENDOR" == "codex" && "$MODE" == "work" ]]; then
+  # The target directory is authoritative. Caller-supplied GIT_* state must not
+  # redirect or corrupt discovery, so probe with a minimal clean environment.
+  GIT_WORKTREE_STATE="$(env -i PATH="$PATH" HOME="${HOME:-}" \
+    git -C "$WORKDIR" rev-parse --is-inside-work-tree 2>/dev/null || true)"
+  if [[ "$GIT_WORKTREE_STATE" != "true" ]]; then
+    CODEX_NONGIT_WORK=1
+    if [[ -z "$JOB_TIMEOUT" ]]; then
+      if [[ -f "$JOB_SUPERVISOR" ]] && command -v perl &>/dev/null &&
+         perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
+           >/dev/null 2>&1; then
+        CODEX_NONGIT_AUTO_JOB_TIMEOUT=1
+        # Preserve the per-call budget while adding process-group cleanup. The
+        # supervisor accepts at most nine digits, so larger values receive its
+        # effective ceiling rather than making non-Git work unavailable.
+        if [[ "$TIMEOUT" =~ ^[1-9][0-9]{0,8}$ ]]; then
+          JOB_TIMEOUT="$TIMEOUT"
+        else
+          JOB_TIMEOUT=999999999
+        fi
+      else
+        echo "omnilane: automatic non-Git Codex job guard is unavailable; continuing without a whole-job fuse (the per-call watchdog path remains)" >&2
+      fi
+    fi
+  fi
+fi
 if [[ -n "$JOB_TIMEOUT" && ! "$JOB_TIMEOUT" =~ ^[1-9][0-9]{0,8}$ ]]; then
   echo "omnilane: invalid job timeout (want 1..999999999 seconds)" >&2
   exit 2
 fi
 JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
-JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
-JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
 unset OMNILANE_JOB_SUPERVISED
 [[ -x "$JOB_WORKER" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
 if [[ -n "$JOB_TIMEOUT" ]]; then
@@ -347,6 +377,14 @@ run_job() {
   fi
   rc=$?
   set -e
+  if [[ "$CODEX_NONGIT_WORK" -eq 1 && "$rc" -eq 124 ]]; then
+    echo "omnilane: Codex work in a non-Git directory timed out after ${JOB_TIMEOUT}s; the supervised process group was terminated" >&2
+  elif [[ "$CODEX_NONGIT_AUTO_JOB_TIMEOUT" -eq 1 && "$rc" -eq 142 ]]; then
+    # Equal implicit inner/outer deadlines can race. Only the automatic case is
+    # normalized; an explicitly longer whole-job fuse must preserve status 142.
+    echo "omnilane: Codex work in a non-Git directory timed out after ${TIMEOUT}s; the supervised process group was terminated" >&2
+    rc=124
+  fi
   finish_job "$rc"
   return "$rc"
 }

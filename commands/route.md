@@ -31,5 +31,10 @@ Steps:
    - Need one aggregate fuse across lock wait, retries, voters, and rounds? Add
      `--job-timeout <seconds>`. Deep full-repository audits typically need
      7200–14400 seconds; it is disabled by default and expiry returns 124.
+     Exception: non-Git Codex `work` automatically uses the resolved per-call
+     timeout as this fuse when no explicit, lane, or global job timeout exists,
+     capped at the supervisor's 999999999-second maximum. If the bundled Perl
+     supervisor is unavailable, it warns and continues through the existing
+     per-call watchdog path.
 4. Relay the worker's output. Judge it against the acceptance criteria you put
    in the task — do not accept "done" without evidence.

@@ -6,7 +6,14 @@ semantic version tags.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- Codex `work` remains available outside Git worktrees. When no whole-job
+  timeout is configured, Omnilane now reuses the resolved per-call watchdog as
+  a process-group fuse for that case (up to 999999999 seconds); expiry cleans
+  the supervised process group and returns 124. Without the bundled Perl
+  supervisor it warns and retains the existing per-call watchdog path instead
+  of blocking work.
 
 ## [0.5.0] - 2026-07-15
 

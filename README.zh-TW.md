@@ -234,8 +234,13 @@ omnilane ui stop     # 正常停止
   或 vote 面板(評審 × 輪次)會發起多次呼叫,總耗時可能是該值的數倍。
 - **整體任務保險絲** — 選配的 `--job-timeout SECONDS` 用同一個程序群組監工,
   一次涵蓋等鎖、重試、所有評審與輪次。優先序為旗標 >
-  `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 關閉。到期會清掉
-  受監工的程序群組並回傳 124。像 fubon-autotrade 規模的完整深度審查,建議先從
+  `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 關閉；唯一的自動例外
+  是 Codex 在 Git worktree 外執行 `work` 時，若未設定整體上限，就沿用解析後的
+  單次呼叫看門狗作為整體保險絲，上限為監工支援的 999999999 秒。到期會清掉
+  受監工的程序群組並回傳 124。這個自動保險絲需要內附的 Perl 監工；若環境
+  無法使用，派工會警告但仍透過原有單次呼叫看門狗路徑執行非 Git 工作；若連
+  單次看門狗工具都沒有，該路徑會另外警告。
+  像 fubon-autotrade 規模的完整深度審查,建議先從
   2–4 小時(7200–14400 秒)起跳,單次呼叫看門狗可先設 30 分鐘;這只是建議值,
   不會寫死成預設。
 - **背景工作生命週期** — `--background` 的工作端跑在自己的 process group,
@@ -255,8 +260,9 @@ omnilane ui stop     # 正常停止
   回無效引數)。long-context 通道的設計本來就是「把內容貼進任務」的長文
   整合,不受影響;要*讀取 repo* 的諮詢請用 claude/codex 候選。
 - **Grok 沒有推理檔位開關**;effort 欄位僅為介面一致而保留,實際忽略。
-- Codex 的 work 模式在非 git 目錄曾出現卡死;在 git 工作目錄(正常情況)
-  使用,待查明前先避開非 git 目錄。
+- **非 Git 的 Codex work 仍受支援。** 部分 Codex CLI 版本可能在 Git worktree
+  外卡住，因此上面的自動保險絲會限制這個情境並清掉受監工的程序群組。Omnilane
+  不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 🌱 狀態
 
