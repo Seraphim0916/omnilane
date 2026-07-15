@@ -5,23 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>Omnilane Live Board</title>
+    <!-- The server intentionally allow-lists three read-only assets; this prevents a noisy /favicon.ico probe without widening that surface. -->
+    <link rel="icon" href="/styles.css">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
-  <body>
+  <body data-mobile-view="list">
     <div class="board-frame">
       <header class="board-header">
-        <div class="brand-lockup" aria-label="Omnilane Live Board">
-          <span class="brand-name">OMNILANE</span>
-          <span class="brand-divider" aria-hidden="true">/</span>
-          <span class="board-name">LIVE BOARD</span>
+        <div class="board-identity" aria-label="Omnilane Live Board">
+          <strong>Omnilane</strong>
+          <span aria-hidden="true">/</span>
+          <span>Live jobs</span>
         </div>
 
         <div class="board-readouts">
+          <span class="read-only-tag">Read only</span>
           <p class="job-count" id="job-count">0 jobs</p>
           <div class="connection-status" id="connection-status" data-mode="waiting" role="status" aria-live="polite">
             <span class="connection-lamp" aria-hidden="true"></span>
-            <span id="connection-label">Connecting to local board</span>
+            <span id="connection-label">Connecting</span>
           </div>
         </div>
       </header>
@@ -30,122 +33,59 @@
         <aside class="dispatch-index" aria-labelledby="dispatch-index-title">
           <div class="index-heading">
             <div>
-              <p class="eyebrow">Dispatch queue</p>
-              <h1 id="dispatch-index-title">Newest first</h1>
+              <p class="section-label">Recent work</p>
+              <h1 id="dispatch-index-title">Task record</h1>
             </div>
-            <span class="read-only-tag">READ ONLY</span>
           </div>
 
           <div class="queue-controls">
             <label class="search-control" for="job-search">
-              <span>Search jobs</span>
-              <input id="job-search" type="search" autocomplete="off" spellcheck="false" placeholder="ID, lane, vendor, model">
+              <span>Find a task</span>
+              <input id="job-search" type="search" autocomplete="off" spellcheck="false" placeholder="Task, ID, lane, model">
             </label>
 
             <fieldset class="status-filter" id="status-filter">
-              <legend>Status</legend>
+              <legend>Show</legend>
               <div class="filter-options">
                 <button type="button" class="filter-button is-active" data-filter="all" aria-pressed="true">All</button>
                 <button type="button" class="filter-button" data-filter="active" aria-pressed="false">Active</button>
-                <button type="button" class="filter-button" data-filter="succeeded" aria-pressed="false">Succeeded</button>
+                <button type="button" class="filter-button" data-filter="succeeded" aria-pressed="false">Done</button>
                 <button type="button" class="filter-button" data-filter="issues" aria-pressed="false">Issues</button>
               </div>
             </fieldset>
-
-            <label class="mobile-picker" for="mobile-job-select">
-              <span>Selected job</span>
-              <select id="mobile-job-select" disabled>
-                <option>No dispatches</option>
-              </select>
-            </label>
           </div>
 
-          <ol class="job-list" id="job-list" aria-label="Recent dispatches"></ol>
-          <p class="list-message" id="list-message">Waiting for dispatches.</p>
+          <ol class="job-list" id="job-list" aria-label="Recent tasks"></ol>
+          <p class="list-message" id="list-message">Waiting for tasks.</p>
         </aside>
 
-        <section class="job-inspector" aria-label="Selected dispatch detail">
+        <section class="job-inspector" aria-label="Selected task detail">
+          <button type="button" class="mobile-back" id="mobile-back" hidden>
+            <span aria-hidden="true">←</span>
+            Back to tasks
+          </button>
+
           <div class="inspector-state" id="inspector-state">
-            <p class="state-code" id="state-code">LOCAL / READ ONLY</p>
+            <p class="state-code" id="state-code">Local · read only</p>
             <h2 id="state-title">Connecting to the job board</h2>
-            <p id="state-message">The newest dispatch will appear here.</p>
+            <p id="state-message">The newest task will appear here.</p>
           </div>
 
           <article class="job-detail" id="job-detail" hidden>
             <header class="job-titlebar">
-              <div>
-                <p class="eyebrow">Selected dispatch</p>
+              <div class="selection-heading">
+                <p class="section-label">Selected task</p>
                 <h2 class="selected-job-id" id="selected-job-id">—</h2>
+                <p class="selected-time" id="selected-job-time">Started time unavailable</p>
               </div>
-              <span class="state-pill" id="selected-job-state">UNKNOWN</span>
+              <span class="state-pill" id="selected-job-state">Unknown</span>
             </header>
 
-            <section class="route-board" aria-labelledby="route-heading">
-              <div class="section-heading route-heading-row">
-                <div>
-                  <p class="eyebrow">Routing trace</p>
-                  <h3 id="route-heading">Lane to outcome</h3>
-                </div>
-                <p class="route-caption">LANE → VENDOR → MODEL → STATE</p>
-              </div>
-
-              <ol class="route-track" id="route-track" data-state="starting">
-                <li class="route-station">
-                  <span class="station-marker" aria-hidden="true"></span>
-                  <span class="station-label">Lane</span>
-                  <span class="station-value" id="route-lane">—</span>
-                </li>
-                <li class="route-station">
-                  <span class="station-marker" aria-hidden="true"></span>
-                  <span class="station-label">Vendor</span>
-                  <span class="station-value" id="route-vendor">—</span>
-                </li>
-                <li class="route-station">
-                  <span class="station-marker" aria-hidden="true"></span>
-                  <span class="station-label">Model</span>
-                  <span class="station-value" id="route-model">—</span>
-                </li>
-                <li class="route-station">
-                  <span class="station-marker" aria-hidden="true"></span>
-                  <span class="station-label">State</span>
-                  <span class="station-value" id="route-state">—</span>
-                </li>
-                <li class="route-signal" aria-hidden="true"></li>
-              </ol>
-            </section>
-
-            <dl class="job-facts" aria-label="Dispatch facts">
-              <div class="fact">
-                <dt>Effort</dt>
-                <dd id="fact-effort">—</dd>
-              </div>
-              <div class="fact">
-                <dt>Mode</dt>
-                <dd id="fact-mode">—</dd>
-              </div>
-              <div class="fact">
-                <dt>Watchdog</dt>
-                <dd id="fact-timeout">—</dd>
-              </div>
-              <div class="fact">
-                <dt>Candidate</dt>
-                <dd id="fact-candidate">—</dd>
-              </div>
-              <div class="fact fact-wide">
-                <dt>Started</dt>
-                <dd id="fact-started">—</dd>
-              </div>
-              <div class="fact fact-wide">
-                <dt>Workdir</dt>
-                <dd id="fact-workdir">—</dd>
-              </div>
-            </dl>
-
-            <section class="text-panel" aria-labelledby="request-heading">
+            <section class="content-section task-section" aria-labelledby="request-heading">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Operator input</p>
-                  <h3 id="request-heading">Request</h3>
+                  <p class="section-label">Task</p>
+                  <h3 id="request-heading">What the model was asked</h3>
                 </div>
                 <div class="content-markers" id="request-markers" aria-live="polite"></div>
               </div>
@@ -153,24 +93,51 @@
               <pre class="plain-content" id="request-content" tabindex="0"></pre>
             </section>
 
-            <section class="text-panel result-panel" aria-labelledby="result-heading">
+            <section class="content-section result-section" aria-labelledby="result-heading">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Public model answer</p>
+                  <p class="section-label">Output</p>
                   <h3 id="result-heading">Public result</h3>
                 </div>
                 <div class="content-markers" id="result-markers" aria-live="polite"></div>
               </div>
               <p class="content-empty" id="result-empty" hidden></p>
-              <pre class="plain-content" id="result-content" tabindex="0"></pre>
+              <pre class="plain-content result-content" id="result-content" tabindex="0"></pre>
             </section>
+
+            <section class="routing-section" aria-labelledby="route-heading">
+              <div class="section-heading">
+                <div>
+                  <p class="section-label">Routing</p>
+                  <h3 id="route-heading">Model path</h3>
+                </div>
+              </div>
+              <dl class="routing-list" id="route-track" data-state="starting">
+                <div><dt>Lane</dt><dd id="route-lane">—</dd></div>
+                <div><dt>Vendor</dt><dd id="route-vendor">—</dd></div>
+                <div><dt>Model</dt><dd id="route-model">—</dd></div>
+                <div><dt>State</dt><dd id="route-state">—</dd></div>
+              </dl>
+            </section>
+
+            <details class="technical-details">
+              <summary>Technical metadata</summary>
+              <dl class="job-facts" aria-label="Task metadata">
+                <div class="fact"><dt>Effort</dt><dd id="fact-effort">—</dd></div>
+                <div class="fact"><dt>Mode</dt><dd id="fact-mode">—</dd></div>
+                <div class="fact"><dt>Watchdog</dt><dd id="fact-timeout">—</dd></div>
+                <div class="fact"><dt>Candidate</dt><dd id="fact-candidate">—</dd></div>
+                <div class="fact fact-wide"><dt>Started</dt><dd id="fact-started">—</dd></div>
+                <div class="fact fact-wide"><dt>Workdir</dt><dd id="fact-workdir">—</dd></div>
+              </dl>
+            </details>
           </article>
         </section>
       </main>
     </div>
 
     <noscript>
-      <p class="noscript-message">JavaScript is required to read the local Live UI.</p>
+      <p class="noscript-message">JavaScript is required to read this local board.</p>
     </noscript>
   </body>
 </html>

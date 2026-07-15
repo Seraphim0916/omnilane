@@ -17,6 +17,8 @@ import threading
 import time
 import unittest
 
+from tests.ui_browser_harness import BrowserHarness, browser_available
+
 
 ROOT = Path(__file__).resolve().parents[1]
 UI_SCRIPT = ROOT / "scripts" / "ui.py"
@@ -683,6 +685,260 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("omnilane ui", help_result.stdout)
 
 
+@unittest.skipUnless(browser_available, "local Chrome and Python Playwright are required")
+class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
+    root, ui_module = ROOT, ui
+    def test_desktop_layout_and_sse_reconcile_preserve_dom_focus_and_scroll(self):
+        self.open_board(1440, 900)
+        metrics = self.page.evaluate(
+            """
+            () => {
+              const header = document.querySelector('.board-header');
+              const index = document.querySelector('.dispatch-index');
+              const list = document.querySelector('.job-list');
+              const inspector = document.querySelector('.job-inspector');
+              return {
+                headerHeight: header.getBoundingClientRect().height,
+                indexWidth: index.getBoundingClientRect().width,
+                listClient: list.clientHeight,
+                listScroll: list.scrollHeight,
+                inspectorOverflow: getComputedStyle(inspector).overflowY,
+                bodyOverflow: getComputedStyle(document.body).overflowY,
+              };
+            }
+            """
+        )
+        self.assertGreaterEqual(metrics["headerHeight"], 52)
+        self.assertLessEqual(metrics["headerHeight"], 56)
+        self.assertGreaterEqual(metrics["indexWidth"], 320)
+        self.assertLessEqual(metrics["indexWidth"], 400)
+        self.assertGreater(metrics["listScroll"], metrics["listClient"])
+        self.assertEqual("auto", metrics["inspectorOverflow"])
+        self.assertEqual("hidden", metrics["bodyOverflow"])
+
+        first = self.page.locator(".job-card").first
+        first.focus()
+        self.page.evaluate(
+            """
+            () => {
+              const list = document.querySelector('.job-list');
+              list.scrollTop = 96;
+              window.__firstJobNode = document.querySelector('.job-card');
+              window.__listScrollBefore = list.scrollTop;
+            }
+            """
+        )
+        newest = self.jobs / self.job_ids[-1]
+        (newest / "exit").write_text("0", encoding="ascii")
+        self.page.locator(".job-card").first.locator(".card-state").filter(
+            has_text="succeeded"
+        ).wait_for()
+        preserved = self.page.evaluate(
+            """
+            () => ({
+              sameNode: window.__firstJobNode === document.querySelector('.job-card'),
+              focused: document.activeElement === document.querySelector('.job-card'),
+              activeTag: document.activeElement.tagName,
+              activeClass: document.activeElement.className,
+              scrollTop: document.querySelector('.job-list').scrollTop,
+              expectedScroll: window.__listScrollBefore,
+            })
+            """
+        )
+        self.assertTrue(preserved["sameNode"], preserved)
+        self.assertTrue(preserved["focused"], preserved)
+        self.assertAlmostEqual(
+            preserved["expectedScroll"], preserved["scrollTop"], delta=1
+        )
+
+    def test_mobile_master_detail_back_escape_and_restoration(self):
+        self.open_board(390, 844)
+        self.page.locator('body[data-mobile-view="list"]').wait_for()
+        rows = self.page.locator(".job-card")
+        target = rows.nth(5)
+        target.focus()
+        self.page.evaluate(
+            """
+            () => {
+              const list = document.querySelector('.job-list');
+              list.scrollTop = 110;
+              window.__mobileExpectedScroll = list.scrollTop;
+              window.__mobileExpectedJob = document.activeElement.dataset.jobId;
+            }
+            """
+        )
+        target.press("Enter")
+        self.page.locator('body[data-mobile-view="detail"]').wait_for()
+        back = self.page.locator("#mobile-back")
+        self.assertTrue(back.is_visible())
+        self.assertGreaterEqual(back.evaluate("node => node.getBoundingClientRect().height"), 44)
+
+        self.page.evaluate("history.back()")
+        self.page.locator('body[data-mobile-view="list"]').wait_for()
+        restored = self.page.evaluate(
+            """
+            () => ({
+              scrollTop: document.querySelector('.job-list').scrollTop,
+              expectedScroll: window.__mobileExpectedScroll,
+              focusedJob: document.activeElement.dataset.jobId || null,
+              expectedJob: window.__mobileExpectedJob,
+            })
+            """
+        )
+        self.assertAlmostEqual(restored["expectedScroll"], restored["scrollTop"], delta=1)
+        self.assertEqual(restored["expectedJob"], restored["focusedJob"])
+
+        self.page.locator('.job-card[data-job-id="{}"]'.format(restored["expectedJob"])).press("Enter")
+        self.page.locator('body[data-mobile-view="detail"]').wait_for()
+        self.page.keyboard.press("Escape")
+        self.page.locator('body[data-mobile-view="list"]').wait_for()
+        for selector in ("#job-search", ".filter-button"):
+            self.assertGreaterEqual(
+                self.page.locator(selector).first.evaluate(
+                    "node => node.getBoundingClientRect().height"
+                ),
+                44,
+            )
+
+    def test_auth_probe_403_clears_snapshot_token_and_reconnect(self):
+        deny_health = {"value": False}
+
+        def route_request(route):
+            if deny_health["value"] and "/api/health" in route.request.url:
+                route.fulfill(
+                    status=403,
+                    content_type="application/json",
+                    body='{"ok":false}',
+                )
+            else:
+                route.continue_()
+
+        self.page.route("**/*", route_request)
+        self.open_board(1440, 900)
+        self.assertGreater(self.page.locator(".job-card").count(), 0)
+        deny_health["value"] = True
+        self.stop_server()
+
+        self.page.locator('#connection-status[data-mode="unauthorized"]').wait_for(
+            timeout=6000
+        )
+        self.assertEqual(0, self.page.locator(".job-card").count())
+        self.assertIsNone(
+            self.page.evaluate(
+                "sessionStorage.getItem('omnilane.live-ui.token')"
+            )
+        )
+        self.page.wait_for_timeout(3300)
+        self.assertEqual("unauthorized", self.page.locator("#connection-status").get_attribute("data-mode"))
+
+    def test_short_disconnect_keeps_snapshot_and_recovers(self):
+        self.open_board(1440, 900)
+        visible_jobs = self.page.locator(".job-card").count()
+        self.stop_server()
+        self.page.locator('#connection-status[data-mode="reconnecting"]').wait_for(
+            timeout=5000
+        )
+        self.assertEqual(visible_jobs, self.page.locator(".job-card").count())
+
+        self.restart_server()
+        self.page.locator('#connection-status[data-mode="live"]').wait_for(timeout=7000)
+        self.assertEqual(visible_jobs, self.page.locator(".job-card").count())
+
+    def test_detail_cache_bounds_requests_and_rejects_stale_selection(self):
+        delayed_id = self.job_ids[1]
+        self.page.add_init_script(
+            """
+            (() => {
+              const delayedId = %s;
+              const originalFetch = window.fetch.bind(window);
+              window.__detailFetchCount = {};
+              window.fetch = (input, init) => {
+                const url = String(input);
+                const marker = "/api/jobs/";
+                const markerIndex = url.indexOf(marker);
+                if (markerIndex >= 0) {
+                  const jobId = decodeURIComponent(
+                    url.slice(markerIndex + marker.length).split("?")[0].split("#")[0]
+                  );
+                  window.__detailFetchCount[jobId] = (window.__detailFetchCount[jobId] || 0) + 1;
+                  if (jobId === delayedId) {
+                    return new Promise((resolve, reject) => {
+                      setTimeout(() => originalFetch(input, init).then(resolve, reject), 450);
+                    });
+                  }
+                }
+                return originalFetch(input, init);
+              };
+            })();
+            """ % json.dumps(delayed_id),
+        )
+        self.open_board(1440, 900)
+        self.page.wait_for_function(
+            "() => document.querySelector('.card-task').textContent.startsWith('Investigate')"
+        )
+        newest = self.job_ids[-1]
+        second = self.job_ids[-2]
+        before = self.page.evaluate(
+            "ids => ids.map(id => window.__detailFetchCount[id] || 0)",
+            [newest, second],
+        )
+        for job_id in (newest, second, newest, second):
+            self.page.locator('.job-card[data-job-id="{}"]'.format(job_id)).click()
+        self.page.wait_for_timeout(200)
+        after = self.page.evaluate(
+            "ids => ids.map(id => window.__detailFetchCount[id] || 0)",
+            [newest, second],
+        )
+        self.assertEqual(before, after)
+
+        final_id = self.job_ids[0]
+        self.page.locator('.job-card[data-job-id="{}"]'.format(delayed_id)).click()
+        self.page.locator('.job-card[data-job-id="{}"]'.format(final_id)).click()
+        self.page.wait_for_function(
+            "id => document.querySelector('#selected-job-id').textContent === id",
+            arg=final_id,
+        )
+        self.page.wait_for_timeout(700)
+        self.assertEqual(final_id, self.page.locator("#selected-job-id").text_content())
+        self.assertIn("task 00", self.page.locator("#request-content").text_content())
+        counts = self.page.evaluate(
+            "ids => ids.map(id => window.__detailFetchCount[id] || 0)",
+            [delayed_id, final_id],
+        )
+        self.assertEqual([1, 1], counts)
+
+    def test_output_updates_only_follow_when_reader_was_at_bottom(self):
+        self.open_board(1440, 900)
+        result = self.page.locator("#result-content")
+        result.wait_for(state="visible")
+        newest = self.jobs / self.job_ids[-1]
+
+        result.evaluate("node => { node.scrollTop = 0; }")
+        with (newest / "out.txt").open("a", encoding="utf-8") as handle:
+            handle.write("NONBOTTOM-MARKER\n")
+        (newest / "exit").write_text("0", encoding="ascii")
+        self.page.wait_for_function(
+            "() => document.querySelector('#result-content').textContent.includes('NONBOTTOM-MARKER')"
+        )
+        self.assertLessEqual(result.evaluate("node => node.scrollTop"), 1)
+
+        (newest / "exit").unlink()
+        self.page.locator(".job-card").first.locator(".card-state").filter(
+            has_text="running"
+        ).wait_for()
+        result.evaluate("node => { node.scrollTop = node.scrollHeight; }")
+        with (newest / "out.txt").open("a", encoding="utf-8") as handle:
+            handle.write("BOTTOM-MARKER\n")
+        (newest / "exit").write_text("0", encoding="ascii")
+        self.page.wait_for_function(
+            "() => document.querySelector('#result-content').textContent.includes('BOTTOM-MARKER')"
+        )
+        distance = result.evaluate(
+            "node => node.scrollHeight - node.clientHeight - node.scrollTop"
+        )
+        self.assertLessEqual(distance, 2)
+
+
 class FrontendContractTests(unittest.TestCase):
     def setUp(self):
         self.ui_root = ROOT / "ui"
@@ -721,13 +977,15 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("EventSource.CLOSED", self.javascript)
         self.assertIn("window.setTimeout", self.javascript)
 
-    def test_visual_contract_has_one_route_signal_and_reduced_motion(self):
-        self.assertIn("LANE → VENDOR → MODEL → STATE", self.html)
-        self.assertEqual(1, self.html.count('class="route-signal"'))
+    def test_visual_contract_is_quiet_text_first_and_reduced_motion(self):
+        self.assertIn('class="routing-list"', self.html)
+        self.assertNotIn('class="route-signal"', self.html)
+        self.assertNotIn("@keyframes", self.css)
         self.assertIn('@media (prefers-reduced-motion: reduce)', self.css)
         self.assertNotRegex(self.css, r"gradient\s*\(")
         self.assertNotIn("backdrop-filter", self.css)
-        self.assertIn('.route-track[data-state="running"] .route-signal', self.css)
+        self.assertIn("--header-height: 54px", self.css)
+        self.assertIn("clamp(320px, 26vw, 400px)", self.css)
 
     def test_javascript_dom_ids_exist_in_html(self):
         referenced = set(
