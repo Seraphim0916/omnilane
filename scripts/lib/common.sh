@@ -74,6 +74,16 @@ depth_guard() {
 # corrupt the job index and cross-pollute pytest. mkdir is the portable lock.
 acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not $PWD
   local vendor="$1" dir="${2:-$PWD}" key lockdir waited=0 owner
+  local empty_since=-1 empty_grace="${OMNILANE_LOCK_EMPTY_GRACE:-10}"
+  local lock_timeout="${OMNILANE_LOCK_TIMEOUT:-600}"
+  [[ "$empty_grace" =~ ^[0-9]+$ ]] || {
+    echo "omnilane: invalid OMNILANE_LOCK_EMPTY_GRACE '$empty_grace'" >&2
+    exit 2
+  }
+  [[ "$lock_timeout" =~ ^[1-9][0-9]*$ ]] || {
+    echo "omnilane: invalid OMNILANE_LOCK_TIMEOUT '$lock_timeout'" >&2
+    exit 2
+  }
   dir="$(cd "$dir" 2>/dev/null && pwd -P)" || dir="$2"
   key="$(printf '%s' "$dir" | hash_str)-$vendor"
   lockdir="$OMNILANE_HOME/locks/$key"
@@ -81,20 +91,40 @@ acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not 
   while ! mkdir "$lockdir" 2>/dev/null; do
     # Steal the lock if its owner is gone (crash / kill -9 leaves the dir behind).
     owner="$(cat "$lockdir/pid" 2>/dev/null || true)"
-    if [[ -n "$owner" ]] && ! kill -0 "$owner" 2>/dev/null; then
+    if [[ -n "$owner" && ! "$owner" =~ ^[1-9][0-9]*$ ]]; then
       rm "$lockdir/pid" 2>/dev/null || true
       rmdir "$lockdir" 2>/dev/null || true
       continue
+    elif [[ -n "$owner" ]] && ! kill -0 "$owner" 2>/dev/null; then
+      rm "$lockdir/pid" 2>/dev/null || true
+      rmdir "$lockdir" 2>/dev/null || true
+      continue
+    elif [[ -z "$owner" ]]; then
+      [[ "$empty_since" -ge 0 ]] || empty_since="$waited"
+      if [[ $((waited - empty_since)) -ge "$empty_grace" ]]; then
+        # The creator normally writes pid immediately after mkdir. A lock that
+        # stays empty beyond the grace period is an interrupted acquisition.
+        rmdir "$lockdir" 2>/dev/null || true
+        empty_since=-1
+        continue
+      fi
+    else
+      empty_since=-1
     fi
-    sleep 2; waited=$((waited + 2))
-    if [[ "$waited" -ge "${OMNILANE_LOCK_TIMEOUT:-600}" ]]; then
+    if [[ "$waited" -ge "$lock_timeout" ]]; then
       echo "omnilane: lock timeout for $vendor in $dir" >&2; exit 87
     fi
+    sleep 2; waited=$((waited + 2))
   done
   # Real subshell PID, not $$: in a backgrounded subshell $$ is the (soon-dead)
   # parent, which would make the live lock look stale and steal-able.
   OMNILANE_LOCK_OWNER="$(current_pid)"
-  printf '%s' "$OMNILANE_LOCK_OWNER" > "$lockdir/pid"
+  # If an empty lock was reclaimed while this process was descheduled, never
+  # overwrite the replacement owner's PID when execution resumes.
+  if ! (set -o noclobber; printf '%s' "$OMNILANE_LOCK_OWNER" > "$lockdir/pid") 2>/dev/null; then
+    echo "omnilane: lost lock ownership for $vendor in $dir" >&2
+    exit 87
+  fi
   OMNILANE_LOCKDIR="$lockdir"
   trap 'release_cwd_lock' EXIT
 }

@@ -209,6 +209,53 @@ test_consult_lane_and_configurator() {
   fi
 }
 
+test_empty_lock_recovery_preserves_live_owner() {
+  local name="empty lock recovery preserves live owner" home workdir canonical key lockdir empty_out invalid_out
+  local rc_empty rc_invalid rc_live
+  home="$TEST_ROOT/empty-lock"; workdir="$home/work"
+  mkdir -p "$home/locks" "$workdir"
+  canonical="$(cd "$workdir" && pwd -P)"
+  key="$(printf '%s' "$canonical" | /bin/bash -c \
+    'source "$1"; hash_str' _ "$ROOT/scripts/lib/common.sh")-codex"
+  lockdir="$home/locks/$key"
+
+  mkdir "$lockdir"
+  empty_out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"; printf acquired' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)"
+  rc_empty=$?
+
+  mkdir "$lockdir"
+  printf '%s\n' '-1' > "$lockdir/pid"
+  invalid_out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"; printf acquired' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)"
+  rc_invalid=$?
+
+  mkdir "$lockdir"
+  printf '%s\n' "$$" > "$lockdir/pid"
+  OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" > "$home/live.out" 2>&1
+  rc_live=$?
+
+  if [[ "$rc_empty" -ne 0 || "$empty_out" != "acquired" ]]; then
+    fail "$name" "empty lock was not reclaimed (rc=$rc_empty, out=$empty_out)"
+  elif [[ "$rc_invalid" -ne 0 || "$invalid_out" != "acquired" ]]; then
+    fail "$name" "invalid PID lock was not reclaimed (rc=$rc_invalid, out=$invalid_out)"
+  elif [[ -d "$lockdir" && ! -f "$lockdir/pid" ]]; then
+    fail "$name" "empty lock remained after successful acquisition"
+  elif [[ "$rc_live" -ne 87 ]]; then
+    fail "$name" "live owner's lock should time out with 87, got $rc_live"
+  elif [[ ! -f "$lockdir/pid" || "$(cat "$lockdir/pid")" != "$$" ]]; then
+    fail "$name" "live owner's lock was modified"
+  else
+    pass "$name"
+  fi
+  [[ ! -f "$lockdir/pid" ]] || /bin/rm "$lockdir/pid"
+  rmdir "$lockdir" 2>/dev/null || true
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -382,6 +429,7 @@ test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
+test_empty_lock_recovery_preserves_live_owner
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
