@@ -25,7 +25,11 @@ pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 
 file_mode() {
-  stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1"
+  if stat -c '%a' "$1" >/dev/null 2>&1; then
+    stat -c '%a' "$1"
+  else
+    stat -f '%Lp' "$1"
+  fi
 }
 
 test_safe_routing_parser() {
