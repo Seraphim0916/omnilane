@@ -249,6 +249,36 @@ test_installer_usage_is_fail_closed() {
   fi
 }
 
+test_uninstall_preserves_foreign_symlinks() {
+  local name="install and uninstall preserve foreign symlinks" home wrapper skill wrapper_target skill_target
+  home="$TEST_ROOT/foreign-links"; make_fake_installer_home "$home"
+  mkdir -p "$home/.local/bin" "$home/.codex/skills" "$home/other/skill"
+  printf '#!/bin/sh\n' > "$home/other/omnilane"
+  wrapper="$home/.local/bin/omnilane"
+  skill="$home/.codex/skills/omnilane"
+  ln -s "$home/other/omnilane" "$wrapper"
+  ln -s "$home/other/skill" "$skill"
+  wrapper_target="$(readlink "$wrapper")"
+  skill_target="$(readlink "$skill")"
+
+  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --uninstall > "$home/out" 2>&1
+
+  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" > "$home/install.out" 2>&1
+
+  if [[ ! -L "$wrapper" || "$(readlink "$wrapper")" != "$wrapper_target" ]]; then
+    fail "$name" "foreign global wrapper was removed or changed"
+  elif [[ ! -L "$skill" || "$(readlink "$skill")" != "$skill_target" ]]; then
+    fail "$name" "foreign skill link was removed or changed"
+  elif ! grep -qi 'not owned\|foreign\|unchanged' "$home/out" ||
+       ! grep -qi 'not owned\|foreign\|unchanged' "$home/install.out"; then
+    fail "$name" "preserved foreign links were not explained"
+  else
+    pass "$name"
+  fi
+}
+
 test_incomplete_marker_fails_closed() {
   local name="malformed markers fail closed" home before after rc kind
   for kind in lone-start lone-end duplicate-start reversed; do
@@ -462,6 +492,7 @@ test_vendor_selector
 test_consult_lane_and_configurator
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
+test_uninstall_preserves_foreign_symlinks
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
 test_install_uninstall_preserves_symlink

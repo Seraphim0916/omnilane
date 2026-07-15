@@ -34,6 +34,8 @@ msg() { # key -> localized string ({} = placeholder, see msgf)
       case "$L" in zh-TW) echo "已移除";; zh-CN) echo "已移除";; ja) echo "削除しました";; ko) echo "제거됨";; *) echo "removed";; esac ;;
     skip_exists)
       case "$L" in zh-TW) echo "跳過 {}(已存在且不是 symlink——請手動處理)";; zh-CN) echo "跳过 {}(已存在且不是 symlink——请手动处理)";; ja) echo "{} をスキップ(symlink 以外の実体があります——手動で解決してください)";; ko) echo "{} 건너뜀(symlink 가 아닌 항목 존재——수동으로 해결하세요)";; *) echo "skip {} (exists and is not a symlink — resolve manually)";; esac ;;
+    foreign_link)
+      case "$L" in zh-TW) echo "既有 symlink 不屬於目前 checkout,保持不變: {}";; zh-CN) echo "现有 symlink 不属于当前 checkout,保持不变: {}";; ja) echo "既存 symlink は現在の checkout の所有ではないため変更しません: {}";; ko) echo "기존 symlink 는 현재 checkout 소유가 아니므로 변경하지 않음: {}";; *) echo "existing symlink is not owned by this checkout; unchanged: {}";; esac ;;
     path_hint)
       case "$L" in zh-TW) echo "(請確認 ~/.local/bin 在 PATH 上)";; zh-CN) echo "(请确认 ~/.local/bin 在 PATH 上)";; ja) echo "(~/.local/bin が PATH にあるか確認してください)";; ko) echo "(~/.local/bin 이 PATH 에 있는지 확인하세요)";; *) echo "(make sure ~/.local/bin is on your PATH)";; esac ;;
     no_cli)
