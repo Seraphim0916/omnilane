@@ -84,6 +84,10 @@ expand_home_path() {
 # Depth guard: a dispatched worker must not fan out again (quota-burn chains).
 depth_guard() {
   local depth="${OMNILANE_DEPTH:-0}"
+  [[ "$depth" =~ ^(0|[1-9][0-9]{0,8})$ ]] || {
+    echo "omnilane: invalid OMNILANE_DEPTH (want 0..999999999)" >&2
+    exit 2
+  }
   if [[ "$depth" -ge 1 ]]; then
     echo "omnilane: refusing nested dispatch (OMNILANE_DEPTH=$depth)" >&2
     exit 86
