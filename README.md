@@ -287,3 +287,6 @@ and the local Live UI. The shell core has passed external model review (11
 findings fixed) and adversarial verification; the UI is covered by Python tests
 and real-browser behavior checks. Grok/Antigravity command-shell behavior may
 still vary across CLI versions. Issues and PRs welcome.
+
+Project policies: [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
+[Changelog](CHANGELOG.md)
