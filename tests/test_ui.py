@@ -708,7 +708,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("omnilane ui", help_result.stdout)
 
 
-@unittest.skipUnless(browser_available, "local Chrome and Python Playwright are required")
+@unittest.skipUnless(browser_available, "a Playwright browser is required")
 class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
     root, ui_module = ROOT, ui
     def test_desktop_layout_and_sse_reconcile_preserve_dom_focus_and_scroll(self):
@@ -798,6 +798,12 @@ class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
 
         self.page.evaluate("history.back()")
         self.page.locator('body[data-mobile-view="list"]').wait_for()
+        self.page.wait_for_function(
+            """
+            () => document.activeElement &&
+              document.activeElement.dataset.jobId === window.__mobileExpectedJob
+            """
+        )
         restored = self.page.evaluate(
             """
             () => ({
