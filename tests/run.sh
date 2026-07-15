@@ -1247,6 +1247,57 @@ EOF
   fi
 }
 
+test_doctor_is_read_only_and_reports_failures() {
+  local name="doctor is read-only and actionable" home good bad outside out rc_good rc_bad rc_unsafe rc_control
+  local state_created=no
+  home="$TEST_ROOT/doctor-home"; good="$TEST_ROOT/doctor-good"; bad="$TEST_ROOT/doctor-bad"
+  mkdir -p "$good/scripts" "$bad"
+  cat > "$good/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  chmod +x "$good/scripts/dispatch.sh"
+  printf 'triage: exec /bin/true -\n' > "$good/routing.yaml"
+
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
+    /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
+  rc_good=$?
+  [[ -e "$home/.omnilane" ]] && state_created=yes
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$bad" \
+    /bin/bash "$ROOT/bin/omnilane" doctor > "$TEST_ROOT/doctor-bad.out" 2>&1
+  rc_bad=$?
+  outside="$TEST_ROOT/doctor-foreign-jobs"
+  mkdir -p "$home/.omnilane" "$outside"
+  chmod 700 "$outside"
+  ln -s "$outside" "$home/.omnilane/jobs"
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
+    /bin/bash "$ROOT/bin/omnilane" doctor > "$TEST_ROOT/doctor-unsafe.out" 2>&1
+  rc_unsafe=$?
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    OMNILANE_DOCTOR_REPO=$'missing\033[31mFORGED' \
+    /bin/bash "$ROOT/bin/omnilane" doctor > "$TEST_ROOT/doctor-control.out" 2>&1
+  rc_control=$?
+
+  if [[ "$rc_good" -ne 0 ]]; then
+    fail "$name" "healthy fixture returned $rc_good: $out"
+  elif [[ "$out" != *'PASS  routing'* || "$out" != *'WARN  state'* ||
+          "$out" != *'0 failed'* ]]; then
+    fail "$name" "healthy report lacked routing/state/summary: $out"
+  elif [[ "$state_created" == yes ]]; then
+    fail "$name" "doctor created the missing state directory"
+  elif [[ "$rc_bad" -ne 1 ]] || ! grep -q 'FAIL  dispatch' "$TEST_ROOT/doctor-bad.out"; then
+    fail "$name" "missing dispatch was not a clear exit-1 failure"
+  elif [[ "$rc_unsafe" -ne 1 ]] || ! grep -q 'FAIL  job-privacy' "$TEST_ROOT/doctor-unsafe.out"; then
+    fail "$name" "symlinked jobs store was not reported as incompatible"
+  elif [[ "$rc_control" -ne 1 ]] || grep -q $'\033' "$TEST_ROOT/doctor-control.out"; then
+    fail "$name" "doctor output leaked terminal control bytes"
+  elif find "$outside" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "doctor wrote through the symlinked jobs store"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -1552,6 +1603,7 @@ test_job_timeout_bounds_grok_retries
 test_background_job_records_whole_job_timeout
 test_job_timeout_bounds_codex_lock_wait
 test_job_timeout_bounds_vote_panel
+test_doctor_is_read_only_and_reports_failures
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks
