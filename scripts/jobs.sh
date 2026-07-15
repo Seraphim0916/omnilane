@@ -13,6 +13,13 @@ usage() {
   exit 2
 }
 
+validate_job_store() {
+  if [[ -L "$JOBS" || ( -e "$JOBS" && ! -d "$JOBS" ) ]]; then
+    echo "unsafe jobs store path (want a real directory)" >&2
+    exit 1
+  fi
+}
+
 select_job() {
   local id="${1:-}"
   [[ -n "$id" ]] || usage
@@ -61,6 +68,8 @@ read_public_metadata() {
   fi
   PUBLIC_METADATA="$value"
 }
+
+validate_job_store
 
 case "${1:-}" in
   list)
