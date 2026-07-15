@@ -137,11 +137,22 @@ if [[ "$UNINSTALL" == "--uninstall" ]]; then
   [[ -L "$BIN_DST" ]] && rm "$BIN_DST" && echo "$(msg removed) $BIN_DST"
 else
   mkdir -p "$HOME/.local/bin"
-  ln -sfn "$REPO/bin/omnilane" "$BIN_DST"
-  echo "$(msg linked) $BIN_DST  $(msg path_hint)"
+  if [[ -e "$BIN_DST" && ! -L "$BIN_DST" ]]; then
+    msgf skip_exists "$BIN_DST"; echo
+  else
+    ln -sfn "$REPO/bin/omnilane" "$BIN_DST"
+    echo "$(msg linked) $BIN_DST  $(msg path_hint)"
+  fi
 fi
 
-[[ ${#found[@]} -gt 0 ]] || { echo "$(msg no_cli)"; exit 1; }
+if [[ ${#found[@]} -eq 0 ]]; then
+  # Uninstall is cleanup, not capability detection. A user may remove their
+  # provider CLIs before removing omnilane; completed cleanup must still be a
+  # successful operation.
+  [[ "$UNINSTALL" == "--uninstall" ]] && exit 0
+  echo "$(msg no_cli)"
+  exit 1
+fi
 
 if [[ "$UNINSTALL" != "--uninstall" ]]; then
   echo

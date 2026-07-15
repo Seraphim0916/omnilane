@@ -298,6 +298,51 @@ test_install_uninstall_preserves_symlink() {
   fi
 }
 
+test_install_preserves_existing_wrapper_file() {
+  local name="installer preserves existing wrapper file" home before after rc
+  home="$TEST_ROOT/existing-wrapper"; make_fake_installer_home "$home"
+  mkdir -p "$home/.local/bin"
+  printf 'ORIGINAL-WRAPPER-CANARY\n' > "$home/.local/bin/omnilane"
+  before="$(shasum -a 256 "$home/.local/bin/omnilane" | awk '{print $1}')"
+  if HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  after="$(shasum -a 256 "$home/.local/bin/omnilane" | awk '{print $1}')"
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "install should skip the occupied path without failing (rc=$rc)"
+  elif [[ -L "$home/.local/bin/omnilane" ]]; then
+    fail "$name" "existing regular file was replaced by a symlink"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "existing wrapper bytes changed"
+  else
+    pass "$name"
+  fi
+}
+
+test_uninstall_succeeds_after_vendor_removal() {
+  local name="uninstall succeeds after vendor removal" home rc
+  home="$TEST_ROOT/uninstall-no-vendor"; make_fake_installer_home "$home"
+  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1 || return 1
+  rm "$home/bin/codex"
+  if HOME="$home" PATH="/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --uninstall > "$home/uninstall.out" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "cleanup completed but uninstall returned $rc"
+  elif [[ -e "$home/.local/bin/omnilane" || -L "$home/.local/bin/omnilane" ]]; then
+    fail "$name" "global wrapper remains after uninstall"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_vote_repo() {
   local repo="$1"
   mkdir -p "$repo/scripts/runners" "$repo/scripts/lib"
@@ -386,6 +431,8 @@ test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
 test_install_uninstall_preserves_symlink
+test_install_preserves_existing_wrapper_file
+test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
 
