@@ -16,6 +16,13 @@ class WorkflowPolicyTests(unittest.TestCase):
             WORKFLOW,
             re.compile(r"^permissions:\n  contents: read$", re.MULTILINE),
         )
+
+    def test_third_party_actions_are_pinned_to_full_commits(self):
+        uses = re.findall(r"^\s*-?\s*uses:\s*([^\s#]+)", WORKFLOW, re.MULTILINE)
+        self.assertTrue(uses, "workflow should contain at least one action")
+        for action in uses:
+            with self.subTest(action=action):
+                self.assertRegex(action, r"^[^@]+@[0-9a-f]{40}$")
         self.assertRegex(
             WORKFLOW,
             re.compile(
