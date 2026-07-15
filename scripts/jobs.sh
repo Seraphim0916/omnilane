@@ -2,13 +2,14 @@
 set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh list | status JOB_ID | result JOB_ID
+#        jobs.sh prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 
 usage() {
-  echo "usage: jobs.sh list|status ID|result ID" >&2
+  echo "usage: jobs.sh list|status ID|result ID|prune [--keep N] [--apply]" >&2
   exit 2
 }
 
@@ -81,5 +82,65 @@ case "${1:-}" in
       echo "--- stderr ---" >&2; cat "$JOB_DIR/out.txt.stderr.log" >&2
     fi
     exit "$rc" ;;
+  prune)
+    keep=100
+    apply=0
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --keep)
+          [[ $# -ge 2 ]] || usage
+          keep="$2"; shift 2 ;;
+        --apply)
+          apply=1; shift ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$keep" =~ ^[0-9]+$ ]] || {
+      echo "invalid --keep value: $keep" >&2
+      exit 2
+    }
+    completed=()
+    if [[ -d "$JOBS" ]]; then
+      for job_dir in "$JOBS"/*; do
+        [[ -d "$job_dir" && ! -L "$job_dir" ]] || continue
+        id="${job_dir##*/}"
+        [[ "$id" =~ $JOB_ID_PATTERN ]] || continue
+        [[ -f "$job_dir/exit" && ! -L "$job_dir/exit" ]] || continue
+        completed+=("$id")
+      done
+    fi
+    candidates=()
+    index=0
+    if [[ ${#completed[@]} -gt 0 ]]; then
+      while IFS= read -r id; do
+        index=$((index + 1))
+        [[ "$index" -le "$keep" ]] || candidates+=("$id")
+      done < <(printf '%s\n' "${completed[@]}" | sort -r)
+    fi
+
+    deleted=0
+    for id in "${candidates[@]}"; do
+      job_dir="$JOBS/$id"
+      if [[ "$apply" -eq 0 ]]; then
+        printf 'would delete %s\n' "$id"
+        continue
+      fi
+      # Re-check immediately before deletion so a replaced path or a job whose
+      # completion marker disappeared is never removed.
+      if [[ -d "$job_dir" && ! -L "$job_dir" &&
+            -f "$job_dir/exit" && ! -L "$job_dir/exit" ]]; then
+        /bin/rm -rf "$job_dir"
+        printf 'deleted %s\n' "$id"
+        deleted=$((deleted + 1))
+      else
+        printf 'skipped changed job %s\n' "$id" >&2
+      fi
+    done
+    if [[ "$apply" -eq 1 ]]; then
+      printf '%s jobs deleted; newest %s completed jobs retained\n' "$deleted" "$keep"
+    else
+      printf '%s jobs eligible; rerun with --apply to delete\n' "${#candidates[@]}"
+    fi ;;
   *) usage ;;
 esac

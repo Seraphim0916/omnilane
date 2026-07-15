@@ -273,6 +273,57 @@ test_jobs_cli_rejects_escape_and_handles_empty_store() {
   fi
 }
 
+test_jobs_prune_is_preview_first_and_preserves_running() {
+  local name="jobs prune is preview-first" home id preview applied rc_invalid count
+  home="$TEST_ROOT/jobs-prune"; mkdir -p "$home/jobs" "$home/outside"
+  for id in \
+    20260715-120005-123-5 \
+    20260715-120004-123-4 \
+    20260715-120003-123-3 \
+    20260715-120002-123-2 \
+    20260715-120001-123-1
+  do
+    mkdir "$home/jobs/$id"
+    printf '0\n' > "$home/jobs/$id/exit"
+  done
+  mkdir "$home/jobs/20260101-000000-123-9"
+  printf 'running\n' > "$home/jobs/20260101-000000-123-9/pid"
+  printf '0\n' > "$home/outside/exit"
+  ln -s "$home/outside" "$home/jobs/20250101-000000-123-8"
+
+  preview="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --keep 2 2>&1)"
+  count="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  applied="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --keep 2 --apply 2>&1)"
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --keep nope --apply \
+    > "$home/invalid.out" 2>&1
+  rc_invalid=$?
+
+  if [[ "$preview" != *'would delete 20260715-120003-123-3'* ||
+        "$preview" != *'3 jobs eligible'* ]]; then
+    fail "$name" "preview did not identify exactly the three old completed jobs: $preview"
+  elif [[ "$count" -ne 6 ]]; then
+    fail "$name" "preview deleted or changed directories (count=$count)"
+  elif [[ "$applied" != *'deleted 20260715-120001-123-1'* ||
+          "$applied" != *'3 jobs deleted'* ]]; then
+    fail "$name" "apply summary was incorrect: $applied"
+  elif [[ -d "$home/jobs/20260715-120003-123-3" ||
+          -d "$home/jobs/20260715-120002-123-2" ||
+          -d "$home/jobs/20260715-120001-123-1" ]]; then
+    fail "$name" "an eligible completed job remained"
+  elif [[ ! -d "$home/jobs/20260715-120005-123-5" ||
+          ! -d "$home/jobs/20260715-120004-123-4" ]]; then
+    fail "$name" "one of the newest completed jobs was deleted"
+  elif [[ ! -d "$home/jobs/20260101-000000-123-9" ]]; then
+    fail "$name" "running job was deleted"
+  elif [[ ! -L "$home/jobs/20250101-000000-123-8" ]]; then
+    fail "$name" "symlink job was modified"
+  elif [[ "$rc_invalid" -ne 2 ]]; then
+    fail "$name" "invalid --keep should exit 2, got $rc_invalid"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -447,6 +498,7 @@ test_watchdog_timeout_resolution
 test_vendor_selector
 test_consult_lane_and_configurator
 test_jobs_cli_rejects_escape_and_handles_empty_store
+test_jobs_prune_is_preview_first_and_preserves_running
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
 test_install_uninstall_preserves_missing_final_newline
