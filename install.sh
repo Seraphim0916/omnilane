@@ -102,15 +102,30 @@ offer_hook() { # vendor
   case "$ans" in y|Y|yes|YES) install_hook "$v" ;; esac
 }
 
+owned_symlink() { # path, exact target written by this checkout
+  [[ -L "$1" ]] && [[ "$(readlink "$1")" == "$2" ]]
+}
+
+preserve_foreign_symlink() {
+  msgf foreign_link "$1" >&2; echo >&2
+}
+
 link_skill() { # $1 = target skills dir
   local dst="$1/omnilane"
   if [[ "$UNINSTALL" == "--uninstall" ]]; then
-    [[ -L "$dst" ]] && rm "$dst" && echo "$(msg removed) $dst"
+    if owned_symlink "$dst" "$SKILL_SRC"; then
+      rm "$dst"; echo "$(msg removed) $dst"
+    elif [[ -L "$dst" ]]; then
+      preserve_foreign_symlink "$dst"
+    fi
     return 0
   fi
   mkdir -p "$1"
   if [[ -e "$dst" && ! -L "$dst" ]]; then
     msgf skip_exists "$dst"; echo; return 0
+  fi
+  if [[ -L "$dst" ]] && ! owned_symlink "$dst" "$SKILL_SRC"; then
+    preserve_foreign_symlink "$dst"; return 0
   fi
   ln -sfn "$SKILL_SRC" "$dst"
   echo "$(msg linked) $dst -> $SKILL_SRC"
@@ -149,11 +164,17 @@ fi
 # Global wrapper so commands work from any directory: omnilane list|route|jobs|configure
 BIN_DST="$HOME/.local/bin/omnilane"
 if [[ "$UNINSTALL" == "--uninstall" ]]; then
-  [[ -L "$BIN_DST" ]] && rm "$BIN_DST" && echo "$(msg removed) $BIN_DST"
+  if owned_symlink "$BIN_DST" "$REPO/bin/omnilane"; then
+    rm "$BIN_DST"; echo "$(msg removed) $BIN_DST"
+  elif [[ -L "$BIN_DST" ]]; then
+    preserve_foreign_symlink "$BIN_DST"
+  fi
 else
   mkdir -p "$HOME/.local/bin"
   if [[ -e "$BIN_DST" && ! -L "$BIN_DST" ]]; then
     msgf skip_exists "$BIN_DST"; echo
+  elif [[ -L "$BIN_DST" ]] && ! owned_symlink "$BIN_DST" "$REPO/bin/omnilane"; then
+    preserve_foreign_symlink "$BIN_DST"
   else
     ln -sfn "$REPO/bin/omnilane" "$BIN_DST"
     echo "$(msg linked) $BIN_DST  $(msg path_hint)"
