@@ -20,14 +20,14 @@
 
 ---
 
-## v0.4.0 새 기능
+## v0.5.0 새 기능
 
-- **자연어로 질문** — `omnilane` 스킬과 `/route` 는 모델 추천, 벤더 지정 상담,
-  표준 모델 패밀리 고정을 지원하며 몰래 다른 모델로 바꾸지 않습니다.
-- **작업을 실시간 확인** — 인증된 읽기 전용 로컬 워크벤치에서 데스크톱과
-  모바일로 잡 상태, 태스크, 라우팅 판단, 공개 결과를 볼 수 있습니다.
-- **작업별 멈춤 방지 시간 조정** — `--timeout` 으로 일회성 값,
-  `OMNILANE_TIMEOUT_<LANE>` 으로 레인별 값, `OMNILANE_TIMEOUT` 으로 전역 값을 설정합니다.
+- **조사 전체 시간 제한** — 선택형 `--job-timeout` 이 락 대기, 재시도,
+  모든 투표자와 라운드를 하나의 process group 감독 아래 제한합니다.
+- **로컬 상태를 안전하고 유한하게 유지** — 소유자 전용 잡 파일, 엄격한
+  metadata/경로 검증, 안전한 잔여 락 회수, 미리보기 우선 `jobs prune`.
+- **실제 runtime 진단과 검증** — 읽기 전용 `omnilane doctor`, CI bundled
+  Chromium 동작 테스트, 최소 workflow 권한, commit 고정 GitHub Actions.
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -260,11 +260,11 @@ omnilane ui stop     # 정상 중지
 
 ## 🌱 상태
 
-v0.4.0 은 검토된 라우팅 코어, 자연어 상담, 로컬 Live UI 를 하나로 묶습니다.
-shell 코어는 외부 모델 리뷰(지적 11건 전부 수정)와 적대적 검증을 통과했고,
-UI 는 Python 테스트와 실제 브라우저 동작 확인으로 검증했습니다.
-Grok/Antigravity 커맨드 셸 동작은 CLI 버전에 따라 달라질 수 있습니다.
-issue 와 PR 환영합니다.
+v0.5.0 은 설치 프로그램, 디스패치 수명주기, 잡 저장소, 락 회수, 전체 잡
+마감시간, 진단, 릴리스 CI 를 강화합니다. 각 후보 변경은 따로 통합하고 적대적
+검증과 전체 회귀를 통과한 뒤 다음 단계로 진행했습니다. UI 도 bundled Chromium
+에서 실행됩니다. Grok/Antigravity 커맨드 셸 동작은 CLI 버전에 따라 달라질 수
+있습니다. issue 와 PR 환영합니다.
 
 프로젝트 문서: [기여 가이드](CONTRIBUTING.md) · [보안 정책](SECURITY.md) ·
 [변경 기록](CHANGELOG.md)

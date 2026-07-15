@@ -20,14 +20,14 @@
 
 ---
 
-## v0.4.0 新功能
+## v0.5.0 新功能
 
-- **直接用自然語言問** — `omnilane` 技能與 `/route` 可以推薦模型、指定廠商
-  諮詢，或鎖定標準模型家族，不會暗中換模型。
-- **即時看工作進度** — 通過驗證、全程唯讀的本機工作台，桌機與手機都能即時
-  顯示工作狀態、任務、路由判斷與公開結果。
-- **依工作調整防卡死時間** — 可用 `--timeout` 設定單次值、用
-  `OMNILANE_TIMEOUT_<LANE>` 設定單一通道，或用 `OMNILANE_TIMEOUT` 設定全域值。
+- **限制整個調查任務時間** — 選配的 `--job-timeout` 以同一個程序群組監工，
+  一次涵蓋等鎖、重試、所有評審與輪次。
+- **讓本機狀態安全且有上限** — job 工件只限擁有者讀取、嚴格驗證 metadata
+  與路徑、安全回收殘留鎖，並提供預設只預覽的 `jobs prune` 保留機制。
+- **直接診斷並驗證真實 runtime** — 唯讀 `omnilane doctor`、CI 內建 Chromium
+  行為測試、最小 workflow 權限，以及固定到 commit 的 GitHub Actions。
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -260,10 +260,10 @@ omnilane ui stop     # 正常停止
 
 ## 🌱 狀態
 
-v0.4.0 把經過審查的路由核心、自然語言諮詢與本機 Live UI 整合在一起。
-shell 核心已通過外部模型審查(11 項發現全修)與對抗式驗證;UI 具備 Python
-測試與真實瀏覽器行為檢查。Grok/Antigravity 指令殼行為仍可能隨 CLI 版本
-變動。歡迎回報 issue 與 PR。
+v0.5.0 強化安裝器、派工生命週期、job 儲存、鎖回收、整體截止時間、診斷與
+發布 CI。每個候選變更都分開整合，通過對抗式驗證與完整回歸後才進下一項；
+UI 也會在內建 Chromium 實跑。Grok/Antigravity 指令殼行為仍可能隨 CLI
+版本變動。歡迎回報 issue 與 PR。
 
 專案文件：[貢獻指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [變更紀錄](CHANGELOG.md)

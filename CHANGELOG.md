@@ -6,7 +6,46 @@ semantic version tags.
 
 ## [Unreleased]
 
-No released changes yet.
+No unreleased changes yet.
+
+## [0.5.0] - 2026-07-15
+
+### Added
+
+- Optional `--job-timeout` and per-lane/global environment controls for one
+  aggregate deadline across lock wait, retries, voters, and rounds.
+- Preview-first `jobs prune`, read-only `omnilane doctor`, executable gate
+  fallback, and explicit dispatch usage/environment validation.
+- Bundled-Chromium behavior CI, contribution and security policies, and this
+  durable changelog.
+
+### Changed
+
+- Job prompts, results, metadata, PID files, and logs now use owner-only storage
+  with bounded control-file parsing and complete JSON escaping.
+- Installer ownership rules preserve regular wrappers and symlinks belonging to
+  other checkouts; uninstall remains successful after provider removal.
+- Empty and invalid stale locks can be recovered without stealing a live owner.
+- GitHub Actions now use read-only permissions, stale-run cancellation, and
+  verified commit SHA pins.
+
+### Fixed
+
+- Rejected job-ID traversal, symlinked job stores and job directories,
+  malformed exit/PID metadata, unbounded PID reads, ambiguous dispatch
+  positionals, and invalid timeout/retry/lock controls.
+- The whole-job supervisor forwards signals, terminates TERM-ignoring process
+  groups, preserves normal exit status, and records timeout exit `124` for
+  foreground and background jobs.
+- Cross-browser mobile focus restoration tests now wait for the observable
+  focus state instead of racing the next animation frame.
+
+### Security
+
+- Prevented terminal-control injection through rejected control values and
+  diagnostic output.
+- Kept prompts and model answers out of world-readable job artifacts and
+  prevented local state commands from following foreign symlinks.
 
 ## [0.4.0] - 2026-07-15
 
@@ -61,7 +100,8 @@ No released changes yet.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Seraphim0916/omnilane/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Seraphim0916/omnilane/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Seraphim0916/omnilane/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Seraphim0916/omnilane/compare/v0.2.0...v0.2.1

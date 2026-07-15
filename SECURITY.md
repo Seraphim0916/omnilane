@@ -4,8 +4,8 @@
 
 | Version | Security fixes |
 |---|---|
-| 0.4.x | Supported |
-| 0.3.x and older | Upgrade to the latest release first |
+| 0.5.x | Supported |
+| 0.4.x and older | Upgrade to the latest release first |
 
 ## Reporting a vulnerability
 

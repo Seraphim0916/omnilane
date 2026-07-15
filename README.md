@@ -20,15 +20,16 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
-## What's new in v0.4.0
+## What's new in v0.5.0
 
-- **Ask in plain language** — the `omnilane` skill and `/route` can recommend
-  a model, consult a vendor, or pin a canonical model family without hiding a
-  fallback.
-- **Watch work live** — an authenticated, read-only local workbench streams
-  job state, tasks, routing decisions, and public results on desktop or mobile.
-- **Tune hang protection** — set a timeout once with `--timeout`, per lane with
-  `OMNILANE_TIMEOUT_<LANE>`, or globally with `OMNILANE_TIMEOUT`.
+- **Bound the whole investigation** — optional `--job-timeout` covers lock
+  wait, retries, voters, and rounds under one process-group supervisor.
+- **Keep local state safe and bounded** — owner-only job artifacts, strict
+  metadata/path validation, safe stale-lock recovery, and preview-first
+  `jobs prune` retention.
+- **Diagnose and verify the real runtime** — read-only `omnilane doctor`,
+  bundled-Chromium behavior tests in CI, least-privilege workflow permissions,
+  and commit-pinned GitHub Actions.
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -292,11 +293,11 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-v0.4.0 combines the reviewed routing core with natural-language consultation
-and the local Live UI. The shell core has passed external model review (11
-findings fixed) and adversarial verification; the UI is covered by Python tests
-and real-browser behavior checks. Grok/Antigravity command-shell behavior may
-still vary across CLI versions. Issues and PRs welcome.
+v0.5.0 hardens the installer, dispatch lifecycle, job store, lock recovery,
+aggregate deadlines, diagnostics, and release CI. Every candidate change was
+integrated separately and followed by adversarial and full-regression checks;
+the UI is also exercised in bundled Chromium. Grok/Antigravity command-shell
+behavior may still vary across CLI versions. Issues and PRs welcome.
 
 Project policies: [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
 [Changelog](CHANGELOG.md)
