@@ -66,6 +66,16 @@ parse_lane_segment() {
   [[ ${#PARSED_FIELDS[@]} -gt 0 ]]
 }
 
+routing_candidate_available() {
+  local vendor="$1" model="${2:-}" script
+  if [[ "$vendor" == "exec" ]]; then
+    script="${model/#\~/$HOME}"
+    [[ -n "$script" && -x "$script" ]]
+  else
+    vendor_available "$vendor"
+  fi
+}
+
 # Pick the first candidate whose vendor CLI is present ("off" always matches).
 # Sets RESOLVED_SPEC / RESOLVED_FIELDS / RESOLVED_IDX / RESOLVED_TOTAL.
 resolve_chain() {
@@ -86,10 +96,10 @@ resolve_chain() {
     if [[ -n "$requested_vendor" ]]; then
       [[ "$vendor" == "$requested_vendor" ]] || continue
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}"); RESOLVED_IDX="$i"
-      if vendor_available "$vendor"; then return 0; fi
+      if routing_candidate_available "$vendor" "${F[1]:-}"; then return 0; fi
       return 4
     fi
-    if [[ "$vendor" == "off" ]] || vendor_available "$vendor"; then
+    if [[ "$vendor" == "off" ]] || routing_candidate_available "$vendor" "${F[1]:-}"; then
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}")
       RESOLVED_IDX="$i"; return 0
     fi

@@ -188,6 +188,35 @@ EOF
   fi
 }
 
+test_exec_gate_fallback() {
+  local name="missing exec gate falls back" home gate out rc rc_missing
+  home="$TEST_ROOT/exec-fallback"; mkdir -p "$home"
+  gate="$home/working gate.sh"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'fallback worked\n' > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec "%s" - | exec "%s" -\n' "$home/missing gate.sh" "$gate" \
+    > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+  rc=$?
+  printf 'none: exec "%s" - | exec "%s" -\n' \
+    "$home/missing-one.sh" "$home/missing-two.sh" > "$home/routing.local.yaml"
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" none x \
+    > "$home/missing.out" 2>&1
+  rc_missing=$?
+
+  if [[ "$rc" -ne 0 || "$out" != "fallback worked" ]]; then
+    fail "$name" "working second gate was not selected (rc=$rc, out=$out)"
+  elif [[ "$rc_missing" -ne 4 ]]; then
+    fail "$name" "all-missing exec chain should be unavailable (4), got $rc_missing"
+  else
+    pass "$name"
+  fi
+}
+
 test_consult_lane_and_configurator() {
   local name="consult lane stays multi-vendor" home listed
   home="$TEST_ROOT/consult"; mkdir -p "$home"
@@ -381,6 +410,7 @@ test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_vendor_selector
+test_exec_gate_fallback
 test_consult_lane_and_configurator
 test_incomplete_marker_fails_closed
 test_install_uninstall_byte_reversible
