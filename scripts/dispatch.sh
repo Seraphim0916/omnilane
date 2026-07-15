@@ -284,7 +284,7 @@ finish_job() {
 
 run_job() {
   local rc=0
-  (umask 077; current_pid > "$JOB_DIR/pid")
+  write_current_pid_file "$JOB_DIR/pid"
   # Two concurrent codex exec in one target dir corrupt its job index — serialize.
   [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
   set +e

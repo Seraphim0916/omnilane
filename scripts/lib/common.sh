@@ -37,9 +37,22 @@ hash_str() { # stdin -> short stable token (sha256sum/shasum/cksum fallback)
   else cksum | cut -d' ' -f1; fi
 }
 
-current_pid() { # subshell-accurate PID; $BASHPID needs bash>=4, macOS ships 3.2
+current_pid() { # Call with direct redirection; command substitution records its short-lived shell.
   if [[ -n "${BASHPID:-}" ]]; then printf '%s' "$BASHPID"
   else (exec sh -c 'printf %s "$PPID"'); fi
+}
+
+write_current_pid_file() {
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  old_umask="$(umask)"
+  umask 077
+  current_pid > "$tmp" || rc=$?
+  umask "$old_umask"
+  if [[ "$rc" -ne 0 ]]; then
+    rm "$tmp" 2>/dev/null || true
+    return "$rc"
+  fi
+  mv "$tmp" "$path"
 }
 
 vendor_bin() { # vendor -> binary (honors local.sh overrides)
@@ -72,29 +85,117 @@ depth_guard() {
 
 # Same-cwd serial lock for codex: two concurrent `codex exec` in one repo
 # corrupt the job index and cross-pollute pytest. mkdir is the portable lock.
+read_lock_owner() {
+  local path="$1" size value length
+  local LC_ALL=C
+  LOCK_OWNER_VALUE=""
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  size="$(wc -c < "$path" | tr -d '[:space:]')" || return 2
+  [[ "$size" =~ ^[0-9]+$ && "$size" -le 11 ]] || return 2
+  value="$(cat "$path")" || return 2
+  length="${#value}"
+  [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
+  [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
+  LOCK_OWNER_VALUE="$value"
+}
+
+prepare_lock_store() {
+  local lock_root="$OMNILANE_HOME/locks"
+  mkdir -p "$OMNILANE_HOME"
+  if [[ -L "$lock_root" || ( -e "$lock_root" && ! -d "$lock_root" ) ]]; then
+    echo "omnilane: unsafe lock store path (want a real directory): $lock_root" >&2
+    exit 1
+  fi
+  [[ -d "$lock_root" ]] || mkdir -m 700 "$lock_root"
+  [[ -d "$lock_root" && ! -L "$lock_root" ]] || {
+    echo "omnilane: lock store changed while preparing it" >&2
+    exit 1
+  }
+  chmod 700 "$lock_root"
+}
+
+write_lock_owner() {
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  old_umask="$(umask)"
+  umask 077
+  current_pid > "$tmp" || rc=$?
+  umask "$old_umask"
+  if [[ "$rc" -eq 0 ]] && ln "$tmp" "$path" 2>/dev/null; then
+    rm "$tmp"
+    return 0
+  fi
+  rm "$tmp" 2>/dev/null || true
+  return 1
+}
+
 acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not $PWD
-  local vendor="$1" dir="${2:-$PWD}" key lockdir waited=0 owner
+  local vendor="$1" dir="${2:-$PWD}" key lockdir waited=0 owner owner_state
+  local empty_since=-1 empty_grace="${OMNILANE_LOCK_EMPTY_GRACE:-10}"
+  local lock_timeout="${OMNILANE_LOCK_TIMEOUT:-600}"
+  [[ "$empty_grace" =~ ^(0|[1-9][0-9]{0,5})$ ]] || {
+    echo "omnilane: invalid OMNILANE_LOCK_EMPTY_GRACE '$empty_grace'" >&2
+    exit 2
+  }
+  [[ "$lock_timeout" =~ ^[1-9][0-9]{0,5}$ ]] || {
+    echo "omnilane: invalid OMNILANE_LOCK_TIMEOUT '$lock_timeout'" >&2
+    exit 2
+  }
   dir="$(cd "$dir" 2>/dev/null && pwd -P)" || dir="$2"
   key="$(printf '%s' "$dir" | hash_str)-$vendor"
   lockdir="$OMNILANE_HOME/locks/$key"
-  mkdir -p "$OMNILANE_HOME/locks"
+  prepare_lock_store
   while ! mkdir "$lockdir" 2>/dev/null; do
     # Steal the lock if its owner is gone (crash / kill -9 leaves the dir behind).
-    owner="$(cat "$lockdir/pid" 2>/dev/null || true)"
-    if [[ -n "$owner" ]] && ! kill -0 "$owner" 2>/dev/null; then
-      rm "$lockdir/pid" 2>/dev/null || true
-      rmdir "$lockdir" 2>/dev/null || true
-      continue
+    owner=""
+    owner_state="empty"
+    if [[ -e "$lockdir/pid" || -L "$lockdir/pid" ]]; then
+      if read_lock_owner "$lockdir/pid"; then
+        owner="$LOCK_OWNER_VALUE"
+        owner_state="valid"
+      else
+        owner_state="invalid"
+      fi
     fi
-    sleep 2; waited=$((waited + 2))
-    if [[ "$waited" -ge "${OMNILANE_LOCK_TIMEOUT:-600}" ]]; then
+    if [[ "$owner_state" == "invalid" ]]; then
+      rm "$lockdir/pid" 2>/dev/null || true
+      if rmdir "$lockdir" 2>/dev/null; then
+        continue
+      fi
+    elif [[ "$owner_state" == "valid" ]] && ! kill -0 "$owner" 2>/dev/null; then
+      rm "$lockdir/pid" 2>/dev/null || true
+      if rmdir "$lockdir" 2>/dev/null; then
+        continue
+      fi
+    elif [[ "$owner_state" == "empty" ]]; then
+      [[ "$empty_since" -ge 0 ]] || empty_since="$waited"
+      if [[ $((waited - empty_since)) -ge "$empty_grace" ]]; then
+        # The creator normally writes pid immediately after mkdir. A lock that
+        # stays empty beyond the grace period is an interrupted acquisition.
+        rmdir "$lockdir" 2>/dev/null || true
+        empty_since=-1
+        continue
+      fi
+    else
+      empty_since=-1
+    fi
+    if [[ "$waited" -ge "$lock_timeout" ]]; then
       echo "omnilane: lock timeout for $vendor in $dir" >&2; exit 87
     fi
+    sleep 2; waited=$((waited + 2))
   done
   # Real subshell PID, not $$: in a backgrounded subshell $$ is the (soon-dead)
   # parent, which would make the live lock look stale and steal-able.
-  OMNILANE_LOCK_OWNER="$(current_pid)"
-  printf '%s' "$OMNILANE_LOCK_OWNER" > "$lockdir/pid"
+  # If an empty lock was reclaimed while this process was descheduled, never
+  # overwrite the replacement owner's PID when execution resumes.
+  if ! write_lock_owner "$lockdir/pid"; then
+    echo "omnilane: lost lock ownership for $vendor in $dir" >&2
+    exit 87
+  fi
+  read_lock_owner "$lockdir/pid" || {
+    echo "omnilane: invalid owner metadata after lock acquisition" >&2
+    exit 87
+  }
+  OMNILANE_LOCK_OWNER="$LOCK_OWNER_VALUE"
   OMNILANE_LOCKDIR="$lockdir"
   trap 'release_cwd_lock' EXIT
 }
@@ -103,7 +204,8 @@ release_cwd_lock() {
   [[ -n "${OMNILANE_LOCKDIR:-}" ]] || return 0
   # Only the recorded owner may remove the lock — a stale-steal may have
   # handed this path to a newer job.
-  [[ "$(cat "$OMNILANE_LOCKDIR/pid" 2>/dev/null)" == "${OMNILANE_LOCK_OWNER:-}" ]] || return 0
+  read_lock_owner "$OMNILANE_LOCKDIR/pid" || return 0
+  [[ "$LOCK_OWNER_VALUE" == "${OMNILANE_LOCK_OWNER:-}" ]] || return 0
   rm "$OMNILANE_LOCKDIR/pid" 2>/dev/null || true
   rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true
 }

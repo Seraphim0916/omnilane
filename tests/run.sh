@@ -3,7 +3,7 @@ set -u
 
 # Tests own their dispatch environment. Inherited recursion guards or watchdog
 # overrides must not turn a healthy suite into a host-dependent false failure.
-unset OMNILANE_DEPTH OMNILANE_TIMEOUT
+unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
 for inherited_timeout in "${!OMNILANE_TIMEOUT_@}"; do
   unset "$inherited_timeout"
 done
@@ -496,6 +496,180 @@ EOF
   fi
 }
 
+test_empty_lock_recovery_preserves_live_owner() {
+  local name="empty lock recovery preserves live owner" home workdir canonical key lockdir empty_out invalid_out
+  local rc_empty rc_invalid rc_live
+  home="$TEST_ROOT/empty-lock"; workdir="$home/work"
+  mkdir -p "$home/locks" "$workdir"
+  canonical="$(cd "$workdir" && pwd -P)"
+  key="$(printf '%s' "$canonical" | /bin/bash -c \
+    'source "$1"; hash_str' _ "$ROOT/scripts/lib/common.sh")-codex"
+  lockdir="$home/locks/$key"
+
+  mkdir "$lockdir"
+  empty_out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"; printf acquired' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)"
+  rc_empty=$?
+
+  mkdir "$lockdir"
+  printf '%s\n' '-1' > "$lockdir/pid"
+  invalid_out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"; printf acquired' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)"
+  rc_invalid=$?
+
+  mkdir "$lockdir"
+  printf '%s\n' "$$" > "$lockdir/pid"
+  OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=2 \
+    /bin/bash -c 'source "$1"; acquire_cwd_lock codex "$2"' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" > "$home/live.out" 2>&1
+  rc_live=$?
+
+  if [[ "$rc_empty" -ne 0 || "$empty_out" != "acquired" ]]; then
+    fail "$name" "empty lock was not reclaimed (rc=$rc_empty, out=$empty_out)"
+  elif [[ "$rc_invalid" -ne 0 || "$invalid_out" != "acquired" ]]; then
+    fail "$name" "invalid PID lock was not reclaimed (rc=$rc_invalid, out=$invalid_out)"
+  elif [[ -d "$lockdir" && ! -f "$lockdir/pid" ]]; then
+    fail "$name" "empty lock remained after successful acquisition"
+  elif [[ "$rc_live" -ne 87 ]]; then
+    fail "$name" "live owner's lock should time out with 87, got $rc_live"
+  elif [[ ! -f "$lockdir/pid" || "$(cat "$lockdir/pid")" != "$$" ]]; then
+    fail "$name" "live owner's lock was modified"
+  else
+    pass "$name"
+  fi
+  [[ ! -f "$lockdir/pid" ]] || /bin/rm "$lockdir/pid"
+  rmdir "$lockdir" 2>/dev/null || true
+}
+
+test_lock_inputs_and_store_fail_closed() {
+  local name="lock inputs and store fail closed" home workdir foreign gate value rc key lockdir out
+  local invalid_ok=1
+  name="lock inputs and store fail closed"
+  home="$TEST_ROOT/lock-boundaries"
+  workdir="$home/work"
+  mkdir -p "$home" "$workdir"
+
+  for value in 08 -1 1000000 nope; do
+    OMNILANE_HOME="$home/grace-$value" OMNILANE_LOCK_EMPTY_GRACE="$value" \
+      OMNILANE_LOCK_TIMEOUT=2 /bin/bash -c \
+      'source "$1"; acquire_cwd_lock codex "$2"' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" >/dev/null 2>&1
+    rc=$?
+    [[ "$rc" -eq 2 ]] || invalid_ok=0
+  done
+  for value in 0 08 -1 1000000 nope; do
+    OMNILANE_HOME="$home/timeout-$value" OMNILANE_LOCK_EMPTY_GRACE=0 \
+      OMNILANE_LOCK_TIMEOUT="$value" /bin/bash -c \
+      'source "$1"; acquire_cwd_lock codex "$2"' \
+      _ "$ROOT/scripts/lib/common.sh" "$workdir" >/dev/null 2>&1
+    rc=$?
+    [[ "$rc" -eq 2 ]] || invalid_ok=0
+  done
+
+  foreign="$home/foreign"
+  mkdir -p "$home/symlink-home" "$foreign"
+  ln -s "$foreign" "$home/symlink-home/locks"
+  OMNILANE_HOME="$home/symlink-home" OMNILANE_LOCK_EMPTY_GRACE=0 \
+    OMNILANE_LOCK_TIMEOUT=2 /bin/bash -c \
+    'source "$1"; acquire_cwd_lock codex "$2"' \
+    _ "$ROOT/scripts/lib/common.sh" "$workdir" >/dev/null 2>&1
+  rc=$?
+
+  mkdir -p "$home/large-owner/locks"
+  key="$(printf '%s' "$(cd "$workdir" && pwd -P)" | /bin/bash -c \
+    'source "$1"; hash_str' _ "$ROOT/scripts/lib/common.sh")-codex"
+  lockdir="$home/large-owner/locks/$key"
+  mkdir "$lockdir"
+  head -c 100000 /dev/zero | tr '\0' 9 > "$lockdir/pid"
+  out="$(OMNILANE_HOME="$home/large-owner" OMNILANE_LOCK_EMPTY_GRACE=0 \
+    OMNILANE_LOCK_TIMEOUT=2 /bin/bash -c \
+    'source "$1"; acquire_cwd_lock codex "$2"; printf acquired' \
+    _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)"
+
+  if [[ "$invalid_ok" -ne 1 ]]; then
+    fail "$name" "an invalid grace/timeout value was accepted"
+  elif [[ "$rc" -ne 1 ]]; then
+    fail "$name" "symlink lock store should exit 1, got $rc"
+  elif find "$foreign" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "lock acquisition wrote through a foreign symlink"
+  elif [[ "$out" != "acquired" ]]; then
+    fail "$name" "oversized owner metadata was not reclaimed safely: $out"
+  else
+    pass "$name"
+  fi
+}
+
+test_lock_serializes_live_bash32_owner() {
+  local name="lock serializes live Bash 3.2 owner" home workdir first_pid start elapsed
+  name="lock serializes live Bash 3.2 owner"
+  home="$TEST_ROOT/lock-serialization"
+  workdir="$home/work"
+  mkdir -p "$workdir"
+
+  OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=0 OMNILANE_LOCK_TIMEOUT=10 \
+    /bin/bash -c \
+    'source "$1"; acquire_cwd_lock codex "$2"; printf first-acquired; sleep 3' \
+    _ "$ROOT/scripts/lib/common.sh" "$workdir" > "$home/first.out" 2>&1 &
+  first_pid=$!
+  sleep 1
+  start=$SECONDS
+  OMNILANE_HOME="$home" OMNILANE_LOCK_EMPTY_GRACE=2 OMNILANE_LOCK_TIMEOUT=10 \
+    /bin/bash -c \
+    'source "$1"; acquire_cwd_lock codex "$2"; printf second-acquired' \
+    _ "$ROOT/scripts/lib/common.sh" "$workdir" > "$home/second.out" 2>&1
+  elapsed=$((SECONDS - start))
+  wait "$first_pid"
+
+  if [[ "$elapsed" -lt 2 ]]; then
+    fail "$name" "second owner bypassed a live lock (waited ${elapsed}s)"
+  elif [[ "$(cat "$home/first.out")" != "first-acquired" ||
+          "$(cat "$home/second.out")" != "second-acquired" ]]; then
+    fail "$name" "one of the serialized owners failed"
+  else
+    pass "$name"
+  fi
+}
+
+test_background_job_records_live_worker_pid() {
+  local name="background job records live worker PID" home workdir gate job_id job_dir deadline pid
+  local running done pid_live=0
+  home="$TEST_ROOT/live-worker-pid"
+  workdir="$home/work"
+  gate="$home/gate.sh"
+  mkdir -p "$home" "$workdir"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+sleep 3
+printf 'finished\n' > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec %s -\n' "$gate" > "$home/routing.local.yaml"
+
+  job_id="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" \
+    --background --workdir "$workdir" probe x)"
+  job_dir="$home/jobs/$job_id"
+  deadline=$((SECONDS + 5))
+  while [[ ! -s "$job_dir/pid" && "$SECONDS" -lt "$deadline" ]]; do sleep 1; done
+  pid="$(cat "$job_dir/pid" 2>/dev/null || true)"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pid_live=1
+  running="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
+  deadline=$((SECONDS + 10))
+  while [[ ! -f "$job_dir/exit" && "$SECONDS" -lt "$deadline" ]]; do sleep 1; done
+  done="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
+
+  if [[ "$pid_live" -ne 1 ]]; then
+    fail "$name" "recorded worker PID was not live"
+  elif [[ "$running" != "running" ]]; then
+    fail "$name" "live job status was not running: $running"
+  elif [[ "$done" != "done exit=0" ]]; then
+    fail "$name" "finished job status was not done: $done"
+  else
+    pass "$name"
+  fi
+}
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -783,6 +957,10 @@ test_jobs_cli_contains_malformed_public_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata
 test_dispatch_rejects_symlink_job_store
+test_empty_lock_recovery_preserves_live_owner
+test_lock_inputs_and_store_fail_closed
+test_lock_serializes_live_bash32_owner
+test_background_job_records_live_worker_pid
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks
