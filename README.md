@@ -20,6 +20,16 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.4.0
+
+- **Ask in plain language** — the `omnilane` skill and `/route` can recommend
+  a model, consult a vendor, or pin a canonical model family without hiding a
+  fallback.
+- **Watch work live** — an authenticated, read-only local workbench streams
+  job state, tasks, routing decisions, and public results on desktop or mobile.
+- **Tune hang protection** — set a timeout once with `--timeout`, per lane with
+  `OMNILANE_TIMEOUT_<LANE>`, or globally with `OMNILANE_TIMEOUT`.
+
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # finds your CLIs, links the skill, speaks your language
@@ -204,12 +214,22 @@ lock timeout; otherwise the worker's own exit code passes through.
 
 ## 🖥️ Live UI
 
-The Live UI is an optional local observer; core routing does not need Python,
-and only this UI requires Python 3.9 or newer. It binds only to `127.0.0.1`,
-uses a random token, and is read-only. The board shows each job's task
-(`task.txt`) and public result (`out.txt`), but never raw worker or vendor logs.
-Start it explicitly with `omnilane ui start`, and run `omnilane ui stop` when
-you are finished.
+The Live UI is an optional local workbench; core routing does not need Python,
+and only this UI requires Python 3.9 or newer.
+
+```bash
+omnilane ui start    # start or reuse the server and print its authenticated URL
+omnilane ui status   # inspect the local server
+omnilane ui url      # print the current authenticated URL
+omnilane ui stop     # stop it cleanly
+```
+
+The desktop view keeps the job list and detail pane independently scrollable;
+mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
+stream updates without replacing focused rows, and a short disconnect keeps the
+last snapshot while reconnecting. It binds only to `127.0.0.1`, uses a random
+token, and is read-only. It shows `task.txt` and the public `out.txt`, but never
+raw worker or vendor logs.
 
 ## 🎭 Modes
 
@@ -262,7 +282,8 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-Early but reviewed: the shell core has been through an external model review
-(11 findings fixed) plus an adversarial verification pass. Runner interfaces
-are stable; Grok/Antigravity command-shell behavior may vary across CLI
-versions. Issues and PRs welcome.
+v0.4.0 combines the reviewed routing core with natural-language consultation
+and the local Live UI. The shell core has passed external model review (11
+findings fixed) and adversarial verification; the UI is covered by Python tests
+and real-browser behavior checks. Grok/Antigravity command-shell behavior may
+still vary across CLI versions. Issues and PRs welcome.
