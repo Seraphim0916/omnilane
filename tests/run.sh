@@ -182,6 +182,61 @@ EOF
   fi
 }
 
+test_dispatch_validate_routing_contract() {
+  local name="dispatch validates routing table offline" home gate marker out rc
+  local invalid rc_invalid duplicate rc_duplicate malformed rc_malformed
+  local unreachable rc_unreachable
+  name="dispatch validates routing table offline"
+  home="$TEST_ROOT/dispatch-validate"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$VALIDATE_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
+    > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    VALIDATE_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --validate 2>&1)"
+  rc=$?
+  printf 'bad: mystery model low\n' > "$home/routing.local.yaml"
+  invalid="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --validate 2>&1)"
+  rc_invalid=$?
+  printf 'dupe: off - -\ndupe: off - -\n' > "$home/routing.local.yaml"
+  duplicate="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --validate 2>&1)"
+  rc_duplicate=$?
+  printf 'broken: exec "unterminated -\n' > "$home/routing.local.yaml"
+  malformed="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --validate 2>&1)"
+  rc_malformed=$?
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unreachable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --validate 2>&1)"
+  rc_unreachable=$?
+
+  if [[ "$rc" -ne 0 || "$out" != *"PASS probe selected=2/2 vendor=exec"* ]]; then
+    fail "$name" "valid fallback table was not accepted: rc=$rc out=$out"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "validation executed work or created job state"
+  elif [[ "$rc_invalid" -ne 2 || "$invalid" != *"FAIL bad unknown-vendor=mystery"* ]]; then
+    fail "$name" "unknown vendor was not rejected: $invalid"
+  elif [[ "$rc_duplicate" -ne 2 || "$duplicate" != *"FAIL dupe duplicate-lane"* ]]; then
+    fail "$name" "duplicate local lane was not rejected: $duplicate"
+  elif [[ "$rc_malformed" -ne 2 || "$malformed" != *"FAIL broken candidate=1 malformed-quotes"* ]]; then
+    fail "$name" "malformed quotes were not rejected: $malformed"
+  elif [[ "$rc_unreachable" -ne 4 || "$unreachable" != *"WARN offline no-candidate-available"* ]]; then
+    fail "$name" "unreachable lane was not a diagnostic exit 4: $unreachable"
+  else
+    pass "$name"
+  fi
+}
+
 test_depth_and_grok_retry_env_validation() {
   local name="depth and Grok retry env validation" home gate fake prompt marker out
   local rc_depth_text rc_depth_negative rc_depth_control rc_nested rc_valid value rc_bad rc_control
@@ -1792,6 +1847,7 @@ test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_dispatch_positional_usage_contract
+test_dispatch_validate_routing_contract
 test_depth_and_grok_retry_env_validation
 test_vendor_selector
 test_exec_gate_fallback

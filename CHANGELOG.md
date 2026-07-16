@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `dispatch.sh --validate` checks the effective routing table for duplicate
+  lanes, malformed candidates, unknown vendors, and machine-local reachability
+  without invoking a provider.
+
 ### Changed
 
 - Redesigned all five READMEs: a 60-second quickstart section, the feature

@@ -216,6 +216,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
 dispatch.sh --list
+dispatch.sh --validate                              # 공급자 호출 없이 실효 라우팅 검사
 jobs.sh list | status ID | result ID
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
 configure.sh                                        # 대화형 레인 메뉴

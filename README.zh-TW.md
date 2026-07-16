@@ -205,6 +205,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任務"                              # "-" 表示從 stdin 讀任務
 dispatch.sh --list
+dispatch.sh --validate                              # 離線檢查生效路由，不呼叫模型
 jobs.sh list | status 工作ID | result 工作ID
 jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 configure.sh                                        # 互動通道選單
