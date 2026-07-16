@@ -1362,6 +1362,38 @@ EOF
   fi
 }
 
+test_lock_owner_read_race_is_silent() {
+  local name="lock owner read race is silent" home fake_cat pid_file marker err rc
+  name="lock owner read race is silent"
+  home="$TEST_ROOT/lock-owner-read-race"
+  fake_cat="$home/bin/cat"
+  pid_file="$home/pid"
+  marker="$home/cat-used"
+  mkdir -p "$home/bin"
+  printf '12345' > "$pid_file"
+  cat > "$fake_cat" <<'EOF'
+#!/bin/sh
+printf used > "$FAKE_CAT_MARKER"
+exec /bin/cat "$1.missing"
+EOF
+  chmod +x "$fake_cat"
+
+  err="$(FAKE_CAT_MARKER="$marker" PATH="$home/bin:$PATH" /bin/bash -c \
+    'source "$1"; read_lock_owner "$2"' \
+    _ "$ROOT/scripts/lib/common.sh" "$pid_file" 2>&1)"
+  rc=$?
+
+  if [[ ! -f "$marker" ]]; then
+    fail "$name" "test fixture did not intercept cat"
+  elif [[ -n "$err" ]]; then
+    fail "$name" "transient race leaked diagnostic output: $err"
+  elif [[ "$rc" -ne 2 ]]; then
+    fail "$name" "expected transient read failure 2, got $rc"
+  else
+    pass "$name"
+  fi
+}
+
 test_lock_serializes_live_bash32_owner() {
   local name="lock serializes live Bash 3.2 owner" home workdir first_pid start elapsed
   name="lock serializes live Bash 3.2 owner"
@@ -1806,6 +1838,7 @@ test_private_job_artifacts_and_valid_metadata
 test_dispatch_rejects_symlink_job_store
 test_empty_lock_recovery_preserves_live_owner
 test_lock_inputs_and_store_fail_closed
+test_lock_owner_read_race_is_silent
 test_lock_serializes_live_bash32_owner
 test_background_job_records_live_worker_pid
 test_job_timeout_resolution_and_safety
