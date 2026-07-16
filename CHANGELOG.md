@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- The Live Board can pin one loaded job as a memory-only reference and compare
+  its route and public result with the current selection. Comparison remains
+  local, read-only, responsive, and plain-text safe.
+
 ### Changed
 
 - Redesigned all five READMEs: a 60-second quickstart section, the feature

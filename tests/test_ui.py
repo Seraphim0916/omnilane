@@ -967,6 +967,50 @@ class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
         )
         self.assertLessEqual(distance, 2)
 
+    def test_compare_pins_reference_snapshot_and_renders_untrusted_output_as_text(self):
+        newest = self.jobs / self.job_ids[-1]
+        (newest / "out.txt").write_text(
+            '<img src=x onerror="window.__compareInjected=true">COMPARE-CANARY',
+            encoding="utf-8",
+        )
+        self.open_board(1440, 900)
+
+        selected = self.page.locator("#selected-job-id").text_content()
+        self.assertEqual(self.job_ids[-1], selected)
+        reference_state = self.page.locator("#selected-job-state").text_content()
+        compare_button = self.page.locator("#compare-toggle")
+        self.page.wait_for_function(
+            "() => document.querySelector('#compare-toggle').disabled === false"
+        )
+        compare_button.click()
+        self.assertEqual("true", compare_button.get_attribute("aria-pressed"))
+        self.assertIn(selected, self.page.locator("#compare-reference-label").text_content())
+
+        current = self.job_ids[-2]
+        self.page.locator('.job-card[data-job-id="{}"]'.format(current)).click()
+        panel = self.page.locator("#compare-panel")
+        panel.wait_for(state="visible")
+        self.assertEqual(selected, self.page.locator("#compare-reference-id").text_content())
+        self.assertEqual(current, self.page.locator("#compare-current-id").text_content())
+        self.assertEqual("hard-judgment", self.page.locator("#compare-reference-lane").text_content())
+        self.assertEqual("triage", self.page.locator("#compare-current-lane").text_content())
+        self.assertIn("COMPARE-CANARY", self.page.locator("#compare-reference-output").text_content())
+        self.assertEqual(0, panel.locator("img").count())
+        self.assertIsNone(self.page.evaluate("window.__compareInjected || null"))
+
+        (newest / "out.txt").write_text("MUTATED-AFTER-PIN", encoding="utf-8")
+        (newest / "exit").write_text("7", encoding="ascii")
+        self.page.locator('.job-card[data-job-id="{}"]'.format(selected)).locator(
+            ".card-state"
+        ).filter(has_text="failed").wait_for()
+        self.assertEqual(reference_state, self.page.locator("#compare-reference-state").text_content())
+        self.assertIn("COMPARE-CANARY", self.page.locator("#compare-reference-output").text_content())
+        self.assertNotIn("MUTATED-AFTER-PIN", self.page.locator("#compare-reference-output").text_content())
+
+        self.page.locator("#compare-clear").click()
+        self.assertTrue(panel.is_hidden())
+        self.assertEqual("false", compare_button.get_attribute("aria-pressed"))
+
 
 class FrontendContractTests(unittest.TestCase):
     def setUp(self):
@@ -1023,6 +1067,21 @@ class FrontendContractTests(unittest.TestCase):
         declared = set(re.findall(r'\bid="([A-Za-z0-9_-]+)"', self.html))
         self.assertTrue(referenced)
         self.assertEqual(set(), referenced - declared)
+
+    def test_compare_contract_is_read_only_accessible_and_memory_scoped(self):
+        for literal in (
+            'id="compare-toggle"',
+            'aria-controls="compare-panel"',
+            'id="compare-panel"',
+            'id="compare-clear"',
+            'id="compare-reference-output"',
+            'id="compare-current-output"',
+        ):
+            self.assertIn(literal, self.html)
+        self.assertIn("compareReference", self.javascript)
+        self.assertIn("renderCompare", self.javascript)
+        self.assertNotIn("sessionStorage.setItem(\"omnilane.live-ui.compare", self.javascript)
+        self.assertNotRegex(self.javascript, r'fetch\([^\n]+(?:POST|PUT|PATCH|DELETE)')
 
 
 if __name__ == "__main__":

@@ -160,9 +160,11 @@ omnilane ui stop     # stop it cleanly
 The desktop view keeps the job list and detail pane independently scrollable;
 mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
 stream updates without replacing focused rows, and a short disconnect keeps the
-last snapshot while reconnecting. It binds only to `127.0.0.1`, uses a random
-token, and is read-only. It shows `task.txt` and the public `out.txt`, but never
-raw worker or vendor logs.
+last snapshot while reconnecting. Pin any loaded task as a reference, then
+select another task to compare both model paths and public results side by side.
+The reference is memory-only and disappears when the page closes. The board
+binds only to `127.0.0.1`, uses a random token, and is read-only. It shows
+`task.txt` and the public `out.txt`, but never raw worker or vendor logs.
 
 Core routing does not need Python; only this UI requires Python 3.9 or newer.
 
