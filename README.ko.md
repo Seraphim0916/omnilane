@@ -20,14 +20,15 @@
 
 ---
 
-## v0.5.0 새 기능
+## v0.5.1 새 기능
 
-- **조사 전체 시간 제한** — 선택형 `--job-timeout` 이 락 대기, 재시도,
-  모든 투표자와 라운드를 하나의 process group 감독 아래 제한합니다.
-- **로컬 상태를 안전하고 유한하게 유지** — 소유자 전용 잡 파일, 엄격한
-  metadata/경로 검증, 안전한 잔여 락 회수, 미리보기 우선 `jobs prune`.
-- **실제 runtime 진단과 검증** — 읽기 전용 `omnilane doctor`, CI bundled
-  Chromium 동작 테스트, 최소 workflow 권한, commit 고정 GitHub Actions.
+- **Git 저장소 밖에서 Codex work 사용** — 일반 디렉터리를 계속 지원하며
+  Omnilane 은 `git init` 을 요구하거나 자동 실행하지 않습니다.
+- **비 Git 멈춤을 안전하게 종료** — 전체 상한이 없으면 결정된 호출별 워치독을
+  process group 퓨즈로 사용하고, 명시한 timeout 우선순위와 종료 코드 의미는
+  그대로 유지합니다.
+- **표시 버전을 신뢰 가능하게 유지** — `VERSION` 이 `omnilane --version` 과 두
+  plugin manifest 를 통일하며 CI 가 변경 기록과 5개 언어 README 를 검사합니다.
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -267,11 +268,11 @@ omnilane ui stop     # 정상 중지
 
 ## 🌱 상태
 
-v0.5.0 은 설치 프로그램, 디스패치 수명주기, 잡 저장소, 락 회수, 전체 잡
-마감시간, 진단, 릴리스 CI 를 강화합니다. 각 후보 변경은 따로 통합하고 적대적
-검증과 전체 회귀를 통과한 뒤 다음 단계로 진행했습니다. UI 도 bundled Chromium
-에서 실행됩니다. Grok/Antigravity 커맨드 셸 동작은 CLI 버전에 따라 달라질 수
-있습니다. issue 와 PR 환영합니다.
+v0.5.1 은 Git 저장소 밖에서도 Codex `work` 를 사용할 수 있게 유지하고 process
+group 정리로 멈춤을 제한하며 모든 공개 버전 정보를 동기화합니다. v0.5.0 의 설치
+프로그램, 디스패치 수명주기, 잡 저장소, 전체 기한, 진단, 릴리스 CI 강화도 그대로
+유지합니다. Grok/Antigravity 커맨드 셸 동작은 CLI 버전에 따라 달라질 수 있습니다.
+issue 와 PR 환영합니다.
 
 프로젝트 문서: [기여 가이드](CONTRIBUTING.md) · [보안 정책](SECURITY.md) ·
 [변경 기록](CHANGELOG.md)

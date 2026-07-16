@@ -20,14 +20,15 @@
 
 ---
 
-## v0.5.0 の新機能
+## v0.5.1 の新機能
 
-- **調査全体の時間を制限** — 任意の `--job-timeout` が、ロック待ち、
-  リトライ、全投票者・ラウンドを一つの process group 監視下で制限します。
-- **ローカル状態を安全かつ有界に** — 所有者限定のジョブ成果物、厳格な
-  metadata／パス検証、安全な残留ロック回収、プレビュー優先の `jobs prune`。
-- **実 runtime を診断・検証** — 読み取り専用 `omnilane doctor`、CI の
-  bundled Chromium 動作テスト、最小 workflow 権限、commit 固定 Actions。
+- **Git 管理外で Codex work を利用** — 通常のディレクトリを引き続きサポートし、
+  Omnilane は `git init` を要求も自動実行もしません。
+- **非 Git の停止を安全に処理** — 全体上限が未設定なら、解決済みの呼び出し単位
+  ウォッチドッグを process group ヒューズとして使い、明示設定の優先順位と終了
+  コードの意味は維持します。
+- **表示バージョンを信頼可能に** — `VERSION` が `omnilane --version` と二つの
+  plugin manifest を統一し、CI が変更履歴と五言語 README の一致を検査します。
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -275,11 +276,11 @@ omnilane ui stop     # 正常に停止
 
 ## 🌱 ステータス
 
-v0.5.0 はインストーラー、ディスパッチのライフサイクル、ジョブストア、
-ロック回収、ジョブ全体の期限、診断、リリース CI を強化します。各候補は個別に
-統合し、敵対的検証と完全回帰を通過してから次へ進みました。UI も bundled
-Chromium で実行されます。Grok/Antigravity のコマンドシェル挙動は CLI
-バージョンで変わる可能性があります。issue と PR を歓迎します。
+v0.5.1 は Git 管理外でも Codex `work` を利用可能に保ち、process group の
+クリーンアップで停止を制限し、公開バージョン情報を同期します。v0.5.0 の
+インストーラー、ライフサイクル、ジョブストア、期限、診断、リリース CI の
+強化も維持します。Grok/Antigravity のコマンドシェル挙動は CLI バージョンで
+変わる可能性があります。issue と PR を歓迎します。
 
 プロジェクト文書：[コントリビューション](CONTRIBUTING.md) ·
 [セキュリティ](SECURITY.md) · [変更履歴](CHANGELOG.md)

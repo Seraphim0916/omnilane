@@ -6,7 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
-### Changed
+No unreleased changes yet.
+
+## [0.5.1] - 2026-07-16
+
+### Added
+
+- A root `VERSION` source of truth, `omnilane --version`, and CI regression
+  coverage that keeps both plugin manifests, the changelog, and all five README
+  headings aligned.
+
+### Fixed
 
 - Codex `work` remains available outside Git worktrees. When no whole-job
   timeout is configured, Omnilane now reuses the resolved per-call watchdog as
@@ -107,7 +117,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Seraphim0916/omnilane/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Seraphim0916/omnilane/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Seraphim0916/omnilane/compare/v0.2.1...v0.3.0

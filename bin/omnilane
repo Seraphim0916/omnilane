@@ -8,6 +8,18 @@ REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 cmd="${1:-help}"; shift || true
 case "$cmd" in
+  version|--version|-V)
+    [[ -r "$REPO/VERSION" ]] || {
+      echo "omnilane: VERSION file is unavailable" >&2
+      exit 1
+    }
+    version="$(<"$REPO/VERSION")"
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+      echo "omnilane: invalid VERSION file" >&2
+      exit 1
+    }
+    printf 'omnilane %s\n' "$version"
+    ;;
   list)      exec bash "$REPO/scripts/dispatch.sh" --list ;;
   route|dispatch) exec bash "$REPO/scripts/dispatch.sh" "$@" ;;
   jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
@@ -24,6 +36,7 @@ case "$cmd" in
     cat <<'EOF'
 omnilane — one routing table, every harness
 
+  omnilane version                      installed release version
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model

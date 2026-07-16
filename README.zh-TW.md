@@ -20,14 +20,14 @@
 
 ---
 
-## v0.5.0 新功能
+## v0.5.1 新功能
 
-- **限制整個調查任務時間** — 選配的 `--job-timeout` 以同一個程序群組監工，
-  一次涵蓋等鎖、重試、所有評審與輪次。
-- **讓本機狀態安全且有上限** — job 工件只限擁有者讀取、嚴格驗證 metadata
-  與路徑、安全回收殘留鎖，並提供預設只預覽的 `jobs prune` 保留機制。
-- **直接診斷並驗證真實 runtime** — 唯讀 `omnilane doctor`、CI 內建 Chromium
-  行為測試、最小 workflow 權限，以及固定到 commit 的 GitHub Actions。
+- **在非 Git 目錄使用 Codex work** — 一般資料夾仍完整支援；Omnilane 不要求、
+  也絕不會自動執行 `git init`。
+- **乾淨停止非 Git 卡死** — 未設定整體上限時，解析後的單次看門狗會自動成為
+  程序群組保險絲，同時保留手動 timeout 的優先序與退出碼語意。
+- **讓版本顯示可信** — `VERSION` 現在統一供應 `omnilane --version` 與兩份
+  plugin manifest，CI 會檢查變更紀錄和五語 README 是否一致。
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -266,10 +266,10 @@ omnilane ui stop     # 正常停止
 
 ## 🌱 狀態
 
-v0.5.0 強化安裝器、派工生命週期、job 儲存、鎖回收、整體截止時間、診斷與
-發布 CI。每個候選變更都分開整合，通過對抗式驗證與完整回歸後才進下一項；
-UI 也會在內建 Chromium 實跑。Grok/Antigravity 指令殼行為仍可能隨 CLI
-版本變動。歡迎回報 issue 與 PR。
+v0.5.1 讓 Codex `work` 在非 Git 目錄仍可使用，同時以程序群組清理限制卡死，
+並同步所有公開版本來源。它延續 v0.5.0 對安裝器、派工生命週期、job 儲存、
+整體截止時間、診斷與發布 CI 的強化。Grok/Antigravity 指令殼行為仍可能隨
+CLI 版本變動。歡迎回報 issue 與 PR。
 
 專案文件：[貢獻指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [變更紀錄](CHANGELOG.md)

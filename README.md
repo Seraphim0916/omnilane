@@ -20,16 +20,15 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
-## What's new in v0.5.0
+## What's new in v0.5.1
 
-- **Bound the whole investigation** — optional `--job-timeout` covers lock
-  wait, retries, voters, and rounds under one process-group supervisor.
-- **Keep local state safe and bounded** — owner-only job artifacts, strict
-  metadata/path validation, safe stale-lock recovery, and preview-first
-  `jobs prune` retention.
-- **Diagnose and verify the real runtime** — read-only `omnilane doctor`,
-  bundled-Chromium behavior tests in CI, least-privilege workflow permissions,
-  and commit-pinned GitHub Actions.
+- **Use Codex work outside Git** — ordinary directories remain supported;
+  Omnilane never requires or runs `git init`.
+- **Stop non-Git hangs cleanly** — the resolved per-call watchdog becomes an
+  automatic process-group fuse when no whole-job timeout was configured, while
+  explicit timeout precedence and exit semantics remain intact.
+- **Trust the displayed version** — `VERSION` now drives `omnilane --version`
+  and both plugin manifests, with CI checking the changelog and all five READMEs.
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
@@ -300,11 +299,11 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-v0.5.0 hardens the installer, dispatch lifecycle, job store, lock recovery,
-aggregate deadlines, diagnostics, and release CI. Every candidate change was
-integrated separately and followed by adversarial and full-regression checks;
-the UI is also exercised in bundled Chromium. Grok/Antigravity command-shell
-behavior may still vary across CLI versions. Issues and PRs welcome.
+v0.5.1 keeps Codex `work` usable outside Git while bounding stalls with
+process-group cleanup, and synchronizes every public version surface. It builds
+on v0.5.0's installer, lifecycle, job-store, deadline, diagnostics, and release
+CI hardening. Grok/Antigravity command-shell behavior may still vary across CLI
+versions. Issues and PRs welcome.
 
 Project policies: [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
 [Changelog](CHANGELOG.md)
