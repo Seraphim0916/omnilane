@@ -13,6 +13,8 @@ semantic version tags.
 - `dispatch.sh --validate` checks the effective routing table for duplicate
   lanes, malformed candidates, unknown vendors, and machine-local reachability
   without invoking a provider.
+- `jobs.sh stats [--last N]` summarizes local job outcomes and lane/vendor
+  distribution from bounded public metadata without reading task or result bodies.
 
 ### Changed
 

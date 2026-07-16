@@ -227,6 +227,7 @@ dispatch.sh --list
 dispatch.sh --explain LANE                          # offline candidate-by-candidate decision trace
 dispatch.sh --validate                              # lint effective routing; no provider calls
 jobs.sh list | status ID | result ID
+jobs.sh stats [--last N]                           # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 ```

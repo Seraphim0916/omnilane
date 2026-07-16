@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # omnilane background-job helper.
-# Usage: jobs.sh list | status JOB_ID | result JOB_ID
+# Usage: jobs.sh list | status JOB_ID | result JOB_ID | stats [--last N]
 #        jobs.sh prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
@@ -9,7 +9,7 @@ JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 
 usage() {
-  echo "usage: jobs.sh list|status ID|result ID|prune [--keep N] [--apply]" >&2
+  echo "usage: jobs.sh list|status ID|result ID|stats [--last N]|prune [--keep N] [--apply]" >&2
   exit 2
 }
 
@@ -83,9 +83,99 @@ read_job_pid() {
   RECORDED_PID="$value"
 }
 
+parse_stats_metadata() {
+  local value="$1"
+  local metadata_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|exec)"(,|})'
+  STATS_LANE=""
+  STATS_VENDOR=""
+  [[ "$value" =~ $metadata_re ]] || return 1
+  STATS_LANE="${BASH_REMATCH[1]}"
+  STATS_VENDOR="${BASH_REMATCH[2]}"
+}
+
+print_stat_counts() {
+  local label="$1"
+  shift
+  [[ $# -gt 0 ]] || return 0
+  printf '%s\n' "$@" | LC_ALL=C sort | uniq -c | while read -r count value; do
+    printf '%s %s %s\n' "$label" "$value" "$count"
+  done
+}
+
 validate_job_store
 
 case "${1:-}" in
+  stats)
+    limit=100
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --last)
+          [[ $# -ge 2 ]] || usage
+          limit="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$limit" =~ ^[1-9][0-9]{0,3}$ && "$limit" -le 10000 ]] || {
+      echo "invalid --last value (want 1..10000)" >&2
+      exit 2
+    }
+    sampled=0
+    succeeded=0
+    failed=0
+    running=0
+    invalid_exit=0
+    invalid_metadata=0
+    ids=()
+    lanes=()
+    vendors=()
+    if [[ -d "$JOBS" ]]; then
+      for job_dir in "$JOBS"/*; do
+        [[ -d "$job_dir" && ! -L "$job_dir" ]] || continue
+        id="${job_dir##*/}"
+        [[ "$id" =~ $JOB_ID_PATTERN ]] || continue
+        ids+=("$id")
+      done
+    fi
+    if [[ ${#ids[@]} -gt 0 ]]; then
+      while IFS= read -r id; do
+        sampled=$((sampled + 1))
+        job_dir="$JOBS/$id"
+        exit_path="$job_dir/exit"
+        if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+          if read_exit_code "$exit_path"; then
+            if [[ "$RECORDED_EXIT" -eq 0 ]]; then
+              succeeded=$((succeeded + 1))
+            else
+              failed=$((failed + 1))
+            fi
+          else
+            invalid_exit=$((invalid_exit + 1))
+          fi
+        else
+          running=$((running + 1))
+        fi
+        metadata_path="$job_dir/meta.json"
+        if read_public_metadata "$metadata_path" &&
+           parse_stats_metadata "$PUBLIC_METADATA"; then
+          lanes+=("$STATS_LANE")
+          vendors+=("$STATS_VENDOR")
+        else
+          invalid_metadata=$((invalid_metadata + 1))
+        fi
+      done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
+    fi
+    completed=$((succeeded + failed))
+    success_rate=0
+    [[ "$completed" -eq 0 ]] || success_rate=$((succeeded * 100 / completed))
+    printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%%\n' \
+      "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate"
+    printf 'invalid_metadata=%s\n' "$invalid_metadata"
+    valid_metadata=$((sampled - invalid_metadata))
+    if [[ "$valid_metadata" -gt 0 ]]; then
+      print_stat_counts lane "${lanes[@]}"
+      print_stat_counts vendor "${vendors[@]}"
+    fi ;;
   list)
     [[ $# -eq 1 ]] || usage
     [[ -d "$JOBS" ]] || exit 0
