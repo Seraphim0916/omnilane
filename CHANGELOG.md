@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `dispatch.sh --explain LANE` reports every fallback candidate and the selected
+  decision without invoking a provider or creating job state.
+
 ### Changed
 
 - Redesigned all five READMEs: a 60-second quickstart section, the feature
