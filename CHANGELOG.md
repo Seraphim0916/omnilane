@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `omnilane doctor --json` emits the same read-only health checks as one escaped,
+  machine-readable document while preserving the existing failure exit status.
+
 ### Changed
 
 - Redesigned all five READMEs: a 60-second quickstart section, the feature

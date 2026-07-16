@@ -211,7 +211,7 @@ omnilane ui start                              # 로컬 Live UI 를 시작하거
 omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
-omnilane doctor                                # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
+omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
