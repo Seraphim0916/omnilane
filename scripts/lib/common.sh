@@ -110,9 +110,9 @@ read_lock_owner() {
   local LC_ALL=C
   LOCK_OWNER_VALUE=""
   [[ -f "$path" && ! -L "$path" ]] || return 1
-  size="$(wc -c < "$path" | tr -d '[:space:]')" || return 2
+  size="$({ wc -c < "$path"; } 2>/dev/null | tr -d '[:space:]')" || return 2
   [[ "$size" =~ ^[0-9]+$ && "$size" -le 11 ]] || return 2
-  value="$(cat "$path")" || return 2
+  value="$(cat "$path" 2>/dev/null)" || return 2
   length="${#value}"
   [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
   [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
