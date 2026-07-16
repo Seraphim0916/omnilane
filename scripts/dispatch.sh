@@ -7,6 +7,7 @@ set -euo pipefail
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
+#   dispatch.sh --explain LANE    # explain candidate availability without dispatching
 #
 # TASK TEXT of "-" reads the task from stdin.
 #
@@ -32,7 +33,7 @@ OVERRIDE_JOB_TIMEOUT=""
 ORIGINAL_ARGC=$#
 
 usage_error() {
-  echo 'usage: dispatch.sh [flags] LANE "TASK"' >&2
+  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE' >&2
   exit 2
 }
 
@@ -137,11 +138,66 @@ print_effective_routing() {
   done
 }
 
+explain_lane() {
+  local lane="$1" chain seg i=0 total selected=0 vendor model effort status
+  local available=0
+  local SEGS=() F=()
+  [[ "$lane" =~ ^[a-z][a-z0-9-]*$ ]] || {
+    echo "omnilane: invalid lane name" >&2
+    return 2
+  }
+  chain="$(raw_lane_line "$lane")" || {
+    echo "omnilane: unknown lane '$lane' (try --list)" >&2
+    return 2
+  }
+  IFS='|' read -ra SEGS <<< "$chain"
+  total="${#SEGS[@]}"
+  printf 'lane: %s\n' "$lane"
+  for seg in "${SEGS[@]}"; do
+    i=$((i + 1))
+    [[ -n "${seg// /}" ]] || continue
+    parse_lane_segment "$seg" || {
+      echo "omnilane: malformed quoted routing segment: $seg" >&2
+      return 2
+    }
+    F=("${PARSED_FIELDS[@]}")
+    vendor="${F[0]:-}"
+    model="${F[1]:--}"
+    effort="${F[2]:--}"
+    available=0
+    status="unavailable"
+    if [[ "$vendor" == "off" ]]; then
+      available=1
+      status="available-disabled"
+    elif routing_candidate_available "$vendor" "$model"; then
+      available=1
+      status="available"
+    fi
+    if [[ "$available" -eq 1 && "$selected" -eq 0 ]]; then
+      selected="$i"
+      if [[ "$vendor" == "off" ]]; then status="selected-disabled"; else status="selected"; fi
+    elif [[ "$available" -eq 1 ]]; then
+      status="available-not-selected"
+    fi
+    printf 'candidate %d: vendor=%s model=%s effort=%s status=%s\n' \
+      "$i" "$vendor" "$model" "$effort" "$status"
+  done
+  if [[ "$selected" -gt 0 ]]; then
+    printf 'decision: candidate %d/%d\n' "$selected" "$total"
+    return 0
+  fi
+  printf 'decision: unavailable\n'
+  return 4
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list)
       [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
       print_effective_routing; exit 0 ;;
+    --explain)
+      [[ "$ORIGINAL_ARGC" -eq 2 && $# -eq 2 ]] || usage_error
+      explain_lane "$2"; exit $? ;;
     --background) BACKGROUND=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),

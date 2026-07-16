@@ -182,6 +182,53 @@ EOF
   fi
 }
 
+test_dispatch_explain_is_read_only_and_diagnostic() {
+  local name="dispatch explains fallback without executing" home gate marker out rc
+  local unavailable rc_unavailable rc_unknown
+  name="dispatch explains fallback without executing"
+  home="$TEST_ROOT/dispatch-explain"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$EXPLAIN_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
+    > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    EXPLAIN_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --explain probe 2>&1)"
+  rc=$?
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --explain offline 2>&1)"
+  rc_unavailable=$?
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --explain missing \
+    > "$home/missing.out" 2>&1
+  rc_unknown=$?
+
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "available fallback explanation exited $rc: $out"
+  elif [[ "$out" != *"candidate 1"*"vendor=codex"*"status=unavailable"* ]]; then
+    fail "$name" "missing unavailable primary candidate: $out"
+  elif [[ "$out" != *"candidate 2"*"vendor=exec"*"status=selected"* ]]; then
+    fail "$name" "missing selected fallback candidate: $out"
+  elif [[ "$out" != *"decision: candidate 2/2"* ]]; then
+    fail "$name" "missing final fallback decision: $out"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "explanation executed work or created job state"
+  elif [[ "$rc_unavailable" -ne 4 || "$unavailable" != *"decision: unavailable"* ]]; then
+    fail "$name" "unavailable route was not a diagnostic exit 4: $unavailable"
+  elif [[ "$rc_unknown" -ne 2 || ! -s "$home/missing.out" ]]; then
+    fail "$name" "unknown lane was not a readable exit 2"
+  else
+    pass "$name"
+  fi
+}
+
 test_depth_and_grok_retry_env_validation() {
   local name="depth and Grok retry env validation" home gate fake prompt marker out
   local rc_depth_text rc_depth_negative rc_depth_control rc_nested rc_valid value rc_bad rc_control
@@ -1824,6 +1871,7 @@ test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_dispatch_positional_usage_contract
+test_dispatch_explain_is_read_only_and_diagnostic
 test_depth_and_grok_retry_env_validation
 test_vendor_selector
 test_exec_gate_fallback

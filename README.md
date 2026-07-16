@@ -224,6 +224,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh --list
+dispatch.sh --explain LANE                          # offline candidate-by-candidate decision trace
 jobs.sh list | status ID | result ID
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
