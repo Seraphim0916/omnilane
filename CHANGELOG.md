@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-16
+
 ### Added
 
 - `dispatch.sh --explain LANE` reports every fallback candidate and the selected
@@ -27,6 +29,12 @@ semantic version tags.
   grid folded into How it works, and the Live UI docs promoted to a Live
   Board section with desktop and mobile screenshots
   (`docs/live-board.png`, `docs/live-board-mobile.png`).
+
+### Fixed
+
+- Lock-owner reads no longer leak transient missing-file diagnostics when the
+  owner file disappears between the existence check and bounded read; locking
+  behavior remains fail-closed.
 
 ## [0.5.1] - 2026-07-16
 
@@ -137,7 +145,9 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.6.0...HEAD
+
+[0.6.0]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Seraphim0916/omnilane/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Seraphim0916/omnilane/compare/v0.3.0...v0.4.0

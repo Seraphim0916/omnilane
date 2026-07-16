@@ -20,6 +20,19 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.6.0
+
+- **Explain and validate routes offline** — inspect every fallback candidate
+  with `--explain`, or lint the complete effective table with `--validate`,
+  without invoking a provider or creating job state.
+- **Inspect local health and outcomes** — bounded `jobs.sh stats` aggregates and
+  `omnilane doctor --json` make local automation observable without exposing
+  task or result bodies.
+- **Compare runs in Live Board** — pin one loaded job as a memory-only reference
+  and compare its model path and public result with the current selection.
+- **Keep lock recovery quiet** — transient owner-file read races no longer leak
+  misleading missing-file diagnostics.
+
 ## What's new in v0.5.1
 
 - **Use Codex work outside Git** — ordinary directories remain supported;
