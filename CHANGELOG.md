@@ -6,7 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Changed
+
+- Redesigned all five READMEs: a 60-second quickstart section, the feature
+  grid folded into How it works, and the Live UI docs promoted to a Live
+  Board section with desktop and mobile screenshots
+  (`docs/live-board.png`, `docs/live-board-mobile.png`).
 
 ## [0.5.1] - 2026-07-16
 
