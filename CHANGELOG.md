@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `jobs.sh stats [--last N]` summarizes local job outcomes and lane/vendor
+  distribution from bounded public metadata without reading task or result bodies.
+
 ### Changed
 
 - Redesigned all five READMEs: a 60-second quickstart section, the feature

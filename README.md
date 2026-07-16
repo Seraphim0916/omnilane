@@ -225,6 +225,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh --list
 jobs.sh list | status ID | result ID
+jobs.sh stats [--last N]                           # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 ```

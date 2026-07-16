@@ -621,6 +621,56 @@ test_jobs_cli_contains_malformed_public_metadata() {
   pass "$name"
 }
 
+test_jobs_stats_aggregates_only_public_metadata() {
+  local name="jobs stats aggregates public metadata" home id out rc empty bad rc_bad
+  name="jobs stats aggregates public metadata"
+  home="$TEST_ROOT/jobs-stats"
+  mkdir -p "$home/jobs"
+
+  id="20260715-120005-123-5"; mkdir "$home/jobs/$id"
+  printf '0\n' > "$home/jobs/$id/exit"
+  printf '{"lane":"triage","vendor":"codex"}\n' > "$home/jobs/$id/meta.json"
+  printf 'PRIVATE-TASK-CANARY\n' > "$home/jobs/$id/task.txt"
+  id="20260715-120004-123-4"; mkdir "$home/jobs/$id"
+  printf '7\n' > "$home/jobs/$id/exit"
+  printf '{"lane":"triage","vendor":"codex"}\n' > "$home/jobs/$id/meta.json"
+  printf 'PRIVATE-OUTPUT-CANARY\n' > "$home/jobs/$id/out.txt"
+  id="20260715-120003-123-3"; mkdir "$home/jobs/$id"
+  printf '{"lane":"hard-judgment","vendor":"claude"}\n' > "$home/jobs/$id/meta.json"
+  id="20260715-120002-123-2"; mkdir "$home/jobs/$id"
+  printf '0\nINJECTED-EXIT\n' > "$home/jobs/$id/exit"
+  printf '{"lane":"unsafe"}\nINJECTED-METADATA\033[31m\n' > "$home/jobs/$id/meta.json"
+  id="20260715-120001-123-1"; mkdir "$home/jobs/$id"
+  printf '0\n' > "$home/jobs/$id/exit"
+  printf '{"lane":"bulk-mechanical","vendor":"gemini"}\n' > "$home/jobs/$id/meta.json"
+
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" stats --last 4 2>&1)"
+  rc=$?
+  empty="$(OMNILANE_HOME="$TEST_ROOT/jobs-stats-empty" \
+    /bin/bash "$ROOT/scripts/jobs.sh" stats 2>&1)"
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" stats --last 0 \
+    > "$home/bad.out" 2>&1
+  rc_bad=$?
+  bad="$(cat "$home/bad.out")"
+
+  if [[ "$rc" -ne 0 || "$out" != *"jobs: sampled=4 succeeded=1 failed=1 running=1 invalid_exit=1 success_rate=50%"* ]]; then
+    fail "$name" "summary counts were wrong: rc=$rc out=$out"
+  elif [[ "$out" != *"invalid_metadata=1"* || "$out" != *"lane triage 2"* ||
+          "$out" != *"lane hard-judgment 1"* ]]; then
+    fail "$name" "lane aggregation was incomplete: $out"
+  elif [[ "$out" != *"vendor codex 2"* || "$out" != *"vendor claude 1"* ]]; then
+    fail "$name" "vendor aggregation was incomplete: $out"
+  elif [[ "$out" == *"PRIVATE-"* || "$out" == *"INJECTED-"* || "$out" == *$'\033'* ]]; then
+    fail "$name" "stats disclosed private or malformed job content: $out"
+  elif [[ "$empty" != "jobs: sampled=0 succeeded=0 failed=0 running=0 invalid_exit=0 success_rate=0%"*$'\n'"invalid_metadata=0" ]]; then
+    fail "$name" "empty store summary changed: $empty"
+  elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid --last"* ]]; then
+    fail "$name" "invalid sample limit was not rejected: rc=$rc_bad out=$bad"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -1800,6 +1850,7 @@ test_consult_lane_and_configurator
 test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata
 test_jobs_cli_contains_malformed_public_metadata
+test_jobs_stats_aggregates_only_public_metadata
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata

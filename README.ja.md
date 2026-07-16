@@ -221,6 +221,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             LANE "TASK"                              # "-" で stdin から読む
 dispatch.sh --list
 jobs.sh list | status ID | result ID
+jobs.sh stats [--last N]                           # ローカル成功率とルーティング集計
 jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー
 ```
