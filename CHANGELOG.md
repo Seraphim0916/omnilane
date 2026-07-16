@@ -15,6 +15,8 @@ semantic version tags.
   without invoking a provider.
 - `jobs.sh stats [--last N]` summarizes local job outcomes and lane/vendor
   distribution from bounded public metadata without reading task or result bodies.
+- `omnilane doctor --json` emits the same read-only health checks as one escaped,
+  machine-readable document while preserving the existing failure exit status.
 
 ### Changed
 

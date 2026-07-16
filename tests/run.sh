@@ -1647,6 +1647,7 @@ EOF
 
 test_doctor_is_read_only_and_reports_failures() {
   local name="doctor is read-only and actionable" home good bad outside out rc_good rc_bad rc_unsafe rc_control
+  local json_good json_bad rc_json_good rc_json_bad
   local state_created=no
   home="$TEST_ROOT/doctor-home"; good="$TEST_ROOT/doctor-good"; bad="$TEST_ROOT/doctor-bad"
   mkdir -p "$good/scripts" "$bad"
@@ -1660,10 +1661,17 @@ EOF
   out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
     /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
   rc_good=$?
+  json_good="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --json 2>&1)"
+  rc_json_good=$?
   [[ -e "$home/.omnilane" ]] && state_created=yes
   HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$bad" \
     /bin/bash "$ROOT/bin/omnilane" doctor > "$TEST_ROOT/doctor-bad.out" 2>&1
   rc_bad=$?
+  json_bad="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    OMNILANE_DOCTOR_REPO='missing"quoted' \
+    /bin/bash "$ROOT/bin/omnilane" doctor --json 2>&1)"
+  rc_json_bad=$?
   outside="$TEST_ROOT/doctor-foreign-jobs"
   mkdir -p "$home/.omnilane" "$outside"
   chmod 700 "$outside"
@@ -1683,8 +1691,16 @@ EOF
     fail "$name" "healthy report lacked routing/state/summary: $out"
   elif [[ "$state_created" == yes ]]; then
     fail "$name" "doctor created the missing state directory"
+  elif [[ "$rc_json_good" -ne 0 || "$json_good" != '{"ok":true,"checks":['* ||
+          "$json_good" != *'"check":"routing"'* || "$json_good" != *'"failed":0'* ]]; then
+    fail "$name" "healthy JSON report was malformed: rc=$rc_json_good out=$json_good"
+  elif [[ "$json_good" == *$'\n'* || "$json_good" == *'Summary:'* ]]; then
+    fail "$name" "JSON mode mixed human report output: $json_good"
   elif [[ "$rc_bad" -ne 1 ]] || ! grep -q 'FAIL  dispatch' "$TEST_ROOT/doctor-bad.out"; then
     fail "$name" "missing dispatch was not a clear exit-1 failure"
+  elif [[ "$rc_json_bad" -ne 1 || "$json_bad" != '{"ok":false,"checks":['* ||
+          "$json_bad" != *'missing\"quoted'* || "$json_bad" != *'"level":"FAIL"'* ]]; then
+    fail "$name" "failing JSON report was not escaped/actionable: rc=$rc_json_bad out=$json_bad"
   elif [[ "$rc_unsafe" -ne 1 ]] || ! grep -q 'FAIL  job-privacy' "$TEST_ROOT/doctor-unsafe.out"; then
     fail "$name" "symlinked jobs store was not reported as incompatible"
   elif [[ "$rc_control" -ne 1 ]] || grep -q $'\033' "$TEST_ROOT/doctor-control.out"; then

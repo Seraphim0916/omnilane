@@ -219,7 +219,7 @@ omnilane ui start                              # start/reuse the local Live UI; 
 omnilane ui status                             # report whether the Live UI is running
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
-omnilane doctor                                # read-only routing and runtime health report
+omnilane doctor [--json]                       # read-only routing and runtime health report
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin

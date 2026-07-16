@@ -2,19 +2,59 @@
 set -u
 # Read-only health report for routing, state, watchdog, and optional UI support.
 
-[[ $# -eq 0 ]] || { echo "usage: omnilane doctor" >&2; exit 2; }
+JSON_MODE=0
+if [[ $# -eq 1 && "$1" == "--json" ]]; then
+  JSON_MODE=1
+elif [[ $# -ne 0 ]]; then
+  echo "usage: omnilane doctor [--json]" >&2
+  exit 2
+fi
 REPO="${OMNILANE_DOCTOR_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
+JSON_REPORTS=""
+JSON_FIRST=1
+
+json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      '\\') out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
 
 report() {
   local level="$1" check="$2" message="$3"
   # Diagnostic inputs include user-controlled paths and routing errors. Strip
   # terminal control bytes so a failed check cannot forge the report display.
   message="$(printf '%s' "$message" | LC_ALL=C tr -d '\000-\010\013\014\016-\037\177')"
-  printf '%-5s %-12s %s\n' "$level" "$check" "$message"
+  if [[ "$JSON_MODE" -eq 1 ]]; then
+    [[ "$JSON_FIRST" -eq 1 ]] || JSON_REPORTS="$JSON_REPORTS,"
+    JSON_FIRST=0
+    JSON_REPORTS="$JSON_REPORTS{\"level\":\"$(json_escape "$level")\",\"check\":\"$(json_escape "$check")\",\"message\":\"$(json_escape "$message")\"}"
+  else
+    printf '%-5s %-12s %s\n' "$level" "$check" "$message"
+  fi
   case "$level" in
     PASS) PASS_COUNT=$((PASS_COUNT + 1)) ;;
     WARN) WARN_COUNT=$((WARN_COUNT + 1)) ;;
@@ -112,8 +152,15 @@ else
   report WARN live-ui "python3 is absent; model routing still works"
 fi
 
-warning_suffix=s
-[[ "$WARN_COUNT" -eq 1 ]] && warning_suffix=""
-printf '\nSummary: %s passed, %s warning%s, %s failed\n' \
-  "$PASS_COUNT" "$WARN_COUNT" "$warning_suffix" "$FAIL_COUNT"
+if [[ "$JSON_MODE" -eq 1 ]]; then
+  ok=true
+  [[ "$FAIL_COUNT" -eq 0 ]] || ok=false
+  printf '{"ok":%s,"checks":[%s],"summary":{"passed":%s,"warnings":%s,"failed":%s}}\n' \
+    "$ok" "$JSON_REPORTS" "$PASS_COUNT" "$WARN_COUNT" "$FAIL_COUNT"
+else
+  warning_suffix=s
+  [[ "$WARN_COUNT" -eq 1 ]] && warning_suffix=""
+  printf '\nSummary: %s passed, %s warning%s, %s failed\n' \
+    "$PASS_COUNT" "$WARN_COUNT" "$warning_suffix" "$FAIL_COUNT"
+fi
 [[ "$FAIL_COUNT" -eq 0 ]]
