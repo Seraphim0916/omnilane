@@ -27,7 +27,15 @@
     factWorkdir: document.getElementById("fact-workdir"), requestMarkers: document.getElementById("request-markers"),
     requestEmpty: document.getElementById("request-empty"), requestContent: document.getElementById("request-content"),
     resultMarkers: document.getElementById("result-markers"), resultEmpty: document.getElementById("result-empty"),
-    resultContent: document.getElementById("result-content"),
+    resultContent: document.getElementById("result-content"), compareToggle: document.getElementById("compare-toggle"),
+    compareReferenceLabel: document.getElementById("compare-reference-label"), comparePanel: document.getElementById("compare-panel"),
+    compareClear: document.getElementById("compare-clear"), compareReferenceId: document.getElementById("compare-reference-id"),
+    compareReferenceLane: document.getElementById("compare-reference-lane"), compareReferenceVendor: document.getElementById("compare-reference-vendor"),
+    compareReferenceModel: document.getElementById("compare-reference-model"), compareReferenceState: document.getElementById("compare-reference-state"),
+    compareReferenceOutput: document.getElementById("compare-reference-output"), compareCurrentId: document.getElementById("compare-current-id"),
+    compareCurrentLane: document.getElementById("compare-current-lane"), compareCurrentVendor: document.getElementById("compare-current-vendor"),
+    compareCurrentModel: document.getElementById("compare-current-model"), compareCurrentState: document.getElementById("compare-current-state"),
+    compareCurrentOutput: document.getElementById("compare-current-output"),
   };
 
   const state = {
@@ -37,6 +45,7 @@
     activeDetailRequests: 0, detailGeneration: 0, detailSequence: 0,
     hasSnapshot: false, unauthorized: false, authProbeInFlight: false,
     reconnectTimer: null, mobileListScroll: 0, mobileFocusId: null,
+    currentDetail: null, compareReference: null,
   };
 
   function boardUrl() { return window.location.pathname + window.location.search; }
@@ -122,6 +131,8 @@
     state.token = null;
     state.jobs = [];
     state.selectedId = null;
+    state.currentDetail = null;
+    state.compareReference = null;
     state.hasSnapshot = false;
     clearStoredToken();
     closeEventStream();
@@ -531,6 +542,8 @@
     renderSummary(selectedSummary);
     const signatureChanged = previousSignature !== summarySignature(selectedSummary);
     if (previousId !== state.selectedId || signatureChanged) {
+      state.currentDetail = null;
+      renderCompare(null);
       fetchDetail(state.selectedId, previousId !== state.selectedId);
     } else {
       const detail = cachedDetail(state.selectedId);
@@ -549,6 +562,93 @@
 
   function metadataValue(meta, name, fallback) {
     return textOrFallback(meta[name], fallback);
+  }
+
+  function detailSnapshot(detail, fallbackSummary) {
+    if (!detail || typeof detail !== "object") {
+      return null;
+    }
+    const summary = normalizeSummary(detail.summary) || fallbackSummary;
+    if (!summary) {
+      return null;
+    }
+    return {
+      summary: {
+        id: summary.id,
+        state: summary.state,
+        exitCode: summary.exitCode,
+        meta: Object.assign({}, summary.meta),
+        signals: {},
+      },
+      output: typeof detail.output === "string" ? detail.output : "",
+      outputTruncated: detail.outputTruncated === true,
+      invalidFiles: Array.isArray(detail.invalidFiles) ? detail.invalidFiles.slice() : [],
+    };
+  }
+
+  function comparisonOutput(snapshot) {
+    const invalidFiles = invalidFileSet(snapshot);
+    if (invalidFiles.has("out.txt")) {
+      return "The public result could not be read safely.";
+    }
+    if (snapshot.output.length > 0) {
+      return snapshot.output;
+    }
+    return emptyResultMessage(snapshot.summary);
+  }
+
+  function renderComparisonSide(prefix, snapshot) {
+    const summary = snapshot.summary;
+    const meta = summary.meta;
+    setText(elements[prefix + "Id"], summary.id);
+    setText(elements[prefix + "Lane"], metadataValue(meta, "lane", "Unknown"));
+    setText(elements[prefix + "Vendor"], metadataValue(meta, "vendor", "Unknown"));
+    setText(elements[prefix + "Model"], metadataValue(meta, "model", "Unknown"));
+    setText(elements[prefix + "State"], summary.state);
+    setText(elements[prefix + "Output"], comparisonOutput(snapshot));
+  }
+
+  function renderCompare(detail) {
+    const current = detailSnapshot(detail, currentSummary());
+    const reference = state.compareReference;
+    const isReference = Boolean(reference && current && reference.summary.id === current.summary.id);
+    elements.compareToggle.disabled = !current;
+    elements.compareToggle.setAttribute("aria-pressed", isReference ? "true" : "false");
+    setText(
+      elements.compareToggle,
+      isReference ? "Unpin reference" : reference ? "Replace reference" : "Pin for compare"
+    );
+    setText(
+      elements.compareReferenceLabel,
+      reference ? "Reference " + reference.summary.id + " pinned" : "No reference pinned"
+    );
+
+    if (!reference || !current || isReference) {
+      elements.comparePanel.hidden = true;
+      return;
+    }
+    renderComparisonSide("compareReference", reference);
+    renderComparisonSide("compareCurrent", current);
+    elements.comparePanel.hidden = false;
+  }
+
+  function toggleCompareReference() {
+    const current = detailSnapshot(state.currentDetail, currentSummary());
+    if (!current) {
+      return;
+    }
+    if (state.compareReference && state.compareReference.summary.id === current.summary.id) {
+      state.compareReference = null;
+    } else {
+      state.compareReference = current;
+    }
+    renderCompare(state.currentDetail);
+  }
+
+  function clearCompareReference() {
+    state.compareReference = null;
+    renderCompare(state.currentDetail);
+    elements.compareToggle.focus();
   }
 
   function renderSummary(summary) {
@@ -640,6 +740,7 @@
       rememberMobileListState();
     }
     state.selectedId = jobId;
+    state.currentDetail = null;
     renderQueue();
     renderSummary(job);
     const detail = cachedDetail(jobId);
@@ -657,6 +758,8 @@
   }
 
   function showDetailLoading(job) {
+    state.currentDetail = null;
+    renderCompare(null);
     clearMarkers(elements.requestMarkers);
     clearMarkers(elements.resultMarkers);
     elements.requestContent.hidden = true;
@@ -768,7 +871,9 @@
       return;
     }
 
+    state.currentDetail = detail;
     renderSummary(summary);
+    renderCompare(detail);
     clearMarkers(elements.requestMarkers);
     clearMarkers(elements.resultMarkers);
     const invalidFiles = invalidFileSet(detail);
@@ -950,6 +1055,9 @@
     elements.mobileBack.addEventListener("click", function () {
       returnToMobileList(true);
     });
+
+    elements.compareToggle.addEventListener("click", toggleCompareReference);
+    elements.compareClear.addEventListener("click", clearCompareReference);
 
     window.addEventListener("popstate", function (event) {
       const historyState = event.state;

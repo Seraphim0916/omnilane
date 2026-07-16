@@ -17,6 +17,9 @@ semantic version tags.
   distribution from bounded public metadata without reading task or result bodies.
 - `omnilane doctor --json` emits the same read-only health checks as one escaped,
   machine-readable document while preserving the existing failure exit status.
+- The Live Board can pin one loaded job as a memory-only reference and compare
+  its route and public result with the current selection. Comparison remains
+  local, read-only, responsive, and plain-text safe.
 
 ### Changed
 

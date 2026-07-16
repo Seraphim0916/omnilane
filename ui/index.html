@@ -78,8 +78,57 @@
                 <h2 class="selected-job-id" id="selected-job-id">—</h2>
                 <p class="selected-time" id="selected-job-time">Started time unavailable</p>
               </div>
-              <span class="state-pill" id="selected-job-state">Unknown</span>
+              <div class="title-actions">
+                <span class="state-pill" id="selected-job-state">Unknown</span>
+                <button
+                  type="button"
+                  class="compare-toggle"
+                  id="compare-toggle"
+                  aria-controls="compare-panel"
+                  aria-pressed="false"
+                  disabled
+                >Pin for compare</button>
+                <p class="compare-reference-label" id="compare-reference-label" aria-live="polite">No reference pinned</p>
+              </div>
             </header>
+
+            <section class="comparison-section" id="compare-panel" aria-labelledby="compare-heading" hidden>
+              <div class="comparison-heading">
+                <div>
+                  <p class="section-label">Reference snapshot</p>
+                  <h3 id="compare-heading">Route and result comparison</h3>
+                </div>
+                <button type="button" class="compare-clear" id="compare-clear">Clear reference</button>
+              </div>
+
+              <div class="comparison-grid">
+                <article class="comparison-column is-reference" aria-labelledby="compare-reference-id">
+                  <p class="comparison-role">Pinned reference</p>
+                  <h4 id="compare-reference-id">—</h4>
+                  <dl class="comparison-route">
+                    <div><dt>Lane</dt><dd id="compare-reference-lane">—</dd></div>
+                    <div><dt>Vendor</dt><dd id="compare-reference-vendor">—</dd></div>
+                    <div><dt>Model</dt><dd id="compare-reference-model">—</dd></div>
+                    <div><dt>State</dt><dd id="compare-reference-state">—</dd></div>
+                  </dl>
+                  <p class="comparison-output-label">Public result</p>
+                  <pre class="comparison-output" id="compare-reference-output" tabindex="0"></pre>
+                </article>
+
+                <article class="comparison-column is-current" aria-labelledby="compare-current-id">
+                  <p class="comparison-role">Current selection</p>
+                  <h4 id="compare-current-id">—</h4>
+                  <dl class="comparison-route">
+                    <div><dt>Lane</dt><dd id="compare-current-lane">—</dd></div>
+                    <div><dt>Vendor</dt><dd id="compare-current-vendor">—</dd></div>
+                    <div><dt>Model</dt><dd id="compare-current-model">—</dd></div>
+                    <div><dt>State</dt><dd id="compare-current-state">—</dd></div>
+                  </dl>
+                  <p class="comparison-output-label">Public result</p>
+                  <pre class="comparison-output" id="compare-current-output" tabindex="0"></pre>
+                </article>
+              </div>
+            </section>
 
             <section class="content-section task-section" aria-labelledby="request-heading">
               <div class="section-heading">
