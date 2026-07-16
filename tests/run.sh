@@ -197,20 +197,6 @@ EOF
   chmod +x "$gate"
   printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
     > "$home/routing.local.yaml"
-  cat >> "$home/routing.local.yaml" <<'EOF'
-hardest-coding: off
-bulk-mechanical: off
-triage: off
-hard-judgment: off
-taste-final: off
-consult: off
-ui-draft: off
-long-context: off
-fast-agentic: off
-live-search: off
-coding-overflow: off
-arbitrate: off
-EOF
 
   out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
     EXPLAIN_EXECUTED_MARKER="$marker" \
@@ -259,6 +245,20 @@ EOF
   chmod +x "$gate"
   printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
     > "$home/routing.local.yaml"
+  cat >> "$home/routing.local.yaml" <<'EOF'
+hardest-coding: off
+bulk-mechanical: off
+triage: off
+hard-judgment: off
+taste-final: off
+consult: off
+ui-draft: off
+long-context: off
+fast-agentic: off
+live-search: off
+coding-overflow: off
+arbitrate: off
+EOF
 
   out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
     VALIDATE_EXECUTED_MARKER="$marker" \
