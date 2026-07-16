@@ -203,6 +203,7 @@ dispatch.sh [--background] [--mode advise|work] [--workdir 目录]
             通道 "任务"                              # "-" 表示从 stdin 读任务
 dispatch.sh --list
 dispatch.sh --explain 通道                          # 离线逐候选解释路由决策
+dispatch.sh --validate                              # 离线检查生效路由，不调用模型
 jobs.sh list | status 作业ID | result 作业ID
 jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业
 configure.sh                                        # 交互通道菜单

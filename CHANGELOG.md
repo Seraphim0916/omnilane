@@ -10,6 +10,9 @@ semantic version tags.
 
 - `dispatch.sh --explain LANE` reports every fallback candidate and the selected
   decision without invoking a provider or creating job state.
+- `dispatch.sh --validate` checks the effective routing table for duplicate
+  lanes, malformed candidates, unknown vendors, and machine-local reachability
+  without invoking a provider.
 
 ### Changed
 

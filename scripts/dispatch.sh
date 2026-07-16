@@ -8,6 +8,7 @@ set -euo pipefail
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
 #   dispatch.sh --explain LANE    # explain candidate availability without dispatching
+#   dispatch.sh --validate        # lint effective routing without dispatching
 #
 # TASK TEXT of "-" reads the task from stdin.
 #
@@ -33,7 +34,7 @@ OVERRIDE_JOB_TIMEOUT=""
 ORIGINAL_ARGC=$#
 
 usage_error() {
-  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE' >&2
+  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE | --validate' >&2
   exit 2
 }
 
@@ -190,6 +191,94 @@ explain_lane() {
   return 4
 }
 
+validate_routing() {
+  local effective_seen=" " file_seen f line content lane chain seg vendor
+  local line_no i total selected lane_invalid invalid=0 unreachable=0
+  local SEGS=() F=()
+  for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+    [[ -f "$f" ]] || continue
+    file_seen=" "
+    line_no=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line_no=$((line_no + 1))
+      content="${line%%#*}"
+      [[ -n "${content//[[:space:]]/}" ]] || continue
+      if ! [[ "$content" =~ ^([a-z][a-z0-9-]*):[[:space:]]*(.*)$ ]]; then
+        printf 'FAIL line-%d invalid-line\n' "$line_no"
+        invalid=$((invalid + 1))
+        continue
+      fi
+      lane="${BASH_REMATCH[1]}"
+      chain="${BASH_REMATCH[2]}"
+      if [[ "$file_seen" == *" $lane "* ]]; then
+        printf 'FAIL %s duplicate-lane\n' "$lane"
+        invalid=$((invalid + 1))
+        continue
+      fi
+      file_seen="$file_seen$lane "
+      [[ "$effective_seen" == *" $lane "* ]] && continue
+      effective_seen="$effective_seen$lane "
+      IFS='|' read -ra SEGS <<< "$chain"
+      total="${#SEGS[@]}"
+      selected=0
+      lane_invalid=0
+      i=0
+      for seg in "${SEGS[@]}"; do
+        i=$((i + 1))
+        if [[ -z "${seg//[[:space:]]/}" ]]; then
+          printf 'FAIL %s candidate=%d empty-segment\n' "$lane" "$i"
+          lane_invalid=1
+          break
+        fi
+        if ! parse_lane_segment "$seg"; then
+          printf 'FAIL %s candidate=%d malformed-quotes\n' "$lane" "$i"
+          lane_invalid=1
+          break
+        fi
+        F=("${PARSED_FIELDS[@]}")
+        vendor="${F[0]:-}"
+        if [[ "$vendor" == "off" ]]; then
+          if [[ "${#F[@]}" -ne 1 && "${#F[@]}" -ne 3 ]]; then
+            printf 'FAIL %s candidate=%d field-count=%d\n' "$lane" "$i" "${#F[@]}"
+            lane_invalid=1
+            break
+          fi
+        elif [[ "${#F[@]}" -ne 3 ]]; then
+          printf 'FAIL %s candidate=%d field-count=%d\n' "$lane" "$i" "${#F[@]}"
+          lane_invalid=1
+          break
+        fi
+        if ! [[ "$vendor" =~ ^(codex|claude|grok|gemini|exec|off)$ ]]; then
+          printf 'FAIL %s unknown-vendor=%s\n' "$lane" "$vendor"
+          lane_invalid=1
+          break
+        fi
+        if printf '%s%s%s' "${F[0]}" "${F[1]:-}" "${F[2]:-}" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+          printf 'FAIL %s candidate=%d control-character\n' "$lane" "$i"
+          lane_invalid=1
+          break
+        fi
+        if [[ "$selected" -eq 0 ]] && { [[ "$vendor" == "off" ]] || routing_candidate_available "$vendor" "${F[1]}"; }; then
+          selected="$i"
+        fi
+      done
+      if [[ "$lane_invalid" -eq 1 ]]; then
+        invalid=$((invalid + 1))
+      elif [[ "$selected" -eq 0 ]]; then
+        printf 'WARN %s no-candidate-available\n' "$lane"
+        unreachable=$((unreachable + 1))
+      else
+        parse_lane_segment "${SEGS[$((selected - 1))]}"
+        printf 'PASS %s selected=%d/%d vendor=%s\n' \
+          "$lane" "$selected" "$total" "${PARSED_FIELDS[0]}"
+      fi
+    done < "$f"
+  done
+  [[ "$invalid" -eq 0 ]] || return 2
+  [[ "$unreachable" -eq 0 ]] || return 4
+  return 0
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list)
@@ -198,6 +287,9 @@ while [[ $# -gt 0 ]]; do
     --explain)
       [[ "$ORIGINAL_ARGC" -eq 2 && $# -eq 2 ]] || usage_error
       explain_lane "$2"; exit $? ;;
+    --validate)
+      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
+      validate_routing; exit $? ;;
     --background) BACKGROUND=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
