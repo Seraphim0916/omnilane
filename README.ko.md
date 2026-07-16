@@ -30,11 +30,16 @@
 - **표시 버전을 신뢰 가능하게 유지** — `VERSION` 이 `omnilane --version` 과 두
   plugin manifest 를 통일하며 CI 가 변경 기록과 5개 언어 README 를 검사합니다.
 
+## ⚡ 60초 시작
+
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # CLI 감지, 스킬 연결, 당신의 언어로 대화
 omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 테스트 수정"
+omnilane ui start     # 선택: 브라우저에서 잡을 실시간 확인
 ```
+
+## 🧭 동작 방식
 
 omnilane 은 **어떤** agentic CLI 든 메인 루프가 서브태스크를 레인으로 분류하고,
 각 레인을 그 작업에 가장 강한 벤더 CLI 로 헤드리스 디스패치하게 해 줍니다.
@@ -51,17 +56,6 @@ flowchart LR
     T -->|"arbitrate(옵트인)"| C6["vote — 1-4 모델 패널"]
 ```
 
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **테이블 하나**<br/>네 개 하네스가 공유 | 🪂 **폴백 체인**<br/>가진 CLI 로 자동 강등 | 🗳️ **의견 패널**<br/>중대한 결정은 멀티모델 투표 |
-| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치 프로그램이 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
-
-</div>
-
-## 🧭 동작 방식
-
 - **`routing.yaml`** — 레인 → 벤더+모델+추론 강도. 파일 하나를 네 하네스가 공유.
 - **폴백 체인** — 한 레인에 후보를 여러 개 나열할 수 있습니다
   (`codex … | claude … | off`). 실제로 설치된 첫 번째 벤더 CLI 가 선택되므로
@@ -71,6 +65,15 @@ flowchart LR
   고정하며 폴백하지 않습니다.
 - **`skills/omnilane/SKILL.md`** — 네 하네스 공용 스킬: 자기 모델을 파악하고,
   자기 레인은 직접 수행, 나머지는 디스패치.
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **테이블 하나**<br/>네 개 하네스가 공유 | 🪂 **폴백 체인**<br/>가진 CLI 로 자동 강등 | 🗳️ **의견 패널**<br/>중대한 결정은 멀티모델 투표 |
+| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치 프로그램이 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
+
+</div>
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
@@ -131,7 +134,37 @@ flowchart LR
 
 </details>
 
-## 🚀 설치
+## 🖥️ Live Board
+
+모든 디스패치는——포그라운드든 `--background` 든——디스크에 잡으로 기록됩니다.
+Live Board 는 그 잡 저장소 위에 놓인 선택형 읽기 전용 로컬 워크벤치입니다:
+각 모델에게 무엇을 물었고, 무엇을 답했고, 어떻게 라우팅됐고, 아직 실행 중인지
+한눈에 봅니다.
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board 데스크톱 화면——왼쪽은 잡 목록, 오른쪽은 선택한 잡의 태스크·공개 결과·모델 경로" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 모바일 화면——검색 가능한 잡 목록과 상태 필터" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # 서버를 시작하거나 재사용하고 인증 URL 출력
+omnilane ui status   # 로컬 서버 상태 확인
+omnilane ui url      # 현재 인증 URL 출력
+omnilane ui stop     # 정상 중지
+```
+
+데스크톱에서는 잡 목록과 상세 패널을 따로 스크롤할 수 있고, 모바일에서는 목록／상세
+전환과 뒤로 가기, Esc 를 지원합니다. Server-Sent Events(SSE)는 포커스된 행을
+다시 만들지 않고 갱신하며, 짧은 연결 끊김에는 마지막 스냅샷을 유지한 채 재연결합니다.
+`127.0.0.1` 에만 바인딩하고 무작위 토큰으로 보호하는 읽기 전용 화면입니다.
+`task.txt` 와 공개용 `out.txt` 만 표시하며 워커나 벤더 원시 로그는 표시하지 않습니다.
+
+핵심 라우팅에는 Python 이 필요 없고, 이 UI 에만 Python 3.9 이상이 필요합니다.
+
+## 📦 설치
 
 전제: 라우팅할 벤더 CLI(`codex`, `claude`, `grok`, `agy`)가 로그인된 채
 `PATH` 에 있을 것——**가진 것만 있으면 됩니다**, 없는 레인은 자동 강등.
@@ -193,24 +226,6 @@ configure.sh                                        # 대화형 레인 메뉴
 CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라운드 반박 전부 실패,
 `86` 중첩 디스패치 거부, `87` 락 대기 타임아웃, `124` 전체 잡 타임아웃.
 그 외에는 워커 자신의 종료 코드를 그대로 전달.
-
-## 🖥️ Live UI
-
-Live UI 는 선택 사항인 로컬 워크벤치입니다. 핵심 라우팅에는 Python 이 필요 없고,
-이 UI 에만 Python 3.9 이상이 필요합니다.
-
-```bash
-omnilane ui start    # 서버를 시작하거나 재사용하고 인증 URL 출력
-omnilane ui status   # 로컬 서버 상태 확인
-omnilane ui url      # 현재 인증 URL 출력
-omnilane ui stop     # 정상 중지
-```
-
-데스크톱에서는 잡 목록과 상세 패널을 따로 스크롤할 수 있고, 모바일에서는 목록／상세
-전환과 뒤로 가기, Esc 를 지원합니다. Server-Sent Events(SSE)는 포커스된 행을
-다시 만들지 않고 갱신하며, 짧은 연결 끊김에는 마지막 스냅샷을 유지한 채 재연결합니다.
-`127.0.0.1` 에만 바인딩하고 무작위 토큰으로 보호하는 읽기 전용 화면입니다.
-`task.txt` 와 공개용 `out.txt` 만 표시하며 워커나 벤더 원시 로그는 표시하지 않습니다.
 
 ## 🎭 모드
 

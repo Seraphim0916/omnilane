@@ -29,11 +29,16 @@
 - **让版本显示可信** — `VERSION` 现在统一提供给 `omnilane --version` 和两份
   plugin manifest，CI 会检查变更记录和五种语言 README 是否一致。
 
+## ⚡ 60 秒上手
+
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # 检测你的 CLI、接好技能、说你的语言
 omnilane route hardest-coding "修掉间歇失败的 auth token 刷新测试"
+omnilane ui start     # 可选:在浏览器实时查看派发
 ```
+
+## 🧭 工作原理
 
 omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道(lane),
 再以无头方式把每条通道派发给该项工作最强的厂商 CLI,直接沿用你已有的订阅登录:
@@ -49,6 +54,14 @@ flowchart LR
     T -->|"arbitrate(可选)"| C6["vote — 1-4 模型评审团"]
 ```
 
+- **`routing.yaml`** — 通道 → 厂商+模型+推理档位。一个文件,四个执行框架共用。
+- **候选链** — 一条通道可以列多个候选(`codex … | claude … | off`),
+  派发时自动采用本机**实际安装了**的第一个厂商 CLI。只订一、两家也能用同一张表。
+- **`scripts/dispatch.sh [--vendor V] <通道> "<任务>"`** — 查表后以无头方式
+  调用对应厂商的 CLI。`--vendor` 会锁定指定厂商，不做降级。
+- **`skills/omnilane/SKILL.md`** — 一份技能四个框架都能加载:
+  先认出自己是哪个模型,自己通道的活自己干,其余派出去。
+
 <div align="center">
 
 | | | |
@@ -57,16 +70,6 @@ flowchart LR
 | 🔒 **安全机制**<br/>排队锁 · 看门狗 · 禁嵌套 | 🌏 **五种语言**<br/>安装器说你的母语 | ↩️ **完全可逆**<br/>`--uninstall` 一键还原 |
 
 </div>
-
-## 🧭 工作原理
-
-- **`routing.yaml`** — 通道 → 厂商+模型+推理档位。一个文件,四个执行框架共用。
-- **候选链** — 一条通道可以列多个候选(`codex … | claude … | off`),
-  派发时自动采用本机**实际安装了**的第一个厂商 CLI。只订一、两家也能用同一张表。
-- **`scripts/dispatch.sh [--vendor V] <通道> "<任务>"`** — 查表后以无头方式
-  调用对应厂商的 CLI。`--vendor` 会锁定指定厂商，不做降级。
-- **`skills/omnilane/SKILL.md`** — 一份技能四个框架都能加载:
-  先认出自己是哪个模型,自己通道的活自己干,其余派出去。
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
@@ -120,7 +123,35 @@ flowchart LR
 
 </details>
 
-## 🚀 安装
+## 🖥️ Live Board
+
+每一次派发——无论前台还是 `--background`——都是落盘的一条 job。Live Board
+是架在这个 job 存储之上、可选且只读的本地工作台:每个模型被问了什么、答了
+什么、怎么路由、是否还在运行,一眼看完。
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board 桌面版——左侧为作业列表,右侧为选定作业的任务、公开结果与模型路径" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 手机版——可搜索的作业列表与状态筛选" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # 启动或复用服务器，输出通过认证的网址
+omnilane ui status   # 查看本地服务器状态
+omnilane ui url      # 输出当前通过认证的网址
+omnilane ui stop     # 正常停止
+```
+
+桌面版的作业列表与详情区域可分别滚动;手机版使用列表／详情切换，支持返回键与
+Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的作业行;短暂断线时
+保留最后画面并自动重连。服务只绑定 `127.0.0.1`、使用随机令牌保护、全程只读。
+界面只显示 `task.txt` 和公开的 `out.txt`，不会显示工作端或厂商原始日志。
+
+核心路由不需要 Python;只有这个界面需要 Python 3.9 或更高版本。
+
+## 📦 安装
 
 前置需求:想路由到的厂商 CLI(`codex`、`claude`、`grok`、`agy`)已登录且在
 `PATH` 上——**有几家装几家就好**,缺的通道会自动降级。
@@ -181,23 +212,6 @@ configure.sh                                        # 交互通道菜单
 `5` 第一轮成功评审太少、`6` 第二轮没有任何反驳成功、`86` 拒绝嵌套派发、
 `87` 等锁超时、`124` 整体任务超时;
 其余直接透传工作端自己的退出码。
-
-## 🖥️ Live UI
-
-Live UI 是可选的本地工作台;核心路由不需要 Python,只有这个界面需要
-Python 3.9 或更高版本。
-
-```bash
-omnilane ui start    # 启动或复用服务器，输出通过认证的网址
-omnilane ui status   # 查看本地服务器状态
-omnilane ui url      # 输出当前通过认证的网址
-omnilane ui stop     # 正常停止
-```
-
-桌面版的作业列表与详情区域可分别滚动;手机版使用列表／详情切换，支持返回键与
-Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的作业行;短暂断线时
-保留最后画面并自动重连。服务只绑定 `127.0.0.1`、使用随机令牌保护、全程只读。
-界面只显示 `task.txt` 和公开的 `out.txt`，不会显示工作端或厂商原始日志。
 
 ## 🎭 模式
 

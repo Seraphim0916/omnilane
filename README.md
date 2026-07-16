@@ -30,11 +30,16 @@ Every subtask goes to the model that is actually best at it — across<br/>
 - **Trust the displayed version** — `VERSION` now drives `omnilane --version`
   and both plugin manifests, with CI checking the changelog and all five READMEs.
 
+## ⚡ 60-second start
+
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # finds your CLIs, links the skill, speaks your language
 omnilane route hardest-coding "fix the flaky auth token refresh"
+omnilane ui start     # optional: watch jobs live in your browser
 ```
+
+## 🧭 How it works
 
 omnilane lets the main loop of **any** agentic CLI classify subtasks into
 lanes and dispatch each lane to the best vendor's CLI — headlessly, using
@@ -51,17 +56,6 @@ flowchart LR
     T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
 ```
 
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **One table**<br/>four harnesses share it | 🪂 **Fallback chains**<br/>degrades to the CLIs you have | 🗳️ **Opinion panel**<br/>multi-model vote for big calls |
-| 🔒 **Safety rails**<br/>locks · watchdogs · no nesting | 🌏 **Five languages**<br/>the installer speaks your locale | ↩️ **Reversible**<br/>`--uninstall` undoes everything |
-
-</div>
-
-## 🧭 How it works
-
 - **`routing.yaml`** — lane → vendor + model + effort. One file, read by every
   harness.
 - **Fallback chains** — a lane can list candidates
@@ -72,6 +66,15 @@ flowchart LR
   vendor without fallback.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **One table**<br/>four harnesses share it | 🪂 **Fallback chains**<br/>degrades to the CLIs you have | 🗳️ **Opinion panel**<br/>multi-model vote for big calls |
+| 🔒 **Safety rails**<br/>locks · watchdogs · no nesting | 🌏 **Five languages**<br/>the installer speaks your locale | ↩️ **Reversible**<br/>`--uninstall` undoes everything |
+
+</div>
 
 ## 🛤️ Lanes (defaults — run `scripts/dispatch.sh --list` for your effective table)
 
@@ -132,7 +135,38 @@ already are that model, so no second call) versus **dispatch**. Your harness's
 
 </details>
 
-## 🚀 Install
+## 🖥️ Live Board
+
+Every dispatch — foreground or `--background` — is a job on disk. The Live
+Board is an optional, read-only local workbench over that job store: what each
+model was asked, what it answered, how it was routed, and whether it is still
+running.
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board on desktop — job list on the left, task, public result and model path for the selected job on the right" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board on mobile — searchable job list with status filters" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # start or reuse the server and print its authenticated URL
+omnilane ui status   # inspect the local server
+omnilane ui url      # print the current authenticated URL
+omnilane ui stop     # stop it cleanly
+```
+
+The desktop view keeps the job list and detail pane independently scrollable;
+mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
+stream updates without replacing focused rows, and a short disconnect keeps the
+last snapshot while reconnecting. It binds only to `127.0.0.1`, uses a random
+token, and is read-only. It shows `task.txt` and the public `out.txt`, but never
+raw worker or vendor logs.
+
+Core routing does not need Python; only this UI requires Python 3.9 or newer.
+
+## 📦 Install
 
 Requirements: the vendor CLIs you want to route to, logged in (`codex`,
 `claude`, `grok`, `agy`) and on `PATH` — install only the ones you have; the
@@ -215,25 +249,6 @@ the chain or the requested vendor is configured but its CLI is unavailable,
 voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
 lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
 code passes through.
-
-## 🖥️ Live UI
-
-The Live UI is an optional local workbench; core routing does not need Python,
-and only this UI requires Python 3.9 or newer.
-
-```bash
-omnilane ui start    # start or reuse the server and print its authenticated URL
-omnilane ui status   # inspect the local server
-omnilane ui url      # print the current authenticated URL
-omnilane ui stop     # stop it cleanly
-```
-
-The desktop view keeps the job list and detail pane independently scrollable;
-mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
-stream updates without replacing focused rows, and a short disconnect keeps the
-last snapshot while reconnecting. It binds only to `127.0.0.1`, uses a random
-token, and is read-only. It shows `task.txt` and the public `out.txt`, but never
-raw worker or vendor logs.
 
 ## 🎭 Modes
 
