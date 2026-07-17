@@ -17,6 +17,9 @@ semantic version tags.
 - `omnilane release-audit [--json]` provides an offline, read-only release gate
   for version metadata, tracked package contents, executable modes, rollback
   docs, archive reproducibility, and optional annotated-tag verification.
+- `dispatch.sh --list`, `--explain`, and `--validate` accept `--json` before or
+  after the inspection command and return one versioned JSON envelope without
+  invoking a provider or creating job state.
 
 ## [0.6.0] - 2026-07-16
 
