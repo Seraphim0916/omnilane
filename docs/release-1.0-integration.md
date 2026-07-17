@@ -26,3 +26,17 @@ publishing.
   rejected by the parent-boundary gate. Both were fail-closed and wrote no
   installer state.
 - Rollback: revert merge commit `25b7083` before later dependent merges.
+
+## #6 Safe Bash/Zsh completion
+
+- Branch: `codex/idea-shell-completion`
+- Merge commit: `000155d`
+- Merge result: one `CHANGELOG.md` add/add conflict; resolved by preserving both
+  #5 installer and #6 completion entries. Tests and localized docs merged cleanly.
+- Shell regression: `52 passed, 0 failed`
+- Python regression: `36 passed, 11 subtests passed`
+- Runtime: public Bash completion loaded with `eval`, public Zsh completion
+  loaded with `source`, the `triage` lane completed in both, and public output
+  byte-matched both checked-in completion files.
+- Rollback: revert merge commit `000155d` after reverting later dependent
+  merges; retain the conflict-resolution parent history.
