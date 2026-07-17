@@ -706,12 +706,18 @@ EOF
   disabled="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
     --dry-run disabled x 2>&1)"
   rc_disabled=$?
-  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  {
+    printf 'offline: codex unavailable-model low\n'
+    printf 'timelane: exec "%s" -\n' "$gate"
+  } > "$home/routing.local.yaml"
   unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
     /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
   rc_unavailable=$?
+  # timelane resolves on every host (exec gate), so this check exercises the
+  # timeout validator instead of failing at vendor resolution on CI machines
+  # that have no codex CLI.
   bad="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
-    --dry-run --timeout nope offline x 2>&1)"
+    --dry-run --timeout nope timelane x 2>&1)"
   rc_bad=$?
   nested="$(OMNILANE_HOME="$home" OMNILANE_DEPTH=1 \
     /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
