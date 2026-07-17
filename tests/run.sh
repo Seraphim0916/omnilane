@@ -986,6 +986,84 @@ test_jobs_stats_aggregates_only_public_metadata() {
   fi
 }
 
+test_jobs_json_is_versioned_and_private_by_default() {
+  local name="jobs JSON is versioned and private by default" home done_id running_id
+  local list_prefix list_suffix status_json result_json stats_json empty_stats_json
+  local invalid_json invalid_utf8_json invalid_rc
+  name="jobs JSON is versioned and private by default"
+  home="$TEST_ROOT/jobs-json"
+  done_id="20260717-120005-123-5"
+  running_id="20260717-120004-123-4"
+  mkdir -p "$home/jobs/$done_id" "$home/jobs/$running_id"
+  printf '0\n' > "$home/jobs/$done_id/exit"
+  printf '{"lane":"triage","vendor":"codex","model":"模型"}\n' > "$home/jobs/$done_id/meta.json"
+  printf 'PRIVATE-TASK-CANARY\n' > "$home/jobs/$done_id/task.txt"
+  printf 'PRIVATE-OUTPUT-CANARY\n' > "$home/jobs/$done_id/out.txt"
+  printf 'PRIVATE-STDERR-CANARY\n' > "$home/jobs/$done_id/out.txt.stderr.log"
+  printf '{"lane":"probe","vendor":"exec"}\n' > "$home/jobs/$running_id/meta.json"
+
+  list_prefix="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json list 2>&1)"
+  list_suffix="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --json 2>&1)"
+  status_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$done_id" --json 2>&1)"
+  result_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result --json "$done_id" 2>&1)"
+  stats_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --last 2 --json 2>&1)"
+  empty_stats_json="$(OMNILANE_HOME="$home/empty" bash "$ROOT/scripts/jobs.sh" stats --json 2>&1)"
+  printf '\377' > "$home/jobs/$running_id/meta.json"
+  invalid_utf8_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --json 2>&1)"
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json status ../escape \
+    > "$home/invalid.json" 2>&1
+  invalid_rc=$?
+  invalid_json="$(cat "$home/invalid.json")"
+
+  if ! python3 - "$done_id" "$running_id" "$list_prefix" "$list_suffix" \
+      "$status_json" "$result_json" "$stats_json" "$empty_stats_json" "$invalid_json" <<'PY'
+import json
+import sys
+
+done_id, running_id, *documents = sys.argv[1:]
+list_prefix, list_suffix, status_doc, result_doc, stats_doc, empty_stats_doc, invalid_doc = map(json.loads, documents)
+assert list_prefix == list_suffix
+assert list_prefix["schema_version"] == 1 and list_prefix["command"] == "list" and list_prefix["ok"] is True
+assert [job["id"] for job in list_prefix["jobs"]] == [done_id, running_id]
+done = list_prefix["jobs"][0]
+assert done["state"] == "done" and done["exit_code"] == 0
+assert done["metadata_status"] == "valid" and '"model":"模型"' in done["metadata"]
+assert status_doc["job"] == {"id": done_id, "state": "done", "exit_code": 0}
+assert result_doc["job"] == {
+    "id": done_id,
+    "state": "done",
+    "exit_code": 0,
+    "output_available": True,
+    "stderr_available": True,
+}
+assert stats_doc["sampled"] == 2 and stats_doc["succeeded"] == 1 and stats_doc["running"] == 1
+assert {item["name"]: item["count"] for item in stats_doc["lanes"]} == {"probe": 1, "triage": 1}
+assert empty_stats_doc["sampled"] == 0 and empty_stats_doc["lanes"] == [] and empty_stats_doc["vendors"] == []
+assert invalid_doc["schema_version"] == 1 and invalid_doc["ok"] is False
+assert invalid_doc["error"] == "invalid job id"
+for document in documents:
+    assert "PRIVATE-" not in document
+PY
+  then
+    fail "$name" "JSON contract was malformed or disclosed private bodies"
+  elif ! python3 - "$running_id" "$invalid_utf8_json" <<'PY'
+import json
+import sys
+
+running_id, document = sys.argv[1:]
+jobs = json.loads(document)["jobs"]
+running = next(job for job in jobs if job["id"] == running_id)
+assert running["metadata"] is None and running["metadata_status"] == "invalid"
+PY
+  then
+    fail "$name" "invalid UTF-8 metadata broke JSON output"
+  elif [[ "$invalid_rc" -ne 2 ]]; then
+    fail "$name" "invalid JSON request did not preserve exit 2 (got $invalid_rc)"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -2451,6 +2529,7 @@ test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata
 test_jobs_cli_contains_malformed_public_metadata
 test_jobs_stats_aggregates_only_public_metadata
+test_jobs_json_is_versioned_and_private_by_default
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata

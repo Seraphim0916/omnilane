@@ -245,8 +245,8 @@ dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 候補ごとの決定理由をオフライン表示
 dispatch.sh [--json] --validate [--json]           # プロバイダーを呼ばず実効ルーティングを検証
-jobs.sh list | status ID | result ID
-jobs.sh stats [--last N]                           # ローカル成功率とルーティング集計
+jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さずメタデータのみ
+jobs.sh [--json] stats [--last N]                  # ローカル成功率とルーティング集計
 jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー
 ```

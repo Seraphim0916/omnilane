@@ -226,8 +226,8 @@ dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir 目錄]
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 離線逐候選解釋路由決策
 dispatch.sh [--json] --validate [--json]           # 離線檢查生效路由，不呼叫模型
-jobs.sh list | status 工作ID | result 工作ID
-jobs.sh stats [--last N]                           # 本機成功率與路由彙整
+jobs.sh [--json] {list | status 工作ID | result 工作ID} # JSON 結果只回中繼資料，不回本文
+jobs.sh [--json] stats [--last N]                  # 本機成功率與路由彙整
 jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布閘門
 configure.sh                                        # 互動通道選單

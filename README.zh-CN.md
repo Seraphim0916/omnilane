@@ -224,8 +224,8 @@ dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir 目录]
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
 dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，不调用模型
-jobs.sh list | status 作业ID | result 作业ID
-jobs.sh stats [--last N]                           # 本机成功率与路由汇总
+jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
+jobs.sh [--json] stats [--last N]                  # 本机成功率与路由汇总
 jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业
 configure.sh                                        # 交互通道菜单
 ```
