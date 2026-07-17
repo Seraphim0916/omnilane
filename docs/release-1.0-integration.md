@@ -97,3 +97,20 @@ publishing.
 - Limitation: ShellCheck remains unavailable locally; aggregate status stays
   `PARTIAL` pending CI/ShellCheck.
 - Rollback: revert merge commit `d775d86` before reverting #1 or earlier work.
+
+## #3 Private-by-default jobs JSON
+
+- Branch: `codex/idea-jobs-json`
+- Merge commit: `0e7fabf`
+- Conflict resolution retained dispatch JSON and dry-run documentation while
+  adding jobs JSON syntax to all five READMEs and the public wrapper help.
+- Syntax and regression: Bash syntax passed; shell suite `56 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Isolated runtime: prefix and suffix JSON positions for list were byte-equal;
+  list, status, result, and stats all parsed as schema version 1.
+- Privacy/adversarial runtime: task, result, and stderr canaries were absent from
+  every JSON response; path-escape job ID failed with exit 2 while still
+  returning valid JSON.
+- Limitation: ShellCheck remains unavailable locally; aggregate status stays
+  `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `0e7fabf` before reverting #2 or earlier work.
