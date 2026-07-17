@@ -117,9 +117,13 @@ read_job_pid() {
   local LC_ALL=C
   RECORDED_PID=""
   [[ -f "$path" && ! -L "$path" ]] || return 1
-  size="$(wc -c < "$path" | tr -d '[:space:]')" || return 2
+  # 2>/dev/null before < : the file can vanish between the check above and
+  # these reads (a job being removed mid-wait). Redirections apply left to
+  # right, so stderr is already silenced when the open fails; the failure is
+  # classified by the caller and the noise must not leak into captured output.
+  size="$(wc -c 2>/dev/null < "$path" | tr -d '[:space:]')" || return 2
   [[ "$size" =~ ^[0-9]+$ && "$size" -le 11 ]] || return 2
-  value="$(cat "$path")" || return 2
+  value="$(cat "$path" 2>/dev/null)" || return 2
   length="${#value}"
   [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
   [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
@@ -645,6 +649,12 @@ case "${1:-}" in
         fi
       fi
       if [[ "$pid_state" == "invalid" ]]; then
+        # A pid file that vanished between the existence check and the bounded
+        # read is a job being removed, not corrupt metadata; loop again so the
+        # directory check reports the disappearance.
+        if [[ ! -e "$JOB_DIR/pid" && ! -L "$JOB_DIR/pid" ]]; then
+          continue
+        fi
         echo "dead (invalid pid metadata)"
         exit 125
       elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then

@@ -52,7 +52,7 @@ _omnilane_job_ids() {
 }
 
 _omnilane() {
-  local cur prev command sub words sub_index
+  local cur prev command sub words sub_index reply_line
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]:-}"
@@ -66,7 +66,12 @@ _omnilane() {
           --mode) words="advise work" ;;
           --vendor) words="codex claude grok gemini exec vote" ;;
           --effort) words="low medium high xhigh max" ;;
-          --workdir) COMPREPLY=( $(compgen -d -- "$cur") ); return ;;
+          --workdir)
+            COMPREPLY=()
+            while IFS= read -r reply_line; do
+              COMPREPLY+=("$reply_line")
+            done < <(compgen -d -- "$cur")
+            return ;;
           --model|--timeout|--job-timeout) return ;;
           *) words="--background --dry-run --help --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
         esac
@@ -109,7 +114,10 @@ _omnilane() {
       *) return ;;
     esac
   fi
-  COMPREPLY=( $(compgen -W "$words" -- "$cur") )
+  COMPREPLY=()
+  while IFS= read -r reply_line; do
+    COMPREPLY+=("$reply_line")
+  done < <(compgen -W "$words" -- "$cur")
 }
 
 complete -F _omnilane omnilane
