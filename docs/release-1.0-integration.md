@@ -63,3 +63,19 @@ publishing.
 - Limitation: ShellCheck is unavailable on this MacStudio, so this experiment
   and the aggregate release candidate remain `PARTIAL` pending CI/ShellCheck.
 - Rollback: revert merge commit `40fabac` before reverting #6 or #5.
+
+## #1 Versioned dispatch inspection JSON
+
+- Branch: `codex/idea-dispatch-json`
+- Merge commit: `78fcf74`
+- Merge result: only `CHANGELOG.md` conflicted; all four existing Unreleased
+  entries were preserved alongside the dispatch JSON entry.
+- Syntax and regression: Bash syntax passed; shell suite `54 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Isolated runtime: both accepted `--json` positions for `--list`, `--explain`,
+  and `--validate` produced byte-identical schema-version-1 documents.
+- Adversarial runtime: mixing `--json` with provider work failed usage with exit
+  2 and created no jobs directory. No provider or network call was made.
+- Limitation: ShellCheck remains unavailable locally; aggregate status stays
+  `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `78fcf74` before reverting earlier integrations.
