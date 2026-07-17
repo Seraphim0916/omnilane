@@ -222,6 +222,7 @@ dispatch.sh --explain 通道                          # 離線逐候選解釋路
 dispatch.sh --validate                              # 離線檢查生效路由，不呼叫模型
 jobs.sh list | status 工作ID | result 工作ID
 jobs.sh stats [--last N]                           # 本機成功率與路由彙整
+jobs.sh audit [--last N]                           # 唯讀檢查工作完整性與隱私權限
 jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 configure.sh                                        # 互動通道選單
 ```

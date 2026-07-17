@@ -2001,6 +2001,68 @@ test_round2_untrusted_boundary_and_cleanup() {
   fi
 }
 
+test_jobs_audit_is_private_read_only_and_fail_closed() {
+  local name="jobs audit is private read-only and fail-closed"
+  local clean bad clean_id bad_id prefix_id clean_out bad_out before after clean_rc bad_rc
+  clean="$TEST_ROOT/jobs-audit-clean"
+  bad="$TEST_ROOT/jobs-audit-bad"
+  clean_id="20260717-170000-123-1"
+  bad_id="20260717-170001-123-2"
+  prefix_id="20260717-170002-123-3"
+
+  mkdir -m 700 -p "$clean/jobs/$clean_id" "$bad/jobs/$bad_id" \
+    "$bad/jobs/$prefix_id" "$bad/jobs/not-a-job"
+  chmod 700 "$clean/jobs" "$clean/jobs/$clean_id"
+  printf 'SECRET_TASK\n' > "$clean/jobs/$clean_id/task.txt"
+  printf '{"lane":"triage","vendor":"codex","model":"m","effort":"high","timeout":1,"job_timeout":null,"mode":"advise","workdir":"/tmp","candidate":"1/1","started":"2026-07-17T09:00:00Z"}\n' \
+    > "$clean/jobs/$clean_id/meta.json"
+  printf '%s\n' "$$" > "$clean/jobs/$clean_id/pid"
+  printf 'private answer\n' > "$clean/jobs/$clean_id/out.txt"
+  printf '7\n' > "$clean/jobs/$clean_id/exit"
+  chmod 600 "$clean/jobs/$clean_id"/*
+
+  printf 'SECRET_BAD_TASK\n' > "$bad/jobs/$bad_id/task.txt"
+  printf 'not-json\n' > "$bad/jobs/$bad_id/meta.json"
+  printf '%s\n' "$$" > "$bad/jobs/$bad_id/pid"
+  printf 'private bad answer\n' > "$bad/jobs/$bad_id/out.txt"
+  ln -s "$clean/jobs/$clean_id/exit" "$bad/jobs/$bad_id/exit"
+  mkfifo "$bad/jobs/untrusted-fifo"
+  chmod 755 "$bad/jobs" "$bad/jobs/$bad_id"
+  chmod 644 "$bad/jobs/$bad_id"/task.txt "$bad/jobs/$bad_id"/meta.json \
+    "$bad/jobs/$bad_id"/pid "$bad/jobs/$bad_id"/out.txt
+  printf 'private prefix task\n' > "$bad/jobs/$prefix_id/task.txt"
+  printf '{"lane":"triage","vendor":"codex",BROKEN}\n' > "$bad/jobs/$prefix_id/meta.json"
+  printf '%s\n' "$$" > "$bad/jobs/$prefix_id/pid"
+  chmod 700 "$bad/jobs/$prefix_id"
+  chmod 600 "$bad/jobs/$prefix_id"/*
+
+  clean_out="$(OMNILANE_HOME="$clean" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 2>&1)"
+  clean_rc=$?
+  before="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
+  bad_out="$(OMNILANE_HOME="$bad" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 2>&1)"
+  bad_rc=$?
+  after="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
+
+  if [[ "$clean_rc" -ne 0 || "$clean_out" != *"audit: sampled=1 passed=1 failed=0"* ]]; then
+    fail "$name" "clean private job did not pass: rc=$clean_rc out=$clean_out"
+  elif [[ "$clean_out$bad_out" == *"SECRET_TASK"* || "$clean_out$bad_out" == *"private answer"* ]]; then
+    fail "$name" "audit exposed private task or result content"
+  elif [[ "$bad_rc" -ne 1 || "$bad_out" != *"failed="* ]]; then
+    fail "$name" "corrupt store did not fail closed: rc=$bad_rc out=$bad_out"
+  elif [[ "$bad_out" != *"unsafe-store-mode"* || "$bad_out" != *"invalid-job-name"* ||
+          "$bad_out" != *"unsafe-job-entry"* ||
+          "$bad_out" != *"unsafe-job-mode"* || "$bad_out" != *"symlink-artifact"* ||
+          "$bad_out" != *"invalid-metadata"* || "$bad_out" != *"unsafe-file-mode"* ]]; then
+    fail "$name" "audit omitted an integrity finding: $bad_out"
+  elif [[ "$(printf '%s\n' "$bad_out" | grep -c 'invalid-metadata')" -lt 2 ]]; then
+    fail "$name" "JSON-shaped corrupt metadata passed audit: $bad_out"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "audit modified job artifacts"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
@@ -2051,6 +2113,7 @@ test_install_preserves_existing_wrapper_file
 test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
+test_jobs_audit_is_private_read_only_and_fail_closed
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

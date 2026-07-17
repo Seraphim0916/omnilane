@@ -2,14 +2,14 @@
 set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh list | status JOB_ID | result JOB_ID | stats [--last N]
-#        jobs.sh prune [--keep N] [--apply]
+#        jobs.sh audit [--last N] | prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 
 usage() {
-  echo "usage: jobs.sh list|status ID|result ID|stats [--last N]|prune [--keep N] [--apply]" >&2
+  echo "usage: jobs.sh list|status ID|result ID|stats [--last N]|audit [--last N]|prune [--keep N] [--apply]" >&2
   exit 2
 }
 
@@ -93,6 +93,13 @@ parse_stats_metadata() {
   STATS_VENDOR="${BASH_REMATCH[2]}"
 }
 
+parse_audit_metadata() {
+  local value="$1" metadata_re
+  local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
+  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(codex|claude|grok|gemini|exec)\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  [[ "$value" =~ $metadata_re ]]
+}
+
 print_stat_counts() {
   local label="$1"
   shift
@@ -102,9 +109,130 @@ print_stat_counts() {
   done
 }
 
+path_mode() {
+  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+
 validate_job_store
 
 case "${1:-}" in
+  audit)
+    limit=100
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --last)
+          [[ $# -ge 2 ]] || usage
+          limit="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$limit" =~ ^[1-9][0-9]{0,3}$ && "$limit" -le 10000 ]] || {
+      echo "invalid --last value (want 1..10000)" >&2
+      exit 2
+    }
+
+    findings=0
+    sampled=0
+    passed=0
+    failed=0
+    ids=()
+    if [[ -d "$JOBS" ]]; then
+      mode="$(path_mode "$JOBS" 2>/dev/null || true)"
+      if [[ "$mode" != "700" ]]; then
+        printf 'FAIL store unsafe-store-mode\n'
+        findings=$((findings + 1))
+      fi
+      for job_dir in "$JOBS"/*; do
+        [[ -e "$job_dir" || -L "$job_dir" ]] || continue
+        if [[ -L "$job_dir" || ! -d "$job_dir" ]]; then
+          printf 'FAIL store unsafe-job-entry\n'
+          findings=$((findings + 1))
+          continue
+        fi
+        id="${job_dir##*/}"
+        if [[ ! "$id" =~ $JOB_ID_PATTERN ]]; then
+          printf 'FAIL store invalid-job-name\n'
+          findings=$((findings + 1))
+          continue
+        fi
+        ids+=("$id")
+      done
+    fi
+
+    if [[ ${#ids[@]} -gt 0 ]]; then
+      while IFS= read -r id; do
+        sampled=$((sampled + 1))
+        job_failed=0
+        job_dir="$JOBS/$id"
+        if [[ ! -d "$job_dir" || -L "$job_dir" ]]; then
+          printf 'FAIL %s changed-job-path\n' "$id"
+          findings=$((findings + 1)); failed=$((failed + 1))
+          continue
+        fi
+        mode="$(path_mode "$job_dir" 2>/dev/null || true)"
+        if [[ "$mode" != "700" ]]; then
+          printf 'FAIL %s unsafe-job-mode\n' "$id"
+          findings=$((findings + 1)); job_failed=1
+        fi
+        for artifact in "$job_dir"/*; do
+          [[ -e "$artifact" || -L "$artifact" ]] || continue
+          if [[ -L "$artifact" ]]; then
+            printf 'FAIL %s symlink-artifact\n' "$id"
+            findings=$((findings + 1)); job_failed=1
+          elif [[ -d "$artifact" ]]; then
+            printf 'FAIL %s nested-directory\n' "$id"
+            findings=$((findings + 1)); job_failed=1
+          elif [[ -f "$artifact" ]]; then
+            mode="$(path_mode "$artifact" 2>/dev/null || true)"
+            if [[ "$mode" != "600" ]]; then
+              printf 'FAIL %s unsafe-file-mode\n' "$id"
+              findings=$((findings + 1)); job_failed=1
+            fi
+          else
+            printf 'FAIL %s unsafe-artifact-type\n' "$id"
+            findings=$((findings + 1)); job_failed=1
+          fi
+        done
+        if [[ ! -f "$job_dir/task.txt" || -L "$job_dir/task.txt" ]]; then
+          printf 'FAIL %s missing-task\n' "$id"
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if ! read_public_metadata "$job_dir/meta.json" ||
+           ! parse_audit_metadata "$PUBLIC_METADATA"; then
+          printf 'FAIL %s invalid-metadata\n' "$id"
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if [[ -e "$job_dir/pid" || -L "$job_dir/pid" ]]; then
+          if ! read_job_pid "$job_dir/pid"; then
+            printf 'FAIL %s invalid-pid\n' "$id"
+            findings=$((findings + 1)); job_failed=1
+          fi
+        else
+          printf 'FAIL %s missing-pid\n' "$id"
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if [[ -e "$job_dir/exit" || -L "$job_dir/exit" ]]; then
+          if ! read_exit_code "$job_dir/exit"; then
+            printf 'FAIL %s invalid-exit\n' "$id"
+            findings=$((findings + 1)); job_failed=1
+          fi
+        fi
+        if [[ "$job_failed" -eq 0 ]]; then
+          printf 'PASS %s\n' "$id"
+          passed=$((passed + 1))
+        else
+          failed=$((failed + 1))
+        fi
+      done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
+    fi
+    printf 'audit: sampled=%s passed=%s failed=%s findings=%s\n' \
+      "$sampled" "$passed" "$failed" "$findings"
+    [[ "$findings" -eq 0 ]] || exit 1 ;;
   stats)
     limit=100
     shift

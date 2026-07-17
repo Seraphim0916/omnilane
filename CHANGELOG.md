@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `jobs.sh audit [--last N]` performs a bounded, read-only integrity and privacy
+  check of the local job store without printing task or result content.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
