@@ -224,6 +224,8 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 ## 📖 명령 레퍼런스
 
 ```
+eval "$(omnilane completion bash)"             # 현재 Bash 에서 완성 활성화
+source <(omnilane completion zsh)               # 현재 Zsh 에서 완성 활성화
 omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시
 omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
