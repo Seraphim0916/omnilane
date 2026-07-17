@@ -131,3 +131,23 @@ publishing.
 - Limitation: ShellCheck remains unavailable locally; aggregate status stays
   `PARTIAL` pending CI/ShellCheck.
 - Rollback: revert merge commit `28fbd7c` before reverting #3 or earlier work.
+
+## #7 Read-only jobs integrity audit
+
+- Branch: `codex/idea-jobs-audit`
+- Merge commit: `9f7ff74`
+- Conflict resolution integrated audit into the shared jobs JSON argument
+  normalizer, so prefix and suffix `--json` forms remain byte-identical while
+  wait stays a separate bounded human-mode operation.
+- Syntax and regression: Bash syntax passed; shell suite `58 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Public-path runtime: an isolated fake exec gate created a real background job;
+  public wait completed it with exit 0, then audit reported exactly one passing
+  job and no findings. No provider or network call was made.
+- Privacy/adversarial runtime: changing the store mode and adding a symlink
+  artifact produced only `unsafe-store-mode` and `symlink-artifact` codes with
+  exit 1. The private task canary stayed absent and pre/post regular-file hashes
+  were identical.
+- Limitation: ShellCheck remains unavailable locally; aggregate status stays
+  `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `9f7ff74` before reverting #4 or earlier work.
