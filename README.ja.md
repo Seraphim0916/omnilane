@@ -197,6 +197,9 @@ CLI バージョンにより異なる場合あり)へマーカー付きの可逆
 **常駐ルーティングリマインダー**を追記できます。非対話インストールは
 `OMNILANE_HOOKS=all|none|claude,codex` を指定。手動接続:
 
+`./install.sh --check` は変更せずドリフトを検査します。インストールまたは
+`--uninstall` に `--dry-run` を加えると所有対象の操作を事前表示します。
+
 - **Claude Code**:プラグインとしてインストール(`/route`、`/route-jobs`
   コマンド付き)、または `skills/omnilane` を `~/.claude/skills/` へ。
 - **Codex**:`skills/omnilane` を `~/.codex/skills/` へ配置/リンク。

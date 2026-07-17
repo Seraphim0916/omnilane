@@ -1733,6 +1733,127 @@ make_fake_installer_home() {
   chmod +x "$home/bin/codex"
 }
 
+snapshot_installer_home() {
+  local root="$1" path mode
+  find "$root" -mindepth 1 -print | LC_ALL=C sort | while IFS= read -r path; do
+    mode="$(file_mode "$path")"
+    if [[ -L "$path" ]]; then
+      printf 'link %s %s %s\n' "${path#"$root"/}" "$mode" "$(readlink "$path")"
+    elif [[ -f "$path" ]]; then
+      printf 'file %s %s ' "${path#"$root"/}" "$mode"
+      shasum -a 256 "$path" | awk '{print $1}'
+    elif [[ -d "$path" ]]; then
+      printf 'dir %s %s\n' "${path#"$root"/}" "$mode"
+    fi
+  done | shasum -a 256 | awk '{print $1}'
+}
+
+test_installer_check_and_dry_run_are_read_only() {
+  local name="installer check and dry run are read-only" fresh installed partial foreign target parent_link parent_outside internal_link
+  local fresh_before fresh_after installed_before installed_after
+  local foreign_before foreign_after parent_before parent_after
+  local install_plan uninstall_plan check_out check_rc partial_out partial_rc foreign_rc parent_rc
+  local parent_check_rc parent_install_rc internal_rc internal_before internal_after
+  local locale locale_ok=1
+  fresh="$TEST_ROOT/install-dry-fresh"; make_fake_installer_home "$fresh"
+  mkdir -p "$fresh/.omnilane"
+  printf 'touch "$HOME/DRY_RUN_OVERLAY_EXECUTED"\n' > "$fresh/.omnilane/local.sh"
+  fresh_before="$(snapshot_installer_home "$fresh")"
+  install_plan="$(HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run 2>&1)"
+  fresh_after="$(snapshot_installer_home "$fresh")"
+
+  installed="$TEST_ROOT/install-dry-installed"; make_fake_installer_home "$installed"
+  mkdir -p "$installed/.local/bin" "$installed/.codex/skills"
+  ln -s "$ROOT/bin/omnilane" "$installed/.local/bin/omnilane"
+  ln -s "$ROOT/skills/omnilane" "$installed/.codex/skills/omnilane"
+  { printf 'base\n'; cat "$ROOT/hooks/routing-instruction.md"; } > "$installed/.codex/AGENTS.md"
+  chmod 400 "$installed/.codex/AGENTS.md"
+  installed_before="$(snapshot_installer_home "$installed")"
+  uninstall_plan="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+    bash "$ROOT/install.sh" --uninstall --dry-run 2>&1)"
+  installed_after="$(snapshot_installer_home "$installed")"
+  check_out="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+    bash "$ROOT/install.sh" --check 2>&1)"
+  check_rc=$?
+
+  partial="$TEST_ROOT/install-check-partial"; make_fake_installer_home "$partial"
+  mkdir -p "$partial/.codex/skills"
+  ln -s "$ROOT/skills/omnilane" "$partial/.codex/skills/omnilane"
+  partial_out="$(HOME="$partial" PATH="$partial/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check 2>&1)"
+  partial_rc=$?
+
+  foreign="$TEST_ROOT/install-check-foreign"; make_fake_installer_home "$foreign"
+  mkdir -p "$foreign/.local/bin" "$foreign/outside"
+  target="$foreign/outside/wrapper"; printf 'FOREIGN-CANARY\n' > "$target"
+  ln -s "$target" "$foreign/.local/bin/omnilane"
+  foreign_before="$(snapshot_installer_home "$foreign")"
+  HOME="$foreign" PATH="$foreign/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check >/dev/null 2>&1
+  foreign_rc=$?
+  foreign_after="$(snapshot_installer_home "$foreign")"
+
+  parent_link="$TEST_ROOT/install-parent-link"; make_fake_installer_home "$parent_link"
+  parent_outside="$TEST_ROOT/install-parent-outside"
+  mkdir -p "$parent_outside"
+  ln -s "$parent_outside" "$parent_link/.codex/skills"
+  parent_before="$(snapshot_installer_home "$parent_link")"
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
+  parent_rc=$?
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check >/dev/null 2>&1
+  parent_check_rc=$?
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" >/dev/null 2>&1
+  parent_install_rc=$?
+  parent_after="$(snapshot_installer_home "$parent_link")"
+
+  internal_link="$TEST_ROOT/install-internal-parent-link"; make_fake_installer_home "$internal_link"
+  mkdir -p "$internal_link/shared-skills"
+  ln -s ../shared-skills "$internal_link/.codex/skills"
+  internal_before="$(snapshot_installer_home "$internal_link")"
+  HOME="$internal_link" PATH="$internal_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
+  internal_rc=$?
+  internal_after="$(snapshot_installer_home "$internal_link")"
+
+  for locale in en zh-TW zh-CN ja ko; do
+    HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none OMNILANE_LANG="$locale" \
+      bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1 || locale_ok=0
+  done
+  fresh_after="$(snapshot_installer_home "$fresh")"
+  installed_after="$(snapshot_installer_home "$installed")"
+
+  if [[ "$install_plan" != *"would link"* || "$install_plan" != *".local/bin/omnilane"* ]]; then
+    fail "$name" "install dry run did not describe owned links: $install_plan"
+  elif [[ "$fresh_before" != "$fresh_after" || "$installed_before" != "$installed_after" ]]; then
+    fail "$name" "dry run changed the install or uninstall fixture"
+  elif [[ -e "$fresh/DRY_RUN_OVERLAY_EXECUTED" ]]; then
+    fail "$name" "dry run executed the machine-local routing overlay"
+  elif [[ "$uninstall_plan" != *"would remove"* || "$uninstall_plan" != *"AGENTS.md"* ]]; then
+    fail "$name" "uninstall dry run did not describe links and hook removal: $uninstall_plan"
+  elif [[ "$check_rc" -ne 0 || "$check_out" != *"PASS wrapper"* ||
+          "$check_out" != *"PASS codex-skill"* || "$check_out" != *"PASS codex-hook"* ]]; then
+    fail "$name" "healthy installation check failed: rc=$check_rc out=$check_out"
+  elif [[ "$partial_rc" -ne 1 || "$partial_out" != *"MISSING wrapper"* ]]; then
+    fail "$name" "partial install was not reported as drift: rc=$partial_rc out=$partial_out"
+  elif [[ "$foreign_rc" -ne 1 || "$foreign_before" != "$foreign_after" ]]; then
+    fail "$name" "foreign link check changed state or returned the wrong status"
+  elif [[ "$parent_rc" -ne 1 || "$parent_check_rc" -ne 1 || "$parent_install_rc" -ne 1 ||
+          "$parent_before" != "$parent_after" ]] ||
+       find "$parent_outside" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "symlinked parent path was accepted or modified"
+  elif [[ "$internal_rc" -ne 0 || "$internal_before" != "$internal_after" ]]; then
+    fail "$name" "HOME-internal parent link was not previewed safely"
+  elif [[ "$locale_ok" -ne 1 ]]; then
+    fail "$name" "a supported locale changed dry-run behavior"
+  else
+    pass "$name"
+  fi
+}
+
 test_installer_usage_is_fail_closed() {
   local name="installer usage is fail-closed" unknown help extra rc_unknown rc_help rc_extra
   unknown="$TEST_ROOT/installer-unknown"; help="$TEST_ROOT/installer-help"
@@ -2041,6 +2162,7 @@ test_background_job_records_whole_job_timeout
 test_job_timeout_bounds_codex_lock_wait
 test_job_timeout_bounds_vote_panel
 test_doctor_is_read_only_and_reports_failures
+test_installer_check_and_dry_run_are_read_only
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks

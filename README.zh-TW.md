@@ -176,6 +176,8 @@ omnilane ui stop     # 正常停止
 標記、可逆的區塊(`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、
 `~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路徑可能隨 CLI 版本不同),
 讓主迴圈記得查路由表;非互動安裝可帶 `OMNILANE_HOOKS=all|none|claude,codex`。
+`./install.sh --check` 可唯讀檢查漂移；安裝或 `--uninstall` 加上
+`--dry-run`，可先預覽每個由這份 checkout 擁有的檔案動作。
 手動接線:
 
 - **Claude Code**:以外掛安裝(附 `/route`、`/route-jobs` 指令),
