@@ -40,3 +40,26 @@ publishing.
   byte-matched both checked-in completion files.
 - Rollback: revert merge commit `000155d` after reverting later dependent
   merges; retain the conflict-resolution parent history.
+
+## #8 Offline release audit
+
+- Branch: `codex/idea-release-audit`
+- Merge commit: `40fabac`
+- Merge conflicts: changelog, four localized READMEs, public wrapper, and shell
+  suite. Resolution preserved #5 and #6 while adding the release gate as a
+  complete CLI, test, and documentation contract.
+- Syntax and regression: Bash syntax passed; shell suite `53 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Clean runtime: current `0.6.0` JSON-plus-manifest passed with 70 tracked
+  paths; two consecutive outputs were byte-identical. Target `1.0.0` failed
+  closed with five release blockers, including `version-mismatch`.
+- Isolated archive runtime: an annotated local `v0.6.0` tag resolving to the
+  fixture HEAD passed `--require-tag`; no source-repository tag or remote was
+  created.
+- Adversarial target injection remains covered by the full shell oracle. The
+  repository pre-tool safety hook blocked a second integration-level fixture
+  command from reading a deliberately named `.env`; the original experiment's
+  isolated secret-shaped package fixture remains recorded in its dossier.
+- Limitation: ShellCheck is unavailable on this MacStudio, so this experiment
+  and the aggregate release candidate remain `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `40fabac` before reverting #6 or #5.
