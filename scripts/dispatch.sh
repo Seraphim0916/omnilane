@@ -6,9 +6,9 @@ set -euo pipefail
 #   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
-#   dispatch.sh --list            # effective routing: local overrides + fallback resolution
-#   dispatch.sh --explain LANE    # explain candidate availability without dispatching
-#   dispatch.sh --validate        # lint effective routing without dispatching
+#   dispatch.sh [--json] --list [--json]
+#   dispatch.sh [--json] --explain LANE [--json]
+#   dispatch.sh [--json] --validate [--json]
 #
 # TASK TEXT of "-" reads the task from stdin.
 #
@@ -31,11 +31,59 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""
-ORIGINAL_ARGC=$#
 
 usage_error() {
-  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE | --validate' >&2
+  echo 'usage: dispatch.sh [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json]' >&2
   exit 2
+}
+
+json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      '\\') out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
+        # Only non-negative C0 bytes are JSON control characters.
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# Run one read-only inspection command once, preserving its human output and
+# exit status inside a stable JSON envelope. This avoids a second routing
+# implementation drifting from the human CLI contract.
+emit_json_inspection() {
+  local command="$1" output rc ok=false first=1 line
+  shift
+  if output="$("$@" 2>&1)"; then rc=0; else rc=$?; fi
+  [[ "$rc" -eq 0 ]] && ok=true
+  printf '{"schema_version":1,"command":"%s","ok":%s,"exit_code":%d,"lines":[' \
+    "$(json_escape "$command")" "$ok" "$rc"
+  if [[ -n "$output" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$first" -eq 1 ]] || printf ','
+      first=0
+      printf '"%s"' "$(json_escape "$line")"
+    done <<< "$output"
+  fi
+  printf ']}\n'
+  exit "$rc"
 }
 
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
@@ -279,17 +327,64 @@ validate_routing() {
   return 0
 }
 
+# Inspection modes are deliberately parsed before dispatch flags. JSON may be
+# placed before or after the inspection command, but can never decorate a real
+# dispatch and therefore cannot accidentally create job state.
+JSON_INSPECTION=0
+if [[ "${1:-}" == "--json" ]]; then
+  JSON_INSPECTION=1
+  shift
+  [[ $# -gt 0 ]] || usage_error
+fi
+case "${1:-}" in
+  --list)
+    if [[ "${2:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 2 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 1 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection list print_effective_routing
+    fi
+    print_effective_routing
+    exit 0
+    ;;
+  --explain)
+    [[ $# -ge 2 ]] || usage_error
+    if [[ "${3:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 3 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 2 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection explain explain_lane "$2"
+    fi
+    explain_lane "$2"
+    exit $?
+    ;;
+  --validate)
+    if [[ "${2:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 2 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 1 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection validate validate_routing
+    fi
+    validate_routing
+    exit $?
+    ;;
+  *)
+    [[ "$JSON_INSPECTION" -eq 0 ]] || usage_error
+    ;;
+esac
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --list)
-      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
-      print_effective_routing; exit 0 ;;
-    --explain)
-      [[ "$ORIGINAL_ARGC" -eq 2 && $# -eq 2 ]] || usage_error
-      explain_lane "$2"; exit $? ;;
-    --validate)
-      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
-      validate_routing; exit $? ;;
+    --list|--explain|--validate|--json) usage_error ;;
     --background) BACKGROUND=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
@@ -467,33 +562,6 @@ else
   (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
 fi
 
-json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      '\\') out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
-        # Only non-negative C0 bytes are JSON control characters.
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
-}
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
 (umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
   "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \

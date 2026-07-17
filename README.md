@@ -238,9 +238,9 @@ omnilane doctor [--json]                       # read-only routing and runtime h
 dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
-dispatch.sh --list
-dispatch.sh --explain LANE                          # offline candidate-by-candidate decision trace
-dispatch.sh --validate                              # lint effective routing; no provider calls
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
+dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
 jobs.sh list | status ID | result ID
 jobs.sh stats [--last N]                           # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only

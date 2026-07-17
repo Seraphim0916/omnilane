@@ -298,6 +298,107 @@ EOF
   fi
 }
 
+test_dispatch_json_inspection_contract() {
+  local name="dispatch inspection commands expose versioned JSON" home gate marker
+  local list_prefix list_suffix explain unavailable invalid mixed mixed_late
+  local rc_list_prefix rc_list_suffix rc_explain rc_unavailable rc_invalid rc_mixed rc_mixed_late
+  name="dispatch inspection commands expose versioned JSON"
+  home="$TEST_ROOT/dispatch-json"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$JSON_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  {
+    printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate"
+    printf 'hostile: vote "model\twith-tab" 1\n'
+  } > "$home/routing.local.yaml"
+
+  list_prefix="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --json --list 2>&1)"
+  rc_list_prefix=$?
+  list_suffix="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --list --json 2>&1)"
+  rc_list_suffix=$?
+  explain="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --json --explain probe 2>&1)"
+  rc_explain=$?
+
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --explain offline --json 2>&1)"
+  rc_unavailable=$?
+  printf 'bad: mystery model low\n' > "$home/routing.local.yaml"
+  invalid="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --json --validate 2>&1)"
+  rc_invalid=$?
+  mixed="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --json triage task 2>&1)"
+  rc_mixed=$?
+  mixed_late="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --background --json --list 2>&1)"
+  rc_mixed_late=$?
+
+  printf '%s\n' "$list_prefix" > "$home/list.json"
+  printf '%s\n' "$explain" > "$home/explain.json"
+  printf '%s\n' "$unavailable" > "$home/unavailable.json"
+  printf '%s\n' "$invalid" > "$home/invalid.json"
+
+  if [[ "$rc_list_prefix" -ne 0 || "$rc_list_suffix" -ne 0 ||
+        "$list_prefix" != "$list_suffix" ]]; then
+    fail "$name" "list JSON forms disagreed: $rc_list_prefix/$rc_list_suffix"
+  elif [[ "$rc_explain" -ne 0 || "$rc_unavailable" -ne 4 || "$rc_invalid" -ne 2 ]]; then
+    fail "$name" "JSON modes changed inspection exit codes: $rc_explain/$rc_unavailable/$rc_invalid"
+  elif [[ "$rc_mixed" -ne 2 || "$mixed" != *"usage"* ]]; then
+    fail "$name" "--json silently mixed with dispatch work: rc=$rc_mixed out=$mixed"
+  elif [[ "$rc_mixed_late" -ne 2 || "$mixed_late" != *"usage"* ]]; then
+    fail "$name" "late --json did not use the inspection usage contract: rc=$rc_mixed_late out=$mixed_late"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "JSON inspection executed work or created job state"
+  elif printf '%s' "$list_prefix" | LC_ALL=C grep -q $'\t'; then
+    fail "$name" "JSON output leaked a literal tab control byte"
+  elif ! python3 - "$home/list.json" "$home/explain.json" \
+      "$home/unavailable.json" "$home/invalid.json" <<'PY'
+import json
+import sys
+
+expected = [
+    ("list", True, 0),
+    ("explain", True, 0),
+    ("explain", False, 4),
+    ("validate", False, 2),
+]
+for path, contract in zip(sys.argv[1:], expected):
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+    command, ok, exit_code = contract
+    assert data["schema_version"] == 1
+    assert data["command"] == command
+    assert data["ok"] is ok
+    assert data["exit_code"] == exit_code
+    assert isinstance(data["lines"], list)
+    assert all(isinstance(line, str) for line in data["lines"])
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    listed = json.load(handle)
+assert any("hostile:" in line and "model\twith-tab" in line for line in listed["lines"])
+with open(sys.argv[2], encoding="utf-8") as handle:
+    explained = json.load(handle)
+assert any("candidate 2" in line and "status=selected" in line for line in explained["lines"])
+PY
+  then
+    fail "$name" "inspection JSON did not satisfy the versioned contract"
+  else
+    pass "$name"
+  fi
+}
+
 test_depth_and_grok_retry_env_validation() {
   local name="depth and Grok retry env validation" home gate fake prompt marker out
   local rc_depth_text rc_depth_negative rc_depth_control rc_nested rc_valid value rc_bad rc_control
@@ -2008,6 +2109,7 @@ test_watchdog_timeout_resolution
 test_dispatch_positional_usage_contract
 test_dispatch_explain_is_read_only_and_diagnostic
 test_dispatch_validate_routing_contract
+test_dispatch_json_inspection_contract
 test_depth_and_grok_retry_env_validation
 test_vendor_selector
 test_exec_gate_fallback

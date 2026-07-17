@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `dispatch.sh --list`, `--explain`, and `--validate` accept `--json` before or
+  after the inspection command and return one versioned JSON envelope without
+  invoking a provider or creating job state.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
