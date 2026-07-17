@@ -8,6 +8,8 @@
   "files": [
     "bin/",
     "scripts/",
+    "!scripts/__pycache__",
+    "!**/*.pyc",
     "completions/",
     "ui/",
     "routing.yaml",
