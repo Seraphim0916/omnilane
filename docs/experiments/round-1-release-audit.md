@@ -45,6 +45,8 @@ optional annotated tag without creating or publishing anything.
   two missing changelog links.
 - Public JSON and JSON-plus-manifest modes parse as schema version 1 and contain
   only stable check codes, hashes, tracked inventory, and release metadata.
+- Two consecutive clean public JSON-plus-manifest runs were byte-identical,
+  including tracked count, manifest SHA-256, archive SHA-256, and inventory.
 
 ## Adversarial evidence
 
