@@ -241,8 +241,8 @@ dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
 dispatch.sh --list
 dispatch.sh --explain LANE                          # offline candidate-by-candidate decision trace
 dispatch.sh --validate                              # lint effective routing; no provider calls
-jobs.sh list | status ID | result ID
-jobs.sh stats [--last N]                           # local success and routing aggregates
+jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
+jobs.sh [--json] stats [--last N]                  # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 ```

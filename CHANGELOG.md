@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `jobs.sh --json list|status|result|stats` emits versioned, machine-readable
+  local job summaries. JSON result inspection reports only body availability;
+  task, output, and stderr bodies remain private.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
