@@ -2001,6 +2001,59 @@ test_round2_untrusted_boundary_and_cleanup() {
   fi
 }
 
+test_shell_completion_is_safe_and_current() {
+  local name="shell completion is safe and current" home bash_out zsh_out bash_lanes bash_jobs zsh_lanes
+  local valid_id marker zsh_rc=0
+  home="$TEST_ROOT/completion-home"
+  valid_id="20260717-160000-123-4"
+  marker="$home/local-overlay-executed"
+  mkdir -p "$home/jobs/$valid_id" "$home/jobs/not-a-job"
+  ln -s "$home" "$home/jobs/20260717-160001-123-5"
+  printf 'touch "%s"\n' "$marker" > "$home/local.sh"
+  cat > "$home/routing.local.yaml" <<'EOF'
+safe-custom: exec /bin/true -
+$(touch should-not-run): exec /bin/true -
+bad lane: exec /bin/true -
+EOF
+
+  bash_out="$(bash "$ROOT/bin/omnilane" completion bash 2>&1)"
+  zsh_out="$(bash "$ROOT/bin/omnilane" completion zsh 2>&1)"
+  printf '%s\n' "$bash_out" > "$home/omnilane.bash"
+  printf '%s\n' "$zsh_out" > "$home/_omnilane"
+  bash -n "$home/omnilane.bash"
+  if command -v zsh >/dev/null 2>&1; then
+    zsh -n "$home/_omnilane" || zsh_rc=$?
+  fi
+  bash_lanes="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane route ""); COMP_CWORD=2; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  bash_jobs="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane jobs status ""); COMP_CWORD=3; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  if command -v zsh >/dev/null 2>&1; then
+    zsh_lanes="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+      zsh -c 'source "$1"; _omnilane_lanes' _ "$home/_omnilane")"
+  else
+    zsh_lanes="safe-custom"
+  fi
+
+  if [[ "$bash_out" != *'_omnilane_lanes'* || "$zsh_out" != *'_omnilane_job_ids'* ]]; then
+    fail "$name" "completion output lacked bounded lane/job helpers"
+  elif [[ "$bash_out$zsh_out" != *'--job-timeout'* || "$bash_out$zsh_out" != *'start status url stop'* ]]; then
+    fail "$name" "public option or UI command inventory was incomplete"
+  elif [[ "$bash_lanes" != *"safe-custom"* || "$bash_lanes" != *"triage"* || "$zsh_lanes" != *"safe-custom"* ]]; then
+    fail "$name" "effective lane completion missed local/default lanes"
+  elif [[ "$bash_lanes$zsh_lanes" == *'touch'* || -e "$marker" ]]; then
+    fail "$name" "completion executed or exposed hostile routing text"
+  elif [[ "$bash_jobs" != "$valid_id" ]]; then
+    fail "$name" "job completion admitted invalid or symlink IDs: $bash_jobs"
+  elif [[ "$zsh_rc" -ne 0 ]]; then
+    fail "$name" "Zsh completion syntax failed"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
@@ -2051,6 +2104,7 @@ test_install_preserves_existing_wrapper_file
 test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
+test_shell_completion_is_safe_and_current
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

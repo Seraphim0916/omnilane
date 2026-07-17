@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `omnilane completion bash|zsh` prints safe shell completion definitions for
+  public commands, routing lanes, and local job IDs without loading executable
+  machine-local routing overrides.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
