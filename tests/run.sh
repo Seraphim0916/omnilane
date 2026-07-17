@@ -1749,11 +1749,11 @@ snapshot_installer_home() {
 }
 
 test_installer_check_and_dry_run_are_read_only() {
-  local name="installer check and dry run are read-only" fresh installed partial foreign target parent_link
+  local name="installer check and dry run are read-only" fresh installed partial foreign target parent_link parent_outside internal_link
   local fresh_before fresh_after installed_before installed_after
   local foreign_before foreign_after parent_before parent_after
   local install_plan uninstall_plan check_out check_rc partial_out partial_rc foreign_rc parent_rc
-  local parent_check_rc parent_install_rc
+  local parent_check_rc parent_install_rc internal_rc internal_before internal_after
   local locale locale_ok=1
   fresh="$TEST_ROOT/install-dry-fresh"; make_fake_installer_home "$fresh"
   mkdir -p "$fresh/.omnilane"
@@ -1795,8 +1795,9 @@ test_installer_check_and_dry_run_are_read_only() {
   foreign_after="$(snapshot_installer_home "$foreign")"
 
   parent_link="$TEST_ROOT/install-parent-link"; make_fake_installer_home "$parent_link"
-  mkdir -p "$parent_link/outside-skills"
-  ln -s "$parent_link/outside-skills" "$parent_link/.codex/skills"
+  parent_outside="$TEST_ROOT/install-parent-outside"
+  mkdir -p "$parent_outside"
+  ln -s "$parent_outside" "$parent_link/.codex/skills"
   parent_before="$(snapshot_installer_home "$parent_link")"
   HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
@@ -1808,6 +1809,15 @@ test_installer_check_and_dry_run_are_read_only() {
     bash "$ROOT/install.sh" >/dev/null 2>&1
   parent_install_rc=$?
   parent_after="$(snapshot_installer_home "$parent_link")"
+
+  internal_link="$TEST_ROOT/install-internal-parent-link"; make_fake_installer_home "$internal_link"
+  mkdir -p "$internal_link/shared-skills"
+  ln -s ../shared-skills "$internal_link/.codex/skills"
+  internal_before="$(snapshot_installer_home "$internal_link")"
+  HOME="$internal_link" PATH="$internal_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
+  internal_rc=$?
+  internal_after="$(snapshot_installer_home "$internal_link")"
 
   for locale in en zh-TW zh-CN ja ko; do
     HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none OMNILANE_LANG="$locale" \
@@ -1833,8 +1843,10 @@ test_installer_check_and_dry_run_are_read_only() {
     fail "$name" "foreign link check changed state or returned the wrong status"
   elif [[ "$parent_rc" -ne 1 || "$parent_check_rc" -ne 1 || "$parent_install_rc" -ne 1 ||
           "$parent_before" != "$parent_after" ]] ||
-       find "$parent_link/outside-skills" -mindepth 1 -print -quit | grep -q .; then
+       find "$parent_outside" -mindepth 1 -print -quit | grep -q .; then
     fail "$name" "symlinked parent path was accepted or modified"
+  elif [[ "$internal_rc" -ne 0 || "$internal_before" != "$internal_after" ]]; then
+    fail "$name" "HOME-internal parent link was not previewed safely"
   elif [[ "$locale_ok" -ne 1 ]]; then
     fail "$name" "a supported locale changed dry-run behavior"
   else

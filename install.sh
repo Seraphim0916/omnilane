@@ -132,21 +132,26 @@ preserve_foreign_symlink() {
   msgf foreign_link "$1" >&2; echo >&2
 }
 
-safe_owned_parent() { # final path; reject links/non-directories below HOME
-  local path="$1" parent next
+safe_owned_parent() { # final path; nearest existing parent must resolve below HOME
+  local path="$1" parent probe next resolved_home resolved_probe
   parent="$(dirname "$path")"
   case "$parent" in
     "$HOME"|"$HOME"/*) ;;
     *) return 1 ;;
   esac
-  while [[ "$parent" != "$HOME" ]]; do
-    if [[ -L "$parent" || ( -e "$parent" && ! -d "$parent" ) ]]; then
-      return 1
-    fi
-    next="$(dirname "$parent")"
-    [[ "$next" != "$parent" ]] || return 1
-    parent="$next"
+  probe="$parent"
+  while [[ ! -e "$probe" && ! -L "$probe" ]]; do
+    next="$(dirname "$probe")"
+    [[ "$next" != "$probe" ]] || return 1
+    probe="$next"
   done
+  [[ -d "$probe" ]] || return 1
+  resolved_home="$(cd "$HOME" 2>/dev/null && pwd -P)" || return 1
+  resolved_probe="$(cd "$probe" 2>/dev/null && pwd -P)" || return 1
+  case "$resolved_probe" in
+    "$resolved_home"|"$resolved_home"/*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 reject_unsafe_parent() {
