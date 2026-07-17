@@ -238,6 +238,7 @@ dispatch.sh --list
 dispatch.sh --explain LANE                          # 候補ごとの決定理由をオフライン表示
 dispatch.sh --validate                              # プロバイダーを呼ばず実効ルーティングを検証
 jobs.sh list | status ID | result ID
+jobs.sh wait ID [--timeout N]                    # ジョブ終了値。124 は待機切れ、125 はワーカー停止
 jobs.sh stats [--last N]                           # ローカル成功率とルーティング集計
 jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー

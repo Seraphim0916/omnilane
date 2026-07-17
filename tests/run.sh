@@ -787,6 +787,93 @@ test_jobs_stats_aggregates_only_public_metadata() {
   fi
 }
 
+test_jobs_wait_is_bounded_and_terminal() {
+  local name="jobs wait is bounded and terminal" home transition_id pending_id malformed_id disappearing_id dead_id link_id
+  local out rc writer timeout_out timeout_rc timeout_elapsed before after malformed_rc malformed_out
+  local disappear_rc disappear_out remover dead_rc dead_out link_rc interrupted_rc waiter invalid_ok=1 value invalid_rc
+  home="$TEST_ROOT/jobs-wait"
+  transition_id="20260717-140001-123-1"
+  pending_id="20260717-140002-123-2"
+  malformed_id="20260717-140003-123-3"
+  disappearing_id="20260717-140004-123-4"
+  dead_id="20260717-140005-123-5"
+  link_id="20260717-140006-123-6"
+  mkdir -p "$home/jobs/$transition_id" "$home/jobs/$pending_id" \
+    "$home/jobs/$malformed_id" "$home/jobs/$disappearing_id" "$home/jobs/$dead_id" "$home/outside"
+  printf '%s\n' "$$" > "$home/jobs/$transition_id/pid"
+  printf '%s\n' "$$" > "$home/jobs/$pending_id/pid"
+  printf '0\nINJECTED-EXIT\n' > "$home/jobs/$malformed_id/exit"
+  printf '%s\n' "$$" > "$home/jobs/$disappearing_id/pid"
+  printf '9999999999\n' > "$home/jobs/$dead_id/pid"
+  printf '0\n' > "$home/outside/exit"
+  ln -s "$home/outside" "$home/jobs/$link_id"
+
+  (sleep 1; printf '7\n' > "$home/jobs/$transition_id/exit") &
+  writer=$!
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$transition_id" --timeout 4 2>&1)"
+  rc=$?
+  wait "$writer" 2>/dev/null || true
+
+  before="$(shasum -a 256 "$home/jobs/$pending_id/pid" | awk '{print $1}')"
+  timeout_elapsed="$SECONDS"
+  timeout_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout 0 2>&1)"
+  timeout_rc=$?
+  timeout_elapsed=$((SECONDS - timeout_elapsed))
+  after="$(shasum -a 256 "$home/jobs/$pending_id/pid" | awk '{print $1}')"
+
+  malformed_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$malformed_id" --timeout 1 2>&1)"
+  malformed_rc=$?
+  dead_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$dead_id" --timeout 1 2>&1)"
+  dead_rc=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$link_id" --timeout 1 \
+    > "$home/link.out" 2>&1
+  link_rc=$?
+
+  (sleep 1; /bin/rm "$home/jobs/$disappearing_id/pid"; rmdir "$home/jobs/$disappearing_id") &
+  remover=$!
+  disappear_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$disappearing_id" --timeout 4 2>&1)"
+  disappear_rc=$?
+  wait "$remover" 2>/dev/null || true
+
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout 10 \
+    > "$home/interrupted.out" 2>&1 &
+  waiter=$!
+  sleep 0.2
+  kill -TERM "$waiter" 2>/dev/null || true
+  wait "$waiter" 2>/dev/null
+  interrupted_rc=$?
+
+  for value in -1 nope 86401; do
+    OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout "$value" \
+      > "$home/invalid-$value.out" 2>&1
+    invalid_rc=$?
+    [[ "$invalid_rc" -eq 2 ]] || invalid_ok=0
+  done
+
+  if [[ "$rc" -ne 7 || "$out" != "done exit=7" ]]; then
+    fail "$name" "terminal job did not preserve exit 7: rc=$rc out=$out"
+  elif [[ "$timeout_rc" -ne 124 || "$timeout_out" != "wait timeout after 0s" ||
+          "$timeout_elapsed" -gt 1 ]]; then
+    fail "$name" "zero-timeout check was not immediate exit 124: rc=$timeout_rc elapsed=$timeout_elapsed out=$timeout_out"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "wait mutated pending job state"
+  elif [[ "$malformed_rc" -ne 1 || "$malformed_out" != "invalid recorded exit status" ]]; then
+    fail "$name" "malformed terminal state was accepted: rc=$malformed_rc out=$malformed_out"
+  elif [[ "$dead_rc" -ne 125 || "$dead_out" != "dead (worker gone, no exit recorded)" ]]; then
+    fail "$name" "dead worker did not return terminal exit 125: rc=$dead_rc out=$dead_out"
+  elif [[ "$link_rc" -ne 1 ]] || grep -q 'OUTSIDE' "$home/link.out"; then
+    fail "$name" "symlink job was followed or returned the wrong status"
+  elif [[ "$disappear_rc" -ne 1 || "$disappear_out" != "job disappeared while waiting" ]]; then
+    fail "$name" "disappearing job was not reported safely: rc=$disappear_rc out=$disappear_out"
+  elif [[ "$interrupted_rc" -ne 143 ]]; then
+    fail "$name" "TERM did not interrupt wait with exit 143 (got $interrupted_rc)"
+  elif [[ "$invalid_ok" -ne 1 ]]; then
+    fail "$name" "invalid wait timeout did not fail with exit 2"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -2017,6 +2104,7 @@ test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata
 test_jobs_cli_contains_malformed_public_metadata
 test_jobs_stats_aggregates_only_public_metadata
+test_jobs_wait_is_bounded_and_terminal
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata

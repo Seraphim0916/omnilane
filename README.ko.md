@@ -233,6 +233,7 @@ dispatch.sh --list
 dispatch.sh --explain LANE                          # 후보별 라우팅 결정을 오프라인 설명
 dispatch.sh --validate                              # 공급자 호출 없이 실효 라우팅 검사
 jobs.sh list | status ID | result ID
+jobs.sh wait ID [--timeout N]                    # 작업 종료값, 124 대기 만료, 125 작업자 중단
 jobs.sh stats [--last N]                           # 로컬 성공률과 라우팅 집계
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
 configure.sh                                        # 대화형 레인 메뉴
