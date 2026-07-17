@@ -2,7 +2,7 @@
 
 Branch: `codex/idea-release-audit`
 
-Commit: `1c75e10`
+Commits: `1c75e10`, `a7aab9c`
 
 Status: PARTIAL. Functional, adversarial, regression, and clean-fixture runtime
 acceptance pass. Local ShellCheck is unverified because `shellcheck` is not
@@ -10,7 +10,7 @@ installed on the current MacStudio.
 
 ## Hypothesis
 
-A read-only offline gate can turn release preparation into reproducible checks
+A read-only offline `omnilane release-audit [--json]` gate can turn release preparation into reproducible checks
 for version consistency, changelog links, package contents, executable modes,
 rollback documentation, secret-shaped artifacts, archive creation, and an
 optional annotated tag without creating or publishing anything.
@@ -24,6 +24,10 @@ optional annotated tag without creating or publishing anything.
   five READMEs now document `./install.sh --uninstall` explicitly.
 - Green: the complete shell suite passed `51 passed, 0 failed`.
 - The complete Python suite passed `36 passed, 11 subtests passed`.
+- A selection-gate review found the acceptance matrix required both a public
+  wrapper command and versioned JSON. The new red oracle returned exit 2 for
+  both current and future targets; the final public command emits one JSON
+  document and preserves the human mode's exit status.
 - Bash syntax, Perl syntax, Python compilation, and `git diff --check` passed.
 
 ## Runtime evidence
@@ -39,6 +43,8 @@ optional annotated tag without creating or publishing anything.
 - Target `1.0.0` correctly remains blocked by five current-state findings:
   VERSION mismatch, wrapper version mismatch, missing release heading, and the
   two missing changelog links.
+- Public JSON and JSON-plus-manifest modes parse as schema version 1 and contain
+  only stable check codes, hashes, tracked inventory, and release metadata.
 
 ## Adversarial evidence
 
@@ -81,6 +87,5 @@ default output stays to stable PASS/FAIL/WARN codes and hashes.
 ## Rollback
 
 No merge is authorized. Delete the experiment branch to discard it. If Vincent
-later selects and integrates `1c75e10`, revert that commit to remove the gate
-and its documentation. `main` remains unchanged pending Vincent's final
-judgment.
+later selects and integrates the gate, revert `a7aab9c` and then `1c75e10` to
+remove it. `main` remains unchanged pending Vincent's final judgment.
