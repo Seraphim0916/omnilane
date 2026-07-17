@@ -2,7 +2,7 @@
 
 Branch: `codex/idea-jobs-audit`
 
-Commit: `0f4cc28`
+Commits: `0f4cc28`, `72f1ed1`
 
 Status: PARTIAL. Functional, adversarial, regression, and runtime acceptance
 pass. Local ShellCheck is unverified because `shellcheck` is not installed on
@@ -10,7 +10,7 @@ the current MacStudio.
 
 ## Hypothesis
 
-A bounded `jobs.sh audit [--last N]` command can prove the local job store still
+A bounded `jobs.sh audit [--last N] [--json]` command can prove the local job store still
 meets Omnilane's integrity and privacy invariants without printing or modifying
 private task and result content.
 
@@ -21,6 +21,10 @@ private task and result content.
 - Green: the complete shell suite passed `51 passed, 0 failed` after the final
   adversarial fixes.
 - The complete Python suite passed `36 passed, 11 subtests passed`.
+- A selection-gate review found the acceptance matrix required JSON output.
+  The added red oracle failed with exit 2 for both clean and corrupt stores;
+  the final version emits one versioned JSON document while preserving exit 0
+  for clean stores and exit 1 for findings.
 - Bash syntax, Perl syntax, Python compilation, and `git diff --check` passed.
 
 ## Runtime evidence
@@ -33,6 +37,8 @@ made.
 
 Eight concurrent public audits of the same completed store all returned zero.
 An absent store returned the stable empty summary with no filesystem write.
+The public wrapper's JSON mode parsed successfully for both a clean generated
+job and the hostile fixture, without exposing task or result bodies.
 
 ## Adversarial evidence
 
@@ -71,5 +77,5 @@ It adds no lock, cleanup path, provider call, or job artifact.
 ## Rollback
 
 No merge is authorized. Delete the experiment branch to discard it. If Vincent
-later selects and integrates `0f4cc28`, revert that commit to remove the
-feature. `main` remains unchanged pending Vincent's final judgment.
+later selects and integrates the feature, revert `72f1ed1` and then `0f4cc28`
+to remove it. `main` remains unchanged pending Vincent's final judgment.
