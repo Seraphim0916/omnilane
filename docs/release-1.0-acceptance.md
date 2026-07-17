@@ -1,6 +1,7 @@
 # Omnilane 1.0 acceptance matrix
 
-Status: discovery baseline complete; implementation not started.
+Status: Round 1 experiments complete; awaiting Vincent's branch selection. No
+experiment has been integrated and `main` remains unchanged.
 
 ## Release contract
 
@@ -57,8 +58,8 @@ than eight experiment branches active at once.
 | 4 | `codex/idea-jobs-wait` | scripts can wait for one job to reach a terminal state with a bounded timeout | deterministic foreground fixture changes pending to terminal | disappearing job, malformed status, timeout zero, interrupted wait, PID reuse | isolated background fixture; verify terminal and timeout exit codes |
 | 5 | `codex/idea-install-check` | `install.sh --check` reports drift and ownership without writing; `--dry-run` previews install/uninstall actions | filesystem snapshots must remain byte-identical | foreign symlinks, missing newline, read-only files, partial install, locale variants | run in a temporary HOME and compare pre/post hashes |
 | 6 | `codex/idea-shell-completion` | Bash and Zsh completion output covers public commands, lanes, options, and safe job-ID completion | generated scripts pass shell syntax and command inventory assertions | spaces in models, hostile job names, absent job store, no command execution during completion | source completion in isolated shells and complete representative inputs |
-| 7 | `codex/idea-jobs-audit` | `jobs.sh audit [--json]` performs a bounded, read-only integrity scan and gives actionable findings | fixtures cover healthy, corrupt, unsafe, stale, and oversized metadata | link traversal, FIFO/device files, races, permission errors, huge stores | audit isolated stores; prove no mutation and stable status codes |
-| 8 | `codex/idea-release-audit` | `omnilane release-audit [--json]` verifies version alignment, required files, syntax/check availability, docs links, and release inventory without publishing | mutate a temporary checkout one invariant at a time and require precise failure | dirty tree, missing optional tools, stale changelog links, manifest mismatch, unsafe file modes | run human and JSON modes on clean checkout; build deterministic inventory twice |
+| 7 | `codex/idea-jobs-audit` | `jobs.sh audit [--last N] [--json]` performs a bounded, read-only integrity scan and gives actionable findings | fixtures cover healthy, corrupt, unsafe, malformed, and oversized stores | link traversal, FIFO files, path replacement, permissions, hostile metadata, 1001-job store | audit isolated stores; prove no mutation, private output, bounded samples, and stable status codes |
+| 8 | `codex/idea-release-audit` | `omnilane release-audit [--json]` verifies version alignment, required files, executable modes, docs links, release inventory, archive, and optional tag without publishing | mutate a temporary checkout one invariant at a time and require precise failure | dirty tree, stale changelog links, manifest mismatch, unsafe files, private-key markers, tag mismatch | run human and JSON modes on clean checkout; build byte-identical deterministic inventory twice |
 
 ## Cross-cutting 1.0 gates
 
