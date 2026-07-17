@@ -45,6 +45,27 @@ publishing.
 - The completion oracle now exercises the integrated wait/audit paths; Bash and
   Zsh syntax plus the full `58 passed, 0 failed` shell suite pass.
 
+## Final clean-candidate verification
+
+- Clean-tree checks: all Bash and Zsh completion syntax passed; Perl watchdog
+  syntax passed; Python compilation passed; Python suite `36 tests` passed;
+  shell suite `58 passed, 0 failed`; offline route listing passed.
+- Release gate: two consecutive clean `1.0.0` JSON-plus-manifest audits were
+  byte-identical and passed with 75 tracked paths and zero findings. The worktree
+  was clean before and after.
+- Browser: all 7 `FrontendBrowserBehaviorTests` passed against the installed
+  Google Chrome with background networking disabled. The optional forced
+  Playwright-bundled Chromium run could not start because that separate browser
+  binary is not installed locally; CI installs it explicitly.
+- Installation: a temporary HOME with a fake non-executed `codex` completed
+  install, check, dry-run, public `omnilane --version`, and uninstall with exit
+  0. It reported `omnilane 1.0.0`, preserved the fake CLI hash, and left no
+  symlinks.
+- ShellCheck remains unavailable on this MacStudio. Therefore the local release
+  candidate status is `PARTIAL`, not final PASS, pending CI/ShellCheck.
+- No provider, network API, installed runtime, service, `main`, tag, remote, or
+  publication state was changed.
+
 ## #5 Read-only installer inspection
 
 - Branch: `codex/idea-install-check`

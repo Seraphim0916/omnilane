@@ -1,9 +1,10 @@
 # Omnilane 1.0 acceptance matrix
 
 Status: Vincent selected all eight Round 1 experiments. They are integrated one
-at a time on `codex/release-1.0`; `main` remains unchanged. Final clean-tree
-release-candidate verification is in progress, with ShellCheck still unavailable
-on the current MacStudio.
+at a time on `codex/release-1.0`; `main` remains unchanged. Clean-tree local
+release-candidate verification is complete except ShellCheck, which remains
+unavailable on the current MacStudio. CI/ShellCheck and Vincent's final branch
+decision remain before any release action.
 
 ## Release contract
 
