@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-17
+
 ### Added
 
 - `install.sh --check` reports missing, drifted, and checkout-owned links and
@@ -172,8 +174,9 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v1.0.0...HEAD
 
+[1.0.0]: https://github.com/Seraphim0916/omnilane/compare/v0.6.0...v1.0.0
 [0.6.0]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Seraphim0916/omnilane/compare/v0.4.0...v0.5.0

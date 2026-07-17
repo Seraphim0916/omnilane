@@ -1,7 +1,9 @@
 # Omnilane 1.0 acceptance matrix
 
-Status: Round 1 experiments complete; awaiting Vincent's branch selection. No
-experiment has been integrated and `main` remains unchanged.
+Status: Vincent selected all eight Round 1 experiments. They are integrated one
+at a time on `codex/release-1.0`; `main` remains unchanged. Final clean-tree
+release-candidate verification is in progress, with ShellCheck still unavailable
+on the current MacStudio.
 
 ## Release contract
 
@@ -38,7 +40,7 @@ untouched until Vincent separately approves it.
 | --- | --- | --- |
 | Operator and locality | `whoami-operator.sh`, `scutil`, `pwd` | `codex-s`; `MacStudio`; `/Users/vincentw/dev/omnilane` |
 | Source state | `git status --short --branch` | clean `main` at `528ecc6` before integration branch creation |
-| Version | `VERSION`, both plugin manifests, latest tag | `0.6.0`; `v0.6.0` |
+| Version | `VERSION`, both plugin manifests, latest tag | candidate metadata `1.0.0`; no `v1.0.0` tag created |
 | Shell baseline | `bash tests/run.sh` | 50 passed, 0 failed |
 | Full required checks | `CONTRIBUTING.md` command set | pending |
 | Real runtime baseline | installed CLI and isolated install/UI flows | pending |

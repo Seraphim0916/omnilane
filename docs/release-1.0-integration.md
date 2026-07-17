@@ -12,6 +12,18 @@ publishing.
 - `main` and `origin/main`: `528ecc6cdaa5051078e8d17eb5c7128394c0c67a`
 - Worktree: clean
 
+## 1.0 release-candidate metadata
+
+- `VERSION`, both plugin manifests, all five localized README version headings,
+  the dated changelog release heading, and compare links now agree on `1.0.0`.
+- Focused version tests passed `4/4`; the public wrapper reports
+  `omnilane 1.0.0`.
+- Pre-commit release audit passed with the explicit dirty-worktree warning.
+  Formal evidence is recorded only after the metadata commit and clean-tree
+  rerun below.
+- This metadata preparation does not create a tag, push, publish, or modify
+  `main`.
+
 ## #5 Read-only installer inspection
 
 - Branch: `codex/idea-install-check`
