@@ -24,6 +24,17 @@ publishing.
 - This metadata preparation does not create a tag, push, publish, or modify
   `main`.
 
+### Clean-candidate bug found and fixed
+
+- The first clean 1.0.0 full run produced `57 passed, 1 failed`: the release
+  audit oracle assumed the repository was always dirty and hard-coded `1.0.0`
+  as a permanently future target.
+- The oracle now creates and removes its own unique dirty marker and uses
+  `99.0.0` as the mismatch target. This preserves dirty-tree rejection coverage
+  on both experiment branches and a clean 1.0.0 candidate.
+- After the fix, the full shell suite returned `58 passed, 0 failed` and left
+  the repository state unchanged.
+
 ## #5 Read-only installer inspection
 
 - Branch: `codex/idea-install-check`

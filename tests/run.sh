@@ -2541,24 +2541,27 @@ EOF
 
 test_release_audit_is_offline_read_only_and_actionable() {
   local name="release audit is offline read-only and actionable"
-  local version marker before after allow_out strict_out future_out manifest_out
+  local version future_target marker dirty_marker before after allow_out strict_out future_out manifest_out
   local json_out json_future allow_rc strict_rc future_rc manifest_rc hostile_rc
   local json_rc json_future_rc json_parse_rc
   version="$(<"$ROOT/VERSION")"
+  future_target="99.0.0"
   marker="$TEST_ROOT/release-audit-executed"
+  dirty_marker="$ROOT/.release-audit-test-dirty-$$"
   before="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+  : > "$dirty_marker"
 
   allow_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty 2>&1)"
   allow_rc=$?
   strict_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" 2>&1)"
   strict_rc=$?
-  future_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target 1.0.0 --allow-dirty 2>&1)"
+  future_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$future_target" --allow-dirty 2>&1)"
   future_rc=$?
   manifest_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty --manifest 2>&1)"
   manifest_rc=$?
   json_out="$(/bin/bash "$ROOT/bin/omnilane" release-audit --target "$version" --allow-dirty --json 2>&1)"
   json_rc=$?
-  json_future="$(/bin/bash "$ROOT/bin/omnilane" release-audit --json --target 1.0.0 --allow-dirty 2>&1)"
+  json_future="$(/bin/bash "$ROOT/bin/omnilane" release-audit --json --target "$future_target" --allow-dirty 2>&1)"
   json_future_rc=$?
   python3 -c '
 import json, sys
@@ -2567,21 +2570,22 @@ assert current["schema_version"] == 1 and current["command"] == "release-audit"
 assert current["status"] == "PASS" and current["target"] == sys.argv[3]
 assert current["findings"] == [] and "dirty-worktree-allowed" in current["warnings"]
 assert len(current["manifest_sha256"]) == len(current["archive_sha256"]) == 64
-assert future["status"] == "FAIL" and future["target"] == "1.0.0"
+assert future["status"] == "FAIL" and future["target"] == sys.argv[4]
 assert "version-mismatch" in future["findings"]
 assert "missing-changelog-release" in future["findings"]
-' "$json_out" "$json_future" "$version" >/dev/null 2>&1
+' "$json_out" "$json_future" "$version" "$future_target" >/dev/null 2>&1
   json_parse_rc=$?
   RELEASE_AUDIT_MARKER="$marker" /bin/bash "$ROOT/scripts/release-audit.sh" \
     --target '1.0.0;touch "$RELEASE_AUDIT_MARKER"' --allow-dirty \
     > "$TEST_ROOT/release-audit-hostile.out" 2>&1
   hostile_rc=$?
+  /bin/rm -f "$dirty_marker"
   after="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
 
   if [[ "$allow_rc" -ne 0 || "$allow_out" != *"release-audit: PASS target=$version"* ]]; then
     fail "$name" "current release metadata did not pass inspection: rc=$allow_rc out=$allow_out"
   elif [[ "$strict_rc" -ne 1 || "$strict_out" != *"dirty-worktree"* ]]; then
-    fail "$name" "strict audit did not reject the experiment worktree: rc=$strict_rc out=$strict_out"
+    fail "$name" "strict audit did not reject a dirty worktree: rc=$strict_rc out=$strict_out"
   elif [[ "$future_rc" -ne 1 || "$future_out" != *"version-mismatch"* ||
           "$future_out" != *"missing-changelog-release"* ]]; then
     fail "$name" "future target did not report release blockers: rc=$future_rc out=$future_out"
