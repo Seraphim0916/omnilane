@@ -177,6 +177,9 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 `~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路径可能随 CLI 版本不同);
 非交互安装可带 `OMNILANE_HOOKS=all|none|claude,codex`。手动接线:
 
+`./install.sh --check` 可只读检查漂移；安装或 `--uninstall` 加上
+`--dry-run`，可先预览每个由这份 checkout 拥有的文件动作。
+
 - **Claude Code**:以插件安装(附 `/route`、`/route-jobs` 命令),
   或把 `skills/omnilane` 放进 `~/.claude/skills/`。
 - **Codex**:把 `skills/omnilane` 放进或链接到 `~/.codex/skills/`。

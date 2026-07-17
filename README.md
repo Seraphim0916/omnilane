@@ -198,6 +198,9 @@ each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 versions) so the main loop remembers to consult the table; non-interactive
 installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
+Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
+install or `--uninstall` to preview every checkout-owned file action.
+
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
 - **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.

@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `install.sh --check` reports missing, drifted, and checkout-owned links and
+  selected routing reminders without writing. `--dry-run` previews install or
+  uninstall actions without loading machine-local routing code.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added

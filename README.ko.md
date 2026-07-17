@@ -192,6 +192,9 @@ omnilane ui stop     # 정상 중지
 수 있음)에 마커로 감싼 가역적 **상시 라우팅 리마인더**를 선택 설치할 수
 있습니다. 비대화형 설치는 `OMNILANE_HOOKS=all|none|claude,codex`. 수동 연결:
 
+`./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
+`--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
+
 - **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령 포함),
   또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
 - **Codex**: `skills/omnilane` 을 `~/.codex/skills/` 에 배치/링크.
