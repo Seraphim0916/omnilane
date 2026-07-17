@@ -8,8 +8,9 @@ semantic version tags.
 
 ### Added
 
-- `jobs.sh audit [--last N]` performs a bounded, read-only integrity and privacy
-  check of the local job store without printing task or result content.
+- `jobs.sh audit [--last N] [--json]` performs a bounded, read-only integrity
+  and privacy check of the local job store without printing task or result
+  content.
 
 ## [0.6.0] - 2026-07-16
 

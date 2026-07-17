@@ -219,7 +219,7 @@ dispatch.sh --explain 通道                          # 离线逐候选解释路
 dispatch.sh --validate                              # 离线检查生效路由，不调用模型
 jobs.sh list | status 作业ID | result 作业ID
 jobs.sh stats [--last N]                           # 本机成功率与路由汇总
-jobs.sh audit [--last N]                           # 只读检查作业完整性与隐私权限
+jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私权限
 jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业
 configure.sh                                        # 交互通道菜单
 ```

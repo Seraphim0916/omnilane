@@ -2003,7 +2003,8 @@ test_round2_untrusted_boundary_and_cleanup() {
 
 test_jobs_audit_is_private_read_only_and_fail_closed() {
   local name="jobs audit is private read-only and fail-closed"
-  local clean bad clean_id bad_id prefix_id clean_out bad_out before after clean_rc bad_rc
+  local clean bad clean_id bad_id prefix_id clean_out bad_out json_out json_bad
+  local before after clean_rc bad_rc json_rc json_bad_rc json_parse_rc
   clean="$TEST_ROOT/jobs-audit-clean"
   bad="$TEST_ROOT/jobs-audit-bad"
   clean_id="20260717-170000-123-1"
@@ -2041,6 +2042,21 @@ test_jobs_audit_is_private_read_only_and_fail_closed() {
   before="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
   bad_out="$(OMNILANE_HOME="$bad" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 2>&1)"
   bad_rc=$?
+  json_out="$(OMNILANE_HOME="$clean" /bin/bash "$ROOT/scripts/jobs.sh" audit --json --last 10 2>&1)"
+  json_rc=$?
+  json_bad="$(OMNILANE_HOME="$bad" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 --json 2>&1)"
+  json_bad_rc=$?
+  python3 -c '
+import json, sys
+clean, bad = map(json.loads, sys.argv[1:])
+assert clean == {"schema_version": 1, "command": "audit", "sampled": 1,
+                 "passed": 1, "failed": 0, "findings": [],
+                 "passed_ids": ["20260717-170000-123-1"]}
+assert bad["schema_version"] == 1 and bad["command"] == "audit"
+assert bad["failed"] == 2 and len(bad["findings"]) >= 7
+assert all(set(item) == {"scope", "code"} for item in bad["findings"])
+' "$json_out" "$json_bad" >/dev/null 2>&1
+  json_parse_rc=$?
   after="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
 
   if [[ "$clean_rc" -ne 0 || "$clean_out" != *"audit: sampled=1 passed=1 failed=0"* ]]; then
@@ -2049,6 +2065,10 @@ test_jobs_audit_is_private_read_only_and_fail_closed() {
     fail "$name" "audit exposed private task or result content"
   elif [[ "$bad_rc" -ne 1 || "$bad_out" != *"failed="* ]]; then
     fail "$name" "corrupt store did not fail closed: rc=$bad_rc out=$bad_out"
+  elif [[ "$json_rc" -ne 0 || "$json_bad_rc" -ne 1 || "$json_parse_rc" -ne 0 ]]; then
+    fail "$name" "audit JSON contract failed: clean_rc=$json_rc bad_rc=$json_bad_rc parse_rc=$json_parse_rc"
+  elif [[ "$json_out$json_bad" == *"SECRET"* || "$json_out$json_bad" == *"private answer"* ]]; then
+    fail "$name" "audit JSON exposed private content"
   elif [[ "$bad_out" != *"unsafe-store-mode"* || "$bad_out" != *"invalid-job-name"* ||
           "$bad_out" != *"unsafe-job-entry"* ||
           "$bad_out" != *"unsafe-job-mode"* || "$bad_out" != *"symlink-artifact"* ||

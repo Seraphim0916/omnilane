@@ -243,7 +243,7 @@ dispatch.sh --explain LANE                          # offline candidate-by-candi
 dispatch.sh --validate                              # lint effective routing; no provider calls
 jobs.sh list | status ID | result ID
 jobs.sh stats [--last N]                           # local success and routing aggregates
-jobs.sh audit [--last N]                           # read-only job integrity/privacy check
+jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 ```

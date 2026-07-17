@@ -234,7 +234,7 @@ dispatch.sh --explain LANE                          # 후보별 라우팅 결정
 dispatch.sh --validate                              # 공급자 호출 없이 실효 라우팅 검사
 jobs.sh list | status ID | result ID
 jobs.sh stats [--last N]                           # 로컬 성공률과 라우팅 집계
-jobs.sh audit [--last N]                           # 잡 무결성과 개인정보 권한을 읽기 전용으로 검사
+jobs.sh audit [--last N] [--json]                  # 잡 무결성과 개인정보 권한을 읽기 전용으로 검사
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
 configure.sh                                        # 대화형 레인 메뉴
 ```

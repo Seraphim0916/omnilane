@@ -40,7 +40,7 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
-  omnilane jobs  list|status ID|result ID|audit [--last N]
+  omnilane jobs  list|status ID|result ID|audit [--last N] [--json]
   omnilane doctor [--json]              read-only local health report
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu

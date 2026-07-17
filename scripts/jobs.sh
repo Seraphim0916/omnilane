@@ -2,14 +2,14 @@
 set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh list | status JOB_ID | result JOB_ID | stats [--last N]
-#        jobs.sh audit [--last N] | prune [--keep N] [--apply]
+#        jobs.sh audit [--last N] [--json] | prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 
 usage() {
-  echo "usage: jobs.sh list|status ID|result ID|stats [--last N]|audit [--last N]|prune [--keep N] [--apply]" >&2
+  echo "usage: jobs.sh list|status ID|result ID|stats [--last N]|audit [--last N] [--json]|prune [--keep N] [--apply]" >&2
   exit 2
 }
 
@@ -122,12 +122,14 @@ validate_job_store
 case "${1:-}" in
   audit)
     limit=100
+    audit_json=0
     shift
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --last)
           [[ $# -ge 2 ]] || usage
           limit="$2"; shift 2 ;;
+        --json) audit_json=1; shift ;;
         *) usage ;;
       esac
     done
@@ -141,22 +143,30 @@ case "${1:-}" in
     passed=0
     failed=0
     ids=()
+    audit_scopes=()
+    audit_codes=()
+    passed_ids=()
+    audit_emit() {
+      audit_scopes+=("$1")
+      audit_codes+=("$2")
+      [[ "$audit_json" -eq 1 ]] || printf 'FAIL %s %s\n' "$1" "$2"
+    }
     if [[ -d "$JOBS" ]]; then
       mode="$(path_mode "$JOBS" 2>/dev/null || true)"
       if [[ "$mode" != "700" ]]; then
-        printf 'FAIL store unsafe-store-mode\n'
+        audit_emit store unsafe-store-mode
         findings=$((findings + 1))
       fi
       for job_dir in "$JOBS"/*; do
         [[ -e "$job_dir" || -L "$job_dir" ]] || continue
         if [[ -L "$job_dir" || ! -d "$job_dir" ]]; then
-          printf 'FAIL store unsafe-job-entry\n'
+          audit_emit store unsafe-job-entry
           findings=$((findings + 1))
           continue
         fi
         id="${job_dir##*/}"
         if [[ ! "$id" =~ $JOB_ID_PATTERN ]]; then
-          printf 'FAIL store invalid-job-name\n'
+          audit_emit store invalid-job-name
           findings=$((findings + 1))
           continue
         fi
@@ -170,68 +180,85 @@ case "${1:-}" in
         job_failed=0
         job_dir="$JOBS/$id"
         if [[ ! -d "$job_dir" || -L "$job_dir" ]]; then
-          printf 'FAIL %s changed-job-path\n' "$id"
+          audit_emit "$id" changed-job-path
           findings=$((findings + 1)); failed=$((failed + 1))
           continue
         fi
         mode="$(path_mode "$job_dir" 2>/dev/null || true)"
         if [[ "$mode" != "700" ]]; then
-          printf 'FAIL %s unsafe-job-mode\n' "$id"
+          audit_emit "$id" unsafe-job-mode
           findings=$((findings + 1)); job_failed=1
         fi
         for artifact in "$job_dir"/*; do
           [[ -e "$artifact" || -L "$artifact" ]] || continue
           if [[ -L "$artifact" ]]; then
-            printf 'FAIL %s symlink-artifact\n' "$id"
+            audit_emit "$id" symlink-artifact
             findings=$((findings + 1)); job_failed=1
           elif [[ -d "$artifact" ]]; then
-            printf 'FAIL %s nested-directory\n' "$id"
+            audit_emit "$id" nested-directory
             findings=$((findings + 1)); job_failed=1
           elif [[ -f "$artifact" ]]; then
             mode="$(path_mode "$artifact" 2>/dev/null || true)"
             if [[ "$mode" != "600" ]]; then
-              printf 'FAIL %s unsafe-file-mode\n' "$id"
+              audit_emit "$id" unsafe-file-mode
               findings=$((findings + 1)); job_failed=1
             fi
           else
-            printf 'FAIL %s unsafe-artifact-type\n' "$id"
+            audit_emit "$id" unsafe-artifact-type
             findings=$((findings + 1)); job_failed=1
           fi
         done
         if [[ ! -f "$job_dir/task.txt" || -L "$job_dir/task.txt" ]]; then
-          printf 'FAIL %s missing-task\n' "$id"
+          audit_emit "$id" missing-task
           findings=$((findings + 1)); job_failed=1
         fi
         if ! read_public_metadata "$job_dir/meta.json" ||
            ! parse_audit_metadata "$PUBLIC_METADATA"; then
-          printf 'FAIL %s invalid-metadata\n' "$id"
+          audit_emit "$id" invalid-metadata
           findings=$((findings + 1)); job_failed=1
         fi
         if [[ -e "$job_dir/pid" || -L "$job_dir/pid" ]]; then
           if ! read_job_pid "$job_dir/pid"; then
-            printf 'FAIL %s invalid-pid\n' "$id"
+            audit_emit "$id" invalid-pid
             findings=$((findings + 1)); job_failed=1
           fi
         else
-          printf 'FAIL %s missing-pid\n' "$id"
+          audit_emit "$id" missing-pid
           findings=$((findings + 1)); job_failed=1
         fi
         if [[ -e "$job_dir/exit" || -L "$job_dir/exit" ]]; then
           if ! read_exit_code "$job_dir/exit"; then
-            printf 'FAIL %s invalid-exit\n' "$id"
+            audit_emit "$id" invalid-exit
             findings=$((findings + 1)); job_failed=1
           fi
         fi
         if [[ "$job_failed" -eq 0 ]]; then
-          printf 'PASS %s\n' "$id"
+          passed_ids+=("$id")
+          [[ "$audit_json" -eq 1 ]] || printf 'PASS %s\n' "$id"
           passed=$((passed + 1))
         else
           failed=$((failed + 1))
         fi
       done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
     fi
-    printf 'audit: sampled=%s passed=%s failed=%s findings=%s\n' \
-      "$sampled" "$passed" "$failed" "$findings"
+    if [[ "$audit_json" -eq 1 ]]; then
+      printf '{"schema_version":1,"command":"audit","sampled":%s,"passed":%s,"failed":%s,"findings":[' \
+        "$sampled" "$passed" "$failed"
+      for ((index = 0; index < ${#audit_codes[@]}; index++)); do
+        [[ "$index" -eq 0 ]] || printf ','
+        printf '{"scope":"%s","code":"%s"}' \
+          "${audit_scopes[$index]}" "${audit_codes[$index]}"
+      done
+      printf '],"passed_ids":['
+      for ((index = 0; index < ${#passed_ids[@]}; index++)); do
+        [[ "$index" -eq 0 ]] || printf ','
+        printf '"%s"' "${passed_ids[$index]}"
+      done
+      printf ']}\n'
+    else
+      printf 'audit: sampled=%s passed=%s failed=%s findings=%s\n' \
+        "$sampled" "$passed" "$failed" "$findings"
+    fi
     [[ "$findings" -eq 0 ]] || exit 1 ;;
   stats)
     limit=100
