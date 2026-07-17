@@ -2,6 +2,7 @@
 set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh [--json] list | status JOB_ID | result JOB_ID | stats [--last N]
+#        jobs.sh wait JOB_ID [--timeout N]
 #        jobs.sh prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
@@ -48,7 +49,7 @@ die() {
 }
 
 usage() {
-  die 2 "usage: jobs.sh [--json] list|status ID|result ID|stats [--last N]|prune [--keep N] [--apply]"
+  die 2 "usage: jobs.sh [--json] list|status ID|result ID|stats [--last N]|wait ID [--timeout N]|prune [--keep N] [--apply]"
 }
 
 validate_job_store() {
@@ -366,6 +367,63 @@ case "${1:-}" in
         echo "running"
       fi
     fi ;;
+  wait)
+    [[ "$JSON_MODE" -eq 0 && $# -ge 2 ]] || usage
+    wait_id="$2"
+    wait_timeout=600
+    shift 2
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --timeout)
+          [[ $# -ge 2 ]] || usage
+          wait_timeout="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$wait_timeout" =~ ^(0|[1-9][0-9]{0,4})$ && "$wait_timeout" -le 86400 ]] || {
+      die 2 "invalid --timeout value (want 0..86400)"
+    }
+    select_job "$wait_id"
+    wait_started="$SECONDS"
+    while true; do
+      [[ -d "$JOB_DIR" && ! -L "$JOB_DIR" ]] || {
+        die 1 "job disappeared while waiting"
+      }
+      exit_path="$JOB_DIR/exit"
+      if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+        read_exit_code "$exit_path" || {
+          die 1 "invalid recorded exit status"
+        }
+        echo "done exit=$RECORDED_EXIT"
+        exit "$RECORDED_EXIT"
+      fi
+
+      pid=""; pid_state="missing"
+      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
+        if read_job_pid "$JOB_DIR/pid"; then
+          pid="$RECORDED_PID"; pid_state="valid"
+        else
+          pid_state="invalid"
+        fi
+      fi
+      if [[ "$pid_state" == "invalid" ]]; then
+        echo "dead (invalid pid metadata)"
+        exit 125
+      elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then
+        if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+          continue
+        fi
+        echo "dead (worker gone, no exit recorded)"
+        exit 125
+      fi
+
+      wait_elapsed=$((SECONDS - wait_started))
+      if [[ "$wait_elapsed" -ge "$wait_timeout" ]]; then
+        printf 'wait timeout after %ss\n' "$wait_timeout" >&2
+        exit 124
+      fi
+      sleep 1
+    done ;;
   result)
     [[ $# -eq 2 ]] || usage
     select_job "$2"

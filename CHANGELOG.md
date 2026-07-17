@@ -26,6 +26,9 @@ semantic version tags.
 - `jobs.sh --json list|status|result|stats` emits versioned, machine-readable
   local job summaries. JSON result inspection reports only body availability;
   task, output, and stderr bodies remain private.
+- `jobs.sh wait ID [--timeout N]` waits read-only for one local background job.
+  It preserves the recorded job exit, returns 124 on wait timeout, and 125 for
+  a dead worker without a recorded exit.
 
 ## [0.6.0] - 2026-07-16
 

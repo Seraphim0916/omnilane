@@ -246,6 +246,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 候補ごとの決定理由をオフライン表示
 dispatch.sh [--json] --validate [--json]           # プロバイダーを呼ばず実効ルーティングを検証
 jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さずメタデータのみ
+jobs.sh wait ID [--timeout N]                     # ジョブ終了値。124 はタイムアウト、125 はワーカー消失
 jobs.sh [--json] stats [--last N]                  # ローカル成功率とルーティング集計
 jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー
