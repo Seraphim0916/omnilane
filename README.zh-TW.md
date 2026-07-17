@@ -229,6 +229,7 @@ dispatch.sh [--json] --validate [--json]           # 離線檢查生效路由，
 jobs.sh [--json] {list | status 工作ID | result 工作ID} # JSON 結果只回中繼資料，不回本文
 jobs.sh wait 工作ID [--timeout N]                  # 工作結束碼；124 逾時；125 工作者消失
 jobs.sh [--json] stats [--last N]                  # 本機成功率與路由彙整
+jobs.sh audit [--last N] [--json]                  # 唯讀檢查工作完整性與隱私
 jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布閘門
 configure.sh                                        # 互動通道選單

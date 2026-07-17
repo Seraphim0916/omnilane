@@ -52,7 +52,7 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
-  omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, or wait
+  omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, wait, or audit
   omnilane completion bash|zsh           print a shell completion script
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json]              read-only local health report

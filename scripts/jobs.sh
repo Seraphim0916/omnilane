@@ -3,7 +3,7 @@ set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh [--json] list | status JOB_ID | result JOB_ID | stats [--last N]
 #        jobs.sh wait JOB_ID [--timeout N]
-#        jobs.sh prune [--keep N] [--apply]
+#        jobs.sh audit [--last N] [--json] | prune [--keep N] [--apply]
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 JOBS="$OMNILANE_HOME/jobs"
@@ -49,7 +49,7 @@ die() {
 }
 
 usage() {
-  die 2 "usage: jobs.sh [--json] list|status ID|result ID|stats [--last N]|wait ID [--timeout N]|prune [--keep N] [--apply]"
+  die 2 "usage: jobs.sh [--json] list|status ID|result ID|stats [--last N]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--apply]"
 }
 
 validate_job_store() {
@@ -134,6 +134,13 @@ parse_stats_metadata() {
   STATS_VENDOR="${BASH_REMATCH[2]}"
 }
 
+parse_audit_metadata() {
+  local value="$1" metadata_re
+  local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
+  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(codex|claude|grok|gemini|exec)\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  [[ "$value" =~ $metadata_re ]]
+}
+
 print_stat_counts() {
   local label="$1"
   shift
@@ -155,6 +162,14 @@ json_stat_counts() {
   printf ']'
 }
 
+path_mode() {
+  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
+    stat -f '%Lp' "$1"
+  else
+    stat -c '%a' "$1"
+  fi
+}
+
 args=()
 for arg in "$@"; do
   if [[ "$arg" == "--json" ]]; then
@@ -168,7 +183,7 @@ set -- "${args[@]}"
 COMMAND="${1:-unknown}"
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
-    list|status|result|stats) ;;
+    list|status|result|stats|audit) ;;
     *) usage ;;
   esac
 fi
@@ -176,6 +191,143 @@ fi
 validate_job_store
 
 case "${1:-}" in
+  audit)
+    limit=100
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --last)
+          [[ $# -ge 2 ]] || usage
+          limit="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$limit" =~ ^[1-9][0-9]{0,3}$ && "$limit" -le 10000 ]] || {
+      die 2 "invalid --last value (want 1..10000)"
+    }
+
+    findings=0
+    sampled=0
+    passed=0
+    failed=0
+    ids=()
+    audit_scopes=()
+    audit_codes=()
+    passed_ids=()
+    audit_emit() {
+      audit_scopes+=("$1")
+      audit_codes+=("$2")
+      [[ "$JSON_MODE" -eq 1 ]] || printf 'FAIL %s %s\n' "$1" "$2"
+    }
+    if [[ -d "$JOBS" ]]; then
+      mode="$(path_mode "$JOBS" 2>/dev/null || true)"
+      if [[ "$mode" != "700" ]]; then
+        audit_emit store unsafe-store-mode
+        findings=$((findings + 1))
+      fi
+      for job_dir in "$JOBS"/*; do
+        [[ -e "$job_dir" || -L "$job_dir" ]] || continue
+        if [[ -L "$job_dir" || ! -d "$job_dir" ]]; then
+          audit_emit store unsafe-job-entry
+          findings=$((findings + 1))
+          continue
+        fi
+        id="${job_dir##*/}"
+        if [[ ! "$id" =~ $JOB_ID_PATTERN ]]; then
+          audit_emit store invalid-job-name
+          findings=$((findings + 1))
+          continue
+        fi
+        ids+=("$id")
+      done
+    fi
+
+    if [[ ${#ids[@]} -gt 0 ]]; then
+      while IFS= read -r id; do
+        sampled=$((sampled + 1))
+        job_failed=0
+        job_dir="$JOBS/$id"
+        if [[ ! -d "$job_dir" || -L "$job_dir" ]]; then
+          audit_emit "$id" changed-job-path
+          findings=$((findings + 1)); failed=$((failed + 1))
+          continue
+        fi
+        mode="$(path_mode "$job_dir" 2>/dev/null || true)"
+        if [[ "$mode" != "700" ]]; then
+          audit_emit "$id" unsafe-job-mode
+          findings=$((findings + 1)); job_failed=1
+        fi
+        for artifact in "$job_dir"/*; do
+          [[ -e "$artifact" || -L "$artifact" ]] || continue
+          if [[ -L "$artifact" ]]; then
+            audit_emit "$id" symlink-artifact
+            findings=$((findings + 1)); job_failed=1
+          elif [[ -d "$artifact" ]]; then
+            audit_emit "$id" nested-directory
+            findings=$((findings + 1)); job_failed=1
+          elif [[ -f "$artifact" ]]; then
+            mode="$(path_mode "$artifact" 2>/dev/null || true)"
+            if [[ "$mode" != "600" ]]; then
+              audit_emit "$id" unsafe-file-mode
+              findings=$((findings + 1)); job_failed=1
+            fi
+          else
+            audit_emit "$id" unsafe-artifact-type
+            findings=$((findings + 1)); job_failed=1
+          fi
+        done
+        if [[ ! -f "$job_dir/task.txt" || -L "$job_dir/task.txt" ]]; then
+          audit_emit "$id" missing-task
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if ! read_public_metadata "$job_dir/meta.json" ||
+           ! parse_audit_metadata "$PUBLIC_METADATA"; then
+          audit_emit "$id" invalid-metadata
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if [[ -e "$job_dir/pid" || -L "$job_dir/pid" ]]; then
+          if ! read_job_pid "$job_dir/pid"; then
+            audit_emit "$id" invalid-pid
+            findings=$((findings + 1)); job_failed=1
+          fi
+        else
+          audit_emit "$id" missing-pid
+          findings=$((findings + 1)); job_failed=1
+        fi
+        if [[ -e "$job_dir/exit" || -L "$job_dir/exit" ]]; then
+          if ! read_exit_code "$job_dir/exit"; then
+            audit_emit "$id" invalid-exit
+            findings=$((findings + 1)); job_failed=1
+          fi
+        fi
+        if [[ "$job_failed" -eq 0 ]]; then
+          passed_ids+=("$id")
+          [[ "$JSON_MODE" -eq 1 ]] || printf 'PASS %s\n' "$id"
+          passed=$((passed + 1))
+        else
+          failed=$((failed + 1))
+        fi
+      done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
+    fi
+    if [[ "$JSON_MODE" -eq 1 ]]; then
+      printf '{"schema_version":1,"command":"audit","sampled":%s,"passed":%s,"failed":%s,"findings":[' \
+        "$sampled" "$passed" "$failed"
+      for ((index = 0; index < ${#audit_codes[@]}; index++)); do
+        [[ "$index" -eq 0 ]] || printf ','
+        printf '{"scope":"%s","code":"%s"}' \
+          "$(json_escape "${audit_scopes[$index]}")" "$(json_escape "${audit_codes[$index]}")"
+      done
+      printf '],"passed_ids":['
+      for ((index = 0; index < ${#passed_ids[@]}; index++)); do
+        [[ "$index" -eq 0 ]] || printf ','
+        printf '"%s"' "$(json_escape "${passed_ids[$index]}")"
+      done
+      printf ']}\n'
+    else
+      printf 'audit: sampled=%s passed=%s failed=%s findings=%s\n' \
+        "$sampled" "$passed" "$failed" "$findings"
+    fi
+    [[ "$findings" -eq 0 ]] || exit 1 ;;
   stats)
     limit=100
     shift

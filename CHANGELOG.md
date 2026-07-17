@@ -29,6 +29,9 @@ semantic version tags.
 - `jobs.sh wait ID [--timeout N]` waits read-only for one local background job.
   It preserves the recorded job exit, returns 124 on wait timeout, and 125 for
   a dead worker without a recorded exit.
+- `jobs.sh audit [--last N] [--json]` performs a bounded, read-only integrity
+  and privacy check of the local job store without printing task or result
+  content.
 
 ## [0.6.0] - 2026-07-16
 
