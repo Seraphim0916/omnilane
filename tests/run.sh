@@ -569,6 +569,104 @@ EOF
   fi
 }
 
+test_dispatch_dry_run_is_resolved_and_side_effect_free() {
+  local name="dispatch dry run resolves without side effects" home gate marker work out rc
+  local stdin_out rc_stdin disabled rc_disabled unavailable rc_unavailable
+  local bad rc_bad nested rc_nested control rc_control link target
+  local unsafe rc_unsafe outside
+  name="dispatch dry run resolves without side effects"
+  home="$TEST_ROOT/dispatch-dry-run"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  work="$home/work tree"
+  target="$home/work-target"
+  link="$home/work-link"
+  mkdir -p "$home" "$work" "$target"
+  ln -s "$target" "$link"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$DRY_RUN_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
+    > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    DRY_RUN_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --background --dry-run --mode work \
+      --workdir "$work" --timeout 55 --job-timeout 77 probe "private task" 2>&1)"
+  rc=$?
+  stdin_out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run --workdir "$link" probe - \
+      </dev/null 2>&1)"
+  rc_stdin=$?
+
+  printf 'disabled: off\n' > "$home/routing.local.yaml"
+  disabled="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run disabled x 2>&1)"
+  rc_disabled=$?
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
+  rc_unavailable=$?
+  bad="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run --timeout nope offline x 2>&1)"
+  rc_bad=$?
+  nested="$(OMNILANE_HOME="$home" OMNILANE_DEPTH=1 \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
+  rc_nested=$?
+
+  printf 'probe: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+  control="$(OMNILANE_HOME="$home" DRY_RUN_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run --model $'bad\033[31mFORGED' \
+      probe x 2>&1)"
+  rc_control=$?
+  outside="$TEST_ROOT/dispatch-dry-run-outside"
+  mkdir -p "$outside"
+  ln -s "$outside" "$home/jobs"
+  unsafe="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run probe x 2>&1)"
+  rc_unsafe=$?
+  /bin/rm "$home/jobs"
+
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "resolved dry run failed: rc=$rc out=$out"
+  elif [[ "$out" != *"lane=probe"* || "$out" != *"vendor=exec"* ||
+          "$out" != *"timeout=55"* || "$out" != *"job_timeout=77"* ||
+          "$out" != *"mode=work"* || "$out" != *"background=yes"* ||
+          "$out" != *"candidate=2/2"* ]]; then
+    fail "$name" "dry run omitted resolved fields: $out"
+  elif [[ "$out" != *"provider_invoked=no"* || "$out" != *"job_state_created=no"* ||
+          "$out" != *"would_invoke_provider=yes"* || "$out" != *"would_write_worktree=yes"* ]]; then
+    fail "$name" "dry run omitted its side-effect decision: $out"
+  elif [[ "$out" == *"private task"* ]]; then
+    fail "$name" "dry run leaked task content"
+  elif [[ "$rc_stdin" -ne 0 || "$stdin_out" != *"task_source=stdin"* ||
+          "$stdin_out" != *"workdir="*"work-link"* ]]; then
+    fail "$name" "stdin or symlink-workdir plan was not resolved: rc=$rc_stdin out=$stdin_out"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "dry run invoked a provider or created job state"
+  elif find "$target" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "dry run wrote through the symlinked workdir"
+  elif [[ "$rc_disabled" -ne 3 || "$disabled" != *"disabled"* ]]; then
+    fail "$name" "disabled lane did not preserve exit 3: $disabled"
+  elif [[ "$rc_unavailable" -ne 4 || "$unavailable" != *"no vendor CLI"* ]]; then
+    fail "$name" "unavailable route did not preserve exit 4: $unavailable"
+  elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid timeout"* ]]; then
+    fail "$name" "invalid timeout did not fail before state: $bad"
+  elif [[ "$rc_nested" -ne 86 || "$nested" != *"nested dispatch"* ]]; then
+    fail "$name" "nested depth did not fail before state: $nested"
+  elif [[ "$rc_control" -ne 0 || "$control" == *$'\033'* || "$control" != *"FORGED"* ]]; then
+    fail "$name" "dry-run output did not safely quote control input"
+  elif [[ "$rc_unsafe" -ne 1 || "$unsafe" != *"unsafe jobs store"* ]]; then
+    fail "$name" "dry run disagreed with the real jobs-store safety gate: rc=$rc_unsafe out=$unsafe"
+  elif find "$outside" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "dry run wrote through the unsafe jobs-store symlink"
+  else
+    pass "$name"
+  fi
+}
+
 test_consult_lane_and_configurator() {
   local name="consult lane stays multi-vendor" home listed
   home="$TEST_ROOT/consult"; mkdir -p "$home"
@@ -2027,6 +2125,7 @@ test_lock_owner_read_race_is_silent
 test_lock_serializes_live_bash32_owner
 test_background_job_records_live_worker_pid
 test_job_timeout_resolution_and_safety
+test_dispatch_dry_run_is_resolved_and_side_effect_free
 test_job_timeout_supervisor_validation
 test_job_timeout_supervisor_kills_process_group
 test_job_timeout_supervisor_forwards_term

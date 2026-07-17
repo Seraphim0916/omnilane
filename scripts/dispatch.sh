@@ -3,7 +3,7 @@ set -euo pipefail
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
-#   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+#   dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh --list            # effective routing: local overrides + fallback resolution
@@ -28,14 +28,44 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
+MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""
 ORIGINAL_ARGC=$#
 
 usage_error() {
-  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE | --validate' >&2
+  echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | --list | --explain LANE | --validate' >&2
   exit 2
+}
+
+print_dry_run_value() {
+  printf '%s=' "$1"
+  printf '%q\n' "$2"
+}
+
+print_dry_run_plan() {
+  local background=no task_source=argument write_worktree=no job_timeout=disabled
+  [[ "$BACKGROUND" -eq 1 ]] && background=yes
+  [[ "$TASK" == "-" ]] && task_source=stdin
+  [[ "$MODE" == "work" ]] && write_worktree=yes
+  [[ -n "$JOB_TIMEOUT" ]] && job_timeout="$JOB_TIMEOUT"
+  printf 'dry_run=yes\n'
+  print_dry_run_value lane "$LANE"
+  print_dry_run_value vendor "$VENDOR"
+  print_dry_run_value model "$MODEL"
+  print_dry_run_value effort "$EFFORT"
+  print_dry_run_value mode "$MODE"
+  print_dry_run_value workdir "$WORKDIR"
+  printf 'timeout=%s\n' "$TIMEOUT"
+  printf 'job_timeout=%s\n' "$job_timeout"
+  printf 'candidate=%s/%s\n' "$RESOLVED_IDX" "$RESOLVED_TOTAL"
+  printf 'background=%s\n' "$background"
+  printf 'task_source=%s\n' "$task_source"
+  printf 'provider_invoked=no\n'
+  printf 'job_state_created=no\n'
+  printf 'would_invoke_provider=yes\n'
+  printf 'would_create_job=yes\n'
+  printf 'would_write_worktree=%s\n' "$write_worktree"
 }
 
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
@@ -291,6 +321,7 @@ while [[ $# -gt 0 ]]; do
       [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
       validate_routing; exit $? ;;
     --background) BACKGROUND=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
@@ -441,11 +472,17 @@ if [[ -n "$JOB_TIMEOUT" ]]; then
 fi
 
 JOBS_ROOT="$OMNILANE_HOME/jobs"
-mkdir -p "$OMNILANE_HOME"
 if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
   echo "omnilane: unsafe jobs store path (want a real directory): $JOBS_ROOT" >&2
   exit 1
 fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  print_dry_run_plan
+  exit 0
+fi
+
+mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
 fi

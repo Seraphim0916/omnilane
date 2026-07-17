@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `dispatch.sh --dry-run` resolves the vendor, overrides, mode, work directory,
+  per-call timeout, whole-job timeout, and expected side effects without reading
+  task stdin, invoking a provider, or creating job state.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
