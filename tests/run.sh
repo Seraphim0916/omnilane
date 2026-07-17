@@ -2001,6 +2001,47 @@ test_round2_untrusted_boundary_and_cleanup() {
   fi
 }
 
+test_release_audit_is_offline_read_only_and_actionable() {
+  local name="release audit is offline read-only and actionable"
+  local version marker before after allow_out strict_out future_out manifest_out
+  local allow_rc strict_rc future_rc manifest_rc hostile_rc
+  version="$(<"$ROOT/VERSION")"
+  marker="$TEST_ROOT/release-audit-executed"
+  before="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+
+  allow_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty 2>&1)"
+  allow_rc=$?
+  strict_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" 2>&1)"
+  strict_rc=$?
+  future_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target 1.0.0 --allow-dirty 2>&1)"
+  future_rc=$?
+  manifest_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty --manifest 2>&1)"
+  manifest_rc=$?
+  RELEASE_AUDIT_MARKER="$marker" /bin/bash "$ROOT/scripts/release-audit.sh" \
+    --target '1.0.0;touch "$RELEASE_AUDIT_MARKER"' --allow-dirty \
+    > "$TEST_ROOT/release-audit-hostile.out" 2>&1
+  hostile_rc=$?
+  after="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+
+  if [[ "$allow_rc" -ne 0 || "$allow_out" != *"release-audit: PASS target=$version"* ]]; then
+    fail "$name" "current release metadata did not pass inspection: rc=$allow_rc out=$allow_out"
+  elif [[ "$strict_rc" -ne 1 || "$strict_out" != *"dirty-worktree"* ]]; then
+    fail "$name" "strict audit did not reject the experiment worktree: rc=$strict_rc out=$strict_out"
+  elif [[ "$future_rc" -ne 1 || "$future_out" != *"version-mismatch"* ||
+          "$future_out" != *"missing-changelog-release"* ]]; then
+    fail "$name" "future target did not report release blockers: rc=$future_rc out=$future_out"
+  elif [[ "$manifest_rc" -ne 0 || "$manifest_out" != *"manifest_sha256="* ||
+          "$manifest_out" != *"tracked="* ]]; then
+    fail "$name" "prospective package manifest was unavailable: rc=$manifest_rc out=$manifest_out"
+  elif [[ "$hostile_rc" -ne 2 || -e "$marker" ]]; then
+    fail "$name" "hostile target was accepted or executed: rc=$hostile_rc"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "release audit modified repository state"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
@@ -2051,6 +2092,7 @@ test_install_preserves_existing_wrapper_file
 test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
+test_release_audit_is_offline_read_only_and_actionable
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

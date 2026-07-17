@@ -198,6 +198,9 @@ each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 versions) so the main loop remembers to consult the table; non-interactive
 installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
+Rollback the installer-owned links and marked reminders with
+`./install.sh --uninstall`.
+
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
 - **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.
@@ -244,6 +247,7 @@ dispatch.sh --validate                              # lint effective routing; no
 jobs.sh list | status ID | result ID
 jobs.sh stats [--last N]                           # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
+scripts/release-audit.sh [--target VERSION]        # offline, read-only release gate
 configure.sh                                        # interactive lane menu
 ```
 
