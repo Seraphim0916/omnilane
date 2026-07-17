@@ -7,7 +7,7 @@ while [[ -L "$SELF" ]]; do SELF="$(readlink "$SELF")"; done
 ROOT="$(cd "$(dirname "$SELF")/.." && pwd -P)"
 
 usage() {
-  echo "usage: release-audit.sh [--target VERSION] [--allow-dirty] [--require-tag] [--manifest]" >&2
+  echo "usage: release-audit.sh [--target VERSION] [--allow-dirty] [--require-tag] [--manifest] [--json]" >&2
   exit 2
 }
 
@@ -15,6 +15,7 @@ target=""
 allow_dirty=0
 require_tag=0
 show_manifest=0
+json_output=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --target)
@@ -23,28 +24,111 @@ while [[ $# -gt 0 ]]; do
     --allow-dirty) allow_dirty=1; shift ;;
     --require-tag) require_tag=1; shift ;;
     --manifest) show_manifest=1; shift ;;
+    --json) json_output=1; shift ;;
     *) usage ;;
   esac
 done
 
+findings=0
+tracked=0
+manifest_sha=""
+archive_sha=""
+finding_codes=()
+pass_codes=()
+warning_codes=()
+manifest_entries=()
+fail() {
+  finding_codes+=("$1")
+  [[ "$json_output" -eq 1 ]] || printf 'FAIL %s\n' "$1"
+  findings=$((findings + 1))
+}
+pass() {
+  pass_codes+=("$1")
+  [[ "$json_output" -eq 1 ]] || printf 'PASS %s\n' "$1"
+}
+warn() {
+  warning_codes+=("$1")
+  [[ "$json_output" -eq 1 ]] || printf 'WARN %s\n' "$1"
+}
+
+json_escape() {
+  local value="$1" out="" ch code escaped i
+  for ((i = 0; i < ${#value}; i++)); do
+    ch="${value:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      '\\') out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+render_json() {
+  local status="$1" index value
+  printf '{"schema_version":1,"command":"release-audit","target":'
+  if [[ -n "$target" ]]; then printf '"%s"' "$(json_escape "$target")"; else printf 'null'; fi
+  printf ',"status":"%s","findings":[' "$status"
+  for ((index = 0; index < ${#finding_codes[@]}; index++)); do
+    [[ "$index" -eq 0 ]] || printf ','
+    printf '"%s"' "$(json_escape "${finding_codes[$index]}")"
+  done
+  printf '],"warnings":['
+  for ((index = 0; index < ${#warning_codes[@]}; index++)); do
+    [[ "$index" -eq 0 ]] || printf ','
+    printf '"%s"' "$(json_escape "${warning_codes[$index]}")"
+  done
+  printf '],"passes":['
+  for ((index = 0; index < ${#pass_codes[@]}; index++)); do
+    [[ "$index" -eq 0 ]] || printf ','
+    printf '"%s"' "$(json_escape "${pass_codes[$index]}")"
+  done
+  printf '],"tracked":%s,"manifest_sha256":' "$tracked"
+  if [[ "$manifest_sha" =~ ^[0-9a-f]{64}$ ]]; then printf '"%s"' "$manifest_sha"; else printf 'null'; fi
+  printf ',"archive_sha256":'
+  if [[ "$archive_sha" =~ ^[0-9a-f]{64}$ ]]; then printf '"%s"' "$archive_sha"; else printf 'null'; fi
+  [[ "$require_tag" -eq 1 ]] && value=true || value=false
+  printf ',"tag_required":%s,"manifest":' "$value"
+  if [[ "$show_manifest" -eq 1 ]]; then
+    printf '['
+    for ((index = 0; index < ${#manifest_entries[@]}; index++)); do
+      [[ "$index" -eq 0 ]] || printf ','
+      printf '"%s"' "$(json_escape "${manifest_entries[$index]}")"
+    done
+    printf ']'
+  else
+    printf 'null'
+  fi
+  printf '}\n'
+}
+
 if [[ -z "$target" ]]; then
-  [[ -f "$ROOT/VERSION" && ! -L "$ROOT/VERSION" ]] || {
-    echo "FAIL version-file-unavailable"
-    echo "release-audit: FAIL target=unknown findings=1"
+  if [[ -f "$ROOT/VERSION" && ! -L "$ROOT/VERSION" ]]; then
+    target="$(<"$ROOT/VERSION")"
+  else
+    fail version-file-unavailable
+    if [[ "$json_output" -eq 1 ]]; then
+      render_json FAIL
+    else
+      echo "release-audit: FAIL target=unknown findings=1"
+    fi
     exit 1
-  }
-  target="$(<"$ROOT/VERSION")"
+  fi
 fi
 [[ "$target" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || usage
 escaped_target="${target//./\\.}"
-
-findings=0
-fail() {
-  printf 'FAIL %s\n' "$1"
-  findings=$((findings + 1))
-}
-pass() { printf 'PASS %s\n' "$1"; }
-warn() { printf 'WARN %s\n' "$1"; }
 
 sha256_stdin() {
   if command -v shasum >/dev/null 2>&1; then
@@ -58,14 +142,16 @@ sha256_stdin() {
 
 command -v git >/dev/null 2>&1 || {
   fail git-unavailable
-  printf 'release-audit: FAIL target=%s findings=%s\n' "$target" "$findings"
+  if [[ "$json_output" -eq 1 ]]; then render_json FAIL;
+  else printf 'release-audit: FAIL target=%s findings=%s\n' "$target" "$findings"; fi
   exit 1
 }
 
 git_root="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$git_root" || "$(cd "$git_root" 2>/dev/null && pwd -P)" != "$ROOT" ]]; then
   fail repository-boundary
-  printf 'release-audit: FAIL target=%s findings=%s\n' "$target" "$findings"
+  if [[ "$json_output" -eq 1 ]]; then render_json FAIL;
+  else printf 'release-audit: FAIL target=%s findings=%s\n' "$target" "$findings"; fi
   exit 1
 fi
 pass repository-boundary
@@ -120,7 +206,7 @@ required=(
   VERSION LICENSE CHANGELOG.md README.md README.zh-TW.md README.zh-CN.md
   README.ja.md README.ko.md install.sh routing.yaml
   bin/omnilane scripts/dispatch.sh scripts/jobs.sh scripts/doctor.sh
-  scripts/ui.py skills/omnilane/SKILL.md
+  scripts/ui.py scripts/release-audit.sh skills/omnilane/SKILL.md
 )
 for path in "${required[@]}"; do
   if git -C "$ROOT" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
@@ -131,7 +217,7 @@ for path in "${required[@]}"; do
 done
 
 for path in install.sh bin/omnilane scripts/dispatch.sh scripts/jobs.sh \
-  scripts/doctor.sh scripts/ui.py scripts/lib/job-timeout.pl \
+  scripts/doctor.sh scripts/ui.py scripts/release-audit.sh scripts/lib/job-timeout.pl \
   scripts/lib/job-worker.sh scripts/runners/run-claude.sh \
   scripts/runners/run-codex.sh scripts/runners/run-exec.sh \
   scripts/runners/run-gemini.sh scripts/runners/run-grok.sh \
@@ -204,15 +290,25 @@ else
 fi
 
 if [[ "$show_manifest" -eq 1 ]]; then
-  while IFS= read -r entry; do printf 'MANIFEST %s\n' "$entry"; done \
-    < <(git -C "$ROOT" ls-files -s)
+  while IFS= read -r entry; do
+    manifest_entries+=("$entry")
+    [[ "$json_output" -eq 1 ]] || printf 'MANIFEST %s\n' "$entry"
+  done < <(git -C "$ROOT" ls-files -s)
 fi
 
 if [[ "$findings" -eq 0 ]]; then
-  printf 'release-audit: PASS target=%s tracked=%s manifest_sha256=%s archive_sha256=%s\n' \
-    "$target" "$tracked" "$manifest_sha" "$archive_sha"
+  if [[ "$json_output" -eq 1 ]]; then
+    render_json PASS
+  else
+    printf 'release-audit: PASS target=%s tracked=%s manifest_sha256=%s archive_sha256=%s\n' \
+      "$target" "$tracked" "$manifest_sha" "$archive_sha"
+  fi
   exit 0
 fi
-printf 'release-audit: FAIL target=%s findings=%s tracked=%s manifest_sha256=%s archive_sha256=%s\n' \
-  "$target" "$findings" "$tracked" "$manifest_sha" "$archive_sha"
+if [[ "$json_output" -eq 1 ]]; then
+  render_json FAIL
+else
+  printf 'release-audit: FAIL target=%s findings=%s tracked=%s manifest_sha256=%s archive_sha256=%s\n' \
+    "$target" "$findings" "$tracked" "$manifest_sha" "$archive_sha"
+fi
 exit 1

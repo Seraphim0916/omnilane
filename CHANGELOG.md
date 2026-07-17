@@ -8,9 +8,9 @@ semantic version tags.
 
 ### Added
 
-- `scripts/release-audit.sh` provides an offline, read-only release gate for
-  version metadata, tracked package contents, executable modes, rollback docs,
-  archive reproducibility, and optional annotated-tag verification.
+- `omnilane release-audit [--json]` provides an offline, read-only release gate
+  for version metadata, tracked package contents, executable modes, rollback
+  docs, archive reproducibility, and optional annotated-tag verification.
 
 ## [0.6.0] - 2026-07-16
 

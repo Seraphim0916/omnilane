@@ -247,7 +247,7 @@ dispatch.sh --validate                              # lint effective routing; no
 jobs.sh list | status ID | result ID
 jobs.sh stats [--last N]                           # local success and routing aggregates
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
-scripts/release-audit.sh [--target VERSION]        # offline, read-only release gate
+omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
 configure.sh                                        # interactive lane menu
 ```
 
