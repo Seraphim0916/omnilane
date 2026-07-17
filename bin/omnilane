@@ -23,6 +23,18 @@ case "$cmd" in
   list)      exec bash "$REPO/scripts/dispatch.sh" --list ;;
   route|dispatch) exec bash "$REPO/scripts/dispatch.sh" "$@" ;;
   jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
+  completion)
+    [[ $# -eq 1 ]] || {
+      echo "usage: omnilane completion bash|zsh" >&2
+      exit 2
+    }
+    case "$1" in
+      bash) cat "$REPO/completions/omnilane.bash" ;;
+      zsh)  cat "$REPO/completions/_omnilane" ;;
+      *) echo "usage: omnilane completion bash|zsh" >&2; exit 2 ;;
+    esac
+    ;;
+  release-audit) exec bash "$REPO/scripts/release-audit.sh" "$@" ;;
   doctor)    exec bash "$REPO/scripts/doctor.sh" "$@" ;;
   ui)
     command -v python3 >/dev/null 2>&1 || {
@@ -40,7 +52,9 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
-  omnilane jobs  list|status ID|result ID
+  omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, wait, or audit
+  omnilane completion bash|zsh           print a shell completion script
+  omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json]              read-only local health report
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu

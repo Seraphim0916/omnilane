@@ -20,7 +20,7 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
-## What's new in v0.6.0
+## What's new in v0.7.0
 
 - **Explain and validate routes offline** — inspect every fallback candidate
   with `--explain`, or lint the complete effective table with `--validate`,
@@ -198,6 +198,11 @@ each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 versions) so the main loop remembers to consult the table; non-interactive
 installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
+Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
+install or `--uninstall` to preview every checkout-owned file action.
+Rollback the installer-owned links and marked reminders with
+`./install.sh --uninstall`.
+
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
 - **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.
@@ -230,19 +235,24 @@ scripts/dispatch.sh --list     # effective table, fallback resolution annotated
 ```
 omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
                                                # (install.sh links it into ~/.local/bin)
+eval "$(omnilane completion bash)"             # enable Bash completion for this shell
+source <(omnilane completion zsh)               # enable Zsh completion for this shell
+omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
 omnilane ui start                              # start/reuse the local Live UI; print its URL
 omnilane ui status                             # report whether the Live UI is running
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json]                       # read-only routing and runtime health report
-dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
-dispatch.sh --list
-dispatch.sh --explain LANE                          # offline candidate-by-candidate decision trace
-dispatch.sh --validate                              # lint effective routing; no provider calls
-jobs.sh list | status ID | result ID
-jobs.sh stats [--last N]                           # local success and routing aggregates
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
+dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
+jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
+jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
+jobs.sh [--json] stats [--last N]                  # local success and routing aggregates
+jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 ```

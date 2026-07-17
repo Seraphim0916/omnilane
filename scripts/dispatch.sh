@@ -3,12 +3,12 @@ set -euo pipefail
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
-#   dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+#   dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
-#   dispatch.sh --list            # effective routing: local overrides + fallback resolution
-#   dispatch.sh --explain LANE    # explain candidate availability without dispatching
-#   dispatch.sh --validate        # lint effective routing without dispatching
+#   dispatch.sh [--json] --list [--json]
+#   dispatch.sh [--json] --explain LANE [--json]
+#   dispatch.sh [--json] --validate [--json]
 #
 # TASK TEXT of "-" reads the task from stdin.
 #
@@ -28,14 +28,121 @@ set -euo pipefail
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
-MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0
+MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""
-ORIGINAL_ARGC=$#
 
 usage_error() {
-  echo 'usage: dispatch.sh [flags] LANE "TASK" | --list | --explain LANE | --validate' >&2
+  echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
   exit 2
+}
+
+print_usage() {
+  cat <<'EOF'
+usage: dispatch.sh [flags] LANE "TASK"
+       dispatch.sh [--json] --list | --explain LANE | --validate
+       dispatch.sh --help
+
+Dispatch one task to the first available vendor CLI in LANE's fallback chain.
+A TASK of "-" reads the task text from stdin.
+
+flags:
+  --background           run in the background and print the JOB_ID
+  --dry-run              print the fully resolved dispatch plan and stop
+                         before any provider call or job state
+  --mode advise|work     advise (read-only, default) or work (may edit files)
+  --workdir DIR          working directory handed to the vendor CLI
+  --vendor V             pin one configured vendor (codex|claude|grok|gemini)
+  --model M              override the routed model
+  --effort E             override the routed effort
+  --timeout SECONDS      cap each CLI call (default 600)
+  --job-timeout SECONDS  cap the whole dispatch (lock wait plus all calls)
+
+read-only queries (no provider call, no job state; --json for one envelope):
+  --list                 effective routing table (local overrides win)
+  --explain LANE         candidate availability for one lane
+  --validate             lint the effective routing table
+  --help, -h             this help
+EOF
+}
+
+json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      '\\') out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
+        # Only non-negative C0 bytes are JSON control characters.
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# Run one read-only inspection command once, preserving its human output and
+# exit status inside a stable JSON envelope. This avoids a second routing
+# implementation drifting from the human CLI contract.
+emit_json_inspection() {
+  local command="$1" output rc ok=false first=1 line
+  shift
+  if output="$("$@" 2>&1)"; then rc=0; else rc=$?; fi
+  [[ "$rc" -eq 0 ]] && ok=true
+  printf '{"schema_version":1,"command":"%s","ok":%s,"exit_code":%d,"lines":[' \
+    "$(json_escape "$command")" "$ok" "$rc"
+  if [[ -n "$output" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ "$first" -eq 1 ]] || printf ','
+      first=0
+      printf '"%s"' "$(json_escape "$line")"
+    done <<< "$output"
+  fi
+  printf ']}\n'
+  exit "$rc"
+}
+
+print_dry_run_value() {
+  printf '%s=' "$1"
+  printf '%q\n' "$2"
+}
+
+print_dry_run_plan() {
+  local background=no task_source=argument write_worktree=no job_timeout=disabled
+  [[ "$BACKGROUND" -eq 1 ]] && background=yes
+  [[ "$TASK" == "-" ]] && task_source=stdin
+  [[ "$MODE" == "work" ]] && write_worktree=yes
+  [[ -n "$JOB_TIMEOUT" ]] && job_timeout="$JOB_TIMEOUT"
+  printf 'dry_run=yes\n'
+  print_dry_run_value lane "$LANE"
+  print_dry_run_value vendor "$VENDOR"
+  print_dry_run_value model "$MODEL"
+  print_dry_run_value effort "$EFFORT"
+  print_dry_run_value mode "$MODE"
+  print_dry_run_value workdir "$WORKDIR"
+  printf 'timeout=%s\n' "$TIMEOUT"
+  printf 'job_timeout=%s\n' "$job_timeout"
+  printf 'candidate=%s/%s\n' "$RESOLVED_IDX" "$RESOLVED_TOTAL"
+  printf 'background=%s\n' "$background"
+  printf 'task_source=%s\n' "$task_source"
+  printf 'provider_invoked=no\n'
+  printf 'job_state_created=no\n'
+  printf 'would_invoke_provider=yes\n'
+  printf 'would_create_job=yes\n'
+  printf 'would_write_worktree=%s\n' "$write_worktree"
 }
 
 raw_lane_line() { # LANE -> chain text (comments stripped); local file wins
@@ -93,7 +200,10 @@ resolve_chain() {
   local SEGS=() F=()
   IFS='|' read -ra SEGS <<< "$chain"
   RESOLVED_TOTAL="${#SEGS[@]}"
-  for seg in "${SEGS[@]}"; do
+  # ${SEGS[@]} on an empty chain is an unbound-variable error under set -u on
+  # Bash 3.2 and would abort --list mid-table; the guard makes it iterate zero
+  # times instead.
+  for seg in ${SEGS[@]+"${SEGS[@]}"}; do
     i=$((i + 1))
     [[ -n "${seg// /}" ]] || continue
     parse_lane_segment "$seg" || {
@@ -220,6 +330,11 @@ validate_routing() {
       effective_seen="$effective_seen$lane "
       IFS='|' read -ra SEGS <<< "$chain"
       total="${#SEGS[@]}"
+      if [[ "$total" -eq 0 ]]; then
+        printf 'FAIL %s empty-chain\n' "$lane"
+        invalid=$((invalid + 1))
+        continue
+      fi
       selected=0
       lane_invalid=0
       i=0
@@ -279,18 +394,70 @@ validate_routing() {
   return 0
 }
 
+# Inspection modes are deliberately parsed before dispatch flags. JSON may be
+# placed before or after the inspection command, but can never decorate a real
+# dispatch and therefore cannot accidentally create job state.
+JSON_INSPECTION=0
+if [[ "${1:-}" == "--json" ]]; then
+  JSON_INSPECTION=1
+  shift
+  [[ $# -gt 0 ]] || usage_error
+fi
+case "${1:-}" in
+  --help|-h)
+    [[ "$JSON_INSPECTION" -eq 0 && $# -eq 1 ]] || usage_error
+    print_usage
+    exit 0 ;;
+  --list)
+    if [[ "${2:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 2 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 1 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection list print_effective_routing
+    fi
+    print_effective_routing
+    exit 0
+    ;;
+  --explain)
+    [[ $# -ge 2 ]] || usage_error
+    if [[ "${3:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 3 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 2 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection explain explain_lane "$2"
+    fi
+    explain_lane "$2"
+    exit $?
+    ;;
+  --validate)
+    if [[ "${2:-}" == "--json" ]]; then
+      [[ "$JSON_INSPECTION" -eq 0 && $# -eq 2 ]] || usage_error
+      JSON_INSPECTION=1
+    else
+      [[ $# -eq 1 ]] || usage_error
+    fi
+    if [[ "$JSON_INSPECTION" -eq 1 ]]; then
+      emit_json_inspection validate validate_routing
+    fi
+    validate_routing
+    exit $?
+    ;;
+  *)
+    [[ "$JSON_INSPECTION" -eq 0 ]] || usage_error
+    ;;
+esac
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --list)
-      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
-      print_effective_routing; exit 0 ;;
-    --explain)
-      [[ "$ORIGINAL_ARGC" -eq 2 && $# -eq 2 ]] || usage_error
-      explain_lane "$2"; exit $? ;;
-    --validate)
-      [[ "$ORIGINAL_ARGC" -eq 1 && $# -eq 1 ]] || usage_error
-      validate_routing; exit $? ;;
+    --list|--explain|--validate|--json) usage_error ;;
     --background) BACKGROUND=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
@@ -441,11 +608,17 @@ if [[ -n "$JOB_TIMEOUT" ]]; then
 fi
 
 JOBS_ROOT="$OMNILANE_HOME/jobs"
-mkdir -p "$OMNILANE_HOME"
 if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
   echo "omnilane: unsafe jobs store path (want a real directory): $JOBS_ROOT" >&2
   exit 1
 fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  print_dry_run_plan
+  exit 0
+fi
+
+mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
 fi
@@ -467,33 +640,6 @@ else
   (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
 fi
 
-json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      '\\') out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
-        # Only non-negative C0 bytes are JSON control characters.
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
-}
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
 (umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
   "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \

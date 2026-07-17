@@ -1,0 +1,114 @@
+#compdef omnilane
+# Zsh completion for omnilane. Reads bounded names only; never dispatches.
+
+_omnilane_repo() {
+  if [[ -n "${OMNILANE_COMPLETION_REPO:-}" && -r "$OMNILANE_COMPLETION_REPO/routing.yaml" ]]; then
+    print -r -- "$OMNILANE_COMPLETION_REPO"
+    return 0
+  fi
+  local exe target
+  exe="${commands[omnilane]:-}" || return 1
+  while [[ -L "$exe" ]]; do
+    target="$(readlink "$exe")" || return 1
+    if [[ "$target" = /* ]]; then exe="$target"; else exe="${exe:h}/$target"; fi
+  done
+  (cd "${exe:h}/.." 2>/dev/null && pwd -P)
+}
+
+_omnilane_lanes() {
+  local repo home file
+  local -a files
+  repo="$(_omnilane_repo)" || return 0
+  home="${OMNILANE_HOME:-$HOME/.omnilane}"
+  files=()
+  for file in "$home/routing.local.yaml" "$repo/routing.yaml"; do
+    [[ -f "$file" && ! -L "$file" ]] && files+=("$file")
+  done
+  (( ${#files} )) || return 0
+  awk '
+    /^[a-z][a-z0-9-]*:[[:space:]]/ {
+      lane=$1; sub(/:$/, "", lane)
+      if (!seen[lane]++) print lane
+    }
+  ' "${files[@]}"
+}
+
+_omnilane_job_ids() {
+  local home root dir id count=0
+  home="${OMNILANE_HOME:-$HOME/.omnilane}"
+  root="$home/jobs"
+  [[ -d "$root" && ! -L "$root" ]] || return 0
+  for dir in "$root"/*(N/); do
+    [[ -L "$dir" ]] && continue
+    id="${dir:t}"
+    if [[ "$id" =~ '^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$' ]]; then
+      print -r -- "$id"
+      (( count += 1 ))
+      (( count < 1000 )) || break
+    fi
+  done
+}
+
+_omnilane() {
+  local command="${words[2]:-}" sub sub_index=3
+  local -a lanes ids
+  if (( CURRENT == 2 )); then
+    _values 'command' version list route dispatch jobs doctor release-audit ui configure completion help
+    return
+  fi
+  case "$command" in
+    route|dispatch)
+      lanes=("${(@f)$(_omnilane_lanes)}")
+      _arguments \
+        '--background[run in background]' \
+        '--dry-run[resolve and print the plan without side effects]' \
+        '--mode[execution mode]:mode:(advise work)' \
+        '--workdir[target directory]:directory:_directories' \
+        '--vendor[vendor override]:vendor:(codex claude grok gemini exec vote)' \
+        '--model[model override]:model:' \
+        '--effort[reasoning effort]:effort:(low medium high xhigh max)' \
+        '--timeout[per-call seconds]:seconds:' \
+        '--job-timeout[whole-job seconds]:seconds:' \
+        "1:lane:($lanes)" '2:task:'
+      ;;
+    jobs)
+      sub="${words[3]:-}"
+      if [[ "$sub" == "--json" ]]; then
+        sub_index=4
+        sub="${words[4]:-}"
+      fi
+      if (( CURRENT == sub_index )); then
+        _values 'job command' list status result tail retry stats wait audit prune help
+      elif (( CURRENT == sub_index + 1 )) &&
+           [[ "$sub" == status || "$sub" == result || "$sub" == wait ||
+              "$sub" == tail || "$sub" == retry ]]; then
+        ids=("${(@f)$(_omnilane_job_ids)}")
+        _values 'job id' "$ids[@]"
+      elif [[ "$sub" == list || "$sub" == status || "$sub" == result ]]; then
+        _values 'option' --json
+      elif [[ "$sub" == tail ]]; then
+        _arguments '--lines[output lines to show]:count:'
+      elif [[ "$sub" == retry ]]; then
+        _arguments '--background[re-dispatch in the background]'
+      elif [[ "$sub" == wait ]]; then
+        _arguments '--timeout[maximum wait seconds]:seconds:'
+      elif [[ "$sub" == stats || "$sub" == audit ]]; then
+        _arguments '--last[maximum jobs]:count:' '--json[versioned metadata output]'
+      elif [[ "$sub" == prune ]]; then
+        _arguments '--keep[completed jobs to retain]:count:' \
+          '--older-than[completed jobs older than N days]:days:' \
+          '--apply[delete eligible jobs]'
+      fi
+      ;;
+    doctor) _values 'option' --json ;;
+    release-audit)
+      _arguments '--target[release version]:version:' '--allow-dirty[permit a dirty worktree]' \
+        '--require-tag[require an annotated tag at HEAD]' '--manifest[include tracked inventory]' \
+        '--json[versioned JSON output]'
+      ;;
+    ui) _values 'ui command' start status url stop ;;
+    completion) _values 'shell' bash zsh ;;
+  esac
+}
+
+(( $+functions[compdef] )) && compdef _omnilane omnilane

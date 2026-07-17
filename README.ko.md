@@ -20,7 +20,7 @@
 
 ---
 
-## v0.6.0 새 기능
+## v0.7.0 새 기능
 
 - **라우팅을 오프라인으로 설명하고 검증** — `--explain` 으로 각 폴백 후보를
   확인하고 `--validate` 로 전체 유효 라우팅 테이블을 검사합니다. 공급자를
@@ -192,6 +192,11 @@ omnilane ui stop     # 정상 중지
 수 있음)에 마커로 감싼 가역적 **상시 라우팅 리마인더**를 선택 설치할 수
 있습니다. 비대화형 설치는 `OMNILANE_HOOKS=all|none|claude,codex`. 수동 연결:
 
+`./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
+`--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
+설치 프로그램이 소유한 링크와 표시된 알림을 되돌리려면
+`./install.sh --uninstall` 을 실행합니다.
+
 - **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령 포함),
   또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
 - **Codex**: `skills/omnilane` 을 `~/.codex/skills/` 에 배치/링크.
@@ -221,19 +226,24 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 ## 📖 명령 레퍼런스
 
 ```
+eval "$(omnilane completion bash)"             # 현재 Bash 에서 완성 활성화
+source <(omnilane completion zsh)               # 현재 Zsh 에서 완성 활성화
+omnilane release-audit [--target VERSION] [--json] # 오프라인 읽기 전용 릴리스 게이트
 omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시
 omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
 omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
-dispatch.sh [--background] [--mode advise|work] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
-dispatch.sh --list
-dispatch.sh --explain LANE                          # 후보별 라우팅 결정을 오프라인 설명
-dispatch.sh --validate                              # 공급자 호출 없이 실효 라우팅 검사
-jobs.sh list | status ID | result ID
-jobs.sh stats [--last N]                           # 로컬 성공률과 라우팅 집계
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]       # 후보별 라우팅 결정을 오프라인 설명
+dispatch.sh [--json] --validate [--json]           # 공급자 호출 없이 실효 라우팅 검사
+jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메타데이터만 반환
+jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
+jobs.sh [--json] stats [--last N]                  # 로컬 성공률과 라우팅 집계
+jobs.sh audit [--last N] [--json]                  # 읽기 전용 작업 무결성/개인정보 검사
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
 configure.sh                                        # 대화형 레인 메뉴
 ```

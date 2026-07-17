@@ -4,27 +4,40 @@ set -euo pipefail
 # Conservative by design: symlinks + marked instruction-file blocks only;
 # everything is reversed by --uninstall. Run from a checkout you have reviewed.
 #
-# Usage: ./install.sh [--uninstall]
+# Usage: ./install.sh [--uninstall] [--dry-run] | ./install.sh --check
 # Env:   OMNILANE_LANG=en|zh-TW|zh-CN|ja|ko   force interface language
 #        OMNILANE_HOOKS=ask|none|all|claude,codex,...   routing-reminder policy
 #                                                       (default ask on a tty)
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
-  echo "usage: ./install.sh [--uninstall]" "${1:-}" >&2
+  echo "usage: ./install.sh [--uninstall] [--dry-run] | ./install.sh --check" "${1:-}" >&2
 }
 
 UNINSTALL=""
-case "$#" in
-  0) ;;
-  1)
-    case "$1" in
-      --uninstall) UNINSTALL="--uninstall" ;;
-      --help|-h) usage; exit 0 ;;
-      *) usage "(unknown argument)"; exit 2 ;;
-    esac ;;
-  *) usage "(unexpected extra arguments)"; exit 2 ;;
-esac
+DRY_RUN=0
+CHECK=0
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall)
+      [[ -z "$UNINSTALL" ]] || { usage "(duplicate argument)"; exit 2; }
+      UNINSTALL="--uninstall" ;;
+    --dry-run)
+      [[ "$DRY_RUN" -eq 0 ]] || { usage "(duplicate argument)"; exit 2; }
+      DRY_RUN=1 ;;
+    --check)
+      [[ "$CHECK" -eq 0 ]] || { usage "(duplicate argument)"; exit 2; }
+      CHECK=1 ;;
+    --help|-h)
+      [[ $# -eq 1 ]] || { usage "(unexpected extra arguments)"; exit 2; }
+      usage; exit 0 ;;
+    *) usage "(unknown argument)"; exit 2 ;;
+  esac
+done
+if [[ "$CHECK" -eq 1 && ( -n "$UNINSTALL" || "$DRY_RUN" -eq 1 ) ]]; then
+  usage "(--check cannot be combined with another mode)"
+  exit 2
+fi
 
 source "$REPO/scripts/lib/i18n.sh"
 SKILL_SRC="$REPO/skills/omnilane"
@@ -60,6 +73,10 @@ remove_hook() { # file [quiet]
     echo "omnilane: warning: routing reminder markers out of order in $f; file unchanged" >&2
     return 2
   fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'would remove routing reminder from %s\n' "$f"
+    return 0
+  fi
   tmp="$(mktemp)"
   awk -v s="$HOOK_START" -v e="$HOOK_END" \
     '$0 == s {
@@ -82,6 +99,11 @@ remove_hook() { # file [quiet]
 install_hook() { # vendor
   local f; f="$(instruction_file "$1")"
   [[ -n "$f" ]] || return 0
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    remove_hook "$f" quiet
+    printf 'would write routing reminder to %s\n' "$f"
+    return 0
+  fi
   mkdir -p "$(dirname "$f")"
   remove_hook "$f" quiet   # refresh: old block out, current block in
   { [[ -s "$f" ]] && echo; cat "$HOOK_SRC"; } >> "$f"
@@ -110,26 +132,130 @@ preserve_foreign_symlink() {
   msgf foreign_link "$1" >&2; echo >&2
 }
 
+safe_owned_parent() { # final path; nearest existing parent must resolve below HOME
+  local path="$1" parent probe next resolved_home resolved_probe
+  parent="$(dirname "$path")"
+  case "$parent" in
+    "$HOME"|"$HOME"/*) ;;
+    *) return 1 ;;
+  esac
+  probe="$parent"
+  while [[ ! -e "$probe" && ! -L "$probe" ]]; do
+    next="$(dirname "$probe")"
+    [[ "$next" != "$probe" ]] || return 1
+    probe="$next"
+  done
+  [[ -d "$probe" ]] || return 1
+  resolved_home="$(cd "$HOME" 2>/dev/null && pwd -P)" || return 1
+  resolved_probe="$(cd "$probe" 2>/dev/null && pwd -P)" || return 1
+  case "$resolved_probe" in
+    "$resolved_home"|"$resolved_home"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+reject_unsafe_parent() {
+  printf 'omnilane: unsafe parent path below HOME: %s\n' "$(dirname "$1")" >&2
+  return 1
+}
+
 link_skill() { # $1 = target skills dir
   local dst="$1/omnilane"
+  safe_owned_parent "$dst" || {
+    reject_unsafe_parent "$dst"
+    return 1
+  }
   if [[ "$UNINSTALL" == "--uninstall" ]]; then
     if owned_symlink "$dst" "$SKILL_SRC"; then
-      rm "$dst"; echo "$(msg removed) $dst"
+      if [[ "$DRY_RUN" -eq 1 ]]; then
+        printf 'would remove owned link %s\n' "$dst"
+      else
+        rm "$dst"; echo "$(msg removed) $dst"
+      fi
     elif [[ -L "$dst" ]]; then
       preserve_foreign_symlink "$dst"
     fi
     return 0
   fi
-  mkdir -p "$1"
   if [[ -e "$dst" && ! -L "$dst" ]]; then
     msgf skip_exists "$dst"; echo; return 0
   fi
   if [[ -L "$dst" ]] && ! owned_symlink "$dst" "$SKILL_SRC"; then
     preserve_foreign_symlink "$dst"; return 0
   fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'would link %s -> %s\n' "$dst" "$SKILL_SRC"
+    return 0
+  fi
+  mkdir -p "$1"
   ln -sfn "$SKILL_SRC" "$dst"
   echo "$(msg linked) $dst -> $SKILL_SRC"
 }
+
+CHECK_FAILURES=0
+check_link() { # label, path, target
+  local label="$1" path="$2" target="$3"
+  if ! safe_owned_parent "$path"; then
+    printf 'DRIFT %s %s (unsafe parent path)\n' "$label" "$path"
+    CHECK_FAILURES=$((CHECK_FAILURES + 1))
+  elif owned_symlink "$path" "$target"; then
+    printf 'PASS %s %s\n' "$label" "$path"
+  elif [[ ! -e "$path" && ! -L "$path" ]]; then
+    printf 'MISSING %s %s\n' "$label" "$path"
+    CHECK_FAILURES=$((CHECK_FAILURES + 1))
+  else
+    printf 'DRIFT %s %s (not an owned link)\n' "$label" "$path"
+    CHECK_FAILURES=$((CHECK_FAILURES + 1))
+  fi
+}
+
+hook_selected() {
+  local vendor="$1"
+  case "$HOOKS_MODE" in
+    none|ask) return 1 ;;
+    all) return 0 ;;
+    *) [[ ",$HOOKS_MODE," == *",$vendor,"* ]] ;;
+  esac
+}
+
+check_hook() {
+  local vendor="$1" f starts ends actual expected
+  f="$(instruction_file "$vendor")"
+  if [[ ! -f "$f" ]]; then
+    printf 'MISSING %s-hook %s\n' "$vendor" "$f"
+    CHECK_FAILURES=$((CHECK_FAILURES + 1))
+    return
+  fi
+  starts="$(grep -xcF "$HOOK_START" "$f" || true)"
+  ends="$(grep -xcF "$HOOK_END" "$f" || true)"
+  if [[ "$starts" -eq 1 && "$ends" -eq 1 ]]; then
+    actual="$(awk -v s="$HOOK_START" -v e="$HOOK_END" \
+      '$0 == s {inside=1} inside {print} $0 == e {exit}' "$f")"
+    expected="$(cat "$HOOK_SRC")"
+    if [[ "$actual" == "$expected" ]]; then
+      printf 'PASS %s-hook %s\n' "$vendor" "$f"
+      return
+    fi
+  fi
+  printf 'DRIFT %s-hook %s (routing reminder differs)\n' "$vendor" "$f"
+  CHECK_FAILURES=$((CHECK_FAILURES + 1))
+}
+
+if [[ "$CHECK" -eq 1 ]]; then
+  check_link wrapper "$HOME/.local/bin/omnilane" "$REPO/bin/omnilane"
+  if command -v claude >/dev/null 2>&1; then
+    check_link claude-skill "$HOME/.claude/skills/omnilane" "$SKILL_SRC"
+    hook_selected claude && check_hook claude
+  fi
+  if command -v codex >/dev/null 2>&1; then
+    check_link codex-skill "$HOME/.codex/skills/omnilane" "$SKILL_SRC"
+    hook_selected codex && check_hook codex
+  fi
+  if command -v grok >/dev/null 2>&1 && hook_selected grok; then check_hook grok; fi
+  if command -v agy >/dev/null 2>&1 && hook_selected agy; then check_hook agy; fi
+  [[ "$CHECK_FAILURES" -eq 0 ]]
+  exit $?
+fi
 
 if [[ "$UNINSTALL" == "--uninstall" ]]; then
   for v in claude codex grok agy; do remove_hook "$(instruction_file "$v")"; done
@@ -163,19 +289,26 @@ if command -v agy >/dev/null 2>&1; then
 fi
 # Global wrapper so commands work from any directory: omnilane list|route|jobs|configure
 BIN_DST="$HOME/.local/bin/omnilane"
+safe_owned_parent "$BIN_DST" || reject_unsafe_parent "$BIN_DST"
 if [[ "$UNINSTALL" == "--uninstall" ]]; then
   if owned_symlink "$BIN_DST" "$REPO/bin/omnilane"; then
-    rm "$BIN_DST"; echo "$(msg removed) $BIN_DST"
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      printf 'would remove owned link %s\n' "$BIN_DST"
+    else
+      rm "$BIN_DST"; echo "$(msg removed) $BIN_DST"
+    fi
   elif [[ -L "$BIN_DST" ]]; then
     preserve_foreign_symlink "$BIN_DST"
   fi
 else
-  mkdir -p "$HOME/.local/bin"
   if [[ -e "$BIN_DST" && ! -L "$BIN_DST" ]]; then
     msgf skip_exists "$BIN_DST"; echo
   elif [[ -L "$BIN_DST" ]] && ! owned_symlink "$BIN_DST" "$REPO/bin/omnilane"; then
     preserve_foreign_symlink "$BIN_DST"
+  elif [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'would link %s -> %s\n' "$BIN_DST" "$REPO/bin/omnilane"
   else
+    mkdir -p "$HOME/.local/bin"
     ln -sfn "$REPO/bin/omnilane" "$BIN_DST"
     echo "$(msg linked) $BIN_DST  $(msg path_hint)"
   fi
@@ -200,8 +333,12 @@ if [[ "$UNINSTALL" != "--uninstall" ]]; then
   echo "  $(msg overrides_local)"
   echo
   echo "$(msg effective)"
-  bash "$REPO/scripts/dispatch.sh" --list
-  if [[ -t 0 && -t 1 ]]; then
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    echo "  would inspect effective routing after installation"
+  else
+    bash "$REPO/scripts/dispatch.sh" --list
+  fi
+  if [[ "$DRY_RUN" -eq 0 && -t 0 && -t 1 ]]; then
     echo
     read -rp "$(msg customize_prompt)" ans || ans=""
     case "$ans" in y|Y|yes|YES) bash "$REPO/scripts/configure.sh" ;; esac

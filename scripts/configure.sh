@@ -97,7 +97,9 @@ while true; do
               model+="${model:+,}$v"
               next=()
               for r in "${remaining[@]}"; do [[ "$r" == "$v" ]] || next+=("$r"); done
-              remaining=("${next[@]}")
+              # next is empty once every vendor is picked; the bare expansion
+              # is an unbound-variable error under set -u on Bash 3.2.
+              remaining=(${next[@]+"${next[@]}"})
             done
             effort="$(pick "$(msg cfg_rounds)" "1" "2")"
             [[ "$effort" == "1" ]] && effort="-" ;;

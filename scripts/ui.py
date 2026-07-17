@@ -1046,7 +1046,10 @@ def start_ui(runtime, requested_port):
         finally:
             os.close(log_fd)
 
-        deadline = time.monotonic() + 6.0
+        # 10s, not 6s: when the whole test suite (or a busy host) is churning
+        # sibling servers, a healthy child can need more than 6s to come up,
+        # and callers time out at 12s — keep the margin on both sides.
+        deadline = time.monotonic() + 10.0
         while time.monotonic() < deadline and child.poll() is None:
             candidate = runtime.read_state()
             if (

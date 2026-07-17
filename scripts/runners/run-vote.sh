@@ -22,7 +22,9 @@ TEMP_FILES=()
 
 cleanup_temp_files() {
   local f
-  for f in "${TEMP_FILES[@]}"; do /bin/rm -f -- "$f"; done
+  # The trap can fire before any temp file exists; a bare empty expansion is
+  # an unbound-variable error under set -u on Bash 3.2.
+  for f in ${TEMP_FILES[@]+"${TEMP_FILES[@]}"}; do /bin/rm -f -- "$f"; done
 }
 trap cleanup_temp_files EXIT
 

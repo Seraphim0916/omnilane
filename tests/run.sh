@@ -298,6 +298,107 @@ EOF
   fi
 }
 
+test_dispatch_json_inspection_contract() {
+  local name="dispatch inspection commands expose versioned JSON" home gate marker
+  local list_prefix list_suffix explain unavailable invalid mixed mixed_late
+  local rc_list_prefix rc_list_suffix rc_explain rc_unavailable rc_invalid rc_mixed rc_mixed_late
+  name="dispatch inspection commands expose versioned JSON"
+  home="$TEST_ROOT/dispatch-json"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$JSON_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  {
+    printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate"
+    printf 'hostile: vote "model\twith-tab" 1\n'
+  } > "$home/routing.local.yaml"
+
+  list_prefix="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --json --list 2>&1)"
+  rc_list_prefix=$?
+  list_suffix="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --list --json 2>&1)"
+  rc_list_suffix=$?
+  explain="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    JSON_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --json --explain probe 2>&1)"
+  rc_explain=$?
+
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --explain offline --json 2>&1)"
+  rc_unavailable=$?
+  printf 'bad: mystery model low\n' > "$home/routing.local.yaml"
+  invalid="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --json --validate 2>&1)"
+  rc_invalid=$?
+  mixed="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --json triage task 2>&1)"
+  rc_mixed=$?
+  mixed_late="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --background --json --list 2>&1)"
+  rc_mixed_late=$?
+
+  printf '%s\n' "$list_prefix" > "$home/list.json"
+  printf '%s\n' "$explain" > "$home/explain.json"
+  printf '%s\n' "$unavailable" > "$home/unavailable.json"
+  printf '%s\n' "$invalid" > "$home/invalid.json"
+
+  if [[ "$rc_list_prefix" -ne 0 || "$rc_list_suffix" -ne 0 ||
+        "$list_prefix" != "$list_suffix" ]]; then
+    fail "$name" "list JSON forms disagreed: $rc_list_prefix/$rc_list_suffix"
+  elif [[ "$rc_explain" -ne 0 || "$rc_unavailable" -ne 4 || "$rc_invalid" -ne 2 ]]; then
+    fail "$name" "JSON modes changed inspection exit codes: $rc_explain/$rc_unavailable/$rc_invalid"
+  elif [[ "$rc_mixed" -ne 2 || "$mixed" != *"usage"* ]]; then
+    fail "$name" "--json silently mixed with dispatch work: rc=$rc_mixed out=$mixed"
+  elif [[ "$rc_mixed_late" -ne 2 || "$mixed_late" != *"usage"* ]]; then
+    fail "$name" "late --json did not use the inspection usage contract: rc=$rc_mixed_late out=$mixed_late"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "JSON inspection executed work or created job state"
+  elif printf '%s' "$list_prefix" | LC_ALL=C grep -q $'\t'; then
+    fail "$name" "JSON output leaked a literal tab control byte"
+  elif ! python3 - "$home/list.json" "$home/explain.json" \
+      "$home/unavailable.json" "$home/invalid.json" <<'PY'
+import json
+import sys
+
+expected = [
+    ("list", True, 0),
+    ("explain", True, 0),
+    ("explain", False, 4),
+    ("validate", False, 2),
+]
+for path, contract in zip(sys.argv[1:], expected):
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+    command, ok, exit_code = contract
+    assert data["schema_version"] == 1
+    assert data["command"] == command
+    assert data["ok"] is ok
+    assert data["exit_code"] == exit_code
+    assert isinstance(data["lines"], list)
+    assert all(isinstance(line, str) for line in data["lines"])
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    listed = json.load(handle)
+assert any("hostile:" in line and "model\twith-tab" in line for line in listed["lines"])
+with open(sys.argv[2], encoding="utf-8") as handle:
+    explained = json.load(handle)
+assert any("candidate 2" in line and "status=selected" in line for line in explained["lines"])
+PY
+  then
+    fail "$name" "inspection JSON did not satisfy the versioned contract"
+  else
+    pass "$name"
+  fi
+}
+
 test_depth_and_grok_retry_env_validation() {
   local name="depth and Grok retry env validation" home gate fake prompt marker out
   local rc_depth_text rc_depth_negative rc_depth_control rc_nested rc_valid value rc_bad rc_control
@@ -569,6 +670,104 @@ EOF
   fi
 }
 
+test_dispatch_dry_run_is_resolved_and_side_effect_free() {
+  local name="dispatch dry run resolves without side effects" home gate marker work out rc
+  local stdin_out rc_stdin disabled rc_disabled unavailable rc_unavailable
+  local bad rc_bad nested rc_nested control rc_control link target
+  local unsafe rc_unsafe outside
+  name="dispatch dry run resolves without side effects"
+  home="$TEST_ROOT/dispatch-dry-run"
+  gate="$home/working gate.sh"
+  marker="$home/executed"
+  work="$home/work tree"
+  target="$home/work-target"
+  link="$home/work-link"
+  mkdir -p "$home" "$work" "$target"
+  ln -s "$target" "$link"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$DRY_RUN_EXECUTED_MARKER"
+EOF
+  chmod +x "$gate"
+  printf 'probe: codex unavailable-model low | exec "%s" -\n' "$gate" \
+    > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    DRY_RUN_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --background --dry-run --mode work \
+      --workdir "$work" --timeout 55 --job-timeout 77 probe "private task" 2>&1)"
+  rc=$?
+  stdin_out="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run --workdir "$link" probe - \
+      </dev/null 2>&1)"
+  rc_stdin=$?
+
+  printf 'disabled: off\n' > "$home/routing.local.yaml"
+  disabled="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run disabled x 2>&1)"
+  rc_disabled=$?
+  printf 'offline: codex unavailable-model low\n' > "$home/routing.local.yaml"
+  unavailable="$(OMNILANE_HOME="$home" CODEX_BIN="$home/missing-codex" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
+  rc_unavailable=$?
+  bad="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run --timeout nope offline x 2>&1)"
+  rc_bad=$?
+  nested="$(OMNILANE_HOME="$home" OMNILANE_DEPTH=1 \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run offline x 2>&1)"
+  rc_nested=$?
+
+  printf 'probe: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+  control="$(OMNILANE_HOME="$home" DRY_RUN_EXECUTED_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run --model $'bad\033[31mFORGED' \
+      probe x 2>&1)"
+  rc_control=$?
+  outside="$TEST_ROOT/dispatch-dry-run-outside"
+  mkdir -p "$outside"
+  ln -s "$outside" "$home/jobs"
+  unsafe="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" \
+    --dry-run probe x 2>&1)"
+  rc_unsafe=$?
+  /bin/rm "$home/jobs"
+
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "resolved dry run failed: rc=$rc out=$out"
+  elif [[ "$out" != *"lane=probe"* || "$out" != *"vendor=exec"* ||
+          "$out" != *"timeout=55"* || "$out" != *"job_timeout=77"* ||
+          "$out" != *"mode=work"* || "$out" != *"background=yes"* ||
+          "$out" != *"candidate=2/2"* ]]; then
+    fail "$name" "dry run omitted resolved fields: $out"
+  elif [[ "$out" != *"provider_invoked=no"* || "$out" != *"job_state_created=no"* ||
+          "$out" != *"would_invoke_provider=yes"* || "$out" != *"would_write_worktree=yes"* ]]; then
+    fail "$name" "dry run omitted its side-effect decision: $out"
+  elif [[ "$out" == *"private task"* ]]; then
+    fail "$name" "dry run leaked task content"
+  elif [[ "$rc_stdin" -ne 0 || "$stdin_out" != *"task_source=stdin"* ||
+          "$stdin_out" != *"workdir="*"work-link"* ]]; then
+    fail "$name" "stdin or symlink-workdir plan was not resolved: rc=$rc_stdin out=$stdin_out"
+  elif [[ -e "$marker" || -d "$home/jobs" ]]; then
+    fail "$name" "dry run invoked a provider or created job state"
+  elif find "$target" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "dry run wrote through the symlinked workdir"
+  elif [[ "$rc_disabled" -ne 3 || "$disabled" != *"disabled"* ]]; then
+    fail "$name" "disabled lane did not preserve exit 3: $disabled"
+  elif [[ "$rc_unavailable" -ne 4 || "$unavailable" != *"no vendor CLI"* ]]; then
+    fail "$name" "unavailable route did not preserve exit 4: $unavailable"
+  elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid timeout"* ]]; then
+    fail "$name" "invalid timeout did not fail before state: $bad"
+  elif [[ "$rc_nested" -ne 86 || "$nested" != *"nested dispatch"* ]]; then
+    fail "$name" "nested depth did not fail before state: $nested"
+  elif [[ "$rc_control" -ne 0 || "$control" == *$'\033'* || "$control" != *"FORGED"* ]]; then
+    fail "$name" "dry-run output did not safely quote control input"
+  elif [[ "$rc_unsafe" -ne 1 || "$unsafe" != *"unsafe jobs store"* ]]; then
+    fail "$name" "dry run disagreed with the real jobs-store safety gate: rc=$rc_unsafe out=$unsafe"
+  elif find "$outside" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "dry run wrote through the unsafe jobs-store symlink"
+  else
+    pass "$name"
+  fi
+}
+
 test_consult_lane_and_configurator() {
   local name="consult lane stays multi-vendor" home listed
   home="$TEST_ROOT/consult"; mkdir -p "$home"
@@ -782,6 +981,171 @@ test_jobs_stats_aggregates_only_public_metadata() {
     fail "$name" "empty store summary changed: $empty"
   elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid --last"* ]]; then
     fail "$name" "invalid sample limit was not rejected: rc=$rc_bad out=$bad"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_json_is_versioned_and_private_by_default() {
+  local name="jobs JSON is versioned and private by default" home done_id running_id
+  local list_prefix list_suffix status_json result_json stats_json empty_stats_json
+  local invalid_json invalid_utf8_json invalid_rc
+  name="jobs JSON is versioned and private by default"
+  home="$TEST_ROOT/jobs-json"
+  done_id="20260717-120005-123-5"
+  running_id="20260717-120004-123-4"
+  mkdir -p "$home/jobs/$done_id" "$home/jobs/$running_id"
+  printf '0\n' > "$home/jobs/$done_id/exit"
+  printf '{"lane":"triage","vendor":"codex","model":"模型"}\n' > "$home/jobs/$done_id/meta.json"
+  printf 'PRIVATE-TASK-CANARY\n' > "$home/jobs/$done_id/task.txt"
+  printf 'PRIVATE-OUTPUT-CANARY\n' > "$home/jobs/$done_id/out.txt"
+  printf 'PRIVATE-STDERR-CANARY\n' > "$home/jobs/$done_id/out.txt.stderr.log"
+  printf '{"lane":"probe","vendor":"exec"}\n' > "$home/jobs/$running_id/meta.json"
+
+  list_prefix="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json list 2>&1)"
+  list_suffix="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --json 2>&1)"
+  status_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$done_id" --json 2>&1)"
+  result_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" result --json "$done_id" 2>&1)"
+  stats_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --last 2 --json 2>&1)"
+  empty_stats_json="$(OMNILANE_HOME="$home/empty" bash "$ROOT/scripts/jobs.sh" stats --json 2>&1)"
+  printf '\377' > "$home/jobs/$running_id/meta.json"
+  invalid_utf8_json="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --json 2>&1)"
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json status ../escape \
+    > "$home/invalid.json" 2>&1
+  invalid_rc=$?
+  invalid_json="$(cat "$home/invalid.json")"
+
+  if ! python3 - "$done_id" "$running_id" "$list_prefix" "$list_suffix" \
+      "$status_json" "$result_json" "$stats_json" "$empty_stats_json" "$invalid_json" <<'PY'
+import json
+import sys
+
+done_id, running_id, *documents = sys.argv[1:]
+list_prefix, list_suffix, status_doc, result_doc, stats_doc, empty_stats_doc, invalid_doc = map(json.loads, documents)
+assert list_prefix == list_suffix
+assert list_prefix["schema_version"] == 1 and list_prefix["command"] == "list" and list_prefix["ok"] is True
+assert [job["id"] for job in list_prefix["jobs"]] == [done_id, running_id]
+done = list_prefix["jobs"][0]
+assert done["state"] == "done" and done["exit_code"] == 0
+assert done["metadata_status"] == "valid" and '"model":"模型"' in done["metadata"]
+assert status_doc["job"] == {"id": done_id, "state": "done", "exit_code": 0}
+assert result_doc["job"] == {
+    "id": done_id,
+    "state": "done",
+    "exit_code": 0,
+    "output_available": True,
+    "stderr_available": True,
+}
+assert stats_doc["sampled"] == 2 and stats_doc["succeeded"] == 1 and stats_doc["running"] == 1
+assert {item["name"]: item["count"] for item in stats_doc["lanes"]} == {"probe": 1, "triage": 1}
+assert empty_stats_doc["sampled"] == 0 and empty_stats_doc["lanes"] == [] and empty_stats_doc["vendors"] == []
+assert invalid_doc["schema_version"] == 1 and invalid_doc["ok"] is False
+assert invalid_doc["error"] == "invalid job id"
+for document in documents:
+    assert "PRIVATE-" not in document
+PY
+  then
+    fail "$name" "JSON contract was malformed or disclosed private bodies"
+  elif ! python3 - "$running_id" "$invalid_utf8_json" <<'PY'
+import json
+import sys
+
+running_id, document = sys.argv[1:]
+jobs = json.loads(document)["jobs"]
+running = next(job for job in jobs if job["id"] == running_id)
+assert running["metadata"] is None and running["metadata_status"] == "invalid"
+PY
+  then
+    fail "$name" "invalid UTF-8 metadata broke JSON output"
+  elif [[ "$invalid_rc" -ne 2 ]]; then
+    fail "$name" "invalid JSON request did not preserve exit 2 (got $invalid_rc)"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_wait_is_bounded_and_terminal() {
+  local name="jobs wait is bounded and terminal" home transition_id pending_id malformed_id disappearing_id dead_id link_id
+  local out rc writer timeout_out timeout_rc timeout_elapsed before after malformed_rc malformed_out
+  local disappear_rc disappear_out remover dead_rc dead_out link_rc interrupted_rc waiter invalid_ok=1 value invalid_rc
+  home="$TEST_ROOT/jobs-wait"
+  transition_id="20260717-140001-123-1"
+  pending_id="20260717-140002-123-2"
+  malformed_id="20260717-140003-123-3"
+  disappearing_id="20260717-140004-123-4"
+  dead_id="20260717-140005-123-5"
+  link_id="20260717-140006-123-6"
+  mkdir -p "$home/jobs/$transition_id" "$home/jobs/$pending_id" \
+    "$home/jobs/$malformed_id" "$home/jobs/$disappearing_id" "$home/jobs/$dead_id" "$home/outside"
+  printf '%s\n' "$$" > "$home/jobs/$transition_id/pid"
+  printf '%s\n' "$$" > "$home/jobs/$pending_id/pid"
+  printf '0\nINJECTED-EXIT\n' > "$home/jobs/$malformed_id/exit"
+  printf '%s\n' "$$" > "$home/jobs/$disappearing_id/pid"
+  printf '9999999999\n' > "$home/jobs/$dead_id/pid"
+  printf '0\n' > "$home/outside/exit"
+  ln -s "$home/outside" "$home/jobs/$link_id"
+
+  (sleep 1; printf '7\n' > "$home/jobs/$transition_id/exit") &
+  writer=$!
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$transition_id" --timeout 4 2>&1)"
+  rc=$?
+  wait "$writer" 2>/dev/null || true
+
+  before="$(shasum -a 256 "$home/jobs/$pending_id/pid" | awk '{print $1}')"
+  timeout_elapsed="$SECONDS"
+  timeout_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout 0 2>&1)"
+  timeout_rc=$?
+  timeout_elapsed=$((SECONDS - timeout_elapsed))
+  after="$(shasum -a 256 "$home/jobs/$pending_id/pid" | awk '{print $1}')"
+
+  malformed_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$malformed_id" --timeout 1 2>&1)"
+  malformed_rc=$?
+  dead_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$dead_id" --timeout 1 2>&1)"
+  dead_rc=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$link_id" --timeout 1 \
+    > "$home/link.out" 2>&1
+  link_rc=$?
+
+  (sleep 1; /bin/rm "$home/jobs/$disappearing_id/pid"; rmdir "$home/jobs/$disappearing_id") &
+  remover=$!
+  disappear_out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$disappearing_id" --timeout 4 2>&1)"
+  disappear_rc=$?
+  wait "$remover" 2>/dev/null || true
+
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout 10 \
+    > "$home/interrupted.out" 2>&1 &
+  waiter=$!
+  sleep 0.2
+  kill -TERM "$waiter" 2>/dev/null || true
+  wait "$waiter" 2>/dev/null
+  interrupted_rc=$?
+
+  for value in -1 nope 86401; do
+    OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" wait "$pending_id" --timeout "$value" \
+      > "$home/invalid-$value.out" 2>&1
+    invalid_rc=$?
+    [[ "$invalid_rc" -eq 2 ]] || invalid_ok=0
+  done
+
+  if [[ "$rc" -ne 7 || "$out" != "done exit=7" ]]; then
+    fail "$name" "terminal job did not preserve exit 7: rc=$rc out=$out"
+  elif [[ "$timeout_rc" -ne 124 || "$timeout_out" != "wait timeout after 0s" ||
+          "$timeout_elapsed" -gt 1 ]]; then
+    fail "$name" "zero-timeout check was not immediate exit 124: rc=$timeout_rc elapsed=$timeout_elapsed out=$timeout_out"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "wait mutated pending job state"
+  elif [[ "$malformed_rc" -ne 1 || "$malformed_out" != "invalid recorded exit status" ]]; then
+    fail "$name" "malformed terminal state was accepted: rc=$malformed_rc out=$malformed_out"
+  elif [[ "$dead_rc" -ne 125 || "$dead_out" != "dead (worker gone, no exit recorded)" ]]; then
+    fail "$name" "dead worker did not return terminal exit 125: rc=$dead_rc out=$dead_out"
+  elif [[ "$link_rc" -ne 1 ]] || grep -q 'OUTSIDE' "$home/link.out"; then
+    fail "$name" "symlink job was followed or returned the wrong status"
+  elif [[ "$disappear_rc" -ne 1 || "$disappear_out" != "job disappeared while waiting" ]]; then
+    fail "$name" "disappearing job was not reported safely: rc=$disappear_rc out=$disappear_out"
+  elif [[ "$interrupted_rc" -ne 143 ]]; then
+    fail "$name" "TERM did not interrupt wait with exit 143 (got $interrupted_rc)"
+  elif [[ "$invalid_ok" -ne 1 ]]; then
+    fail "$name" "invalid wait timeout did not fail with exit 2"
   else
     pass "$name"
   fi
@@ -1733,6 +2097,127 @@ make_fake_installer_home() {
   chmod +x "$home/bin/codex"
 }
 
+snapshot_installer_home() {
+  local root="$1" path mode
+  find "$root" -mindepth 1 -print | LC_ALL=C sort | while IFS= read -r path; do
+    mode="$(file_mode "$path")"
+    if [[ -L "$path" ]]; then
+      printf 'link %s %s %s\n' "${path#"$root"/}" "$mode" "$(readlink "$path")"
+    elif [[ -f "$path" ]]; then
+      printf 'file %s %s ' "${path#"$root"/}" "$mode"
+      shasum -a 256 "$path" | awk '{print $1}'
+    elif [[ -d "$path" ]]; then
+      printf 'dir %s %s\n' "${path#"$root"/}" "$mode"
+    fi
+  done | shasum -a 256 | awk '{print $1}'
+}
+
+test_installer_check_and_dry_run_are_read_only() {
+  local name="installer check and dry run are read-only" fresh installed partial foreign target parent_link parent_outside internal_link
+  local fresh_before fresh_after installed_before installed_after
+  local foreign_before foreign_after parent_before parent_after
+  local install_plan uninstall_plan check_out check_rc partial_out partial_rc foreign_rc parent_rc
+  local parent_check_rc parent_install_rc internal_rc internal_before internal_after
+  local locale locale_ok=1
+  fresh="$TEST_ROOT/install-dry-fresh"; make_fake_installer_home "$fresh"
+  mkdir -p "$fresh/.omnilane"
+  printf 'touch "$HOME/DRY_RUN_OVERLAY_EXECUTED"\n' > "$fresh/.omnilane/local.sh"
+  fresh_before="$(snapshot_installer_home "$fresh")"
+  install_plan="$(HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run 2>&1)"
+  fresh_after="$(snapshot_installer_home "$fresh")"
+
+  installed="$TEST_ROOT/install-dry-installed"; make_fake_installer_home "$installed"
+  mkdir -p "$installed/.local/bin" "$installed/.codex/skills"
+  ln -s "$ROOT/bin/omnilane" "$installed/.local/bin/omnilane"
+  ln -s "$ROOT/skills/omnilane" "$installed/.codex/skills/omnilane"
+  { printf 'base\n'; cat "$ROOT/hooks/routing-instruction.md"; } > "$installed/.codex/AGENTS.md"
+  chmod 400 "$installed/.codex/AGENTS.md"
+  installed_before="$(snapshot_installer_home "$installed")"
+  uninstall_plan="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+    bash "$ROOT/install.sh" --uninstall --dry-run 2>&1)"
+  installed_after="$(snapshot_installer_home "$installed")"
+  check_out="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+    bash "$ROOT/install.sh" --check 2>&1)"
+  check_rc=$?
+
+  partial="$TEST_ROOT/install-check-partial"; make_fake_installer_home "$partial"
+  mkdir -p "$partial/.codex/skills"
+  ln -s "$ROOT/skills/omnilane" "$partial/.codex/skills/omnilane"
+  partial_out="$(HOME="$partial" PATH="$partial/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check 2>&1)"
+  partial_rc=$?
+
+  foreign="$TEST_ROOT/install-check-foreign"; make_fake_installer_home "$foreign"
+  mkdir -p "$foreign/.local/bin" "$foreign/outside"
+  target="$foreign/outside/wrapper"; printf 'FOREIGN-CANARY\n' > "$target"
+  ln -s "$target" "$foreign/.local/bin/omnilane"
+  foreign_before="$(snapshot_installer_home "$foreign")"
+  HOME="$foreign" PATH="$foreign/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check >/dev/null 2>&1
+  foreign_rc=$?
+  foreign_after="$(snapshot_installer_home "$foreign")"
+
+  parent_link="$TEST_ROOT/install-parent-link"; make_fake_installer_home "$parent_link"
+  parent_outside="$TEST_ROOT/install-parent-outside"
+  mkdir -p "$parent_outside"
+  ln -s "$parent_outside" "$parent_link/.codex/skills"
+  parent_before="$(snapshot_installer_home "$parent_link")"
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
+  parent_rc=$?
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --check >/dev/null 2>&1
+  parent_check_rc=$?
+  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" >/dev/null 2>&1
+  parent_install_rc=$?
+  parent_after="$(snapshot_installer_home "$parent_link")"
+
+  internal_link="$TEST_ROOT/install-internal-parent-link"; make_fake_installer_home "$internal_link"
+  mkdir -p "$internal_link/shared-skills"
+  ln -s ../shared-skills "$internal_link/.codex/skills"
+  internal_before="$(snapshot_installer_home "$internal_link")"
+  HOME="$internal_link" PATH="$internal_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
+  internal_rc=$?
+  internal_after="$(snapshot_installer_home "$internal_link")"
+
+  for locale in en zh-TW zh-CN ja ko; do
+    HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none OMNILANE_LANG="$locale" \
+      bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1 || locale_ok=0
+  done
+  fresh_after="$(snapshot_installer_home "$fresh")"
+  installed_after="$(snapshot_installer_home "$installed")"
+
+  if [[ "$install_plan" != *"would link"* || "$install_plan" != *".local/bin/omnilane"* ]]; then
+    fail "$name" "install dry run did not describe owned links: $install_plan"
+  elif [[ "$fresh_before" != "$fresh_after" || "$installed_before" != "$installed_after" ]]; then
+    fail "$name" "dry run changed the install or uninstall fixture"
+  elif [[ -e "$fresh/DRY_RUN_OVERLAY_EXECUTED" ]]; then
+    fail "$name" "dry run executed the machine-local routing overlay"
+  elif [[ "$uninstall_plan" != *"would remove"* || "$uninstall_plan" != *"AGENTS.md"* ]]; then
+    fail "$name" "uninstall dry run did not describe links and hook removal: $uninstall_plan"
+  elif [[ "$check_rc" -ne 0 || "$check_out" != *"PASS wrapper"* ||
+          "$check_out" != *"PASS codex-skill"* || "$check_out" != *"PASS codex-hook"* ]]; then
+    fail "$name" "healthy installation check failed: rc=$check_rc out=$check_out"
+  elif [[ "$partial_rc" -ne 1 || "$partial_out" != *"MISSING wrapper"* ]]; then
+    fail "$name" "partial install was not reported as drift: rc=$partial_rc out=$partial_out"
+  elif [[ "$foreign_rc" -ne 1 || "$foreign_before" != "$foreign_after" ]]; then
+    fail "$name" "foreign link check changed state or returned the wrong status"
+  elif [[ "$parent_rc" -ne 1 || "$parent_check_rc" -ne 1 || "$parent_install_rc" -ne 1 ||
+          "$parent_before" != "$parent_after" ]] ||
+       find "$parent_outside" -mindepth 1 -print -quit | grep -q .; then
+    fail "$name" "symlinked parent path was accepted or modified"
+  elif [[ "$internal_rc" -ne 0 || "$internal_before" != "$internal_after" ]]; then
+    fail "$name" "HOME-internal parent link was not previewed safely"
+  elif [[ "$locale_ok" -ne 1 ]]; then
+    fail "$name" "a supported locale changed dry-run behavior"
+  else
+    pass "$name"
+  fi
+}
+
 test_installer_usage_is_fail_closed() {
   local name="installer usage is fail-closed" unknown help extra rc_unknown rc_help rc_extra
   unknown="$TEST_ROOT/installer-unknown"; help="$TEST_ROOT/installer-help"
@@ -2001,13 +2486,475 @@ test_round2_untrusted_boundary_and_cleanup() {
   fi
 }
 
+test_shell_completion_is_safe_and_current() {
+  local name="shell completion is safe and current" home bash_out zsh_out bash_lanes bash_jobs bash_wait bash_audit zsh_lanes
+  local valid_id marker zsh_rc=0
+  home="$TEST_ROOT/completion-home"
+  valid_id="20260717-160000-123-4"
+  marker="$home/local-overlay-executed"
+  mkdir -p "$home/jobs/$valid_id" "$home/jobs/not-a-job"
+  ln -s "$home" "$home/jobs/20260717-160001-123-5"
+  printf 'touch "%s"\n' "$marker" > "$home/local.sh"
+  cat > "$home/routing.local.yaml" <<'EOF'
+safe-custom: exec /bin/true -
+$(touch should-not-run): exec /bin/true -
+bad lane: exec /bin/true -
+EOF
+
+  bash_out="$(bash "$ROOT/bin/omnilane" completion bash 2>&1)"
+  zsh_out="$(bash "$ROOT/bin/omnilane" completion zsh 2>&1)"
+  printf '%s\n' "$bash_out" > "$home/omnilane.bash"
+  printf '%s\n' "$zsh_out" > "$home/_omnilane"
+  bash -n "$home/omnilane.bash"
+  if command -v zsh >/dev/null 2>&1; then
+    zsh -n "$home/_omnilane" || zsh_rc=$?
+  fi
+  bash_lanes="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane route ""); COMP_CWORD=2; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  bash_jobs="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane jobs status ""); COMP_CWORD=3; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  bash_wait="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane jobs wait ""); COMP_CWORD=3; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  bash_audit="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+    bash -c 'source "$1"; COMP_WORDS=(omnilane jobs audit ""); COMP_CWORD=3; _omnilane; printf "%s\n" "${COMPREPLY[@]}"' \
+    _ "$home/omnilane.bash")"
+  if command -v zsh >/dev/null 2>&1; then
+    zsh_lanes="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_COMPLETION_REPO="$ROOT" \
+      zsh -c 'source "$1"; _omnilane_lanes' _ "$home/_omnilane")"
+  else
+    zsh_lanes="safe-custom"
+  fi
+
+  if [[ "$bash_out" != *'_omnilane_lanes'* || "$zsh_out" != *'_omnilane_job_ids'* ]]; then
+    fail "$name" "completion output lacked bounded lane/job helpers"
+  elif [[ "$bash_out$zsh_out" != *'--job-timeout'* || "$bash_out$zsh_out" != *'--dry-run'* ||
+          "$bash_out$zsh_out" != *'release-audit'* || "$bash_out$zsh_out" != *'start status url stop'* ]]; then
+    fail "$name" "public option or UI command inventory was incomplete"
+  elif [[ "$bash_lanes" != *"safe-custom"* || "$bash_lanes" != *"triage"* || "$zsh_lanes" != *"safe-custom"* ]]; then
+    fail "$name" "effective lane completion missed local/default lanes"
+  elif [[ "$bash_lanes$zsh_lanes" == *'touch'* || -e "$marker" ]]; then
+    fail "$name" "completion executed or exposed hostile routing text"
+  elif [[ "$bash_jobs" != "$valid_id" ]]; then
+    fail "$name" "job completion admitted invalid or symlink IDs: $bash_jobs"
+  elif [[ "$bash_wait" != "$valid_id" || "$bash_audit" != *'--last'* || "$bash_audit" != *'--json'* ]]; then
+    fail "$name" "integrated wait/audit completion inventory was incomplete"
+  elif [[ "$zsh_rc" -ne 0 ]]; then
+    fail "$name" "Zsh completion syntax failed"
+  else
+    pass "$name"
+  fi
+}
+
+test_release_audit_is_offline_read_only_and_actionable() {
+  local name="release audit is offline read-only and actionable"
+  local version future_target marker dirty_marker before after allow_out strict_out future_out manifest_out
+  local json_out json_future allow_rc strict_rc future_rc manifest_rc hostile_rc
+  local json_rc json_future_rc json_parse_rc
+  version="$(<"$ROOT/VERSION")"
+  future_target="99.0.0"
+  marker="$TEST_ROOT/release-audit-executed"
+  dirty_marker="$ROOT/.release-audit-test-dirty-$$"
+  before="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+  : > "$dirty_marker"
+
+  allow_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty 2>&1)"
+  allow_rc=$?
+  strict_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" 2>&1)"
+  strict_rc=$?
+  future_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$future_target" --allow-dirty 2>&1)"
+  future_rc=$?
+  manifest_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty --manifest 2>&1)"
+  manifest_rc=$?
+  json_out="$(/bin/bash "$ROOT/bin/omnilane" release-audit --target "$version" --allow-dirty --json 2>&1)"
+  json_rc=$?
+  json_future="$(/bin/bash "$ROOT/bin/omnilane" release-audit --json --target "$future_target" --allow-dirty 2>&1)"
+  json_future_rc=$?
+  python3 -c '
+import json, sys
+current, future = map(json.loads, sys.argv[1:3])
+assert current["schema_version"] == 1 and current["command"] == "release-audit"
+assert current["status"] == "PASS" and current["target"] == sys.argv[3]
+assert current["findings"] == [] and "dirty-worktree-allowed" in current["warnings"]
+assert len(current["manifest_sha256"]) == len(current["archive_sha256"]) == 64
+assert future["status"] == "FAIL" and future["target"] == sys.argv[4]
+assert "version-mismatch" in future["findings"]
+assert "missing-changelog-release" in future["findings"]
+' "$json_out" "$json_future" "$version" "$future_target" >/dev/null 2>&1
+  json_parse_rc=$?
+  RELEASE_AUDIT_MARKER="$marker" /bin/bash "$ROOT/scripts/release-audit.sh" \
+    --target '1.0.0;touch "$RELEASE_AUDIT_MARKER"' --allow-dirty \
+    > "$TEST_ROOT/release-audit-hostile.out" 2>&1
+  hostile_rc=$?
+  /bin/rm -f "$dirty_marker"
+  after="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+
+  if [[ "$allow_rc" -ne 0 || "$allow_out" != *"release-audit: PASS target=$version"* ]]; then
+    fail "$name" "current release metadata did not pass inspection: rc=$allow_rc out=$allow_out"
+  elif [[ "$strict_rc" -ne 1 || "$strict_out" != *"dirty-worktree"* ]]; then
+    fail "$name" "strict audit did not reject a dirty worktree: rc=$strict_rc out=$strict_out"
+  elif [[ "$future_rc" -ne 1 || "$future_out" != *"version-mismatch"* ||
+          "$future_out" != *"missing-changelog-release"* ]]; then
+    fail "$name" "future target did not report release blockers: rc=$future_rc out=$future_out"
+  elif [[ "$manifest_rc" -ne 0 || "$manifest_out" != *"manifest_sha256="* ||
+          "$manifest_out" != *"tracked="* ]]; then
+    fail "$name" "prospective package manifest was unavailable: rc=$manifest_rc out=$manifest_out"
+  elif [[ "$json_rc" -ne 0 || "$json_future_rc" -ne 1 || "$json_parse_rc" -ne 0 ]]; then
+    fail "$name" "public release audit JSON failed: current=$json_rc future=$json_future_rc parse=$json_parse_rc"
+  elif [[ "$hostile_rc" -ne 2 || -e "$marker" ]]; then
+    fail "$name" "hostile target was accepted or executed: rc=$hostile_rc"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "release audit modified repository state"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_audit_is_private_read_only_and_fail_closed() {
+  local name="jobs audit is private read-only and fail-closed"
+  local clean bad clean_id bad_id prefix_id clean_out bad_out json_out json_bad
+  local before after clean_rc bad_rc json_rc json_bad_rc json_parse_rc
+  clean="$TEST_ROOT/jobs-audit-clean"
+  bad="$TEST_ROOT/jobs-audit-bad"
+  clean_id="20260717-170000-123-1"
+  bad_id="20260717-170001-123-2"
+  prefix_id="20260717-170002-123-3"
+
+  mkdir -m 700 -p "$clean/jobs/$clean_id" "$bad/jobs/$bad_id" \
+    "$bad/jobs/$prefix_id" "$bad/jobs/not-a-job"
+  chmod 700 "$clean/jobs" "$clean/jobs/$clean_id"
+  printf 'SECRET_TASK\n' > "$clean/jobs/$clean_id/task.txt"
+  printf '{"lane":"triage","vendor":"codex","model":"m","effort":"high","timeout":1,"job_timeout":null,"mode":"advise","workdir":"/tmp","candidate":"1/1","started":"2026-07-17T09:00:00Z"}\n' \
+    > "$clean/jobs/$clean_id/meta.json"
+  printf '%s\n' "$$" > "$clean/jobs/$clean_id/pid"
+  printf 'private answer\n' > "$clean/jobs/$clean_id/out.txt"
+  printf '7\n' > "$clean/jobs/$clean_id/exit"
+  chmod 600 "$clean/jobs/$clean_id"/*
+
+  printf 'SECRET_BAD_TASK\n' > "$bad/jobs/$bad_id/task.txt"
+  printf 'not-json\n' > "$bad/jobs/$bad_id/meta.json"
+  printf '%s\n' "$$" > "$bad/jobs/$bad_id/pid"
+  printf 'private bad answer\n' > "$bad/jobs/$bad_id/out.txt"
+  ln -s "$clean/jobs/$clean_id/exit" "$bad/jobs/$bad_id/exit"
+  mkfifo "$bad/jobs/untrusted-fifo"
+  chmod 755 "$bad/jobs" "$bad/jobs/$bad_id"
+  chmod 644 "$bad/jobs/$bad_id"/task.txt "$bad/jobs/$bad_id"/meta.json \
+    "$bad/jobs/$bad_id"/pid "$bad/jobs/$bad_id"/out.txt
+  printf 'private prefix task\n' > "$bad/jobs/$prefix_id/task.txt"
+  printf '{"lane":"triage","vendor":"codex",BROKEN}\n' > "$bad/jobs/$prefix_id/meta.json"
+  printf '%s\n' "$$" > "$bad/jobs/$prefix_id/pid"
+  chmod 700 "$bad/jobs/$prefix_id"
+  chmod 600 "$bad/jobs/$prefix_id"/*
+
+  clean_out="$(OMNILANE_HOME="$clean" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 2>&1)"
+  clean_rc=$?
+  before="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
+  bad_out="$(OMNILANE_HOME="$bad" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 2>&1)"
+  bad_rc=$?
+  json_out="$(OMNILANE_HOME="$clean" /bin/bash "$ROOT/scripts/jobs.sh" audit --json --last 10 2>&1)"
+  json_rc=$?
+  json_bad="$(OMNILANE_HOME="$bad" /bin/bash "$ROOT/scripts/jobs.sh" audit --last 10 --json 2>&1)"
+  json_bad_rc=$?
+  python3 -c '
+import json, sys
+clean, bad = map(json.loads, sys.argv[1:])
+assert clean == {"schema_version": 1, "command": "audit", "sampled": 1,
+                 "passed": 1, "failed": 0, "findings": [],
+                 "passed_ids": ["20260717-170000-123-1"]}
+assert bad["schema_version"] == 1 and bad["command"] == "audit"
+assert bad["failed"] == 2 and len(bad["findings"]) >= 7
+assert all(set(item) == {"scope", "code"} for item in bad["findings"])
+' "$json_out" "$json_bad" >/dev/null 2>&1
+  json_parse_rc=$?
+  after="$(find "$bad/jobs" -type f -exec shasum -a 256 {} \; | LC_ALL=C sort)"
+
+  if [[ "$clean_rc" -ne 0 || "$clean_out" != *"audit: sampled=1 passed=1 failed=0"* ]]; then
+    fail "$name" "clean private job did not pass: rc=$clean_rc out=$clean_out"
+  elif [[ "$clean_out$bad_out" == *"SECRET_TASK"* || "$clean_out$bad_out" == *"private answer"* ]]; then
+    fail "$name" "audit exposed private task or result content"
+  elif [[ "$bad_rc" -ne 1 || "$bad_out" != *"failed="* ]]; then
+    fail "$name" "corrupt store did not fail closed: rc=$bad_rc out=$bad_out"
+  elif [[ "$json_rc" -ne 0 || "$json_bad_rc" -ne 1 || "$json_parse_rc" -ne 0 ]]; then
+    fail "$name" "audit JSON contract failed: clean_rc=$json_rc bad_rc=$json_bad_rc parse_rc=$json_parse_rc"
+  elif [[ "$json_out$json_bad" == *"SECRET"* || "$json_out$json_bad" == *"private answer"* ]]; then
+    fail "$name" "audit JSON exposed private content"
+  elif [[ "$bad_out" != *"unsafe-store-mode"* || "$bad_out" != *"invalid-job-name"* ||
+          "$bad_out" != *"unsafe-job-entry"* ||
+          "$bad_out" != *"unsafe-job-mode"* || "$bad_out" != *"symlink-artifact"* ||
+          "$bad_out" != *"invalid-metadata"* || "$bad_out" != *"unsafe-file-mode"* ]]; then
+    fail "$name" "audit omitted an integrity finding: $bad_out"
+  elif [[ "$(printf '%s\n' "$bad_out" | grep -c 'invalid-metadata')" -lt 2 ]]; then
+    fail "$name" "JSON-shaped corrupt metadata passed audit: $bad_out"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "audit modified job artifacts"
+  else
+    pass "$name"
+  fi
+}
+
+test_help_is_stdout_and_read_only() {
+  local name="help exits zero on stdout only" home out out2 out3 rc
+  home="$TEST_ROOT/help"; mkdir -p "$home"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --help 2>"$home/err")" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "dispatch --help exit=$rc"
+  elif [[ "$out" != *'usage: dispatch.sh'* || "$out" != *'--validate'* || "$out" != *'--job-timeout'* ]]; then
+    fail "$name" "dispatch --help is missing usage content"
+  elif [[ -s "$home/err" ]]; then
+    fail "$name" "dispatch --help wrote to stderr"
+  elif [[ -e "$home/jobs" ]]; then
+    fail "$name" "dispatch --help created job state"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --help extra >/dev/null 2>&1; then
+    fail "$name" "--help with extra arguments did not fail"
+  elif ! out2="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" -h 2>/dev/null)"; then
+    fail "$name" "-h alias failed"
+  elif [[ "$out2" != "$out" ]]; then
+    fail "$name" "-h output differs from --help"
+  elif ! out3="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" help 2>/dev/null)"; then
+    fail "$name" "jobs.sh help failed"
+  elif [[ "$out3" != 'usage: jobs.sh'* ]]; then
+    fail "$name" "jobs.sh help is missing usage text"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" help extra >/dev/null 2>&1; then
+    fail "$name" "jobs.sh help with extra arguments did not fail"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" >/dev/null 2>&1; then
+    fail "$name" "jobs.sh without arguments must stay a usage error"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_bare_invocation_is_usage_not_crash() {
+  local name="bare jobs.sh is a usage error on Bash 3.2" home out rc
+  home="$TEST_ROOT/jobs-bare"; mkdir -p "$home"
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "bare invocation crashed: $out"
+  elif [[ "$rc" -ne 2 || "$out" != *'usage: jobs.sh'* ]]; then
+    fail "$name" "expected usage with exit 2, got rc=$rc"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_tail_is_bounded_and_safe() {
+  local name="jobs tail bounds lines and refuses symlinks" home job out rc i
+  home="$TEST_ROOT/jobs-tail"
+  job="$home/jobs/20260101-000000-1-1"
+  mkdir -p "$job"
+  for ((i = 1; i <= 30; i++)); do printf 'line %d\n' "$i"; done > "$job/out.txt"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != 'line 11'* || "$out" != *'line 30' ]]; then
+    fail "$name" "default tail window is wrong (rc=$rc)"
+    return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 --lines 5 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != 'line 26'* || "$out" != *'line 30' ]]; then
+    fail "$name" "--lines 5 window is wrong (rc=$rc)"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 --lines 1001 >/dev/null 2>&1; then
+    fail "$name" "--lines above the cap was accepted"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail '../escape' >/dev/null 2>&1; then
+    fail "$name" "path-escape job id was accepted"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json tail 20260101-000000-1-1 >/dev/null 2>&1; then
+    fail "$name" "tail must reject --json mode"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-2"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-2 2>&1)" || rc=$?
+  if [[ "$rc" -ne 1 || "$out" != *'no output yet'* ]]; then
+    fail "$name" "missing output should say 'no output yet' with exit 1 (rc=$rc)"
+    return
+  fi
+  printf 'secret\n' > "$home/private.txt"
+  mkdir -p "$home/jobs/20260101-000000-1-3"
+  ln -s "$home/private.txt" "$home/jobs/20260101-000000-1-3/out.txt"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-3 2>&1)" || rc=$?
+  if [[ "$rc" -ne 1 || "$out" == *secret* ]]; then
+    fail "$name" "symlinked out.txt was followed (rc=$rc)"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_retry_replays_completed_job() {
+  local name="retry replays a completed job fail-closed" home gate job out rc new_id
+  home="$TEST_ROOT/jobs-retry"
+  gate="$home/gate.sh"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'retry worked: %s\n' "$(head -1 "$4")" > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  job="$home/jobs/20260101-000000-1-1"
+  mkdir -p "$job"
+  printf '7\n' > "$job/exit"
+  printf 'original task text\n' > "$job/task.txt"
+  printf '{"lane":"probe","vendor":"exec","model":"%s","effort":"-","timeout":600,"job_timeout":null,"mode":"advise","workdir":"%s","candidate":"1/1","started":"2026-01-01T00:00:00Z"}\n' \
+    "$gate" "$home" > "$job/meta.json"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-1 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'retry worked'* ]]; then
+    fail "$name" "retry did not replay through the exec gate (rc=$rc, out=$out)"
+    return
+  fi
+  new_id="$(ls "$home/jobs" | LC_ALL=C sort | grep -v '^20260101-000000-1-1$' | head -1)"
+  if [[ -z "$new_id" ]]; then
+    fail "$name" "retry did not create a new job"
+    return
+  fi
+  if ! grep -q 'original task text' "$home/jobs/$new_id/task.txt"; then
+    fail "$name" "retry lost the original task text"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-2"
+  printf 'x\n' > "$home/jobs/20260101-000000-1-2/task.txt"
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-2 >/dev/null 2>&1; then
+    fail "$name" "retry of a running job was accepted"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-3"
+  printf '1\n' > "$home/jobs/20260101-000000-1-3/exit"
+  printf 'x\n' > "$home/jobs/20260101-000000-1-3/task.txt"
+  printf '{"lane":"probe","vendor":"exec","model":"a\\"b","effort":"-","timeout":600,"job_timeout":null,"mode":"advise","workdir":"%s","candidate":"1/1","started":"2026-01-01T00:00:00Z"}\n' \
+    "$home" > "$home/jobs/20260101-000000-1-3/meta.json"
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-3 >/dev/null 2>&1; then
+    fail "$name" "escaped metadata was not rejected fail-closed"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_prune_older_than_uses_id_timestamps() {
+  local name="prune --older-than ages by job id" home recent out rc
+  home="$TEST_ROOT/prune-age"
+  mkdir -p "$home/jobs/20200101-000000-1-1" \
+           "$home/jobs/20200102-000000-1-1" \
+           "$home/jobs/20200103-000000-1-1"
+  printf '0\n' > "$home/jobs/20200101-000000-1-1/exit"
+  printf '0\n' > "$home/jobs/20200102-000000-1-1/exit"
+  recent="$(date +%Y%m%d-%H%M%S)-9-9"
+  mkdir -p "$home/jobs/$recent"
+  printf '0\n' > "$home/jobs/$recent/exit"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 30 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'2 jobs eligible'* ]]; then
+    fail "$name" "preview should list the two old completed jobs (rc=$rc, out=$out)"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 0 >/dev/null 2>&1; then
+    fail "$name" "--older-than 0 was accepted"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --keep 2 --older-than 30 --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'1 jobs deleted'* ]]; then
+    fail "$name" "--keep 2 AND age should delete exactly one job (rc=$rc, out=$out)"
+    return
+  fi
+  if [[ -d "$home/jobs/20200101-000000-1-1" || ! -d "$home/jobs/20200102-000000-1-1" ]]; then
+    fail "$name" "--keep window was not composed with the age filter"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 30 --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "age-only apply failed (rc=$rc)"
+  elif [[ -d "$home/jobs/20200102-000000-1-1" ]]; then
+    fail "$name" "old completed job survived the age-only prune"
+  elif [[ ! -d "$home/jobs/20200103-000000-1-1" ]]; then
+    fail "$name" "old RUNNING job was deleted by prune"
+  elif [[ ! -d "$home/jobs/$recent" ]]; then
+    fail "$name" "recent completed job was deleted by the age prune"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_prune_survives_empty_candidate_list() {
+  local name="prune with no eligible jobs exits cleanly" home out rc
+  home="$TEST_ROOT/prune-empty"
+  mkdir -p "$home/jobs"
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'0 jobs eligible'* ]]; then
+    fail "$name" "empty store preview crashed (rc=$rc, out=$out)"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'0 jobs deleted'* ]]; then
+    fail "$name" "empty store apply crashed (rc=$rc, out=$out)"
+  else
+    pass "$name"
+  fi
+}
+
+test_routing_empty_chain_survives_bash32() {
+  local name="empty routing chain cannot abort list or validate" home out rc
+  home="$TEST_ROOT/empty-chain"; mkdir -p "$home"
+  {
+    printf 'emptylane:\n'
+    printf 'zzz-after: off\n'
+  } > "$home/routing.local.yaml"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --list 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "--list crashed on the empty chain"
+    return
+  fi
+  if [[ "$out" != *zzz-after* ]]; then
+    fail "$name" "--list silently truncated lanes after the empty chain"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --validate 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "--validate crashed on the empty chain"
+  elif [[ "$out" != *'FAIL emptylane empty-chain'* ]]; then
+    fail "$name" "--validate did not flag the empty chain: $out"
+  elif [[ "$rc" -ne 2 ]]; then
+    fail "$name" "--validate with an invalid lane should exit 2, got $rc"
+  elif [[ "$out" != *'zzz-after'* ]]; then
+    fail "$name" "--validate stopped before later lanes"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
+test_help_is_stdout_and_read_only
+test_jobs_bare_invocation_is_usage_not_crash
+test_jobs_tail_is_bounded_and_safe
+test_jobs_retry_replays_completed_job
+test_jobs_prune_older_than_uses_id_timestamps
+test_jobs_prune_survives_empty_candidate_list
+test_routing_empty_chain_survives_bash32
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
 test_dispatch_positional_usage_contract
 test_dispatch_explain_is_read_only_and_diagnostic
 test_dispatch_validate_routing_contract
+test_dispatch_json_inspection_contract
 test_depth_and_grok_retry_env_validation
 test_vendor_selector
 test_exec_gate_fallback
@@ -2017,6 +2964,9 @@ test_jobs_cli_rejects_escape_and_handles_empty_store
 test_jobs_cli_rejects_malformed_exit_metadata
 test_jobs_cli_contains_malformed_public_metadata
 test_jobs_stats_aggregates_only_public_metadata
+test_jobs_json_is_versioned_and_private_by_default
+test_jobs_wait_is_bounded_and_terminal
+test_jobs_audit_is_private_read_only_and_fail_closed
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
 test_private_job_artifacts_and_valid_metadata
@@ -2027,6 +2977,7 @@ test_lock_owner_read_race_is_silent
 test_lock_serializes_live_bash32_owner
 test_background_job_records_live_worker_pid
 test_job_timeout_resolution_and_safety
+test_dispatch_dry_run_is_resolved_and_side_effect_free
 test_job_timeout_supervisor_validation
 test_job_timeout_supervisor_kills_process_group
 test_job_timeout_supervisor_forwards_term
@@ -2041,6 +2992,7 @@ test_background_job_records_whole_job_timeout
 test_job_timeout_bounds_codex_lock_wait
 test_job_timeout_bounds_vote_panel
 test_doctor_is_read_only_and_reports_failures
+test_installer_check_and_dry_run_are_read_only
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
 test_uninstall_preserves_foreign_symlinks
@@ -2051,6 +3003,8 @@ test_install_preserves_existing_wrapper_file
 test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
+test_shell_completion_is_safe_and_current
+test_release_audit_is_offline_read_only_and_actionable
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
