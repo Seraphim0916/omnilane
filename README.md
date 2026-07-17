@@ -20,7 +20,7 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
-## What's new in v1.0.0
+## What's new in v0.7.0
 
 - **Explain and validate routes offline** — inspect every fallback candidate
   with `--explain`, or lint the complete effective table with `--validate`,
