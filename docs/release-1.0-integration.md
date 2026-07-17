@@ -79,3 +79,21 @@ publishing.
 - Limitation: ShellCheck remains unavailable locally; aggregate status stays
   `PARTIAL` pending CI/ShellCheck.
 - Rollback: revert merge commit `78fcf74` before reverting earlier integrations.
+
+## #2 Side-effect-free dispatch dry run
+
+- Branch: `codex/idea-dispatch-dry-run`
+- Merge commit: `d775d86`
+- Conflict resolution combined the existing JSON inspection parser with the
+  dry-run flag and retained one shared canonical dispatch resolution path.
+- Syntax and regression: Bash syntax passed; shell suite `55 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Isolated runtime: a fake executable provider, explicit route, stdin task,
+  symlink workdir, work mode, background mode, and both timeout layers resolved
+  into the expected plan. The provider marker and jobs directory stayed absent,
+  the routing hash stayed identical, and task canary bytes were not emitted.
+- Adversarial runtime: a symlinked jobs store failed closed with exit 1 before
+  provider execution and did not write through to the foreign directory.
+- Limitation: ShellCheck remains unavailable locally; aggregate status stays
+  `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `d775d86` before reverting #1 or earlier work.
