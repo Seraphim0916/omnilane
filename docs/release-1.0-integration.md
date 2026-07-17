@@ -114,3 +114,20 @@ publishing.
 - Limitation: ShellCheck remains unavailable locally; aggregate status stays
   `PARTIAL` pending CI/ShellCheck.
 - Rollback: revert merge commit `0e7fabf` before reverting #2 or earlier work.
+
+## #4 Bounded jobs wait
+
+- Branch: `codex/idea-jobs-wait`
+- Merge commit: `28fbd7c`
+- Conflict resolution retained the jobs JSON normalizer and added wait as a
+  human-mode, read-only command with its own bounded timeout contract.
+- Syntax and regression: Bash syntax passed; shell suite `57 passed, 0 failed`;
+  Python suite `36 tests` passed.
+- Isolated runtime: a transitioning job preserved recorded exit 7; an immediate
+  timeout returned 124; a dead worker without an exit marker returned 125.
+- Cross-feature adversarial runtime: unsupported `--json wait` failed usage with
+  exit 2 but still returned a valid JSON error envelope, without polling or
+  mutating job state.
+- Limitation: ShellCheck remains unavailable locally; aggregate status stays
+  `PARTIAL` pending CI/ShellCheck.
+- Rollback: revert merge commit `28fbd7c` before reverting #3 or earlier work.
