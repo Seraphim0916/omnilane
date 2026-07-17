@@ -200,6 +200,8 @@ installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
 
 Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
 install or `--uninstall` to preview every checkout-owned file action.
+Rollback the installer-owned links and marked reminders with
+`./install.sh --uninstall`.
 
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
@@ -235,6 +237,7 @@ omnilane list | route … | jobs … | configure   # global wrapper, works anywh
                                                # (install.sh links it into ~/.local/bin)
 eval "$(omnilane completion bash)"             # enable Bash completion for this shell
 source <(omnilane completion zsh)               # enable Zsh completion for this shell
+omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
 omnilane ui start                              # start/reuse the local Live UI; print its URL
 omnilane ui status                             # report whether the Live UI is running
 omnilane ui url                                # print the current authenticated local URL

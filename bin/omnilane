@@ -34,6 +34,7 @@ case "$cmd" in
       *) echo "usage: omnilane completion bash|zsh" >&2; exit 2 ;;
     esac
     ;;
+  release-audit) exec bash "$REPO/scripts/release-audit.sh" "$@" ;;
   doctor)    exec bash "$REPO/scripts/doctor.sh" "$@" ;;
   ui)
     command -v python3 >/dev/null 2>&1 || {
@@ -53,6 +54,7 @@ omnilane — one routing table, every harness
                                         dispatch or consult a model
   omnilane jobs  list|status ID|result ID
   omnilane completion bash|zsh           print a shell completion script
+  omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json]              read-only local health report
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu

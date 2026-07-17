@@ -194,6 +194,8 @@ omnilane ui stop     # 정상 중지
 
 `./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
 `--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
+설치 프로그램이 소유한 링크와 표시된 알림을 되돌리려면
+`./install.sh --uninstall` 을 실행합니다.
 
 - **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령 포함),
   또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
@@ -226,6 +228,7 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 ```
 eval "$(omnilane completion bash)"             # 현재 Bash 에서 완성 활성화
 source <(omnilane completion zsh)               # 현재 Zsh 에서 완성 활성화
+omnilane release-audit [--target VERSION] [--json] # 오프라인 읽기 전용 릴리스 게이트
 omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시
 omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시

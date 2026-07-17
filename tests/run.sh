@@ -2175,6 +2175,66 @@ EOF
   fi
 }
 
+test_release_audit_is_offline_read_only_and_actionable() {
+  local name="release audit is offline read-only and actionable"
+  local version marker before after allow_out strict_out future_out manifest_out
+  local json_out json_future allow_rc strict_rc future_rc manifest_rc hostile_rc
+  local json_rc json_future_rc json_parse_rc
+  version="$(<"$ROOT/VERSION")"
+  marker="$TEST_ROOT/release-audit-executed"
+  before="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+
+  allow_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty 2>&1)"
+  allow_rc=$?
+  strict_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" 2>&1)"
+  strict_rc=$?
+  future_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target 1.0.0 --allow-dirty 2>&1)"
+  future_rc=$?
+  manifest_out="$(/bin/bash "$ROOT/scripts/release-audit.sh" --target "$version" --allow-dirty --manifest 2>&1)"
+  manifest_rc=$?
+  json_out="$(/bin/bash "$ROOT/bin/omnilane" release-audit --target "$version" --allow-dirty --json 2>&1)"
+  json_rc=$?
+  json_future="$(/bin/bash "$ROOT/bin/omnilane" release-audit --json --target 1.0.0 --allow-dirty 2>&1)"
+  json_future_rc=$?
+  python3 -c '
+import json, sys
+current, future = map(json.loads, sys.argv[1:3])
+assert current["schema_version"] == 1 and current["command"] == "release-audit"
+assert current["status"] == "PASS" and current["target"] == sys.argv[3]
+assert current["findings"] == [] and "dirty-worktree-allowed" in current["warnings"]
+assert len(current["manifest_sha256"]) == len(current["archive_sha256"]) == 64
+assert future["status"] == "FAIL" and future["target"] == "1.0.0"
+assert "version-mismatch" in future["findings"]
+assert "missing-changelog-release" in future["findings"]
+' "$json_out" "$json_future" "$version" >/dev/null 2>&1
+  json_parse_rc=$?
+  RELEASE_AUDIT_MARKER="$marker" /bin/bash "$ROOT/scripts/release-audit.sh" \
+    --target '1.0.0;touch "$RELEASE_AUDIT_MARKER"' --allow-dirty \
+    > "$TEST_ROOT/release-audit-hostile.out" 2>&1
+  hostile_rc=$?
+  after="$(git -C "$ROOT" status --porcelain=v1 --untracked-files=all)"
+
+  if [[ "$allow_rc" -ne 0 || "$allow_out" != *"release-audit: PASS target=$version"* ]]; then
+    fail "$name" "current release metadata did not pass inspection: rc=$allow_rc out=$allow_out"
+  elif [[ "$strict_rc" -ne 1 || "$strict_out" != *"dirty-worktree"* ]]; then
+    fail "$name" "strict audit did not reject the experiment worktree: rc=$strict_rc out=$strict_out"
+  elif [[ "$future_rc" -ne 1 || "$future_out" != *"version-mismatch"* ||
+          "$future_out" != *"missing-changelog-release"* ]]; then
+    fail "$name" "future target did not report release blockers: rc=$future_rc out=$future_out"
+  elif [[ "$manifest_rc" -ne 0 || "$manifest_out" != *"manifest_sha256="* ||
+          "$manifest_out" != *"tracked="* ]]; then
+    fail "$name" "prospective package manifest was unavailable: rc=$manifest_rc out=$manifest_out"
+  elif [[ "$json_rc" -ne 0 || "$json_future_rc" -ne 1 || "$json_parse_rc" -ne 0 ]]; then
+    fail "$name" "public release audit JSON failed: current=$json_rc future=$json_future_rc parse=$json_parse_rc"
+  elif [[ "$hostile_rc" -ne 2 || -e "$marker" ]]; then
+    fail "$name" "hostile target was accepted or executed: rc=$hostile_rc"
+  elif [[ "$before" != "$after" ]]; then
+    fail "$name" "release audit modified repository state"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
@@ -2227,6 +2287,7 @@ test_uninstall_succeeds_after_vendor_removal
 test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
 test_shell_completion_is_safe_and_current
+test_release_audit_is_offline_read_only_and_actionable
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
