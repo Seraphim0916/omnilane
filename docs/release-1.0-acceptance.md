@@ -10,17 +10,26 @@ clean checkout. A green unit suite alone is insufficient. "Zero bugs" means no
 known reproducible defect inside this matrix; it is not a claim that defects are
 impossible.
 
-Each idea gets one independent branch from `v0.6.0`. Each branch may use at most
-three evidence-driven repair rounds. A round is: reproduce with a failing test or
-runtime oracle, make one focused correction, then rerun the target and regression
-checks. A branch still failing after round three is rejected from 1.0 rather than
-merged by weakening its acceptance criteria.
+Each idea gets one independent branch from the current accepted baseline. At
+most eight experiment branches may be active at once, and the project may run at
+most three evidence-driven creative-divergence rounds. A new round is allowed
+only when the preceding round produced new runtime evidence, adversarial failure
+modes, user evidence, or comparison results that justify materially different
+hypotheses. Renaming or retrying the same idea does not count as new evidence and
+does not justify another round.
 
-No idea branch is merged automatically. After all eight branches finish their
-independent adversarial validation, Vincent receives a comparison dossier and
-selects which branches, if any, may enter `codex/release-1.0`. Selected branches
-are then merged one at a time into that integration branch with regression checks
-after each merge. `main` remains untouched until Vincent separately approves it.
+The three-round limit applies to creative divergence, not to a branch's normal
+red/green debugging loop. A branch is still rejected rather than rescued by
+weakening acceptance criteria when it cannot become stable. The separate Goal
+stop rule for the same blocker recurring three evidence-driven attempts remains
+in force.
+
+No idea branch is merged automatically. After the final justified divergence
+round, Vincent receives a comparison dossier for every attempted, retired, and
+surviving branch and selects which branches, if any, may enter
+`codex/release-1.0`. Selected branches are then merged one at a time into that
+integration branch with regression checks after each merge. `main` remains
+untouched until Vincent separately approves it.
 
 ## Baseline
 
@@ -33,10 +42,12 @@ after each merge. `main` remains untouched until Vincent separately approves it.
 | Full required checks | `CONTRIBUTING.md` command set | pending |
 | Real runtime baseline | installed CLI and isolated install/UI flows | pending |
 
-## Eight idea branches
+## Round 1: up to eight concurrent idea branches
 
 The table order is the recommended evaluation order only. It does not authorize
-merging; Vincent makes the final selection after seeing all eight results.
+merging. Later rounds may replace retired experiments with materially different
+branches only when Round 1 evidence justifies doing so, while keeping no more
+than eight experiment branches active at once.
 
 | # | Branch | User-visible outcome | Red/green oracle | Adversarial focus | Runtime proof |
 | --- | --- | --- | --- | --- | --- |
@@ -71,16 +82,17 @@ merging; Vincent makes the final selection after seeing all eight results.
 3. Run syntax and ShellCheck over changed shell files.
 4. Exercise the changed CLI path against an isolated `HOME` and
    `OMNILANE_HOME`; capture return code and bounded output.
-5. Record the branch tip, result, repair-round count, known risks, and rejection
+5. Record the branch tip, result, divergence round, known risks, and rejection
    or selection recommendation. Do not merge before Vincent chooses.
 
 ## Selection and integration gate
 
-After all eight branch dossiers are ready, stop and ask Vincent to choose. For
-each selected branch only, merge it into `codex/release-1.0`, rerun its oracle,
-the complete regression set, and the real runtime smoke, then record the merge
-commit and rollback command. A selection does not authorize merging `main`,
-creating a tag, pushing, publishing, or changing any external release state.
+After no further evidence-justified round remains, or after Round 3 completes,
+stop and ask Vincent to choose. For each selected branch only, merge it into
+`codex/release-1.0`, rerun its oracle, the complete regression set, and the real
+runtime smoke, then record the merge commit and rollback command. A selection
+does not authorize merging `main`, creating a tag, pushing, publishing, or
+changing any external release state.
 
 ## Final release-candidate verification
 
