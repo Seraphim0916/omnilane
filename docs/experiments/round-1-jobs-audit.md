@@ -40,6 +40,10 @@ An absent store returned the stable empty summary with no filesystem write.
 The public wrapper's JSON mode parsed successfully for both a clean generated
 job and the hostile fixture, without exposing task or result bodies.
 
+A 1001-job valid fixture proved the default audit samples exactly the newest
+100 jobs, while `--last 1000` samples and passes exactly 1000. Both JSON outputs
+remained valid, had no findings, and did not enumerate the unsampled remainder.
+
 ## Adversarial evidence
 
 - Store and job directories must be exact mode 700; regular artifacts must be
