@@ -22,6 +22,23 @@
 
 ## v0.7.0 새 기능
 
+- **디스패치를 먼저 미리보기** — `--dry-run` 은 완전히 해석된 실행 계획(vendor,
+  모델, 모드, 타임아웃, 부작용 판정)을 출력하며 모델 호출도 작업 상태 생성도
+  하지 않습니다.
+- **버전 있는 JSON 자동화** — `--list`/`--explain`/`--validate` 와
+  `jobs list|status|result|stats` 에 `--json` 엔벨로프를 제공하고, 읽기 전용
+  `jobs wait`, `jobs audit`, 결정적 manifest 를 갖춘 오프라인
+  `omnilane release-audit` 게이트를 추가했습니다.
+- **로컬 작업을 끝까지 제어** — `jobs tail` 로 실시간 출력을 확인하고,
+  `jobs retry` 로 완료된 작업을 fail-closed 로 재실행하며,
+  `prune --older-than` 으로 오래된 작업을 정리합니다. `--help` 가 모든 명령을
+  다룹니다.
+- **설치와 자동완성을 안전하게** — `install.sh --check`/`--dry-run` 은 쓰기 없이
+  드리프트를 보고하고, `omnilane completion bash|zsh` 가 안전한 탭 완성을
+  제공하며, macOS 기본 Bash 3.2 크래시 5건을 수정했습니다.
+
+## v0.6.0 새 기능
+
 - **라우팅을 오프라인으로 설명하고 검증** — `--explain` 으로 각 폴백 후보를
   확인하고 `--validate` 로 전체 유효 라우팅 테이블을 검사합니다. 공급자를
   호출하거나 잡 상태를 만들지 않습니다.

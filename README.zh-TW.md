@@ -22,6 +22,19 @@
 
 ## v0.7.0 新功能
 
+- **先預覽再派工** — `--dry-run` 印出完整解析後的派工計畫(vendor、模型、
+  模式、逾時、副作用判定),不呼叫模型、不建立工作狀態。
+- **版本化 JSON 自動化** — `--list`/`--explain`/`--validate` 與
+  `jobs list|status|result|stats` 都有 `--json` 信封;另有唯讀 `jobs wait`、
+  `jobs audit`,以及帶可重現 manifest 的離線 `omnilane release-audit` 發佈稽核。
+- **本機工作一條龍** — `jobs tail` 窺看即時輸出、`jobs retry` 以 fail-closed
+  方式重派已完成工作、`prune --older-than` 依時間清理,`--help` 覆蓋所有指令。
+- **安裝與補全更安全** — `install.sh --check`/`--dry-run` 唯讀回報漂移,
+  `omnilane completion bash|zsh` 提供安全的 tab 補全,並修復五個 macOS 原生
+  Bash 3.2 崩潰。
+
+## v0.6.0 新功能
+
 - **離線看懂並驗證路由** — 用 `--explain` 查看每個備援候選，或用
   `--validate` 檢查完整生效路由表；都不會呼叫模型或建立工作狀態。
 - **用機器可讀資料觀察本機狀態** — `jobs.sh stats` 提供有界統計，

@@ -22,6 +22,22 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ## What's new in v0.7.0
 
+- **Preview any dispatch first** — `--dry-run` prints the fully resolved plan
+  (vendor, model, mode, timeouts, side-effect decision) with no provider call
+  and no job state.
+- **Automate with versioned JSON** — one `--json` envelope for `--list`,
+  `--explain`, `--validate`, and `jobs list|status|result|stats`, plus
+  read-only `jobs wait`, `jobs audit`, and an offline `omnilane release-audit`
+  gate with a deterministic manifest.
+- **Drive local jobs end to end** — `jobs tail` peeks at live output,
+  `jobs retry` re-dispatches a completed job fail-closed,
+  `prune --older-than` ages out old jobs, and `--help` covers every command.
+- **Install and complete safely** — `install.sh --check`/`--dry-run` report
+  drift without writing, `omnilane completion bash|zsh` ships safe tab
+  completion, and five macOS stock Bash 3.2 crashes are fixed.
+
+## What's new in v0.6.0
+
 - **Explain and validate routes offline** — inspect every fallback candidate
   with `--explain`, or lint the complete effective table with `--validate`,
   without invoking a provider or creating job state.

@@ -22,6 +22,22 @@
 
 ## v0.7.0 の新機能
 
+- **ディスパッチを事前にプレビュー** — `--dry-run` は解決済みの実行計画
+  (vendor、モデル、モード、タイムアウト、副作用判定)を表示し、モデル呼び出しも
+  ジョブ状態の作成も行いません。
+- **バージョン付き JSON で自動化** — `--list`/`--explain`/`--validate` と
+  `jobs list|status|result|stats` に `--json` エンベロープを追加。読み取り専用の
+  `jobs wait`、`jobs audit`、決定的マニフェスト付きのオフライン
+  `omnilane release-audit` も利用できます。
+- **ローカルジョブを一気通貫で操作** — `jobs tail` で出力を覗き、`jobs retry` で
+  完了ジョブを fail-closed に再実行、`prune --older-than` で古いジョブを整理。
+  `--help` が全コマンドを網羅します。
+- **インストールと補完を安全に** — `install.sh --check`/`--dry-run` は書き込みなしで
+  ドリフトを報告し、`omnilane completion bash|zsh` が安全なタブ補完を提供。
+  macOS 標準 Bash 3.2 のクラッシュを 5 件修正しました。
+
+## v0.6.0 の新機能
+
 - **ルーティングをオフラインで説明・検証** — `--explain` で各フォールバック
   候補を確認し、`--validate` で実効ルーティング表全体を検査できます。
   プロバイダー呼び出しやジョブ状態の作成は行いません。
