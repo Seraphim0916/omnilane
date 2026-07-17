@@ -220,7 +220,7 @@ omnilane ui status                             # 查看 Live UI 是否運作中
 omnilane ui url                                # 印出目前通過驗證的本機網址
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 唯讀檢查路由與本機執行環境
-dispatch.sh [--background] [--mode advise|work] [--workdir 目錄]
+dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任務"                              # "-" 表示從 stdin 讀任務
 dispatch.sh [--json] --list [--json]

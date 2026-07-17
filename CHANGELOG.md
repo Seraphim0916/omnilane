@@ -20,6 +20,9 @@ semantic version tags.
 - `dispatch.sh --list`, `--explain`, and `--validate` accept `--json` before or
   after the inspection command and return one versioned JSON envelope without
   invoking a provider or creating job state.
+- `dispatch.sh --dry-run` resolves the vendor, overrides, mode, work directory,
+  per-call timeout, whole-job timeout, and expected side effects without reading
+  task stdin, invoking a provider, or creating job state.
 
 ## [0.6.0] - 2026-07-16
 
