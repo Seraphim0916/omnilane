@@ -3,7 +3,15 @@ set -euo pipefail
 # omnilane — global entrypoint so commands work from any directory.
 
 SELF="${BASH_SOURCE[0]}"
-while [[ -L "$SELF" ]]; do SELF="$(readlink "$SELF")"; done
+# A relative readlink target (how npm links global bins) resolves against the
+# symlink's own directory, not the caller's cwd.
+while [[ -L "$SELF" ]]; do
+  TARGET="$(readlink "$SELF")"
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
 REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 cmd="${1:-help}"; shift || true

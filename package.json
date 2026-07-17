@@ -1,0 +1,52 @@
+{
+  "name": "omnilane",
+  "version": "0.7.0",
+  "description": "One routing table, every harness — classify subtasks into lanes and dispatch each lane to the best vendor's agentic CLI (Codex, Claude, Gemini, Grok) using your existing subscription logins.",
+  "bin": {
+    "omnilane": "bin/omnilane"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "completions/",
+    "ui/",
+    "routing.yaml",
+    "routing.local.yaml.example",
+    "local.sh.example",
+    "VERSION",
+    "CHANGELOG.md",
+    "README.md",
+    "README.zh-TW.md",
+    "README.zh-CN.md",
+    "README.ja.md",
+    "README.ko.md",
+    "SECURITY.md"
+  ],
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Seraphim0916/omnilane.git"
+  },
+  "homepage": "https://github.com/Seraphim0916/omnilane#readme",
+  "bugs": {
+    "url": "https://github.com/Seraphim0916/omnilane/issues"
+  },
+  "keywords": [
+    "agentic",
+    "cli",
+    "llm",
+    "routing",
+    "dispatch",
+    "codex",
+    "claude",
+    "gemini",
+    "grok",
+    "multi-model",
+    "orchestration"
+  ],
+  "license": "MIT",
+  "author": "Seraphim0916"
+}
