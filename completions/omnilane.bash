@@ -52,13 +52,13 @@ _omnilane_job_ids() {
 }
 
 _omnilane() {
-  local cur prev command sub words
+  local cur prev command sub words sub_index
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   command="${COMP_WORDS[1]:-}"
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-    words="version list route dispatch jobs doctor ui configure completion help"
+    words="version list route dispatch jobs doctor release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)
@@ -68,17 +68,29 @@ _omnilane() {
           --effort) words="low medium high xhigh max" ;;
           --workdir) COMPREPLY=( $(compgen -d -- "$cur") ); return ;;
           --model|--timeout|--job-timeout) return ;;
-          *) words="--background --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
+          *) words="--background --dry-run --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
         esac
         ;;
       jobs)
         sub="${COMP_WORDS[2]:-}"
-        if [[ "$COMP_CWORD" -eq 2 ]]; then
-          words="list status result stats prune"
-        elif [[ "$COMP_CWORD" -eq 3 && ( "$sub" == status || "$sub" == result ) ]]; then
+        sub_index=2
+        if [[ "$sub" == "--json" ]]; then
+          sub_index=3
+          sub="${COMP_WORDS[3]:-}"
+        fi
+        if [[ "$COMP_CWORD" -eq "$sub_index" ]]; then
+          words="list status result stats wait audit prune"
+        elif [[ "$COMP_CWORD" -eq $((sub_index + 1)) &&
+                ( "$sub" == status || "$sub" == result || "$sub" == wait ) ]]; then
           words="$(_omnilane_job_ids)"
-        elif [[ "$sub" == stats ]]; then
-          words="--last"
+        elif [[ "$sub" == list ]]; then
+          words="--json"
+        elif [[ "$sub" == status || "$sub" == result ]]; then
+          words="--json"
+        elif [[ "$sub" == wait ]]; then
+          words="--timeout"
+        elif [[ "$sub" == stats || "$sub" == audit ]]; then
+          words="--last --json"
         elif [[ "$sub" == prune ]]; then
           words="--keep --apply"
         else
@@ -86,6 +98,7 @@ _omnilane() {
         fi
         ;;
       doctor) words="--json" ;;
+      release-audit) words="--target --allow-dirty --require-tag --manifest --json" ;;
       ui) words="start status url stop" ;;
       completion) words="bash zsh" ;;
       *) return ;;

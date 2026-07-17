@@ -35,6 +35,16 @@ publishing.
 - After the fix, the full shell suite returned `58 passed, 0 failed` and left
   the repository state unchanged.
 
+### Cross-branch completion drift found and fixed
+
+- A final command-inventory review found that the completion experiment still
+  reflected its original branch snapshot and omitted later integrated commands:
+  dispatch `--dry-run`, jobs `wait`/`audit`/JSON options, and `release-audit`.
+- Bash and Zsh completion now expose the complete 1.0 command surface, including
+  bounded job-ID completion for wait and the correct wait/audit options.
+- The completion oracle now exercises the integrated wait/audit paths; Bash and
+  Zsh syntax plus the full `58 passed, 0 failed` shell suite pass.
+
 ## #5 Read-only installer inspection
 
 - Branch: `codex/idea-install-check`
