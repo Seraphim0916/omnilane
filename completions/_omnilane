@@ -78,19 +78,26 @@ _omnilane() {
         sub="${words[4]:-}"
       fi
       if (( CURRENT == sub_index )); then
-        _values 'job command' list status result stats wait audit prune
+        _values 'job command' list status result tail retry stats wait audit prune help
       elif (( CURRENT == sub_index + 1 )) &&
-           [[ "$sub" == status || "$sub" == result || "$sub" == wait ]]; then
+           [[ "$sub" == status || "$sub" == result || "$sub" == wait ||
+              "$sub" == tail || "$sub" == retry ]]; then
         ids=("${(@f)$(_omnilane_job_ids)}")
         _values 'job id' "$ids[@]"
       elif [[ "$sub" == list || "$sub" == status || "$sub" == result ]]; then
         _values 'option' --json
+      elif [[ "$sub" == tail ]]; then
+        _arguments '--lines[output lines to show]:count:'
+      elif [[ "$sub" == retry ]]; then
+        _arguments '--background[re-dispatch in the background]'
       elif [[ "$sub" == wait ]]; then
         _arguments '--timeout[maximum wait seconds]:seconds:'
       elif [[ "$sub" == stats || "$sub" == audit ]]; then
         _arguments '--last[maximum jobs]:count:' '--json[versioned metadata output]'
       elif [[ "$sub" == prune ]]; then
-        _arguments '--keep[completed jobs to retain]:count:' '--apply[delete eligible jobs]'
+        _arguments '--keep[completed jobs to retain]:count:' \
+          '--older-than[completed jobs older than N days]:days:' \
+          '--apply[delete eligible jobs]'
       fi
       ;;
     doctor) _values 'option' --json ;;

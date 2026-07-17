@@ -68,7 +68,7 @@ _omnilane() {
           --effort) words="low medium high xhigh max" ;;
           --workdir) COMPREPLY=( $(compgen -d -- "$cur") ); return ;;
           --model|--timeout|--job-timeout) return ;;
-          *) words="--background --dry-run --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
+          *) words="--background --dry-run --help --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
         esac
         ;;
       jobs)
@@ -79,20 +79,25 @@ _omnilane() {
           sub="${COMP_WORDS[3]:-}"
         fi
         if [[ "$COMP_CWORD" -eq "$sub_index" ]]; then
-          words="list status result stats wait audit prune"
+          words="list status result tail retry stats wait audit prune help"
         elif [[ "$COMP_CWORD" -eq $((sub_index + 1)) &&
-                ( "$sub" == status || "$sub" == result || "$sub" == wait ) ]]; then
+                ( "$sub" == status || "$sub" == result || "$sub" == wait ||
+                  "$sub" == tail || "$sub" == retry ) ]]; then
           words="$(_omnilane_job_ids)"
         elif [[ "$sub" == list ]]; then
           words="--json"
         elif [[ "$sub" == status || "$sub" == result ]]; then
           words="--json"
+        elif [[ "$sub" == tail ]]; then
+          words="--lines"
+        elif [[ "$sub" == retry ]]; then
+          words="--background"
         elif [[ "$sub" == wait ]]; then
           words="--timeout"
         elif [[ "$sub" == stats || "$sub" == audit ]]; then
           words="--last --json"
         elif [[ "$sub" == prune ]]; then
-          words="--keep --apply"
+          words="--keep --older-than --apply"
         else
           return
         fi

@@ -34,6 +34,28 @@ semantic version tags.
 - `jobs.sh audit [--last N] [--json]` performs a bounded, read-only integrity
   and privacy check of the local job store without printing task or result
   content.
+- `dispatch.sh --help` / `-h` and `jobs.sh help` print full usage on stdout
+  with exit 0; misuse keeps the stderr usage error with exit 2.
+- `jobs.sh tail JOB_ID [--lines N]` peeks at the bounded end of one job's
+  public output stream, for running and completed jobs, refusing symlinked
+  output paths.
+- `jobs.sh retry JOB_ID [--background]` re-dispatches a completed job with its
+  recorded lane, vendor, mode, workdir, timeouts, and original task text;
+  metadata parsing is fail-closed and running jobs are refused.
+- `jobs.sh prune --older-than DAYS` prunes completed jobs by the timestamp
+  embedded in the job id; alone it prunes purely by age, and combined with an
+  explicit `--keep N` both conditions must hold.
+
+### Fixed
+
+- A bare `jobs.sh` invocation reports usage with exit 2 instead of crashing
+  with an unbound-variable error under macOS stock Bash 3.2.
+- An empty routing chain (`lane:` with no candidates) no longer aborts
+  `--list` mid-table under Bash 3.2; `--validate` now reports it as
+  `FAIL <lane> empty-chain` and keeps scanning later lanes.
+- `jobs.sh prune` no longer crashes under Bash 3.2 when no job is eligible.
+- The configurator's four-voter selection and the vote runner's temp-file
+  cleanup no longer hit empty-array expansions under Bash 3.2 `set -u`.
 
 ## [0.6.0] - 2026-07-16
 

@@ -33,8 +33,37 @@ OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""
 
 usage_error() {
-  echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json]' >&2
+  echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
   exit 2
+}
+
+print_usage() {
+  cat <<'EOF'
+usage: dispatch.sh [flags] LANE "TASK"
+       dispatch.sh [--json] --list | --explain LANE | --validate
+       dispatch.sh --help
+
+Dispatch one task to the first available vendor CLI in LANE's fallback chain.
+A TASK of "-" reads the task text from stdin.
+
+flags:
+  --background           run in the background and print the JOB_ID
+  --dry-run              print the fully resolved dispatch plan and stop
+                         before any provider call or job state
+  --mode advise|work     advise (read-only, default) or work (may edit files)
+  --workdir DIR          working directory handed to the vendor CLI
+  --vendor V             pin one configured vendor (codex|claude|grok|gemini)
+  --model M              override the routed model
+  --effort E             override the routed effort
+  --timeout SECONDS      cap each CLI call (default 600)
+  --job-timeout SECONDS  cap the whole dispatch (lock wait plus all calls)
+
+read-only queries (no provider call, no job state; --json for one envelope):
+  --list                 effective routing table (local overrides win)
+  --explain LANE         candidate availability for one lane
+  --validate             lint the effective routing table
+  --help, -h             this help
+EOF
 }
 
 json_escape() {
@@ -171,7 +200,10 @@ resolve_chain() {
   local SEGS=() F=()
   IFS='|' read -ra SEGS <<< "$chain"
   RESOLVED_TOTAL="${#SEGS[@]}"
-  for seg in "${SEGS[@]}"; do
+  # ${SEGS[@]} on an empty chain is an unbound-variable error under set -u on
+  # Bash 3.2 and would abort --list mid-table; the guard makes it iterate zero
+  # times instead.
+  for seg in ${SEGS[@]+"${SEGS[@]}"}; do
     i=$((i + 1))
     [[ -n "${seg// /}" ]] || continue
     parse_lane_segment "$seg" || {
@@ -298,6 +330,11 @@ validate_routing() {
       effective_seen="$effective_seen$lane "
       IFS='|' read -ra SEGS <<< "$chain"
       total="${#SEGS[@]}"
+      if [[ "$total" -eq 0 ]]; then
+        printf 'FAIL %s empty-chain\n' "$lane"
+        invalid=$((invalid + 1))
+        continue
+      fi
       selected=0
       lane_invalid=0
       i=0
@@ -367,6 +404,10 @@ if [[ "${1:-}" == "--json" ]]; then
   [[ $# -gt 0 ]] || usage_error
 fi
 case "${1:-}" in
+  --help|-h)
+    [[ "$JSON_INSPECTION" -eq 0 && $# -eq 1 ]] || usage_error
+    print_usage
+    exit 0 ;;
   --list)
     if [[ "${2:-}" == "--json" ]]; then
       [[ "$JSON_INSPECTION" -eq 0 && $# -eq 2 ]] || usage_error

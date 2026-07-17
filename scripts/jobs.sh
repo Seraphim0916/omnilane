@@ -48,8 +48,10 @@ die() {
   exit "$rc"
 }
 
+USAGE_TEXT="usage: jobs.sh [--json] list|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+
 usage() {
-  die 2 "usage: jobs.sh [--json] list|status ID|result ID|stats [--last N]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--apply]"
+  die 2 "$USAGE_TEXT"
 }
 
 validate_job_store() {
@@ -179,7 +181,9 @@ for arg in "$@"; do
     args+=("$arg")
   fi
 done
-set -- "${args[@]}"
+# ${args[@]} with zero remaining arguments is an unbound-variable error under
+# set -u on Bash 3.2; a bare `jobs.sh` must reach usage, not crash.
+set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
@@ -191,6 +195,88 @@ fi
 validate_job_store
 
 case "${1:-}" in
+  help|--help|-h)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 1 ]] || usage
+    echo "$USAGE_TEXT" ;;
+  tail)
+    # Peek at the live public output stream of one job (running or done)
+    # without touching its exit contract. Only out.txt is shown; stderr and
+    # worker logs stay private to `result` and the job directory.
+    [[ "$JSON_MODE" -eq 0 && $# -ge 2 ]] || usage
+    tail_id="$2"
+    lines=20
+    shift 2
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --lines)
+          [[ $# -ge 2 ]] || usage
+          lines="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$lines" =~ ^([1-9][0-9]{0,2}|1000)$ ]] || {
+      die 2 "invalid --lines value (want 1..1000)"
+    }
+    select_job "$tail_id"
+    out_path="$JOB_DIR/out.txt"
+    if [[ -L "$out_path" ]]; then
+      die 1 "unsafe output path (symlink)"
+    fi
+    if [[ ! -f "$out_path" ]]; then
+      die 1 "no output yet"
+    fi
+    tail -n "$lines" -- "$out_path" ;;
+  retry)
+    # Re-dispatch a COMPLETED job with its recorded route and original task
+    # text. Metadata parsing is fail-closed: any value that needed JSON
+    # escaping does not match the strict patterns below and refuses to retry,
+    # so corrupted or hand-edited metadata can never smuggle flags or paths.
+    [[ "$JSON_MODE" -eq 0 && $# -ge 2 ]] || usage
+    retry_id="$2"
+    retry_background=0
+    shift 2
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --background) retry_background=1; shift ;;
+        *) usage ;;
+      esac
+    done
+    select_job "$retry_id"
+    read_exit_code "$JOB_DIR/exit" || {
+      die 1 "retry needs a completed job (still running, or invalid exit metadata)"
+    }
+    read_public_metadata "$JOB_DIR/meta.json" || {
+      die 1 "cannot retry: unreadable job metadata"
+    }
+    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|exec)","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
+    [[ "$PUBLIC_METADATA" =~ $retry_re ]] || {
+      die 1 "cannot retry: job metadata is not safely parseable"
+    }
+    retry_lane="${BASH_REMATCH[1]}"
+    retry_vendor="${BASH_REMATCH[2]}"
+    retry_model="${BASH_REMATCH[3]}"
+    retry_effort="${BASH_REMATCH[4]}"
+    retry_timeout="${BASH_REMATCH[5]}"
+    retry_job_timeout="${BASH_REMATCH[6]}"
+    retry_mode="${BASH_REMATCH[7]}"
+    retry_workdir="${BASH_REMATCH[8]}"
+    task_path="$JOB_DIR/task.txt"
+    [[ -f "$task_path" && ! -L "$task_path" ]] || {
+      die 1 "cannot retry: original task text is missing"
+    }
+    [[ -d "$retry_workdir" ]] || {
+      die 1 "cannot retry: original workdir no longer exists: $retry_workdir"
+    }
+    retry_args=(--mode "$retry_mode" --workdir "$retry_workdir" --timeout "$retry_timeout")
+    [[ "$retry_job_timeout" == "null" ]] || retry_args+=(--job-timeout "$retry_job_timeout")
+    # dispatch --vendor only accepts real CLI vendors; an exec gate is re-run
+    # through normal lane resolution plus the recorded --model script path.
+    [[ "$retry_vendor" == "exec" ]] || retry_args+=(--vendor "$retry_vendor")
+    [[ -z "$retry_model" ]] || retry_args+=(--model "$retry_model")
+    [[ -z "$retry_effort" ]] || retry_args+=(--effort "$retry_effort")
+    [[ "$retry_background" -eq 0 ]] || retry_args+=(--background)
+    exec bash "$OMNILANE_REPO/scripts/dispatch.sh" "${retry_args[@]}" \
+      "$retry_lane" - < "$task_path" ;;
   audit)
     limit=100
     shift
@@ -604,13 +690,18 @@ case "${1:-}" in
     exit "$rc" ;;
   prune)
     keep=100
+    keep_given=0
+    older_than=""
     apply=0
     shift
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --keep)
           [[ $# -ge 2 ]] || usage
-          keep="$2"; shift 2 ;;
+          keep="$2"; keep_given=1; shift 2 ;;
+        --older-than)
+          [[ $# -ge 2 ]] || usage
+          older_than="$2"; shift 2 ;;
         --apply)
           apply=1; shift ;;
         *) usage ;;
@@ -620,6 +711,25 @@ case "${1:-}" in
       echo "invalid --keep value (want 0..999999999)" >&2
       exit 2
     }
+    cutoff=""
+    if [[ -n "$older_than" ]]; then
+      [[ "$older_than" =~ ^[1-9][0-9]{0,3}$ ]] || {
+        die 2 "invalid --older-than value (want 1..9999 days)"
+      }
+      # Age comes from the timestamp embedded in the job id (local time, the
+      # same clock that created it), not from mtime, which any tool can touch.
+      # The fixed-width YYYYMMDD-HHMMSS format makes string comparison exact.
+      if ! cutoff="$(date -v "-${older_than}d" +%Y%m%d-%H%M%S 2>/dev/null)" &&
+         ! cutoff="$(date -d "${older_than} days ago" +%Y%m%d-%H%M%S 2>/dev/null)"; then
+        die 1 "cannot compute --older-than cutoff on this host's date command"
+      fi
+      [[ "$cutoff" =~ ^[0-9]{8}-[0-9]{6}$ ]] || {
+        die 1 "cannot compute --older-than cutoff on this host's date command"
+      }
+      # --older-than alone prunes purely by age; an explicit --keep composes
+      # as AND (a job must be both beyond the keep window and old enough).
+      [[ "$keep_given" -eq 1 ]] || keep=0
+    fi
     completed=()
     if [[ -d "$JOBS" ]]; then
       for job_dir in "$JOBS"/*; do
@@ -635,30 +745,46 @@ case "${1:-}" in
     if [[ ${#completed[@]} -gt 0 ]]; then
       while IFS= read -r id; do
         index=$((index + 1))
-        [[ "$index" -le "$keep" ]] || candidates+=("$id")
+        [[ "$index" -le "$keep" ]] && continue
+        if [[ -n "$cutoff" ]]; then
+          [[ "${id:0:15}" < "$cutoff" ]] || continue
+        fi
+        candidates+=("$id")
       done < <(printf '%s\n' "${completed[@]}" | sort -r)
     fi
 
     deleted=0
-    for id in "${candidates[@]}"; do
-      job_dir="$JOBS/$id"
-      if [[ "$apply" -eq 0 ]]; then
-        printf 'would delete %s\n' "$id"
-        continue
-      fi
-      # Re-check immediately before deletion so a replaced path or a job whose
-      # completion marker disappeared is never removed.
-      if [[ -d "$job_dir" && ! -L "$job_dir" ]] &&
-         read_exit_code "$job_dir/exit"; then
-        /bin/rm -rf "$job_dir"
-        printf 'deleted %s\n' "$id"
-        deleted=$((deleted + 1))
-      else
-        printf 'skipped changed job %s\n' "$id" >&2
-      fi
-    done
+    # ${arr[@]} on an empty array is an unbound-variable error under set -u
+    # on Bash 3.2, so an empty candidate list must never reach the loop.
+    if [[ ${#candidates[@]} -gt 0 ]]; then
+      for id in "${candidates[@]}"; do
+        job_dir="$JOBS/$id"
+        if [[ "$apply" -eq 0 ]]; then
+          printf 'would delete %s\n' "$id"
+          continue
+        fi
+        # Re-check immediately before deletion so a replaced path or a job whose
+        # completion marker disappeared is never removed.
+        if [[ -d "$job_dir" && ! -L "$job_dir" ]] &&
+           read_exit_code "$job_dir/exit"; then
+          /bin/rm -rf "$job_dir"
+          printf 'deleted %s\n' "$id"
+          deleted=$((deleted + 1))
+        else
+          printf 'skipped changed job %s\n' "$id" >&2
+        fi
+      done
+    fi
     if [[ "$apply" -eq 1 ]]; then
-      printf '%s jobs deleted; newest %s completed jobs retained\n' "$deleted" "$keep"
+      if [[ -n "$older_than" && "$keep_given" -eq 1 ]]; then
+        printf '%s jobs deleted; kept the newest %s completed jobs and everything newer than %s days\n' \
+          "$deleted" "$keep" "$older_than"
+      elif [[ -n "$older_than" ]]; then
+        printf '%s jobs deleted; completed jobs newer than %s days retained\n' \
+          "$deleted" "$older_than"
+      else
+        printf '%s jobs deleted; newest %s completed jobs retained\n' "$deleted" "$keep"
+      fi
     else
       printf '%s jobs eligible; rerun with --apply to delete\n' "${#candidates[@]}"
     fi ;;

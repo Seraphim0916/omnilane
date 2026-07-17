@@ -2694,7 +2694,260 @@ assert all(set(item) == {"scope", "code"} for item in bad["findings"])
   fi
 }
 
+test_help_is_stdout_and_read_only() {
+  local name="help exits zero on stdout only" home out out2 out3 rc
+  home="$TEST_ROOT/help"; mkdir -p "$home"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --help 2>"$home/err")" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "dispatch --help exit=$rc"
+  elif [[ "$out" != *'usage: dispatch.sh'* || "$out" != *'--validate'* || "$out" != *'--job-timeout'* ]]; then
+    fail "$name" "dispatch --help is missing usage content"
+  elif [[ -s "$home/err" ]]; then
+    fail "$name" "dispatch --help wrote to stderr"
+  elif [[ -e "$home/jobs" ]]; then
+    fail "$name" "dispatch --help created job state"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --help extra >/dev/null 2>&1; then
+    fail "$name" "--help with extra arguments did not fail"
+  elif ! out2="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" -h 2>/dev/null)"; then
+    fail "$name" "-h alias failed"
+  elif [[ "$out2" != "$out" ]]; then
+    fail "$name" "-h output differs from --help"
+  elif ! out3="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" help 2>/dev/null)"; then
+    fail "$name" "jobs.sh help failed"
+  elif [[ "$out3" != 'usage: jobs.sh'* ]]; then
+    fail "$name" "jobs.sh help is missing usage text"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" help extra >/dev/null 2>&1; then
+    fail "$name" "jobs.sh help with extra arguments did not fail"
+  elif OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" >/dev/null 2>&1; then
+    fail "$name" "jobs.sh without arguments must stay a usage error"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_bare_invocation_is_usage_not_crash() {
+  local name="bare jobs.sh is a usage error on Bash 3.2" home out rc
+  home="$TEST_ROOT/jobs-bare"; mkdir -p "$home"
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "bare invocation crashed: $out"
+  elif [[ "$rc" -ne 2 || "$out" != *'usage: jobs.sh'* ]]; then
+    fail "$name" "expected usage with exit 2, got rc=$rc"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_tail_is_bounded_and_safe() {
+  local name="jobs tail bounds lines and refuses symlinks" home job out rc i
+  home="$TEST_ROOT/jobs-tail"
+  job="$home/jobs/20260101-000000-1-1"
+  mkdir -p "$job"
+  for ((i = 1; i <= 30; i++)); do printf 'line %d\n' "$i"; done > "$job/out.txt"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != 'line 11'* || "$out" != *'line 30' ]]; then
+    fail "$name" "default tail window is wrong (rc=$rc)"
+    return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 --lines 5 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != 'line 26'* || "$out" != *'line 30' ]]; then
+    fail "$name" "--lines 5 window is wrong (rc=$rc)"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-1 --lines 1001 >/dev/null 2>&1; then
+    fail "$name" "--lines above the cap was accepted"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail '../escape' >/dev/null 2>&1; then
+    fail "$name" "path-escape job id was accepted"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json tail 20260101-000000-1-1 >/dev/null 2>&1; then
+    fail "$name" "tail must reject --json mode"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-2"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-2 2>&1)" || rc=$?
+  if [[ "$rc" -ne 1 || "$out" != *'no output yet'* ]]; then
+    fail "$name" "missing output should say 'no output yet' with exit 1 (rc=$rc)"
+    return
+  fi
+  printf 'secret\n' > "$home/private.txt"
+  mkdir -p "$home/jobs/20260101-000000-1-3"
+  ln -s "$home/private.txt" "$home/jobs/20260101-000000-1-3/out.txt"
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" tail 20260101-000000-1-3 2>&1)" || rc=$?
+  if [[ "$rc" -ne 1 || "$out" == *secret* ]]; then
+    fail "$name" "symlinked out.txt was followed (rc=$rc)"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_retry_replays_completed_job() {
+  local name="retry replays a completed job fail-closed" home gate job out rc new_id
+  home="$TEST_ROOT/jobs-retry"
+  gate="$home/gate.sh"
+  mkdir -p "$home"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf 'retry worked: %s\n' "$(head -1 "$4")" > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  job="$home/jobs/20260101-000000-1-1"
+  mkdir -p "$job"
+  printf '7\n' > "$job/exit"
+  printf 'original task text\n' > "$job/task.txt"
+  printf '{"lane":"probe","vendor":"exec","model":"%s","effort":"-","timeout":600,"job_timeout":null,"mode":"advise","workdir":"%s","candidate":"1/1","started":"2026-01-01T00:00:00Z"}\n' \
+    "$gate" "$home" > "$job/meta.json"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-1 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'retry worked'* ]]; then
+    fail "$name" "retry did not replay through the exec gate (rc=$rc, out=$out)"
+    return
+  fi
+  new_id="$(ls "$home/jobs" | LC_ALL=C sort | grep -v '^20260101-000000-1-1$' | head -1)"
+  if [[ -z "$new_id" ]]; then
+    fail "$name" "retry did not create a new job"
+    return
+  fi
+  if ! grep -q 'original task text' "$home/jobs/$new_id/task.txt"; then
+    fail "$name" "retry lost the original task text"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-2"
+  printf 'x\n' > "$home/jobs/20260101-000000-1-2/task.txt"
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-2 >/dev/null 2>&1; then
+    fail "$name" "retry of a running job was accepted"
+    return
+  fi
+  mkdir -p "$home/jobs/20260101-000000-1-3"
+  printf '1\n' > "$home/jobs/20260101-000000-1-3/exit"
+  printf 'x\n' > "$home/jobs/20260101-000000-1-3/task.txt"
+  printf '{"lane":"probe","vendor":"exec","model":"a\\"b","effort":"-","timeout":600,"job_timeout":null,"mode":"advise","workdir":"%s","candidate":"1/1","started":"2026-01-01T00:00:00Z"}\n' \
+    "$home" > "$home/jobs/20260101-000000-1-3/meta.json"
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-3 >/dev/null 2>&1; then
+    fail "$name" "escaped metadata was not rejected fail-closed"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_prune_older_than_uses_id_timestamps() {
+  local name="prune --older-than ages by job id" home recent out rc
+  home="$TEST_ROOT/prune-age"
+  mkdir -p "$home/jobs/20200101-000000-1-1" \
+           "$home/jobs/20200102-000000-1-1" \
+           "$home/jobs/20200103-000000-1-1"
+  printf '0\n' > "$home/jobs/20200101-000000-1-1/exit"
+  printf '0\n' > "$home/jobs/20200102-000000-1-1/exit"
+  recent="$(date +%Y%m%d-%H%M%S)-9-9"
+  mkdir -p "$home/jobs/$recent"
+  printf '0\n' > "$home/jobs/$recent/exit"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 30 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'2 jobs eligible'* ]]; then
+    fail "$name" "preview should list the two old completed jobs (rc=$rc, out=$out)"
+    return
+  fi
+  if OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 0 >/dev/null 2>&1; then
+    fail "$name" "--older-than 0 was accepted"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --keep 2 --older-than 30 --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'1 jobs deleted'* ]]; then
+    fail "$name" "--keep 2 AND age should delete exactly one job (rc=$rc, out=$out)"
+    return
+  fi
+  if [[ -d "$home/jobs/20200101-000000-1-1" || ! -d "$home/jobs/20200102-000000-1-1" ]]; then
+    fail "$name" "--keep window was not composed with the age filter"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --older-than 30 --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "age-only apply failed (rc=$rc)"
+  elif [[ -d "$home/jobs/20200102-000000-1-1" ]]; then
+    fail "$name" "old completed job survived the age-only prune"
+  elif [[ ! -d "$home/jobs/20200103-000000-1-1" ]]; then
+    fail "$name" "old RUNNING job was deleted by prune"
+  elif [[ ! -d "$home/jobs/$recent" ]]; then
+    fail "$name" "recent completed job was deleted by the age prune"
+  else
+    pass "$name"
+  fi
+}
+
+test_jobs_prune_survives_empty_candidate_list() {
+  local name="prune with no eligible jobs exits cleanly" home out rc
+  home="$TEST_ROOT/prune-empty"
+  mkdir -p "$home/jobs"
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'0 jobs eligible'* ]]; then
+    fail "$name" "empty store preview crashed (rc=$rc, out=$out)"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --apply 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'0 jobs deleted'* ]]; then
+    fail "$name" "empty store apply crashed (rc=$rc, out=$out)"
+  else
+    pass "$name"
+  fi
+}
+
+test_routing_empty_chain_survives_bash32() {
+  local name="empty routing chain cannot abort list or validate" home out rc
+  home="$TEST_ROOT/empty-chain"; mkdir -p "$home"
+  {
+    printf 'emptylane:\n'
+    printf 'zzz-after: off\n'
+  } > "$home/routing.local.yaml"
+
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --list 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "--list crashed on the empty chain"
+    return
+  fi
+  if [[ "$out" != *zzz-after* ]]; then
+    fail "$name" "--list silently truncated lanes after the empty chain"
+    return
+  fi
+  rc=0
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" --validate 2>&1)" || rc=$?
+  if [[ "$out" == *'unbound variable'* ]]; then
+    fail "$name" "--validate crashed on the empty chain"
+  elif [[ "$out" != *'FAIL emptylane empty-chain'* ]]; then
+    fail "$name" "--validate did not flag the empty chain: $out"
+  elif [[ "$rc" -ne 2 ]]; then
+    fail "$name" "--validate with an invalid lane should exit 2, got $rc"
+  elif [[ "$out" != *'zzz-after'* ]]; then
+    fail "$name" "--validate stopped before later lanes"
+  else
+    pass "$name"
+  fi
+}
+
 test_safe_routing_parser
+test_help_is_stdout_and_read_only
+test_jobs_bare_invocation_is_usage_not_crash
+test_jobs_tail_is_bounded_and_safe
+test_jobs_retry_replays_completed_job
+test_jobs_prune_older_than_uses_id_timestamps
+test_jobs_prune_survives_empty_candidate_list
+test_routing_empty_chain_survives_bash32
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces
 test_watchdog_timeout_resolution
