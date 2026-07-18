@@ -348,6 +348,7 @@ omnilane list | route … | jobs … | configure   # global wrapper, works anywh
                                                # (install.sh links it into ~/.local/bin)
 eval "$(omnilane completion bash)"             # enable Bash completion for this shell
 source <(omnilane completion zsh)               # enable Zsh completion for this shell
+omnilane completion fish | source              # enable Fish completion for this shell
 omnilane mcp                                   # MCP stdio server (needs Node.js)
 omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
 omnilane ui start                              # start/reuse the local Live UI; print its URL

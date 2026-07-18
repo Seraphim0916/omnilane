@@ -327,6 +327,7 @@ scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
 ```
 eval "$(omnilane completion bash)"             # 현재 Bash 에서 완성 활성화
 source <(omnilane completion zsh)               # 현재 Zsh 에서 완성 활성화
+omnilane completion fish | source              # 현재 Fish 에서 완성 활성화
 omnilane mcp                                   # MCP stdio 서버(Node.js 필요)
 omnilane release-audit [--target VERSION] [--json] # 오프라인 읽기 전용 릴리스 게이트
 omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시

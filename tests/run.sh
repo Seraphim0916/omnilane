@@ -3785,5 +3785,31 @@ EOF
 }
 test_jobs_rm
 
+test_completion_fish() {
+  local name="fish completion script" out rc badrc fish_rc tmp w
+  out="$(bash "$ROOT/bin/omnilane" completion fish 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "completion fish exited $rc: $out"; return; fi
+  if [[ "$out" != *'complete -c omnilane'* ]]; then
+    fail "$name" "output is not a fish completion script"; return
+  fi
+  for w in version list route jobs mcp doctor release-audit ui configure completion; do
+    if [[ "$out" != *"$w"* ]]; then fail "$name" "fish completion missing command: $w"; return; fi
+  done
+  if [[ "$out" != *'advise work'* || "$out" != *openrouter* || "$out" != *deepseek* ||
+        "$out" != *'bash zsh fish'* || "$out" != *'start status url stop'* ]]; then
+    fail "$name" "fish completion option/enum inventory incomplete"; return
+  fi
+  bash "$ROOT/bin/omnilane" completion nushell >/dev/null 2>&1; badrc=$?
+  if [[ "$badrc" -eq 0 ]]; then fail "$name" "unknown completion shell was accepted"; return; fi
+  # Real syntax check only when fish is installed; sourcing runs the complete defs.
+  if command -v fish >/dev/null 2>&1; then
+    tmp="$TEST_ROOT/omnilane.fish"; printf '%s\n' "$out" > "$tmp"
+    fish_rc=0; fish -c "source '$tmp'" >/dev/null 2>&1 || fish_rc=$?
+    if [[ "$fish_rc" -ne 0 ]]; then fail "$name" "fish rejected the completion script"; return; fi
+  fi
+  pass "$name"
+}
+test_completion_fish
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
