@@ -1,6 +1,6 @@
 {
   "name": "omnilane",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "One routing table, every harness: classify subtasks into lanes and auto-dispatch each lane to the best vendor CLI (Codex, Claude Code, Grok Build, Antigravity) with background jobs, depth guard, and serialized codex dispatch.",
   "author": {
     "name": "Seraphim0916"

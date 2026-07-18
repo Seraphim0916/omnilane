@@ -21,6 +21,14 @@
 
 ---
 
+## v0.8.3 新功能
+
+- **MCP server** — `omnilane mcp` 启动零依赖的 stdio MCP server,任何支持
+  MCP 的宿主(Claude Code、Codex、Gemini CLI、Cursor、OpenCode……)无需安装
+  skill 即可发现并调用 omnilane:提供 `route`、`jobs_status`、`jobs_result`、
+  `list_lanes` 四个工具。`route` 默认只读 advise 模式;work 模式必须明确
+  指定 workdir。
+
 ## v0.8.2 新功能
 
 - **`openrouter` vendor** — 只需 `curl` 加一个 `OPENROUTER_API_KEY`,
@@ -242,6 +250,27 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 - **Antigravity**:`agy plugin install <本仓库路径>`(先用
   `agy plugin validate` 检查)
 
+### MCP server
+
+`omnilane mcp` 会启动零依赖、跑在本机的 MCP stdio server,让任何支持 MCP
+的宿主无需安装 skill、也不用加路由提醒,即可发现并调用 omnilane。在宿主
+配置里指向已安装的 CLI 即可:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Server 提供 `route`、`jobs_status`、`jobs_result`、`list_lanes` 四个工具。
+`route` 默认只读 `advise` 模式;选择 `work` 的调用必须同时提供明确的
+`workdir`。
+
 ## ⚙️ 自定义设置
 
 三层,全部可选:
@@ -351,7 +380,7 @@ configure.sh                                        # 交互通道菜单
 
 ## 🌱 状态
 
-v0.8.2 共有八个派发 vendor——四个框架原生(codex、claude、grok、gemini)、
+v0.8.3 共有八个派发 vendor——四个框架原生(codex、claude、grok、gemini)、
 三个聚合/溢流 CLI(kimi、qwen、opencode),加上免 CLI 的 `openrouter` 直连
 API vendor——全部走统一 runner 契约并附 contract 测试,另有 Claude Code
 `SessionStart` 自动提醒。kimi、qwen、opencode、openrouter 的 runner 以假

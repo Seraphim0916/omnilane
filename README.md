@@ -21,6 +21,14 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ---
 
+## What's new in v0.8.3
+
+- **MCP server** — `omnilane mcp` starts a zero-dependency stdio MCP server,
+  so any MCP-capable host (Claude Code, Codex, Gemini CLI, Cursor, OpenCode…)
+  can discover and call omnilane without installing the skill: tools `route`,
+  `jobs_status`, `jobs_result`, and `list_lanes`. `route` defaults to
+  read-only advise mode; work mode requires an explicit workdir.
+
 ## What's new in v0.8.2
 
 - **`openrouter` vendor** — dispatch straight to the OpenRouter API with
@@ -431,7 +439,7 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-v0.8.2 spans eight dispatch vendors — four harness natives (codex, claude,
+v0.8.3 spans eight dispatch vendors — four harness natives (codex, claude,
 grok, gemini), three aggregator/overflow CLIs (kimi, qwen, opencode), and the
 CLI-free `openrouter` direct-API vendor — on the uniform runner contract with
 contract tests, plus the Claude Code `SessionStart` auto-reminder. kimi, qwen,
