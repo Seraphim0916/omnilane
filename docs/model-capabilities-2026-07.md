@@ -38,13 +38,27 @@ The 15.4-point Fable 5 vs Sol gap on Pro contrasts with Sol's lead on the
 Coding Agent Index — the two measure different things (raw problem-solving vs
 agentic tool use). Pin models per lane accordingly.
 
-### SWE-Bench Verified (open-weight coders)
+### SWE-Bench Verified
+
+Now saturated — the frontier clusters in the high 80s, so the meaningful ranking
+has moved to SWE-Bench Pro (above). OpenAI stopped reporting Verified in early
+2026. Frontier scores per public leaderboard aggregates:
+
+| Model | Score |
+|-------|------:|
+| Claude Opus 4.8 | 88.6% |
+| GPT-5.3 Codex | 85.0% |
+| Claude Opus 4.5 | 80.9% |
+| Gemini 3.1 Pro | 80.6% |
+| Grok 4 (4.3) | ~75% |
+
+Open-weight coders on Verified:
 
 | Model | Score | Notes |
 |-------|------:|-------|
-| DeepSeek-V3.2 | ~70% | V4 preview adds 1M context, open weights, aggressive pricing |
-| Qwen3-Coder-480B | 69.6% | Qwen3-Coder-Next is an 80B-total / 3B-active efficient variant |
-| Kimi K2 | 65.8% single / 71.6% multi | K2.6 is open-weight, natively multimodal, long-horizon |
+| Kimi K2 | 65.8% single / 71.6% multi | K2.6 open-weight, multimodal, long-horizon |
+| DeepSeek-V3.2 | ~70% | V4 adds 1M context, open weights, aggressive pricing |
+| Qwen3-Coder-480B | 69.6% | Qwen3-Coder-Next is an 80B-total / 3B-active variant |
 
 Open-weight coding leaders (mid-2026): GLM-5.2 (1M context, long-horizon),
 MiniMax M3, Kimi K2.7 Code, DeepSeek V4, Qwen3-Coder.
@@ -56,6 +70,47 @@ MiniMax M3, Kimi K2.7 Code, DeepSeek V4, Qwen3-Coder.
 | Claude Fable 5 | 59.9% | 1M+ |
 | GPT-5.6 Sol | 58.9% | 1M |
 | Kimi K3 | 57.1% | 1.05M |
+
+## Pricing and context windows (July 2026)
+
+Pay-per-token API list price, USD per 1M tokens (input / output). Prices move
+often — treat as of the cited date and confirm on each provider's pricing page.
+Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$10
+(Claude Fable 5), a ~70x spread, so routing cheap lanes to cheap models matters.
+
+| Model | Input $/1M | Output $/1M | Context |
+|-------|-----------:|------------:|---------|
+| GPT-5.4 | 2.50 | 15.00 | 1M |
+| GPT-5.5 | 5.00 | 30.00 | 1M |
+| Claude Opus 4.8 | 5.00 | 25.00 | 200K |
+| Claude Sonnet 4.6 | 3.00 | 15.00 | 1M+ |
+| Claude Fable 5 | 10.00 | — | 1M+ |
+| Gemini 3.1 Pro | 2.00 | 12.00 | ~2M (largest commercial) |
+| Gemini 3 Flash | 0.50 | 3.00 | 1M |
+| Gemini 3.1 Flash-Lite | 0.10 | 0.40 | — |
+| Grok 4.5 | 2.00 | 6.00 | — |
+| DeepSeek V3 | 0.27 | 1.10 | — |
+| DeepSeek V4 Flash | 0.14 | 0.28 | 1M (384K output) |
+| Z.ai GLM-5.2 | 1.40 | 4.40 | 1M |
+| Mistral Ministral 3 (3B) | 0.10 | 0.10 | — |
+| Kimi K3 | — | — | 1.05M |
+
+Groq and Cerebras are fast-inference hosts (Llama / Qwen / gpt-oss families); the
+per-token price depends on which hosted model you pick — see their pricing pages.
+GPT-5.6 pricing / context were not published in the sources surveyed here.
+
+## Frontier models omnilane routes (codex / claude / gemini / grok lanes)
+
+- **Gemini 3.1 Pro** (Google, 2026-02): SWE-bench Verified 80.6%, LiveCodeBench
+  Pro ~2,439 Elo (leads), ~2M context; strong agentic coding (plans before
+  editing, multi-tool orchestration) — suited to monorepo / long-context work.
+  omnilane reaches it through the `gemini` lane (the `agy` CLI).
+- **Grok 4.5** (xAI, public 2026-07-09): a low-cost frontier coder ($2/$6);
+  detailed public coding benchmarks were still thin at the time of writing
+  (Grok 4.3 scored ~75% SWE-bench Verified). omnilane's `grok` lane.
+- **GPT-5.6 Sol / Terra / Luna** and **Claude Opus 4.8 / Fable 5** are covered in
+  the benchmark and pricing tables above; they back the `codex` and `claude`
+  lanes.
 
 ## Terminal-native coding CLIs / harnesses
 
@@ -105,3 +160,8 @@ Coding Plan uses a separate `/api/coding/paas/v4` path. Exact model slugs change
 - Mistral Codestral: <https://mistral.ai/news/codestral/>
 - Groq OpenAI compatibility: <https://console.groq.com/docs/openai>
 - Cerebras model catalog: <https://inference-docs.cerebras.ai/models/overview>
+- LLM API pricing (BenchLM, July 2026): <https://benchlm.ai/llm-pricing>
+- LLM context window comparison (Morph): <https://www.morphllm.com/llm-context-window-comparison>
+- SWE-bench Verified leaderboard (BenchLM): <https://benchlm.ai/benchmarks/sweVerified>
+- Gemini 3.1 Pro (Google DeepMind): <https://deepmind.google/models/gemini/pro/>
+- Google Gemini 3 benchmarks (Vellum): <https://www.vellum.ai/blog/google-gemini-3-benchmarks>
