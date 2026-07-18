@@ -20,6 +20,14 @@
 
 ---
 
+## v0.8.1 새 기능
+
+- **Claude Code 플러그인이 라우팅 리마인더를 자동 로드** — 플러그인에
+  `SessionStart` 훅(`hooks/hooks.json`)이 포함되어 세션 시작 시
+  (`startup|resume|clear`) 라우팅 리마인더를 자동 주입합니다.
+  `~/.claude/CLAUDE.md` 수정 없이 플러그인 설치만으로 적용됩니다.
+  다른 CLI는 기존대로 `install.sh` 지침 파일 방식을 사용합니다.
+
 ## v0.8.0 새 기능
 
 - **새 디스패치 벤더 2종** — `kimi`(Moonshot Kimi Code CLI)와
@@ -236,8 +244,9 @@ omnilane ui stop     # 정상 중지
 설치 프로그램이 소유한 링크와 표시된 알림을 되돌리려면
 `./install.sh --uninstall` 을 실행합니다.
 
-- **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령 포함),
-  또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
+- **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령과 함께
+  세션 시작 시 라우팅 리마인더를 자동 주입하는 `SessionStart` 훅 포함,
+  CLAUDE.md 수정 불필요), 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
 - **Codex**: `skills/omnilane` 을 `~/.codex/skills/` 에 배치/링크.
 - **Grok Build**: `grok plugin install <이 저장소> --trust`
 - **Antigravity**: `agy plugin install <이 저장소>`(먼저

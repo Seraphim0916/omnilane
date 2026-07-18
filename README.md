@@ -20,6 +20,14 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.8.1
+
+- **Claude Code plugin auto-loads the routing reminder** — the plugin now
+  ships a `SessionStart` hook (`hooks/hooks.json`) that injects the routing
+  reminder at session open (`startup|resume|clear`), so plugin installs get
+  the persistent reminder with no edit to `~/.claude/CLAUDE.md`. The
+  `install.sh` instruction-file reminder still covers the other CLIs.
+
 ## What's new in v0.8.0
 
 - **Two new dispatch vendors** — `kimi` (Moonshot Kimi Code CLI) and `qwen`
@@ -243,7 +251,9 @@ Rollback the installer-owned links and marked reminders with
 `./install.sh --uninstall`.
 
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
-  `/route-jobs` commands), or drop `skills/omnilane` into `~/.claude/skills/`.
+  `/route-jobs` commands, and a `SessionStart` hook that auto-injects the
+  routing reminder at session open — no CLAUDE.md edit needed), or drop
+  `skills/omnilane` into `~/.claude/skills/`.
 - **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.
 - **Grok Build**: `grok plugin install <this repo> --trust`
 - **Antigravity**: `agy plugin install <this repo>` (check first with

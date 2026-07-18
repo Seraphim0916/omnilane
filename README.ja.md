@@ -20,6 +20,15 @@
 
 ---
 
+## v0.8.1 の新機能
+
+- **Claude Code プラグインがルーティングリマインダーを自動読み込み** —
+  プラグインに `SessionStart` フック(`hooks/hooks.json`)を同梱。
+  セッション開始時(`startup|resume|clear`)にルーティングリマインダーを
+  自動注入するため、`~/.claude/CLAUDE.md` を編集せずプラグインの
+  インストールだけで有効になります。他の CLI は引き続き `install.sh` の
+  指示ファイル方式です。
+
 ## v0.8.0 の新機能
 
 - **2 つの新ディスパッチベンダー** — `kimi`(Moonshot Kimi Code CLI)と
@@ -241,7 +250,9 @@ CLI バージョンにより異なる場合あり)へマーカー付きの可逆
 `./install.sh --uninstall` を実行します。
 
 - **Claude Code**:プラグインとしてインストール(`/route`、`/route-jobs`
-  コマンド付き)、または `skills/omnilane` を `~/.claude/skills/` へ。
+  コマンドに加え、セッション開始時にルーティングリマインダーを自動注入する
+  `SessionStart` フック付き。CLAUDE.md の編集は不要)、または
+  `skills/omnilane` を `~/.claude/skills/` へ。
 - **Codex**:`skills/omnilane` を `~/.codex/skills/` へ配置/リンク。
 - **Grok Build**:`grok plugin install <このリポジトリ> --trust`
 - **Antigravity**:`agy plugin install <このリポジトリ>`(先に

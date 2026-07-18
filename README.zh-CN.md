@@ -20,6 +20,13 @@
 
 ---
 
+## v0.8.1 新功能
+
+- **Claude Code 插件开场自动载入路由提醒** — 插件新增 `SessionStart`
+  hook(`hooks/hooks.json`),在会话开始(`startup|resume|clear`)时自动
+  注入路由提醒,安装插件即生效,无需修改 `~/.claude/CLAUDE.md`。其他
+  CLI 仍使用 `install.sh` 的指令文件提醒。
+
 ## v0.8.0 新功能
 
 - **两个新派工 vendor** — `kimi`(Moonshot Kimi Code CLI)与 `qwen`
@@ -212,7 +219,8 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 `--dry-run`，可先预览每个由这份 checkout 拥有的文件动作。
 要回滚安装器拥有的链接与标记提示，执行 `./install.sh --uninstall`。
 
-- **Claude Code**:以插件安装(附 `/route`、`/route-jobs` 命令),
+- **Claude Code**:以插件安装(附 `/route`、`/route-jobs` 命令,并内置
+  `SessionStart` hook,会话开始时自动注入路由提醒,无需修改 CLAUDE.md),
   或把 `skills/omnilane` 放进 `~/.claude/skills/`。
 - **Codex**:把 `skills/omnilane` 放进或链接到 `~/.codex/skills/`。
 - **Grok Build**:`grok plugin install <本仓库路径> --trust`

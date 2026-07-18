@@ -20,6 +20,13 @@
 
 ---
 
+## v0.8.1 新功能
+
+- **Claude Code 外掛開場自動載入路由提醒** — 外掛新增 `SessionStart`
+  hook(`hooks/hooks.json`),於開場(`startup|resume|clear`)自動注入
+  路由提醒,裝外掛即生效,不必修改 `~/.claude/CLAUDE.md`。其他 CLI
+  仍走 `install.sh` 的指令檔提醒。
+
 ## v0.8.0 新功能
 
 - **兩個新派工 vendor** — `kimi`(Moonshot Kimi Code CLI)與 `qwen`
@@ -213,7 +220,8 @@ omnilane ui stop     # 正常停止
 
 要回滾安裝器擁有的連結與標記提示，執行 `./install.sh --uninstall`。
 
-- **Claude Code**:以外掛安裝(附 `/route`、`/route-jobs` 指令),
+- **Claude Code**:以外掛安裝(附 `/route`、`/route-jobs` 指令,並內建
+  `SessionStart` hook,開場自動注入路由提醒,不必修改 CLAUDE.md),
   或把 `skills/omnilane` 放進 `~/.claude/skills/`。
 - **Codex**:把 `skills/omnilane` 放進或連結到 `~/.codex/skills/`。
 - **Grok Build**:`grok plugin install <本 repo 路徑> --trust`

@@ -6,6 +6,16 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-18
+
+### Added
+
+- Claude Code plugin `SessionStart` hook (`hooks/hooks.json`): plugin installs
+  now auto-inject the routing reminder (`hooks/routing-instruction.md`) at
+  session open (`startup|resume|clear`) via `${CLAUDE_PLUGIN_ROOT}`, with no
+  edit to the user's `~/.claude/CLAUDE.md`. The `install.sh` instruction-file
+  reminder remains the path for the other CLIs.
+
 ## [0.8.0] - 2026-07-18
 
 ### Added
@@ -229,7 +239,9 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.8.1...HEAD
+
+[0.8.1]: https://github.com/Seraphim0916/omnilane/compare/v0.8.0...v0.8.1
 
 [0.8.0]: https://github.com/Seraphim0916/omnilane/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/Seraphim0916/omnilane/compare/v0.7.0...v0.7.1
