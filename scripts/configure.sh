@@ -16,6 +16,8 @@ CLAUDE_MODELS=("claude-opus-4-8" "claude-fable-5" "claude-sonnet-5" "claude-haik
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
 GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.1 Pro (Low)" "Gemini 3.5 Flash (High)" "Gemini 3.5 Flash (Medium)" "Gemini 3.5 Flash (Low)")
 GROK_MODELS=("grok-4.5" "grok-4.3")
+KIMI_MODELS=("kimi-k3" "kimi-k2.7-code")
+QWEN_MODELS=("qwen3-coder-plus" "qwen3-coder-flash")
 
 custom_value_is_safe() {
   case "$1" in
@@ -74,7 +76,7 @@ while true; do
     echo "$(msgf cfg_pick_range "${#LANES[@]}")"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini "vote (multi-model panel)" "exec (your own script/gate)" off)"
+  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini kimi qwen "vote (multi-model panel)" "exec (your own script/gate)" off)"
   [[ "$vendor" == exec* ]] && vendor="exec"
   [[ "$vendor" == vote* ]] && vendor="vote"
   if [[ "$vendor" == "off" ]]; then
@@ -86,6 +88,8 @@ while true; do
     claude) model="$(pick "$(msg cfg_model)" "${CLAUDE_MODELS[@]}")"; effort="$(pick "$(msg cfg_effort)" "${CLAUDE_EFFORTS[@]}")" ;;
     gemini) model="$(pick "$(msg cfg_model)" "${GEMINI_MODELS[@]}")"; effort="-" ;;
     grok)   model="$(pick "$(msg cfg_model)" "${GROK_MODELS[@]}")";   effort="-" ;;
+    kimi)   model="$(pick "$(msg cfg_model)" "${KIMI_MODELS[@]}")";   effort="-" ;;
+    qwen)   model="$(pick "$(msg cfg_model)" "${QWEN_MODELS[@]}")";   effort="-" ;;
     vote)   while true; do
               count="$(pick "$(msg cfg_voters_count)" "1" "2" "3" "4")"
               [[ "$count" =~ ^[1-4]$ ]] && break

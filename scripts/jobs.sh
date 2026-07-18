@@ -132,7 +132,7 @@ read_job_pid() {
 
 parse_stats_metadata() {
   local value="$1"
-  local metadata_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|exec)"(,|})'
+  local metadata_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|kimi|qwen|exec)"(,|})'
   STATS_LANE=""
   STATS_VENDOR=""
   [[ "$value" =~ $metadata_re ]] || return 1
@@ -143,7 +143,7 @@ parse_stats_metadata() {
 parse_audit_metadata() {
   local value="$1" metadata_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(codex|claude|grok|gemini|exec)\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(codex|claude|grok|gemini|kimi|qwen|exec)\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
   [[ "$value" =~ $metadata_re ]]
 }
 
@@ -252,7 +252,7 @@ case "${1:-}" in
     read_public_metadata "$JOB_DIR/meta.json" || {
       die 1 "cannot retry: unreadable job metadata"
     }
-    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|exec)","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
+    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|kimi|qwen|exec)","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
     [[ "$PUBLIC_METADATA" =~ $retry_re ]] || {
       die 1 "cannot retry: job metadata is not safely parseable"
     }

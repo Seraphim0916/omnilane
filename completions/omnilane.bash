@@ -64,7 +64,7 @@ _omnilane() {
       route|dispatch)
         case "$prev" in
           --mode) words="advise work" ;;
-          --vendor) words="codex claude grok gemini exec vote" ;;
+          --vendor) words="codex claude grok gemini kimi qwen exec vote" ;;
           --effort) words="low medium high xhigh max" ;;
           --workdir)
             COMPREPLY=()
