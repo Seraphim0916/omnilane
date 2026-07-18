@@ -48,7 +48,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N]|wait ID [--timeout N]|cancel ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -723,6 +723,23 @@ case "${1:-}" in
       (umask 077; printf '137\n' > "$exit_path")
       echo "cancelled (exit 137)"
     fi
+    exit 0 ;;
+  rm)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    select_job "$2"
+    exit_path="$JOB_DIR/exit"
+    # Refuse to delete a job whose worker is still alive: removing the directory
+    # out from under a running worker would strand it writing into a deleted path.
+    # A recorded exit (finished) or a dead pid (crashed worker) is safe to remove.
+    if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
+      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]] &&
+         read_job_pid "$JOB_DIR/pid" && kill -0 "$RECORDED_PID" 2>/dev/null; then
+        die 1 "job is running (pid $RECORDED_PID); cancel it first"
+      fi
+    fi
+    # select_job already proved $JOB_DIR is a real child dir, never a symlink.
+    /bin/rm -rf "$JOB_DIR"
+    echo "removed $2"
     exit 0 ;;
   result)
     [[ $# -eq 2 ]] || usage

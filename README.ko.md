@@ -343,6 +343,7 @@ dispatch.sh [--json] --validate [--json]           # 공급자 호출 없이 실
 jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메타데이터만 반환
 jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
 jobs.sh cancel ID                                 # 실행 중 작업 중지: 그룹 SIGTERM 후 SIGKILL
+jobs.sh rm ID                                     # 완료/종료 작업 1건 삭제(실행 중이면 거부)
 jobs.sh [--json] stats [--last N]                  # 로컬 성공률과 라우팅 집계
 jobs.sh audit [--last N] [--json]                  # 읽기 전용 작업 무결성/개인정보 검사
 jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
