@@ -20,6 +20,16 @@
 
 ---
 
+## v0.8.0 新功能
+
+- **两个新派工 vendor** — `kimi`(Moonshot Kimi Code CLI)与 `qwen`
+  (Alibaba Qwen Code CLI)加入,沿用统一 runner 契约:advise 只读、
+  work 自动批准、剥除 API key 环境变量改用 CLI 自身订阅登录、空输出
+  视为失败。可用 `--vendor kimi|qwen` 直接指定。
+- **coding-overflow 新增备选链** — 额度溢流道改为 grok → kimi → qwen
+  再到 `off`,三家装任一家即可用。runner 以假可执行文件完成契约测试;
+  欢迎反馈真实模型实测结果。
+
 ## v0.7.1 新功能
 
 - **路由表更新(2026-07 模型数据)** — hardest-coding 首选改为 GPT-5.6 Sol
@@ -117,7 +127,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 百万 token 长文整合——仅限分析,不派 agentic 长链 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 快速多步骤 agentic 循环、多模态检查 |
 | 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
-| 🚰 coding-overflow | Grok 4.5 | —(off) | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
 | 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。

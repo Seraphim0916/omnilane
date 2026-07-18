@@ -20,6 +20,18 @@
 
 ---
 
+## v0.8.0 새 기능
+
+- **새 디스패치 벤더 2종** — `kimi`(Moonshot Kimi Code CLI)와
+  `qwen`(Alibaba Qwen Code CLI)이 통일 runner 계약으로 합류:
+  advise 는 읽기 전용, work 는 자동 승인, API 키 환경 변수를 제거해
+  CLI 자체 구독 로그인을 사용, 빈 출력은 명시적 실패.
+  `--vendor kimi|qwen` 으로 직접 지정할 수 있습니다.
+- **coding-overflow 폴백 체인** — 쿼터 안전 밸브가 grok → kimi → qwen
+  → `off` 순으로 폴백해 세 벤더 중 하나만 설치돼 있어도 동작합니다.
+  runner 는 페이크 바이너리로 계약 테스트 완료. 실제 모델 사용 보고를
+  환영합니다.
+
 ## v0.7.1 새 기능
 
 - **라우팅 테이블 갱신(2026-07 모델 데이터)** — hardest-coding 1순위를
@@ -128,7 +140,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.5 | —(off) | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때

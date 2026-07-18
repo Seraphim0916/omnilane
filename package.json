@@ -1,6 +1,6 @@
 {
   "name": "omnilane",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "One routing table, every harness — classify subtasks into lanes and dispatch each lane to the best vendor's agentic CLI (Codex, Claude, Gemini, Grok) using your existing subscription logins.",
   "bin": {
     "omnilane": "bin/omnilane"

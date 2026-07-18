@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-18
+
 ### Added
 
 - Two new dispatch vendors: `kimi` (Moonshot Kimi Code CLI, binary `kimi`,
@@ -227,8 +229,9 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.8.0...HEAD
 
+[0.8.0]: https://github.com/Seraphim0916/omnilane/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/Seraphim0916/omnilane/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Seraphim0916/omnilane/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...v0.6.0

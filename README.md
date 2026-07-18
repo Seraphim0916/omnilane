@@ -20,6 +20,18 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.8.0
+
+- **Two new dispatch vendors** — `kimi` (Moonshot Kimi Code CLI) and `qwen`
+  (Alibaba Qwen Code CLI) join the vendor set with the uniform runner
+  contract: advise stays read-only, work auto-approves, API-key env is
+  stripped so the CLIs use their own subscription logins, and empty output
+  is a loud failure. Pin them with `--vendor kimi|qwen`.
+- **coding-overflow grows a chain** — the quota relief valve now falls back
+  grok → kimi → qwen before `off`, so it works with any one of the three
+  vendors installed. Runners are contract-tested against fake binaries;
+  real-model reports welcome.
+
 ## What's new in v0.7.1
 
 - **Routing refresh (2026-07 model data)** — hardest-coding now dispatches
@@ -130,7 +142,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis — analysis only, never agentic loops |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
-| 🚰 coding-overflow | Grok 4.5 | — (off) | Codex-quota relief valve for mid-tier coding |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what

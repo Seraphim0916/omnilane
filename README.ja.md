@@ -20,6 +20,18 @@
 
 ---
 
+## v0.8.0 の新機能
+
+- **2 つの新ディスパッチベンダー** — `kimi`(Moonshot Kimi Code CLI)と
+  `qwen`(Alibaba Qwen Code CLI)が統一 runner 契約で加わりました:
+  advise は読み取り専用、work は自動承認、API キー環境変数を除去して
+  CLI 自身のサブスクリプションログインを使用、空出力は明示的な失敗。
+  `--vendor kimi|qwen` で直接指名できます。
+- **coding-overflow にフォールバックチェーン** — クォータ逃し弁が
+  grok → kimi → qwen → `off` の順にフォールバックし、3 ベンダーの
+  いずれか 1 つで動作します。runner はフェイクバイナリで契約テスト済み。
+  実モデルでの報告を歓迎します。
+
 ## v0.7.1 の新機能
 
 - **ルーティング表を更新(2026-07 モデルデータ)** — hardest-coding の第一候補を
@@ -128,7 +140,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100 万トークン級の長文統合——分析専用、agentic ループ禁止 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.5 | —(off) | リアルタイム X/ウェブ検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.5 | —(off) | Codex クォータ逼迫時の中級コーディング逃し弁 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex クォータ逼迫時の中級コーディング逃し弁 |
 | 🗳️ arbitrate | off(オプトイン) | — | 内蔵オピニオンパネル(重大な判断用)——デフォルト無効。`routing.local.yaml` で有効化;投票者×ラウンドごとに 1 コール消費 |
 
 **バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
