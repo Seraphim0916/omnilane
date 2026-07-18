@@ -20,6 +20,19 @@
 
 ---
 
+## v0.8.2 새 기능
+
+- **`openrouter` vendor** — `curl`과 `OPENROUTER_API_KEY`만으로
+  OpenRouter API에 직접 디스패치합니다. 어떤 omnilane 설치에서도 수백 개의
+  호스팅 모델에 접근할 수 있으며 코딩 에이전트 CLI를 추가로 설치할 필요가
+  없습니다. advise/consult 전용(파일 편집 불가, work 모드는 명확한 오류로
+  안내)이며 모델 slug는 필수입니다. 예:
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`
+- **`opencode` vendor** — 멀티 프로바이더 집합 CLI OpenCode를 통한
+  헤드리스 디스패치(`opencode run`). advise 모드는 내장 읽기 전용 `plan`
+  에이전트를 사용하고 work 모드는 `--auto`를 사용합니다. 기본
+  `coding-overflow` 체인의 마지막 폴백으로 추가되었습니다.
+
 ## v0.8.1 새 기능
 
 - **Claude Code 플러그인이 라우팅 리마인더를 자동 로드** — 플러그인에
@@ -148,7 +161,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때

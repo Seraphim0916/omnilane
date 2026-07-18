@@ -20,6 +20,17 @@
 
 ---
 
+## v0.8.2 新功能
+
+- **`openrouter` vendor** — 只需 `curl` 加一个 `OPENROUTER_API_KEY`,
+  即可直连 OpenRouter API 派工:任何 omnilane 安装都能访问数百个
+  托管模型,无需再装任何代理 CLI。仅限 advise/consult(不能改文件,
+  work 模式会明确报错指路),模型 slug 必填,例如
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`。
+- **`opencode` vendor** — 通过 OpenCode 多供应商聚合 CLI 无头派工
+  (`opencode run`)。advise 模式锁定内置只读 `plan` agent;work 模式
+  用 `--auto`。加入默认 `coding-overflow` 链作为最后回退。
+
 ## v0.8.1 新功能
 
 - **Claude Code 插件开场自动载入路由提醒** — 插件新增 `SessionStart`
@@ -134,7 +145,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 百万 token 长文整合——仅限分析,不派 agentic 长链 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 快速多步骤 agentic 循环、多模态检查 |
 | 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
 | 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。

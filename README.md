@@ -20,6 +20,19 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.8.2
+
+- **`openrouter` vendor** — dispatch straight to the OpenRouter API with
+  nothing but `curl` and an `OPENROUTER_API_KEY`: hundreds of hosted models
+  become reachable from any omnilane install, no coding-agent CLI required.
+  Advise/consult only (it cannot edit files; work mode fails with guidance)
+  and the model slug is mandatory, e.g.
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`.
+- **`opencode` vendor** — headless dispatch through the OpenCode
+  multi-provider aggregator CLI (`opencode run`). Advise mode pins OpenCode's
+  built-in read-only `plan` agent; work mode uses `--auto`. Joins the default
+  `coding-overflow` chain as its last fallback.
+
 ## What's new in v0.8.1
 
 - **Claude Code plugin auto-loads the routing reminder** — the plugin now
@@ -150,7 +163,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis — analysis only, never agentic loops |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex-quota relief valve for mid-tier coding |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what

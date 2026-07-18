@@ -20,6 +20,19 @@
 
 ---
 
+## v0.8.2 の新機能
+
+- **`openrouter` vendor** — `curl` と `OPENROUTER_API_KEY` だけで
+  OpenRouter API に直接ディスパッチ。どの omnilane インストールからでも
+  数百のホスト型モデルに到達でき、コーディングエージェント CLI の追加は
+  不要。advise/consult 専用(ファイル編集不可、work モードは明確に
+  エラーで案内)、モデル slug は必須。例:
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`
+- **`opencode` vendor** — マルチプロバイダ集約 CLI OpenCode 経由の
+  ヘッドレスディスパッチ(`opencode run`)。advise モードは組み込みの
+  読み取り専用 `plan` エージェントを使用し、work モードは `--auto`。
+  デフォルトの `coding-overflow` チェーンの最終フォールバックに追加。
+
 ## v0.8.1 の新機能
 
 - **Claude Code プラグインがルーティングリマインダーを自動読み込み** —
@@ -149,7 +162,7 @@ flowchart LR
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100 万トークン級の長文統合——分析専用、agentic ループ禁止 |
 | ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.5 | —(off) | リアルタイム X/ウェブ検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex クォータ逼迫時の中級コーディング逃し弁 |
+| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ逼迫時の中級コーディング逃し弁 |
 | 🗳️ arbitrate | off(オプトイン) | — | 内蔵オピニオンパネル(重大な判断用)——デフォルト無効。`routing.local.yaml` で有効化;投票者×ラウンドごとに 1 コール消費 |
 
 **バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの

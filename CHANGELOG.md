@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-07-18
+
 ### Added
 
 - `openrouter` vendor: direct OpenRouter API dispatch (curl + `OPENROUTER_API_KEY`,
@@ -250,7 +252,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/Seraphim0916/omnilane/compare/v0.8.1...v0.8.2
 
 [0.8.1]: https://github.com/Seraphim0916/omnilane/compare/v0.8.0...v0.8.1
 
