@@ -3205,5 +3205,72 @@ NODE
 }
 test_mcp_server_surface
 
+test_configure_noninteractive() {
+  local name="configure non-interactive set/get/unset/list" home file out rc proof
+  home="$TEST_ROOT/configure-noninteractive"; mkdir -p "$home"
+  file="$home/.omnilane/routing.local.yaml"
+  proof="$home/injected"
+
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set triage "claude claude-opus-4-8 high" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 ]] || ! grep -q '^triage: claude claude-opus-4-8 high$' "$file" 2>/dev/null; then
+    fail "$name" "set did not write the lane: rc=$rc out=$out"; return
+  fi
+
+  local got rc_get
+  got="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" get triage 2>&1)"; rc_get=$?
+  if [[ "$rc_get" -ne 0 || "$got" != triage:*claude*opus-4-8* ]]; then
+    fail "$name" "get did not report the override: rc=$rc_get out=$got"; return
+  fi
+
+  local listed
+  listed="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" list 2>&1)"
+  if [[ "$listed" != *"triage: claude claude-opus-4-8 high"* ]]; then
+    fail "$name" "list omitted the override: $listed"; return
+  fi
+
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set triage "gemini \"Gemini 3.5 Flash (Low)\" -" >/dev/null 2>&1
+  if [[ "$(grep -c '^triage:' "$file")" -ne 1 ]]; then
+    fail "$name" "duplicate lane lines after re-set"; return
+  fi
+
+  local rc_unsafe
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set fast-agentic "codex \$(touch $proof) low" >/dev/null 2>&1; rc_unsafe=$?
+  if [[ "$rc_unsafe" -eq 0 || -e "$proof" ]] || grep -q '^fast-agentic:' "$file"; then
+    fail "$name" "unsafe spec was accepted or executed: rc=$rc_unsafe"; return
+  fi
+
+  local before after rc_bad
+  before="$(cat "$file")"
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set hard-judgment "mystery model low" >/dev/null 2>&1; rc_bad=$?
+  after="$(cat "$file")"
+  if [[ "$rc_bad" -eq 0 || "$before" != "$after" ]]; then
+    fail "$name" "invalid vendor set was not rolled back: rc=$rc_bad"; return
+  fi
+
+  local rc_unknown rc_upper
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set no-such-lane "codex x low" >/dev/null 2>&1; rc_unknown=$?
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set Bad_Lane "codex x low" >/dev/null 2>&1; rc_upper=$?
+  if [[ "$rc_unknown" -ne 2 || "$rc_upper" -ne 2 ]]; then
+    fail "$name" "unknown/invalid lane not rejected: $rc_unknown/$rc_upper"; return
+  fi
+
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" unset triage >/dev/null 2>&1
+  if grep -q '^triage:' "$file"; then
+    fail "$name" "unset left the override behind"; return
+  fi
+
+  pass "$name"
+}
+test_configure_noninteractive
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

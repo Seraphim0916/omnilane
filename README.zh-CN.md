@@ -319,6 +319,7 @@ jobs.sh [--json] stats [--last N]                  # 本机成功率与路由汇
 jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私
 jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业
 configure.sh                                        # 交互通道菜单
+configure.sh set|get|unset|list LANE [SPEC]         # 非交互编辑 routing.local.yaml
 ```
 
 退出码:`2` 用法错误(包括厂商值无效,或指定厂商不在该通道)、`3` 通道已关闭、

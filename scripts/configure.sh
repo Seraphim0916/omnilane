@@ -9,6 +9,110 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/i18n.sh"
 
 LOCAL_FILE="$OMNILANE_HOME/routing.local.yaml"
 
+# --- Non-interactive subcommands -------------------------------------------
+# `configure set|get|unset|list` script the same routing.local.yaml the menu
+# writes, so automation never needs a tty. No subcommand => interactive menu.
+
+cfg_usage() {
+  cat >&2 <<'EOF'
+usage: configure                 interactive lane menu
+       configure set LANE SPEC   set/override one lane. SPEC = "vendor model effort [| ...]" or "off".
+                                 Quote the whole SPEC (and the model) when a model name has spaces.
+       configure get LANE        show the effective routing line for LANE
+       configure unset LANE      remove LANE's local override
+       configure list            show current local overrides
+EOF
+}
+
+# Reject shell-dangerous bytes while allowing the routing RHS grammar
+# (chains with |, quoted "models with spaces", slashes, effort tokens).
+cfg_spec_is_safe() {
+  case "$1" in
+    '') return 1 ;;
+    *'$'*|*'`'*|*'\'*|*'#'*|*';'*|*'&'*|*'<'*|*'>'*|*$'\r'*|*$'\n'*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+cfg_lane_is_known() {
+  local want="$1" line
+  while IFS= read -r line; do
+    case "$line" in "$want":*) return 0 ;; esac
+  done < "$OMNILANE_REPO/routing.yaml"
+  return 1
+}
+
+cfg_valid_lane() { [[ "$1" =~ ^[a-z][a-z0-9-]*$ ]]; }
+
+cfg_set() {
+  local lane="${1:-}"; shift || true
+  local spec="$*"
+  cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
+  cfg_lane_is_known "$lane" || { echo "omnilane: unknown lane '$lane' (see: omnilane list)" >&2; exit 2; }
+  [[ -n "$spec" ]] || { echo "omnilane: missing routing spec for '$lane'" >&2; cfg_usage; exit 2; }
+  cfg_spec_is_safe "$spec" || { echo 'omnilane: unsafe routing spec (not allowed: $ ` \ # ; & < > newlines)' >&2; exit 2; }
+
+  mkdir -p "$OMNILANE_HOME"
+  local had_file=0
+  if [[ -f "$LOCAL_FILE" ]]; then had_file=1; cp "$LOCAL_FILE" "$LOCAL_FILE.bak"; fi
+  local tmp="$LOCAL_FILE.tmp.$$"
+  {
+    echo "# updated by 'configure set' on $(date +%F) — first match per lane wins"
+    echo "$lane: $spec"
+    [[ "$had_file" -eq 1 ]] && grep -v '^#' "$LOCAL_FILE.bak" | grep -v "^$lane:" || true
+  } > "$tmp"
+  mv "$tmp" "$LOCAL_FILE"
+
+  # Semantic guard: reject only a structural FAIL on THIS lane. Availability
+  # WARN (validate exit 4) is fine — the vendor CLI may be legitimately absent.
+  local validate_out
+  validate_out="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --validate 2>&1)" || true
+  if printf '%s\n' "$validate_out" | grep -q "^FAIL $lane "; then
+    if [[ "$had_file" -eq 1 ]]; then mv "$LOCAL_FILE.bak" "$LOCAL_FILE"; else /bin/rm -f "$LOCAL_FILE"; fi
+    echo "omnilane: rejected — $(printf '%s\n' "$validate_out" | grep "^FAIL $lane " | head -1)" >&2
+    exit 2
+  fi
+  [[ "$had_file" -eq 1 ]] && /bin/rm -f "$LOCAL_FILE.bak"
+  echo "set $lane -> $spec"
+}
+
+cfg_get() {
+  local lane="${1:-}"
+  cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
+  local line
+  line="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null | grep "^$lane:" | head -1 || true)"
+  [[ -n "$line" ]] || { echo "omnilane: unknown lane '$lane' (see: omnilane list)" >&2; exit 2; }
+  printf '%s\n' "$line"
+}
+
+cfg_unset() {
+  local lane="${1:-}"
+  cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
+  if [[ ! -f "$LOCAL_FILE" ]] || ! grep -q "^$lane:" "$LOCAL_FILE"; then
+    echo "no local override for '$lane'"; return 0
+  fi
+  cp "$LOCAL_FILE" "$LOCAL_FILE.bak"
+  grep -v "^$lane:" "$LOCAL_FILE.bak" > "$LOCAL_FILE" || true
+  /bin/rm -f "$LOCAL_FILE.bak"
+  echo "unset $lane (local override removed)"
+}
+
+cfg_list() {
+  if [[ -f "$LOCAL_FILE" ]] && grep -qE '^[a-z]' "$LOCAL_FILE"; then
+    cat "$LOCAL_FILE"
+  else
+    echo "no local overrides in $LOCAL_FILE"
+  fi
+}
+
+case "${1:-}" in
+  set)   shift; cfg_set "$@"; exit $? ;;
+  get)   shift; cfg_get "$@"; exit $? ;;
+  unset) shift; cfg_unset "$@"; exit $? ;;
+  list)  shift; cfg_list "$@"; exit $? ;;
+  -h|--help|help) cfg_usage; exit 0 ;;
+esac
+
 # Curated suggestions only — "c" always allows free text so new models work.
 CODEX_MODELS=("gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna")
 CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
