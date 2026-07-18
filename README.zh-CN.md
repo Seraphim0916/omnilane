@@ -5,8 +5,9 @@
 ### 一张路由表,四个执行框架通用。
 
 *让主循环不再猜要用哪个模型。*<br/>
-每个子任务都派给真正最擅长它的模型——横跨<br/>
-**Claude Code · Codex · Grok Build · Antigravity**,直接用你已经在付的订阅。
+从 **Claude Code · Codex · Grok Build · Antigravity** 任一框架驾驶,每个子任务都派给<br/>
+真正最擅长它的模型——Codex、Claude、Grok、Gemini、Kimi、Qwen、OpenCode,<br/>
+或经 OpenRouter 直达任何托管模型——用你已经在付的订阅,或一把 API 密钥。
 
 <img src="docs/hero.zh-CN.png" alt="omnilane 把每个子任务派给 Claude Code、Codex、Grok、Antigravity 中最擅长的模型" width="820"/>
 
@@ -101,7 +102,8 @@ omnilane ui start     # 可选:在浏览器实时查看派发
 ## 🧭 工作原理
 
 omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道(lane),
-再以无头方式把每条通道派发给该项工作最强的厂商 CLI,直接沿用你已有的订阅登录:
+再以无头方式把每条通道派发给该项工作最强的厂商——直接沿用你已有的订阅登录
+(`openrouter` vendor 例外:免装任何 CLI,一把 API 密钥直连):
 
 ```mermaid
 flowchart LR
@@ -215,8 +217,10 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 
 ## 📦 安装
 
-前置需求:想路由到的厂商 CLI(`codex`、`claude`、`grok`、`agy`)已登录且在
-`PATH` 上——**有几家装几家就好**,缺的通道会自动降级。
+前置需求:想路由到的厂商 CLI(`codex`、`claude`、`grok`、`agy`,另可选
+`kimi`、`qwen`、`opencode`)已登录且在 `PATH` 上——**有几家装几家就好**,
+缺的通道会自动降级。`openrouter` vendor 是例外:不需要任何 CLI,只要
+`curl` 和环境变量里的 `OPENROUTER_API_KEY`。
 
 最快:`./install.sh` — 自动检测本机的 CLI、接好技能、列出其余的插件安装命令、
 打印这台机器的生效路由表,最后询问是否进入交互设置菜单(`--uninstall` 可逆)。
@@ -291,9 +295,11 @@ configure.sh                                        # 交互通道菜单
 ## 🎭 模式
 
 - **advise(默认)** — 只读工作端。Codex 跑只读沙箱;Claude 只给
-  Read/Glob/Grep;Grok 跑 plan 模式。适合审查、提问、第二意见。
+  Read/Glob/Grep;Grok 跑 plan 模式;Kimi 与 OpenCode 锁各自的只读
+  plan 模式;OpenRouter 天生只做 advise(纯推理)。适合审查、提问、第二意见。
 - **work** — 允许改文件,仅限你指定的 `--workdir`。Codex 给
   workspace-write 沙箱;Claude 自动接受编辑;Gemini 跑 accept-edits 模式。
+  `openrouter` vendor 会明确拒绝 work 模式——改文件请走代理式 CLI vendor。
 
 ## 🔒 内置安全机制
 
@@ -345,10 +351,12 @@ configure.sh                                        # 交互通道菜单
 
 ## 🌱 状态
 
-v0.5.1 让 Codex `work` 在非 Git 目录仍可使用，同时以进程组清理限制卡死，
-并同步所有公开版本来源。它延续 v0.5.0 对安装器、派发生命周期、作业存储、
-整体截止时间、诊断和发布 CI 的强化。Grok/Antigravity 命令壳行为仍可能随
-CLI 版本变动。欢迎提交 issue 与 PR。
+v0.8.2 共有八个派发 vendor——四个框架原生(codex、claude、grok、gemini)、
+三个聚合/溢流 CLI(kimi、qwen、opencode),加上免 CLI 的 `openrouter` 直连
+API vendor——全部走统一 runner 契约并附 contract 测试,另有 Claude Code
+`SessionStart` 自动提醒。kimi、qwen、opencode、openrouter 的 runner 以假
+可执行文件做过契约测试;欢迎反馈真实模型使用经验。Grok/Antigravity 命令壳
+行为仍可能随 CLI 版本变动。欢迎提交 issue 与 PR。
 
 项目文档：[贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [变更记录](CHANGELOG.md)

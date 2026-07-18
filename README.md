@@ -5,8 +5,9 @@
 ### One routing table, every harness.
 
 *Your main loop stops guessing which model to use.*<br/>
-Every subtask goes to the model that is actually best at it — across<br/>
-**Claude Code · Codex · Grok Build · Antigravity**, on the subscriptions you already pay for.
+Drive it from **Claude Code · Codex · Grok Build · Antigravity**, and every subtask goes<br/>
+to the model that is actually best at it — Codex, Claude, Grok, Gemini, Kimi, Qwen, OpenCode,<br/>
+or any hosted model via OpenRouter — on the subscriptions you already pay for, or a single API key.
 
 <img src="docs/hero.png" alt="omnilane routes each subtask to the best model across Claude Code, Codex, Grok and Antigravity" width="820"/>
 
@@ -115,8 +116,9 @@ omnilane ui start     # optional: watch jobs live in your browser
 ## 🧭 How it works
 
 omnilane lets the main loop of **any** agentic CLI classify subtasks into
-lanes and dispatch each lane to the best vendor's CLI — headlessly, using
-your existing subscription logins:
+lanes and dispatch each lane to the best vendor — headlessly, using your
+existing subscription logins (or, for the `openrouter` vendor, a direct API
+key with no extra CLI at all):
 
 ```mermaid
 flowchart LR
@@ -244,8 +246,10 @@ Core routing does not need Python; only this UI requires Python 3.9 or newer.
 ## 📦 Install
 
 Requirements: the vendor CLIs you want to route to, logged in (`codex`,
-`claude`, `grok`, `agy`) and on `PATH` — install only the ones you have; the
-rest of the table degrades automatically.
+`claude`, `grok`, `agy`, and optionally `kimi`, `qwen`, `opencode`) and on
+`PATH` — install only the ones you have; the rest of the table degrades
+automatically. The `openrouter` vendor is the exception: it needs no CLI,
+only `curl` and an `OPENROUTER_API_KEY` in your environment.
 
 Quickest: `./install.sh` — symlinks the skill for the CLIs it finds, prints
 the plugin commands for the rest, shows your effective routing, and offers the
@@ -343,11 +347,13 @@ code passes through.
 ## 🎭 Modes
 
 - **advise** (default) — read-only worker. Codex runs in a read-only sandbox;
-  Claude gets only Read/Glob/Grep; Grok runs in plan mode. Use for reviews,
-  questions, second opinions.
+  Claude gets only Read/Glob/Grep; Grok runs in plan mode; Kimi and OpenCode
+  pin their read-only plan modes; OpenRouter is advise-only by design (pure
+  inference). Use for reviews, questions, second opinions.
 - **work** — the worker may edit files, only inside the `--workdir` you name.
   Codex gets a workspace-write sandbox; Claude auto-accepts edits; Gemini runs
-  in accept-edits mode.
+  in accept-edits mode. The `openrouter` vendor refuses work mode with a clear
+  error — route edits to an agentic CLI vendor instead.
 
 ## 🔒 Safety rails
 
@@ -404,11 +410,13 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-v0.5.1 keeps Codex `work` usable outside Git while bounding stalls with
-process-group cleanup, and synchronizes every public version surface. It builds
-on v0.5.0's installer, lifecycle, job-store, deadline, diagnostics, and release
-CI hardening. Grok/Antigravity command-shell behavior may still vary across CLI
-versions. Issues and PRs welcome.
+v0.8.2 spans eight dispatch vendors — four harness natives (codex, claude,
+grok, gemini), three aggregator/overflow CLIs (kimi, qwen, opencode), and the
+CLI-free `openrouter` direct-API vendor — on the uniform runner contract with
+contract tests, plus the Claude Code `SessionStart` auto-reminder. kimi, qwen,
+opencode, and openrouter runners are contract-tested against fake binaries;
+real-model reports welcome. Grok/Antigravity command-shell behavior may still
+vary across CLI versions. Issues and PRs welcome.
 
 Project policies: [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
 [Changelog](CHANGELOG.md)
