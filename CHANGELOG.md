@@ -13,6 +13,12 @@ semantic version tags.
   openrouter (`OPENROUTER_API_KEY` + curl). Shown in human and `--json` output;
   the probe mirrors the runners' `*_BIN` overrides and `local.sh` in an isolated
   subshell. It is a `PASS`/`WARN` check and never fails the report.
+- MCP server read-only introspection tools: `explain`, `validate`, `dry_run`,
+  `jobs_list`, `jobs_stats`, `jobs_audit`, and `doctor` join the existing
+  `route`, `list_lanes`, `jobs_status`, and `jobs_result`, so the MCP surface
+  mirrors the CLI's full offline read-only surface. All refuse provider calls and
+  create no job state; `dry_run` requires an explicit `workdir` only when `mode`
+  is `work`. `jobs_stats`/`jobs_audit` accept an optional `last` and `json`.
 
 ## [0.8.3] - 2026-07-18
 

@@ -296,7 +296,7 @@ MCP 지원 호스트가 스킬 설치나 라우팅 리마인더 없이 omnilane 
 }
 ```
 
-서버는 `route`, `jobs_status`, `jobs_result`, `list_lanes` 를 제공합니다.
+서버는 `route` 와 함께 읽기 전용 조회 도구 `list_lanes`, `explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`, `jobs_stats`, `jobs_audit`, `doctor` 를 제공합니다.
 `route` 의 기본값은 읽기 전용 `advise` 모드이며, `work` 를 선택한 호출은
 명시적 `workdir` 을 함께 제공해야 합니다.
 

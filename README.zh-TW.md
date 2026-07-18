@@ -270,7 +270,7 @@ omnilane ui stop     # 正常停止
 }
 ```
 
-Server 提供 `route`、`jobs_status`、`jobs_result`、`list_lanes` 四個工具。
+Server 提供 `route`,以及一組唯讀查詢工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor`。
 `route` 預設唯讀 `advise` 模式;選 `work` 的呼叫必須同時提供明確的
 `workdir`。
 

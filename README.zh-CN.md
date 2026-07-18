@@ -269,7 +269,7 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 }
 ```
 
-Server 提供 `route`、`jobs_status`、`jobs_result`、`list_lanes` 四个工具。
+Server 提供 `route`,以及一组只读查询工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor`。
 `route` 默认只读 `advise` 模式;选择 `work` 的调用必须同时提供明确的
 `workdir`。
 
