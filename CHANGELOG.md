@@ -19,6 +19,11 @@ semantic version tags.
   mirrors the CLI's full offline read-only surface. All refuse provider calls and
   create no job state; `dry_run` requires an explicit `workdir` only when `mode`
   is `work`. `jobs_stats`/`jobs_audit` accept an optional `last` and `json`.
+- `configure set|get|unset|list|diff` non-interactive subcommands: script or
+  inspect `routing.local.yaml` without a tty. `set` validates the lane, refuses
+  unsafe specs, and rolls back on a structural FAIL; `diff` shows how local
+  overrides change the effective table versus the defaults. The interactive menu
+  is unchanged.
 
 ## [0.8.3] - 2026-07-18
 

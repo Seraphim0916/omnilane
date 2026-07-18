@@ -321,6 +321,9 @@ Three layers, all optional:
    future models), and writes the result to `~/.omnilane/routing.local.yaml`.
    It intentionally skips the multi-vendor `consult` lane; edit that one by
    hand if needed. `install.sh` offers to run the menu at the end of a normal install.
+   For scripting, `configure set|get|unset|list|diff LANE [SPEC]` edits or inspects the same file
+   without a tty — `set` validates the lane and rejects an unsafe or structurally
+   invalid spec, rolling back on failure.
 2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
    as `routing.yaml`; local lines win. See `routing.local.yaml.example`.
 3. **`~/.omnilane/local.sh`** — per-machine binaries, proxies, auth wrappers;
@@ -358,6 +361,7 @@ jobs.sh [--json] stats [--last N]                  # local success and routing a
 jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
+configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```
 
 **Big decisions can get a panel, not a person.** The `arbitrate` lane ships
