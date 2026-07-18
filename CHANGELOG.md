@@ -20,6 +20,10 @@ semantic version tags.
 - Configurator and bash completion know the new vendors; `--vendor kimi|qwen`
   pins them directly. The `vote` panel still accepts the original four
   vendors only.
+- Both new runners are contract-tested (argv construction, exit codes,
+  empty-output failure) against fake binaries; real-model end-to-end runs
+  are pending community feedback — failures surface loudly, never as a
+  silent rc=0.
 
 ## [0.7.1] - 2026-07-18
 
