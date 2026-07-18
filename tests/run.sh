@@ -3547,5 +3547,149 @@ STATFIX
 }
 test_jobs_stats_filters
 
+test_jobs_cancel() {
+  local name="jobs cancel terminates a running background job" home gate id rc out
+  home="$TEST_ROOT/jobs-cancel"; mkdir -p "$home"
+  gate="$home/sleeper.sh"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+# exec vendor runner signature: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE
+sleep 30
+EOF
+  chmod +x "$gate"
+  printf 'sleeper: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  id="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --background sleeper "cancel me" 2>/dev/null)"
+  if ! [[ "$id" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]]; then
+    fail "$name" "background dispatch did not return a job id: $id"; return
+  fi
+
+  # Wait until the worker has recorded its pid and is actually alive.
+  local tries=0 pid=""
+  while [[ "$tries" -lt 40 ]]; do
+    if [[ -f "$home/jobs/$id/pid" ]]; then
+      pid="$(cat "$home/jobs/$id/pid" 2>/dev/null | tr -d '[:space:]')"
+      [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null && break
+    fi
+    sleep 0.2; tries=$((tries + 1)); pid=""
+  done
+  if [[ -z "$pid" ]]; then
+    fail "$name" "worker never became a live pid"; return
+  fi
+
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" cancel "$id" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "cancel exited $rc: $out"; return
+  fi
+  if kill -0 "$pid" 2>/dev/null; then
+    sleep 1
+    kill -0 "$pid" 2>/dev/null && { fail "$name" "worker still alive after cancel"; kill -KILL "-$pid" 2>/dev/null; return; }
+  fi
+
+  local final
+  final="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$id" 2>/dev/null || true)"
+  if [[ "$final" == running* ]]; then
+    fail "$name" "job still running after cancel: $final"; return
+  fi
+
+  # Idempotent: cancelling a terminal job is a clean no-op.
+  local out2 rc2
+  out2="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" cancel "$id" 2>&1)"; rc2=$?
+  if [[ "$rc2" -ne 0 ]] || { [[ "$out2" != *finished* ]] && [[ "$out2" != *"not running"* ]]; }; then
+    fail "$name" "second cancel not idempotent: rc=$rc2 out=$out2"; return
+  fi
+
+  # Adversarial: unknown job -> exit 1; malformed id -> exit 2.
+  local rc_missing rc_bad
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" cancel 20200101-000000-1-1 >/dev/null 2>&1; rc_missing=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" cancel not-a-job >/dev/null 2>&1; rc_bad=$?
+  if [[ "$rc_missing" -ne 1 || "$rc_bad" -ne 2 ]]; then
+    fail "$name" "unknown/invalid id not rejected: $rc_missing/$rc_bad"; return
+  fi
+
+  pass "$name"
+}
+test_jobs_cancel
+
+test_jobs_rm() {
+  local name="jobs rm deletes a finished job and refuses a running one" home rc out
+  home="$TEST_ROOT/jobs-rm"; mkdir -p "$home"
+  local quick="$home/quick.sh" sleeper="$home/sleeper.sh"
+  cat > "$quick" <<'EOF'
+#!/usr/bin/env bash
+# exec vendor runner signature: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE
+exit 0
+EOF
+  cat > "$sleeper" <<'EOF'
+#!/usr/bin/env bash
+sleep 30
+EOF
+  chmod +x "$quick" "$sleeper"
+  {
+    printf 'quick: exec "%s" -\n' "$quick"
+    printf 'sleeper: exec "%s" -\n' "$sleeper"
+  } > "$home/routing.local.yaml"
+
+  # Finished job: rm removes the directory.
+  local fid tries=0
+  fid="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --background quick "done" 2>/dev/null)"
+  if ! [[ "$fid" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]]; then
+    fail "$name" "background dispatch (quick) did not return a job id: $fid"; return
+  fi
+  while [[ "$tries" -lt 50 ]]; do
+    [[ -f "$home/jobs/$fid/exit" ]] && break
+    sleep 0.2; tries=$((tries + 1))
+  done
+  if [[ ! -f "$home/jobs/$fid/exit" ]]; then
+    fail "$name" "quick job never recorded an exit"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" rm "$fid" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *"removed $fid"* ]]; then
+    fail "$name" "rm of finished job failed: rc=$rc out=$out"; return
+  fi
+  if [[ -e "$home/jobs/$fid" ]]; then
+    fail "$name" "job directory survived rm"; return
+  fi
+
+  # Running job: rm refuses and leaves the directory (and worker) intact.
+  local sid pid=""
+  sid="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" --background sleeper "keep me" 2>/dev/null)"
+  if ! [[ "$sid" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]]; then
+    fail "$name" "background dispatch (sleeper) did not return a job id: $sid"; return
+  fi
+  tries=0
+  while [[ "$tries" -lt 40 ]]; do
+    if [[ -f "$home/jobs/$sid/pid" ]]; then
+      pid="$(cat "$home/jobs/$sid/pid" 2>/dev/null | tr -d '[:space:]')"
+      [[ "$pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$pid" 2>/dev/null && break
+    fi
+    sleep 0.2; tries=$((tries + 1)); pid=""
+  done
+  if [[ -z "$pid" ]]; then
+    fail "$name" "sleeper worker never became a live pid"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" rm "$sid" 2>&1)"; rc=$?
+  if [[ "$rc" -ne 1 || "$out" != *running* ]]; then
+    kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    fail "$name" "rm did not refuse running job: rc=$rc out=$out"; return
+  fi
+  if [[ ! -d "$home/jobs/$sid" ]]; then
+    kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    fail "$name" "rm deleted a running job directory"; return
+  fi
+  kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+
+  # Adversarial: unknown job -> exit 1; malformed id -> exit 2.
+  local rc_missing rc_bad
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" rm 20200101-000000-1-1 >/dev/null 2>&1; rc_missing=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" rm not-a-job >/dev/null 2>&1; rc_bad=$?
+  if [[ "$rc_missing" -ne 1 || "$rc_bad" -ne 2 ]]; then
+    fail "$name" "unknown/invalid id not rejected: $rc_missing/$rc_bad"; return
+  fi
+
+  pass "$name"
+}
+test_jobs_rm
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

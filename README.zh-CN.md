@@ -316,6 +316,8 @@ dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，
 jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
 jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 过滤列表
 jobs.sh wait 作业ID [--timeout N]                  # 作业退出码；124 超时；125 工作进程消失
+jobs.sh cancel 作业ID                              # 停止运行中的作业:整组 SIGTERM,再 SIGKILL
+jobs.sh rm 作业ID                                  # 删除单个已完成/已死作业(运行中会被拒绝)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 本机成功率与路由汇总
 jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私
 jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业

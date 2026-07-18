@@ -29,6 +29,13 @@ semantic version tags.
   modes. `list` scans all jobs for up to 20 matches; `stats` filters within its
   `--last` sample and recomputes the success rate and lane/vendor aggregates.
   Invalid filter values exit 2; unfiltered behavior is unchanged.
+- `jobs cancel ID`: stop a running background job. Signals the worker's process
+  group (SIGTERM, then SIGKILL after a grace period) so the vendor CLI child
+  dies too, and leaves a terminal exit recorded — 143 on graceful stop, 137 if
+  force-killed. Idempotent on already-finished, dead, or never-backgrounded jobs.
+- `jobs rm ID`: delete one job's stored directory (task, output, exit, metadata).
+  Refuses a job whose worker is still alive — cancel it first — complementing
+  `jobs prune`, which only bulk-deletes completed jobs by count or age.
 
 ## [0.8.3] - 2026-07-18
 

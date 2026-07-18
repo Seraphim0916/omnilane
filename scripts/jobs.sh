@@ -48,7 +48,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -731,6 +731,75 @@ case "${1:-}" in
       fi
       sleep 1
     done ;;
+  cancel)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    select_job "$2"
+    exit_path="$JOB_DIR/exit"
+    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+      if read_exit_code "$exit_path"; then
+        echo "already finished (exit $RECORDED_EXIT)"
+      else
+        echo "already finished (invalid exit metadata)"
+      fi
+      exit 0
+    fi
+    pid=""; pid_state="missing"
+    if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
+      if read_job_pid "$JOB_DIR/pid"; then pid="$RECORDED_PID"; pid_state="valid"; else pid_state="invalid"; fi
+    fi
+    if [[ "$pid_state" != "valid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+      echo "not running (no live worker to cancel)"
+      exit 0
+    fi
+    # Background workers run as their own process-group leader (dispatch `set -m`),
+    # and that leader traps SIGTERM to record a best-effort exit code. Signal the
+    # whole group so the vendor CLI child dies too and the worker writes its exit.
+    cancel_grp="$pid"
+    cancel_pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)"
+    [[ "$cancel_pgid" =~ ^[1-9][0-9]*$ ]] && cancel_grp="$cancel_pgid"
+    kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    cancel_waited=0
+    while [[ "$cancel_waited" -lt 5 ]]; do
+      if [[ -e "$exit_path" || -L "$exit_path" ]]; then break; fi
+      if ! kill -0 "$pid" 2>/dev/null; then break; fi
+      sleep 1; cancel_waited=$((cancel_waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      # The TERM trap did not fire in time; SIGKILL cannot be trapped, so no exit
+      # gets recorded — force the group down and record the terminal state below.
+      kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      sleep 1
+    fi
+    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+      if read_exit_code "$exit_path"; then
+        echo "cancelled (exit $RECORDED_EXIT)"
+      else
+        echo "cancelled (invalid exit metadata)"
+      fi
+    elif kill -0 "$pid" 2>/dev/null; then
+      die 1 "cancel could not terminate worker pid $pid"
+    else
+      (umask 077; printf '137\n' > "$exit_path")
+      echo "cancelled (exit 137)"
+    fi
+    exit 0 ;;
+  rm)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    select_job "$2"
+    exit_path="$JOB_DIR/exit"
+    # Refuse to delete a job whose worker is still alive: removing the directory
+    # out from under a running worker would strand it writing into a deleted path.
+    # A recorded exit (finished) or a dead pid (crashed worker) is safe to remove.
+    if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
+      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]] &&
+         read_job_pid "$JOB_DIR/pid" && kill -0 "$RECORDED_PID" 2>/dev/null; then
+        die 1 "job is running (pid $RECORDED_PID); cancel it first"
+      fi
+    fi
+    # select_job already proved $JOB_DIR is a real child dir, never a symlink.
+    /bin/rm -rf "$JOB_DIR"
+    echo "removed $2"
+    exit 0 ;;
   result)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
