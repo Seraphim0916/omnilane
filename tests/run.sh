@@ -610,7 +610,7 @@ EOF
   elif [[ "$out_named" != "good gate" ]]; then
     fail "$name" "named-user tilde was expanded as current HOME: $out_named"
   elif [[ "$out_home" != "home gate" ]]; then
-    fail "$name" "~/ gate did not resolve against HOME: $out_home"
+    fail "$name" "home-relative gate did not resolve against HOME: $out_home"
   else
     pass "$name"
   fi
@@ -1963,7 +1963,7 @@ test_lock_serializes_live_bash32_owner() {
 
 test_background_job_records_live_worker_pid() {
   local name="background job records live worker PID" home workdir gate job_id job_dir deadline pid
-  local running done pid_live=0
+  local running finished pid_live=0
   home="$TEST_ROOT/live-worker-pid"
   workdir="$home/work"
   gate="$home/gate.sh"
@@ -1986,14 +1986,14 @@ EOF
   running="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
   deadline=$((SECONDS + 10))
   while [[ ! -f "$job_dir/exit" && "$SECONDS" -lt "$deadline" ]]; do sleep 1; done
-  done="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
+  finished="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
 
   if [[ "$pid_live" -ne 1 ]]; then
     fail "$name" "recorded worker PID was not live"
   elif [[ "$running" != "running" ]]; then
     fail "$name" "live job status was not running: $running"
-  elif [[ "$done" != "done exit=0" ]]; then
-    fail "$name" "finished job status was not done: $done"
+  elif [[ "$finished" != "done exit=0" ]]; then
+    fail "$name" "finished job status was not done: $finished"
   else
     pass "$name"
   fi
@@ -2628,9 +2628,10 @@ test_jobs_audit_is_private_read_only_and_fail_closed() {
   bad_id="20260717-170001-123-2"
   prefix_id="20260717-170002-123-3"
 
-  mkdir -m 700 -p "$clean/jobs/$clean_id" "$bad/jobs/$bad_id" \
+  mkdir -p "$clean/jobs/$clean_id" "$bad/jobs/$bad_id" \
     "$bad/jobs/$prefix_id" "$bad/jobs/not-a-job"
-  chmod 700 "$clean/jobs" "$clean/jobs/$clean_id"
+  chmod 700 "$clean/jobs" "$clean/jobs/$clean_id" "$bad/jobs/$bad_id" \
+    "$bad/jobs/$prefix_id" "$bad/jobs/not-a-job"
   printf 'SECRET_TASK\n' > "$clean/jobs/$clean_id/task.txt"
   printf '{"lane":"triage","vendor":"codex","model":"m","effort":"high","timeout":1,"job_timeout":null,"mode":"advise","workdir":"/tmp","candidate":"1/1","started":"2026-07-17T09:00:00Z"}\n' \
     > "$clean/jobs/$clean_id/meta.json"
@@ -3155,6 +3156,54 @@ test_openrouter_vendor_availability() {
   fi
 }
 test_openrouter_vendor_availability
+
+test_mcp_server_surface() {
+  local name="MCP server surface" home output rc
+  if ! command -v node >/dev/null 2>&1; then
+    pass "$name (node unavailable; skipped)"
+    return
+  fi
+
+  home="$TEST_ROOT/mcp-server"; mkdir -p "$home"
+  output="$home/responses.jsonl"
+  printf 'probe-lane: off\n' > "$home/routing.local.yaml"
+
+  {
+    printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_lanes","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":4,"method":"unknown/method","params":{}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"route","arguments":{"lane":"probe-lane","task":"probe","mode":"work"}}}'
+  } | OMNILANE_HOME="$home" "$ROOT/bin/omnilane-mcp" > "$output" 2> "$home/stderr"
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "server exited $rc"
+    return
+  fi
+
+  node - "$output" > "$home/assert.out" 2>&1 <<'NODE'
+const fs = require('fs');
+const messages = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+const byId = (id) => messages.find((message) => message.id === id);
+const requiredTools = ['route', 'jobs_status', 'jobs_result', 'list_lanes'];
+const names = byId(2).result.tools.map((tool) => tool.name);
+
+if (messages.length !== 5) throw new Error(`expected 5 responses, got ${messages.length}`);
+if (byId(1).result.serverInfo.name !== 'omnilane') throw new Error('initialize server name mismatch');
+if (!requiredTools.every((name) => names.includes(name))) throw new Error(`missing tools: ${requiredTools.filter((name) => !names.includes(name)).join(', ')}`);
+if (!byId(3).result.content[0].text.includes('probe-lane')) throw new Error('list_lanes omitted probe lane');
+if (byId(4).error.code !== -32601) throw new Error('unknown method did not return -32601');
+if (byId(5).result.isError !== true) throw new Error('work without workdir was not a tool error');
+NODE
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$(tail -n 1 "$home/assert.out")"
+  else
+    pass "$name"
+  fi
+}
+test_mcp_server_surface
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

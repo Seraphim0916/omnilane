@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- Dependency-free MCP stdio server (`omnilane mcp`) exposing routing, lane
+  discovery, and background-job status/results to any MCP-capable host.
+
 ## [0.8.2] - 2026-07-18
 
 ### Added

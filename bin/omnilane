@@ -31,6 +31,13 @@ case "$cmd" in
   list)      exec bash "$REPO/scripts/dispatch.sh" --list ;;
   route|dispatch) exec bash "$REPO/scripts/dispatch.sh" "$@" ;;
   jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
+  mcp)
+    command -v node >/dev/null 2>&1 || {
+      echo "omnilane: mcp requires Node.js on PATH" >&2
+      exit 1
+    }
+    exec node "$REPO/bin/omnilane-mcp" "$@"
+    ;;
   completion)
     [[ $# -eq 1 ]] || {
       echo "usage: omnilane completion bash|zsh" >&2
@@ -61,6 +68,7 @@ omnilane — one routing table, every harness
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
   omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, wait, or audit
+  omnilane mcp                          start the MCP stdio server
   omnilane completion bash|zsh           print a shell completion script
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json]              read-only local health report
