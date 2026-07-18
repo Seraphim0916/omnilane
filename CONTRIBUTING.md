@@ -40,6 +40,11 @@ bash tests/run.sh
 bash scripts/dispatch.sh --list
 ```
 
+Or run the whole set in one command with `bash scripts/check.sh` (append
+`--quick` to skip the two slow suite runs — `unittest` and `tests/run.sh` — for a
+fast pre-commit pass). A `SKIP` (an unavailable tool such as ShellCheck, or an
+absent target) is not a failure; it exits non-zero only on a real `FAIL`.
+
 The browser CI job installs `tests/requirements-browser.txt`, installs bundled
 Chromium with Playwright, sets `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1`, and runs
 `tests.test_ui.FrontendBrowserBehaviorTests`. If a dependency such as

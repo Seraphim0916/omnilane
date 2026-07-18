@@ -3205,5 +3205,28 @@ NODE
 }
 test_mcp_server_surface
 
+test_selfcheck_script() {
+  local name="check.sh runs the required checks" out rc badrepo bout brc
+  out="$(bash "$ROOT/scripts/check.sh" --quick 2>&1)"; rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "check.sh --quick failed on the clean tree: rc=$rc"$'\n'"$out"; return
+  fi
+  if [[ "$out" != *"PASS bash-syntax"* ]]; then
+    fail "$name" "missing bash-syntax PASS: $out"; return
+  fi
+  if printf '%s\n' "$out" | grep -q '^FAIL '; then
+    fail "$name" "clean tree reported a FAIL: $out"; return
+  fi
+  # A broken shell file must FAIL bash-syntax and exit non-zero.
+  badrepo="$TEST_ROOT/selfcheck-bad"; mkdir -p "$badrepo/scripts"
+  printf 'if [ ; then\n' > "$badrepo/scripts/broken.sh"
+  bout="$(bash "$ROOT/scripts/check.sh" --quick "$badrepo" 2>&1)"; brc=$?
+  if [[ "$brc" -eq 0 ]] || [[ "$bout" != *"FAIL bash-syntax"* ]]; then
+    fail "$name" "broken repo did not fail bash-syntax: rc=$brc out=$bout"; return
+  fi
+  pass "$name"
+}
+test_selfcheck_script
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
