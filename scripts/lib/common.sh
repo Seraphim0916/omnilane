@@ -70,6 +70,8 @@ vendor_bin() { # vendor -> binary (honors local.sh overrides)
     claude) echo "${CLAUDE_BIN:-claude}" ;;
     grok)   echo "${GROK_BIN:-grok}" ;;
     gemini) echo "${AGY_BIN:-agy}" ;;
+    kimi)   echo "${KIMI_BIN:-kimi}" ;;
+    qwen)   echo "${QWEN_BIN:-qwen}" ;;
     *)      echo "" ;;
   esac
 }

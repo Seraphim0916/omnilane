@@ -52,7 +52,7 @@ flags:
                          before any provider call or job state
   --mode advise|work     advise (read-only, default) or work (may edit files)
   --workdir DIR          working directory handed to the vendor CLI
-  --vendor V             pin one configured vendor (codex|claude|grok|gemini)
+  --vendor V             pin one configured vendor (codex|claude|grok|gemini|kimi|qwen)
   --model M              override the routed model
   --effort E             override the routed effort
   --timeout SECONDS      cap each CLI call (default 600)
@@ -363,7 +363,7 @@ validate_routing() {
           lane_invalid=1
           break
         fi
-        if ! [[ "$vendor" =~ ^(codex|claude|grok|gemini|exec|off)$ ]]; then
+        if ! [[ "$vendor" =~ ^(codex|claude|grok|gemini|kimi|qwen|exec|off)$ ]]; then
           printf 'FAIL %s unknown-vendor=%s\n' "$lane" "$vendor"
           lane_invalid=1
           break
@@ -489,8 +489,8 @@ TASK="$2"
 # A typo like --mode advice must not fall through to the write-enabled branch.
 [[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode (advise|work)" >&2; exit 2; }
 if [[ -n "$OVERRIDE_VENDOR" ]] &&
-   ! [[ "$OVERRIDE_VENDOR" =~ ^(codex|claude|grok|gemini)$ ]]; then
-  echo "omnilane: invalid vendor (codex|claude|grok|gemini)" >&2
+   ! [[ "$OVERRIDE_VENDOR" =~ ^(codex|claude|grok|gemini|kimi|qwen)$ ]]; then
+  echo "omnilane: invalid vendor (codex|claude|grok|gemini|kimi|qwen)" >&2
   exit 2
 fi
 

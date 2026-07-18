@@ -6,6 +6,21 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- Two new dispatch vendors: `kimi` (Moonshot Kimi Code CLI, binary `kimi`,
+  override `KIMI_BIN`) and `qwen` (Alibaba Qwen Code CLI, binary `qwen`,
+  override `QWEN_BIN`). Both runners follow the uniform
+  `MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE` contract: advise stays
+  read-only (kimi `--plan`; qwen default approvals), work auto-approves
+  (kimi `-y`; qwen `--approval-mode yolo`), API-key env is stripped so the
+  CLIs use their own subscription logins, and empty output is a failure.
+- `coding-overflow` now falls back grok → kimi → qwen before `off`, so the
+  quota relief valve works with any one of the three vendors installed.
+- Configurator and bash completion know the new vendors; `--vendor kimi|qwen`
+  pins them directly. The `vote` panel still accepts the original four
+  vendors only.
+
 ## [0.7.1] - 2026-07-18
 
 ### Changed
