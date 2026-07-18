@@ -3012,5 +3012,149 @@ test_round2_untrusted_boundary_and_cleanup
 test_shell_completion_is_safe_and_current
 test_release_audit_is_offline_read_only_and_actionable
 
+test_opencode_runner_contract() {
+  local name="opencode runner contract" home fake prompt argv rc
+  home="$TEST_ROOT/opencode-runner"; mkdir -p "$home"
+  fake="$home/fake-opencode"; prompt="$home/prompt"; argv="$home/argv"
+  printf 'summarize this repo\n' > "$prompt"
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$OPENCODE_ARGV_FILE"
+printf 'opencode-answer\n'
+EOF
+  chmod +x "$fake"
+
+  OPENCODE_ARGV_FILE="$argv" OPENCODE_BIN="$fake" \
+    /bin/bash "$ROOT/scripts/runners/run-opencode.sh" \
+    advise "$home" "openrouter/some/model" - "$prompt" "$home/out-advise" \
+    > "$home/advise.log" 2>&1
+  rc=$?
+  if [[ "$rc" -ne 0 ]] || [[ "$(cat "$home/out-advise")" != "opencode-answer" ]]; then
+    fail "$name" "advise run failed (rc=$rc)"; return
+  elif ! grep -qx -- '--agent' "$argv" || ! grep -qx 'plan' "$argv"; then
+    fail "$name" "advise mode did not select the read-only plan agent"; return
+  elif grep -qx -- '--auto' "$argv"; then
+    fail "$name" "advise mode must never auto-approve permissions"; return
+  elif ! grep -qx 'openrouter/some/model' "$argv"; then
+    fail "$name" "model was not forwarded"; return
+  fi
+
+  OPENCODE_ARGV_FILE="$argv" OPENCODE_BIN="$fake" \
+    /bin/bash "$ROOT/scripts/runners/run-opencode.sh" \
+    work "$home" - - "$prompt" "$home/out-work" \
+    > "$home/work.log" 2>&1
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "work run failed (rc=$rc)"; return
+  elif ! grep -qx -- '--auto' "$argv" || grep -qx -- '--agent' "$argv"; then
+    fail "$name" "work mode flags wrong (want --auto, no --agent plan)"; return
+  elif grep -qx -- '-m' "$argv"; then
+    fail "$name" "model '-' must be left to opencode's own default"; return
+  fi
+
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$fake"
+  OPENCODE_BIN="$fake" /bin/bash "$ROOT/scripts/runners/run-opencode.sh" \
+    advise "$home" - - "$prompt" "$home/out-empty" > "$home/empty.log" 2>&1
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    fail "$name" "empty output must not be a silent rc=0 success"
+  else
+    pass "$name"
+  fi
+}
+test_opencode_runner_contract
+
+test_openrouter_runner_contract() {
+  local name="openrouter runner contract" home bin prompt rc out
+  home="$TEST_ROOT/openrouter-runner"; mkdir -p "$home/bin"
+  bin="$home/bin"; prompt="$home/prompt"
+  printf 'what is a lane\n' > "$prompt"
+  cat > "$bin/curl" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do printf '%s\n' "$arg"; done > "$FAKE_CURL_ARGV"
+cat "$FAKE_CURL_RESPONSE"
+exit "${FAKE_CURL_RC:-0}"
+EOF
+  chmod +x "$bin/curl"
+
+  OPENROUTER_API_KEY=test-key /bin/bash "$ROOT/scripts/runners/run-openrouter.sh" \
+    work "$home" some/model - "$prompt" "$home/out-work" > "$home/work.log" 2>&1
+  rc=$?
+  if [[ "$rc" -ne 2 ]] || ! grep -q 'advise' "$home/out-work.stderr.log"; then
+    fail "$name" "work mode must hard-fail toward advise (rc=$rc)"; return
+  fi
+
+  env -u OPENROUTER_API_KEY /bin/bash "$ROOT/scripts/runners/run-openrouter.sh" \
+    advise "$home" some/model - "$prompt" "$home/out-nokey" > "$home/nokey.log" 2>&1
+  rc=$?
+  if [[ "$rc" -ne 2 ]] || ! grep -q 'OPENROUTER_API_KEY' "$home/out-nokey.stderr.log"; then
+    fail "$name" "missing key must fail cleanly naming the setting (rc=$rc)"; return
+  fi
+
+  OPENROUTER_API_KEY=test-key /bin/bash "$ROOT/scripts/runners/run-openrouter.sh" \
+    advise "$home" - - "$prompt" "$home/out-nomodel" > "$home/nomodel.log" 2>&1
+  rc=$?
+  if [[ "$rc" -ne 2 ]] || ! grep -q 'model slug' "$home/out-nomodel.stderr.log"; then
+    fail "$name" "missing model must fail cleanly (rc=$rc)"; return
+  fi
+
+  printf '{"choices":[{"message":{"content":"router-answer"}}]}' > "$home/response.json"
+  PATH="$bin:$PATH" FAKE_CURL_ARGV="$home/curl-argv" FAKE_CURL_RESPONSE="$home/response.json" \
+    OPENROUTER_API_KEY=test-key /bin/bash "$ROOT/scripts/runners/run-openrouter.sh" \
+    advise "$home" some/model - "$prompt" "$home/out-ok" > "$home/ok.log" 2>&1
+  rc=$?
+  out="$(cat "$home/out-ok" 2>/dev/null)"
+  if [[ "$rc" -ne 0 || "$out" != "router-answer" ]]; then
+    fail "$name" "happy path failed (rc=$rc, out=$out)"; return
+  elif ! grep -q 'chat/completions' "$home/curl-argv"; then
+    fail "$name" "request did not target chat/completions"; return
+  elif [[ -e "$home/out-ok.request.json" || -e "$home/out-ok.response.json" ]]; then
+    fail "$name" "request/response temp files must be cleaned up"; return
+  fi
+
+  printf '{"error":{"message":"bad model"}}' > "$home/response.json"
+  PATH="$bin:$PATH" FAKE_CURL_ARGV="$home/curl-argv" FAKE_CURL_RESPONSE="$home/response.json" \
+    FAKE_CURL_RC=22 OPENROUTER_API_KEY=test-key \
+    /bin/bash "$ROOT/scripts/runners/run-openrouter.sh" \
+    advise "$home" some/model - "$prompt" "$home/out-err" > "$home/err.log" 2>&1
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    fail "$name" "API error must not be a silent success"
+  elif grep -q 'test-key' "$home/out-err.stderr.log" 2>/dev/null; then
+    fail "$name" "API key leaked into the error surface"
+  else
+    pass "$name"
+  fi
+}
+test_openrouter_runner_contract
+
+test_openrouter_vendor_availability() {
+  local name="openrouter vendor availability" home out rc
+  home="$TEST_ROOT/openrouter-avail"; mkdir -p "$home"
+  printf 'orlane: openrouter some/model -\n' > "$home/routing.local.yaml"
+
+  out="$(OMNILANE_HOME="$home" OPENROUTER_API_KEY=test-key \
+    /bin/bash "$ROOT/scripts/dispatch.sh" --dry-run orlane "probe" 2>&1)"
+  rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *openrouter* ]]; then
+    fail "$name" "keyed dry-run should resolve to openrouter (rc=$rc)"; return
+  fi
+
+  OMNILANE_HOME="$home" /bin/bash -c 'unset OPENROUTER_API_KEY; \
+    exec /bin/bash "$0" --dry-run orlane "probe"' "$ROOT/scripts/dispatch.sh" \
+    > "$home/nokey.out" 2>&1
+  rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    fail "$name" "without a key the openrouter-only chain must be unavailable"
+  else
+    pass "$name"
+  fi
+}
+test_openrouter_vendor_availability
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

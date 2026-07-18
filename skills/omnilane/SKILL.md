@@ -49,7 +49,7 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 | long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
 | fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
-| coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus | Codex-quota relief valve for mid-tier coding; verify factual claims |
+| coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
 
 Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
@@ -65,7 +65,7 @@ Users may speak normally; they do not need lane names.
    `誰適合`) → classify the need, then answer with the first available model
    shown for that lane by `dispatch.sh --list`; do not dispatch unless execution
    is also requested.
-2. Generic vendor name (`Claude`, `Codex`, `Grok`, `Gemini`) → run
+2. Generic vendor name (`Claude`, `Codex`, `Grok`, `Gemini`, `OpenCode`) → run
    `dispatch.sh --vendor <vendor> consult "<task>"`.
 3. Canonical model alias → pass its vendor, model, and effort from the table
    below. Never silently substitute another model family.
@@ -86,6 +86,14 @@ Users may speak normally; they do not need lane names.
 | Gemini Flash | gemini | Gemini 3.5 Flash (High) | - |
 | Kimi | kimi | kimi-k3 | - |
 | Qwen | qwen | qwen3-coder-plus | - |
+| OpenCode | opencode | provider/model form, or `-` for its own default | - |
+| OpenRouter | openrouter | explicit OpenRouter slug (e.g. anthropic/claude-sonnet-5) | - |
+
+OpenCode is the multi-provider aggregator CLI (75+ providers): work-capable,
+last resort in coding-overflow. OpenRouter is direct-API — no CLI needed, only
+`OPENROUTER_API_KEY` — and is **advise/consult only** (it cannot edit files);
+its model slug is mandatory. "Ask <any hosted model> via OpenRouter" →
+`dispatch.sh --vendor openrouter --model <slug> consult "<task>"`.
 
 Examples:
 

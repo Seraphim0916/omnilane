@@ -64,7 +64,7 @@ _omnilane() {
         '--dry-run[resolve and print the plan without side effects]' \
         '--mode[execution mode]:mode:(advise work)' \
         '--workdir[target directory]:directory:_directories' \
-        '--vendor[vendor override]:vendor:(codex claude grok gemini exec vote)' \
+        '--vendor[vendor override]:vendor:(codex claude grok gemini kimi qwen opencode openrouter exec vote)' \
         '--model[model override]:model:' \
         '--effort[reasoning effort]:effort:(low medium high xhigh max)' \
         '--timeout[per-call seconds]:seconds:' \

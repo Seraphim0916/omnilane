@@ -72,6 +72,7 @@ vendor_bin() { # vendor -> binary (honors local.sh overrides)
     gemini) echo "${AGY_BIN:-agy}" ;;
     kimi)   echo "${KIMI_BIN:-kimi}" ;;
     qwen)   echo "${QWEN_BIN:-qwen}" ;;
+    opencode) echo "${OPENCODE_BIN:-opencode}" ;;
     *)      echo "" ;;
   esac
 }
@@ -81,6 +82,11 @@ vendor_available() {
   # checked at dispatch time (the chain resolver cannot see it here).
   # "vote" is the built-in multi-model panel: needs >=2 voters, checked at dispatch.
   [[ "$1" == "exec" || "$1" == "vote" ]] && return 0
+  # "openrouter" is direct-API (no CLI): available iff curl and a key exist.
+  if [[ "$1" == "openrouter" ]]; then
+    command -v curl >/dev/null 2>&1 && [[ -n "${OPENROUTER_API_KEY:-}" ]]
+    return
+  fi
   local b; b="$(vendor_bin "$1")"
   [[ -n "$b" ]] && command -v "$b" >/dev/null 2>&1
 }
