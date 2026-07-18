@@ -276,6 +276,27 @@ Rollback the installer-owned links and marked reminders with
 - **Antigravity**: `agy plugin install <this repo>` (check first with
   `agy plugin validate <this repo>`)
 
+### MCP server
+
+`omnilane mcp` starts a zero-dependency, local MCP stdio server so any
+MCP-capable host can discover and call omnilane without installing the skill or
+adding a routing reminder. Configure the host to launch the installed CLI:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The server exposes `route`, `jobs_status`, `jobs_result`, and `list_lanes`.
+`route` defaults to read-only `advise` mode. Calls that select `work` must also
+provide an explicit `workdir`.
+
 ## ⚙️ Configure
 
 Three layers, all optional:

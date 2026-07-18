@@ -1,0 +1,465 @@
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+const { spawn } = require('child_process');
+
+const ROOT = path.resolve(__dirname, '..');
+const DISPATCH_SCRIPT = path.join(ROOT, 'scripts', 'dispatch.sh');
+const JOBS_SCRIPT = path.join(ROOT, 'scripts', 'jobs.sh');
+const LATEST_PROTOCOL_VERSION = '2025-11-25';
+const SUPPORTED_PROTOCOL_VERSIONS = new Set([
+  '2025-11-25',
+  '2025-06-18',
+  '2025-03-26',
+  '2024-11-05',
+]);
+const MAX_COLLECTED_BYTES = 1024 * 1024;
+const TRUNCATION_MARKER = `[omnilane-mcp: output truncated after ${MAX_COLLECTED_BYTES} bytes]`;
+const LANE_PATTERN = /^[a-z][a-z0-9-]*$/;
+const JOB_ID_PATTERN = /^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$/;
+const OWN = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
+
+let serverVersion;
+try {
+  serverVersion = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf8').trim();
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(serverVersion)) {
+    throw new Error('invalid VERSION file');
+  }
+} catch (error) {
+  process.stderr.write(`omnilane-mcp: ${error.message}\n`);
+  process.exit(1);
+}
+
+const tools = [
+  {
+    name: 'route',
+    description: 'Route a task through omnilane. Defaults to read-only advise mode; work mode requires an explicit workdir.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lane: {
+          type: 'string',
+          pattern: '^[a-z][a-z0-9-]*$',
+          description: 'Configured omnilane lane name.',
+        },
+        task: { type: 'string', description: 'Task text sent to the selected lane.' },
+        mode: {
+          type: 'string',
+          enum: ['advise', 'work'],
+          default: 'advise',
+          description: 'Read-only advice or write-enabled work.',
+        },
+        workdir: {
+          type: 'string',
+          minLength: 1,
+          description: 'Working directory. Required when mode is work.',
+        },
+        vendor: { type: 'string', description: 'Optional configured vendor override.' },
+        model: { type: 'string', description: 'Optional routed model override.' },
+        effort: { type: 'string', description: 'Optional routed effort override.' },
+        background: {
+          type: 'boolean',
+          default: false,
+          description: 'Run as an omnilane background job and return its job ID.',
+        },
+        timeout: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Per-call timeout in seconds forwarded to dispatch.sh.',
+        },
+      },
+      required: ['lane', 'task'],
+      additionalProperties: false,
+      allOf: [
+        {
+          if: { properties: { mode: { const: 'work' } }, required: ['mode'] },
+          then: { required: ['workdir'] },
+        },
+      ],
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
+    name: 'jobs_status',
+    description: 'Read the current status of one omnilane background job.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          pattern: '^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$',
+          description: 'Omnilane background job ID.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'jobs_result',
+    description: 'Read the result of one completed omnilane background job.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          pattern: '^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$',
+          description: 'Omnilane background job ID.',
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'list_lanes',
+    description: 'List the effective omnilane routing table and available fallback selection.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+];
+
+class RpcError extends Error {
+  constructor(code, message, data) {
+    super(message);
+    this.code = code;
+    this.data = data;
+  }
+}
+
+const activeChildren = new Set();
+let shuttingDown = false;
+let outputClosed = false;
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function textResult(text) {
+  return { content: [{ type: 'text', text }] };
+}
+
+function toolError(message) {
+  return {
+    content: [{ type: 'text', text: `Error: ${message}` }],
+    isError: true,
+  };
+}
+
+function writeMessage(message) {
+  if (outputClosed) return;
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+function writeResult(id, result) {
+  writeMessage({ jsonrpc: '2.0', id, result });
+}
+
+function writeError(id, code, message, data) {
+  const error = { code, message };
+  if (data !== undefined) error.data = data;
+  writeMessage({ jsonrpc: '2.0', id, error });
+}
+
+function validationError(args, allowedKeys) {
+  if (!isObject(args)) return 'arguments must be an object';
+  const unexpected = Object.keys(args).filter((key) => !allowedKeys.includes(key));
+  if (unexpected.length > 0) return `unexpected argument: ${unexpected[0]}`;
+  return null;
+}
+
+function validateRouteArguments(args) {
+  let error = validationError(args, [
+    'lane', 'task', 'mode', 'workdir', 'vendor', 'model', 'effort',
+    'background', 'timeout',
+  ]);
+  if (error) return error;
+  if (typeof args.lane !== 'string' || !LANE_PATTERN.test(args.lane)) {
+    return 'lane must match ^[a-z][a-z0-9-]*$';
+  }
+  if (typeof args.task !== 'string') return 'task must be a string';
+  if (OWN(args, 'mode') && args.mode !== 'advise' && args.mode !== 'work') {
+    return 'mode must be advise or work';
+  }
+  if (OWN(args, 'workdir') && (typeof args.workdir !== 'string' || args.workdir.length === 0)) {
+    return 'workdir must be a non-empty string';
+  }
+  for (const key of ['vendor', 'model', 'effort']) {
+    if (OWN(args, key) && typeof args[key] !== 'string') return `${key} must be a string`;
+  }
+  if (OWN(args, 'background') && typeof args.background !== 'boolean') {
+    return 'background must be a boolean';
+  }
+  if (OWN(args, 'timeout') && (!Number.isInteger(args.timeout) || args.timeout < 1)) {
+    return 'timeout must be a positive integer';
+  }
+  if (args.mode === 'work' && !OWN(args, 'workdir')) {
+    return 'work mode requires an explicit workdir';
+  }
+  return null;
+}
+
+function validateJobArguments(args) {
+  const error = validationError(args, ['id']);
+  if (error) return error;
+  if (typeof args.id !== 'string' || !JOB_ID_PATTERN.test(args.id)) {
+    return 'id must match ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$';
+  }
+  return null;
+}
+
+function createCapture() {
+  const chunks = { stdout: [], stderr: [] };
+  let collected = 0;
+  let truncated = false;
+
+  function add(stream, chunk) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const remaining = MAX_COLLECTED_BYTES - collected;
+    if (remaining > 0) {
+      chunks[stream].push(buffer.subarray(0, remaining));
+      collected += Math.min(buffer.length, remaining);
+    }
+    if (buffer.length > remaining) truncated = true;
+  }
+
+  function read(stream) {
+    return Buffer.concat(chunks[stream]).toString('utf8');
+  }
+
+  return {
+    add,
+    stdout: () => read('stdout'),
+    stderr: () => read('stderr'),
+    wasTruncated: () => truncated,
+  };
+}
+
+function appendTruncationMarker(text, truncated) {
+  if (!truncated) return text;
+  const separator = text.length === 0 || text.endsWith('\n') ? '' : '\n';
+  return `${text}${separator}${TRUNCATION_MARKER}`;
+}
+
+function runScript(script, args) {
+  return new Promise((resolve) => {
+    const capture = createCapture();
+    let child;
+    let settled = false;
+
+    try {
+      child = spawn('bash', [script].concat(args), {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      resolve({ spawnError: error });
+      return;
+    }
+
+    activeChildren.add(child);
+    child.stdout.on('data', (chunk) => capture.add('stdout', chunk));
+    child.stderr.on('data', (chunk) => capture.add('stderr', chunk));
+
+    function finish(result) {
+      if (settled) return;
+      settled = true;
+      activeChildren.delete(child);
+      resolve(Object.assign(result, {
+        stdout: capture.stdout(),
+        stderr: capture.stderr(),
+        truncated: capture.wasTruncated(),
+      }));
+      if (shuttingDown && activeChildren.size === 0) {
+        setImmediate(() => process.exit(0));
+      }
+    }
+
+    child.once('error', (error) => finish({ spawnError: error }));
+    child.once('close', (code, signal) => finish({ code, signal }));
+  });
+}
+
+function processFailure(label, result) {
+  if (result.spawnError) {
+    return toolError(`${label} could not start: ${result.spawnError.message}`);
+  }
+  const parts = [];
+  if (result.stderr) parts.push(result.stderr);
+  if (result.stdout) parts.push(result.stdout);
+  let detail = parts.join(parts.length > 1 ? '\n' : '');
+  detail = appendTruncationMarker(detail, result.truncated);
+  const status = result.signal ? `signal ${result.signal}` : `exit ${result.code}`;
+  return toolError(`${label} failed with ${status}${detail ? `:\n${detail}` : ''}`);
+}
+
+async function runToolScript(label, script, args) {
+  const result = await runScript(script, args);
+  if (result.spawnError || result.code !== 0) return processFailure(label, result);
+  return textResult(appendTruncationMarker(result.stdout, result.truncated));
+}
+
+async function callRoute(args) {
+  const error = validateRouteArguments(args);
+  if (error) return toolError(error);
+
+  const mode = OWN(args, 'mode') ? args.mode : 'advise';
+  const argv = ['--mode', mode];
+  for (const key of ['workdir', 'vendor', 'model', 'effort', 'timeout']) {
+    if (OWN(args, key)) argv.push(`--${key}`, String(args[key]));
+  }
+  if (args.background === true) argv.push('--background');
+  argv.push(args.lane, args.task);
+
+  const result = await runScript(DISPATCH_SCRIPT, argv);
+  if (result.spawnError || result.code !== 0) return processFailure('route', result);
+  const stdout = appendTruncationMarker(result.stdout, result.truncated);
+  if (args.background === true) {
+    const jobId = stdout.split(/\r?\n/).find((line) => JOB_ID_PATTERN.test(line));
+    if (!jobId) return toolError('background route did not return a valid job ID');
+    return textResult(jobId);
+  }
+  return textResult(stdout);
+}
+
+async function callTool(name, args) {
+  if (name === 'route') return callRoute(args);
+  if (name === 'list_lanes') {
+    const error = validationError(args, []);
+    if (error) return toolError(error);
+    return runToolScript('list_lanes', DISPATCH_SCRIPT, ['--list']);
+  }
+  if (name === 'jobs_status' || name === 'jobs_result') {
+    const error = validateJobArguments(args);
+    if (error) return toolError(error);
+    const command = name === 'jobs_status' ? 'status' : 'result';
+    return runToolScript(name, JOBS_SCRIPT, [command, args.id]);
+  }
+  throw new RpcError(-32602, `Unknown tool: ${name}`);
+}
+
+function initialize(params) {
+  if (!isObject(params) || typeof params.protocolVersion !== 'string') {
+    throw new RpcError(-32602, 'initialize requires a protocolVersion string');
+  }
+  const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.has(params.protocolVersion)
+    ? params.protocolVersion
+    : LATEST_PROTOCOL_VERSION;
+  return {
+    protocolVersion,
+    capabilities: { tools: {} },
+    serverInfo: { name: 'omnilane', version: serverVersion },
+  };
+}
+
+async function handleRequest(message) {
+  switch (message.method) {
+    case 'initialize':
+      return initialize(message.params);
+    case 'tools/list':
+      if (message.params !== undefined && !isObject(message.params)) {
+        throw new RpcError(-32602, 'tools/list params must be an object');
+      }
+      return { tools };
+    case 'tools/call': {
+      if (!isObject(message.params) || typeof message.params.name !== 'string') {
+        throw new RpcError(-32602, 'tools/call requires a tool name');
+      }
+      const args = message.params.arguments === undefined ? {} : message.params.arguments;
+      return callTool(message.params.name, args);
+    }
+    default:
+      throw new RpcError(-32601, `Method not found: ${message.method}`);
+  }
+}
+
+async function processLine(line) {
+  if (line.length === 0) return;
+
+  let message;
+  try {
+    message = JSON.parse(line);
+  } catch (error) {
+    writeError(null, -32700, 'Parse error');
+    return;
+  }
+
+  const hasId = isObject(message) && OWN(message, 'id');
+  if (!isObject(message) || message.jsonrpc !== '2.0' || typeof message.method !== 'string') {
+    if (hasId) writeError(message.id, -32600, 'Invalid Request');
+    return;
+  }
+  if (!hasId) return;
+
+  try {
+    writeResult(message.id, await handleRequest(message));
+  } catch (error) {
+    if (error instanceof RpcError) {
+      writeError(message.id, error.code, error.message, error.data);
+    } else {
+      process.stderr.write(`omnilane-mcp: internal error: ${error.message}\n`);
+      writeError(message.id, -32603, 'Internal error');
+    }
+  }
+}
+
+const input = readline.createInterface({
+  input: process.stdin,
+  crlfDelay: Infinity,
+  terminal: false,
+});
+
+input.on('line', (line) => {
+  processLine(line).catch((error) => {
+    process.stderr.write(`omnilane-mcp: internal error: ${error.message}\n`);
+  });
+});
+
+function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  input.close();
+  for (const child of activeChildren) child.kill('SIGTERM');
+  if (activeChildren.size === 0) process.exit(0);
+  setTimeout(() => process.exit(0), 1000);
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+process.stdout.on('error', (error) => {
+  if (error.code === 'EPIPE') {
+    outputClosed = true;
+    shutdown();
+    return;
+  }
+  process.stderr.write(`omnilane-mcp: stdout error: ${error.message}\n`);
+  process.exit(1);
+});
