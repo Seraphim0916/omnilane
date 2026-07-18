@@ -155,10 +155,18 @@ vendor_line="$(
     name="${spec%%:*}"; bin="${spec#*:}"
     if command -v "$bin" >/dev/null 2>&1; then present="$present $name"; else absent="$absent $name"; fi
   done
-  if [[ -n "${OPENROUTER_API_KEY:-}" ]] && command -v curl >/dev/null 2>&1; then
-    present="$present openrouter"
+  # Direct-API vendors (OpenAI-compatible, no CLI): reachable iff curl exists
+  # and the matching API key is set. Keep aligned with
+  # OMNILANE_DIRECT_API_VENDORS in lib/common.sh.
+  if command -v curl >/dev/null 2>&1; then
+    for spec in "openrouter:${OPENROUTER_API_KEY:-}" "deepseek:${DEEPSEEK_API_KEY:-}" \
+                "zai:${ZAI_API_KEY:-}" "mistral:${MISTRAL_API_KEY:-}" \
+                "groq:${GROQ_API_KEY:-}" "cerebras:${CEREBRAS_API_KEY:-}"; do
+      name="${spec%%:*}"; key="${spec#*:}"
+      if [[ -n "$key" ]]; then present="$present $name"; else absent="$absent $name"; fi
+    done
   else
-    absent="$absent openrouter"
+    absent="$absent openrouter deepseek zai mistral groq cerebras"
   fi
   printf '%s|%s' "${present# }" "${absent# }"
 )"
