@@ -100,14 +100,19 @@ vendor_api_spec() {
 }
 
 vendor_is_direct_api() { # 0 if vendor is an OpenAI-compatible direct-API vendor
-  case " $OMNILANE_DIRECT_API_VENDORS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+  local _v
+  # Exact token match — a substring `case` would accept adjacent-pair strings
+  # like "openrouter deepseek".
+  for _v in $OMNILANE_DIRECT_API_VENDORS; do [[ "$1" == "$_v" ]] && return 0; done
+  return 1
 }
 
 omnilane_known_vendor() { # 0 if vendor is dispatchable (CLI, direct-API, or exec)
-  case " $OMNILANE_CLI_VENDORS $OMNILANE_DIRECT_API_VENDORS exec " in
-    *" $1 "*) return 0 ;;
-    *) return 1 ;;
-  esac
+  local _v
+  for _v in $OMNILANE_CLI_VENDORS $OMNILANE_DIRECT_API_VENDORS exec; do
+    [[ "$1" == "$_v" ]] && return 0
+  done
+  return 1
 }
 
 vendor_bin() { # vendor -> binary (honors local.sh overrides)

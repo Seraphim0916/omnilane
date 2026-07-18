@@ -43,8 +43,12 @@ truncate_payload "$PROMPT_FILE" 140000
 
 REQUEST_FILE="${OUTPUT_FILE}.request.json"
 RESPONSE_FILE="${OUTPUT_FILE}.response.json"
-cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" 2>/dev/null || true; }
+# Keep the API key out of the process argument list (ps-visible): curl reads the
+# Authorization header from a 0600 file, not a -H command-line flag.
+HEADER_FILE="${OUTPUT_FILE}.headers"
+cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" "$HEADER_FILE" 2>/dev/null || true; }
 trap cleanup EXIT
+( umask 077; printf 'Authorization: Bearer %s\n' "$API_KEY" > "$HEADER_FILE" )
 
 python3 - "$MODEL" "$PROMPT_FILE" > "$REQUEST_FILE" <<'PY'
 import json, sys
@@ -58,7 +62,7 @@ PY
 set +e
 run_with_timeout "$RUN_TIMEOUT" curl -sS --fail-with-body \
   --max-time "$RUN_TIMEOUT" \
-  -H "Authorization: Bearer $API_KEY" \
+  -H "@$HEADER_FILE" \
   -H "Content-Type: application/json" \
   -X POST "$BASE_URL/chat/completions" \
   --data-binary "@$REQUEST_FILE" \
