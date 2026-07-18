@@ -64,6 +64,52 @@ write_current_pid_file() {
   mv "$tmp" "$path"
 }
 
+# ---- Vendor registry (single source of truth) ---------------------------
+# Two vendor kinds. CLI-agent vendors run a local binary (see vendor_bin).
+# Direct-API vendors are OpenAI-compatible /chat/completions endpoints driven
+# by run-openai-compat.sh (curl + an API key, no CLI). To add an
+# OpenAI-compatible vendor: add its name to OMNILANE_DIRECT_API_VENDORS, add a
+# vendor_api_spec row, add a runners/run-<name>.sh wrapper, and a model row in
+# configure.sh. Every validation site derives from these lists.
+OMNILANE_CLI_VENDORS="codex claude grok gemini kimi qwen opencode"
+OMNILANE_DIRECT_API_VENDORS="openrouter deepseek zai mistral groq cerebras"
+
+# Pipe-joined vendor alternations for =~ checks and JSON metadata regexes.
+# _OVERRIDE covers what --vendor may pin (no exec/off); _ALT adds the "exec"
+# bring-your-own gate. Built from the lists above — the single source of truth.
+OMNILANE_OVERRIDE_VENDOR_ALT=""
+for _omnilane_v in $OMNILANE_CLI_VENDORS $OMNILANE_DIRECT_API_VENDORS; do
+  OMNILANE_OVERRIDE_VENDOR_ALT="${OMNILANE_OVERRIDE_VENDOR_ALT:+$OMNILANE_OVERRIDE_VENDOR_ALT|}$_omnilane_v"
+done
+unset _omnilane_v
+# shellcheck disable=SC2034  # consumed by jobs.sh/dispatch.sh which source this file
+OMNILANE_VENDOR_ALT="$OMNILANE_OVERRIDE_VENDOR_ALT|exec"
+
+# Direct-API vendor -> "BASE_URL_DEFAULT|KEY_ENV|MODEL_HINT". Base URL is
+# overridable per vendor via <VENDOR>_BASE_URL (e.g. DEEPSEEK_BASE_URL).
+vendor_api_spec() {
+  case "$1" in
+    openrouter) echo "https://openrouter.ai/api/v1|OPENROUTER_API_KEY|anthropic/claude-sonnet-4" ;;
+    deepseek)   echo "https://api.deepseek.com|DEEPSEEK_API_KEY|deepseek-chat" ;;
+    zai)        echo "https://api.z.ai/api/openai/v1|ZAI_API_KEY|glm-4.6" ;;
+    mistral)    echo "https://api.mistral.ai/v1|MISTRAL_API_KEY|devstral-latest" ;;
+    groq)       echo "https://api.groq.com/openai/v1|GROQ_API_KEY|qwen/qwen3.6-27b" ;;
+    cerebras)   echo "https://api.cerebras.ai/v1|CEREBRAS_API_KEY|qwen-3-32b" ;;
+    *)          echo "" ;;
+  esac
+}
+
+vendor_is_direct_api() { # 0 if vendor is an OpenAI-compatible direct-API vendor
+  case " $OMNILANE_DIRECT_API_VENDORS " in *" $1 "*) return 0 ;; *) return 1 ;; esac
+}
+
+omnilane_known_vendor() { # 0 if vendor is dispatchable (CLI, direct-API, or exec)
+  case " $OMNILANE_CLI_VENDORS $OMNILANE_DIRECT_API_VENDORS exec " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 vendor_bin() { # vendor -> binary (honors local.sh overrides)
   case "$1" in
     codex)  echo "${CODEX_BIN:-codex}" ;;
@@ -82,9 +128,12 @@ vendor_available() {
   # checked at dispatch time (the chain resolver cannot see it here).
   # "vote" is the built-in multi-model panel: needs >=2 voters, checked at dispatch.
   [[ "$1" == "exec" || "$1" == "vote" ]] && return 0
-  # "openrouter" is direct-API (no CLI): available iff curl and a key exist.
-  if [[ "$1" == "openrouter" ]]; then
-    command -v curl >/dev/null 2>&1 && [[ -n "${OPENROUTER_API_KEY:-}" ]]
+  # Direct-API vendors have no CLI: available iff curl and their API key exist.
+  if vendor_is_direct_api "$1"; then
+    local spec key_env
+    spec="$(vendor_api_spec "$1")"
+    key_env="${spec#*|}"; key_env="${key_env%%|*}"
+    command -v curl >/dev/null 2>&1 && [[ -n "${!key_env:-}" ]]
     return
   fi
   local b; b="$(vendor_bin "$1")"

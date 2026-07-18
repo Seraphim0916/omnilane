@@ -3157,6 +3157,73 @@ test_openrouter_vendor_availability() {
 }
 test_openrouter_vendor_availability
 
+test_openai_compat_runners() {
+  local name="OpenAI-compatible direct-API runners" home bin prompt rc out row vendor rest keyenv hostfrag runner
+  home="$TEST_ROOT/oai-compat"; mkdir -p "$home/bin"
+  bin="$home/bin"; prompt="$home/prompt"
+  printf 'what is a lane\n' > "$prompt"
+  cat > "$bin/curl" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do printf '%s\n' "$arg"; done > "$FAKE_CURL_ARGV"
+cat "$FAKE_CURL_RESPONSE"
+exit "${FAKE_CURL_RC:-0}"
+EOF
+  chmod +x "$bin/curl"
+  printf '{"choices":[{"message":{"content":"vendor-answer"}}]}' > "$home/response.json"
+
+  # vendor | API-key env var | host substring the request must target
+  for row in \
+    'deepseek|DEEPSEEK_API_KEY|api.deepseek.com' \
+    'zai|ZAI_API_KEY|api.z.ai' \
+    'mistral|MISTRAL_API_KEY|api.mistral.ai' \
+    'groq|GROQ_API_KEY|api.groq.com' \
+    'cerebras|CEREBRAS_API_KEY|api.cerebras.ai'; do
+    vendor="${row%%|*}"; rest="${row#*|}"
+    keyenv="${rest%%|*}"; hostfrag="${rest##*|}"
+    runner="$ROOT/scripts/runners/run-$vendor.sh"
+
+    # work mode is a hard error: inference-only vendors have no agentic loop
+    env "$keyenv=test-key" /bin/bash "$runner" \
+      work "$home" some/model - "$prompt" "$home/out-work" > "$home/work.log" 2>&1; rc=$?
+    if [[ "$rc" -ne 2 ]] || ! grep -q 'advise' "$home/out-work.stderr.log" 2>/dev/null; then
+      fail "$name" "$vendor work mode must hard-fail toward advise (rc=$rc)"; return
+    fi
+
+    # missing key fails cleanly, naming the exact env var
+    env -u "$keyenv" /bin/bash "$runner" \
+      advise "$home" some/model - "$prompt" "$home/out-nokey" > "$home/nokey.log" 2>&1; rc=$?
+    if [[ "$rc" -ne 2 ]] || ! grep -q "$keyenv" "$home/out-nokey.stderr.log" 2>/dev/null; then
+      fail "$name" "$vendor missing key must name $keyenv (rc=$rc)"; return
+    fi
+
+    # missing model fails cleanly
+    env "$keyenv=test-key" /bin/bash "$runner" \
+      advise "$home" - - "$prompt" "$home/out-nomodel" > "$home/nomodel.log" 2>&1; rc=$?
+    if [[ "$rc" -ne 2 ]] || ! grep -q 'model slug' "$home/out-nomodel.stderr.log" 2>/dev/null; then
+      fail "$name" "$vendor missing model must fail cleanly (rc=$rc)"; return
+    fi
+
+    # happy path: content out, targets the vendor host + chat/completions,
+    # temp files cleaned, API key never leaked into the error surface
+    env PATH="$bin:$PATH" FAKE_CURL_ARGV="$home/curl-argv" \
+      FAKE_CURL_RESPONSE="$home/response.json" "$keyenv=test-key" \
+      /bin/bash "$runner" \
+      advise "$home" some/model - "$prompt" "$home/out-ok" > "$home/ok.log" 2>&1; rc=$?
+    out="$(cat "$home/out-ok" 2>/dev/null)"
+    if [[ "$rc" -ne 0 || "$out" != "vendor-answer" ]]; then
+      fail "$name" "$vendor happy path failed (rc=$rc, out=$out)"; return
+    elif ! grep -q "$hostfrag" "$home/curl-argv" || ! grep -q 'chat/completions' "$home/curl-argv"; then
+      fail "$name" "$vendor did not target $hostfrag/chat/completions"; return
+    elif [[ -e "$home/out-ok.request.json" || -e "$home/out-ok.response.json" ]]; then
+      fail "$name" "$vendor request/response temp files must be cleaned up"; return
+    elif grep -q 'test-key' "$home/out-ok.stderr.log" 2>/dev/null; then
+      fail "$name" "$vendor leaked the API key into stderr"; return
+    fi
+  done
+  pass "$name"
+}
+test_openai_compat_runners
+
 test_mcp_server_surface() {
   local name="MCP server surface" home output rc
   if ! command -v node >/dev/null 2>&1; then

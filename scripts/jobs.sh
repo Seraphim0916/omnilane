@@ -132,7 +132,7 @@ read_job_pid() {
 
 parse_stats_metadata() {
   local value="$1"
-  local metadata_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec)"(,|})'
+  local metadata_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"('"$OMNILANE_VENDOR_ALT"')"(,|})'
   STATS_LANE=""
   STATS_VENDOR=""
   [[ "$value" =~ $metadata_re ]] || return 1
@@ -143,7 +143,7 @@ parse_stats_metadata() {
 parse_audit_metadata() {
   local value="$1" metadata_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec)\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
   [[ "$value" =~ $metadata_re ]]
 }
 
@@ -252,7 +252,7 @@ case "${1:-}" in
     read_public_metadata "$JOB_DIR/meta.json" || {
       die 1 "cannot retry: unreadable job metadata"
     }
-    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"(codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec)","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
+    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"('"$OMNILANE_VENDOR_ALT"')","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
     [[ "$PUBLIC_METADATA" =~ $retry_re ]] || {
       die 1 "cannot retry: job metadata is not safely parseable"
     }
@@ -440,10 +440,7 @@ case "${1:-}" in
       die 2 "invalid --last value (want 1..10000)"
     }
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
-    case "$filter_vendor" in
-      ""|codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec) ;;
-      *) die 2 "invalid --vendor value" ;;
-    esac
+    [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     sampled=0
     succeeded=0
     failed=0
@@ -535,10 +532,7 @@ case "${1:-}" in
       esac
     done
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
-    case "$filter_vendor" in
-      ""|codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec) ;;
-      *) die 2 "invalid --vendor value" ;;
-    esac
+    [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     case "$filter_status" in
       ""|running|done) ;;
       *) die 2 "invalid --status value (want running or done)" ;;
