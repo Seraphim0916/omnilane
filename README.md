@@ -303,8 +303,9 @@ adding a routing reminder. Configure the host to launch the installed CLI:
 }
 ```
 
-The server exposes `route`, `jobs_status`, `jobs_result`, and `list_lanes`.
-`route` defaults to read-only `advise` mode. Calls that select `work` must also
+The server exposes `route` plus read-only introspection: `list_lanes`,
+`explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`,
+and `doctor`. `route` defaults to read-only `advise` mode. Calls that select `work` must also
 provide an explicit `workdir`.
 
 Node.js is the only runtime requirement (no npm packages). If you prefer

@@ -3205,5 +3205,84 @@ NODE
 }
 test_mcp_server_surface
 
+test_mcp_readonly_tools() {
+  local name="MCP read-only tools" home output rc marker gate
+  if ! command -v node >/dev/null 2>&1; then
+    pass "$name (node unavailable; skipped)"
+    return
+  fi
+
+  home="$TEST_ROOT/mcp-readonly"; mkdir -p "$home"
+  output="$home/responses.jsonl"
+  marker="$home/gate-executed"
+  gate="$home/working gate.sh"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+printf executed > "$OMNILANE_TEST_GATE_MARKER"
+EOF
+  chmod +x "$gate"
+  {
+    printf 'probe: exec "%s" -\n' "$gate"
+    printf 'hardest-coding: off\nbulk-mechanical: off\ntriage: off\n'
+    printf 'hard-judgment: off\ntaste-final: off\nconsult: off\n'
+    printf 'ui-draft: off\nlong-context: off\nfast-agentic: off\n'
+    printf 'live-search: off\ncoding-overflow: off\narbitrate: off\n'
+  } > "$home/routing.local.yaml"
+
+  {
+    printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"explain","arguments":{"lane":"probe"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"validate","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"jobs_list","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"doctor","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"dry_run","arguments":{"lane":"probe","task":"preview"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"explain","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"explain","arguments":{"lane":"Bad_Upper"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"dry_run","arguments":{"lane":"probe","task":"t","mode":"work"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"jobs_list","arguments":{"unexpected":1}}}'
+  } | OMNILANE_HOME="$home" OMNILANE_TEST_GATE_MARKER="$marker" "$ROOT/bin/omnilane-mcp" > "$output" 2> "$home/stderr"
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "server exited $rc"
+    return
+  fi
+
+  node - "$output" > "$home/assert.out" 2>&1 <<'NODE'
+const fs = require('fs');
+const messages = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+const byId = (id) => messages.find((m) => m.id === id);
+const added = ['jobs_list', 'explain', 'validate', 'dry_run', 'doctor'];
+const text = (id) => byId(id).result.content[0].text;
+const isErr = (id) => Boolean(byId(id).result && byId(id).result.isError === true);
+
+try {
+const names = byId(2).result.tools.map((t) => t.name);
+if (messages.length !== 11) throw new Error(`expected 11 responses, got ${messages.length}`);
+for (const n of added) if (!names.includes(n)) throw new Error(`tools/list missing ${n}`);
+if (isErr(3) || !/vendor=exec/.test(text(3)) || !/status=selected/.test(text(3)) || !/decision:/.test(text(3))) throw new Error(`explain did not resolve: ${JSON.stringify(byId(3).result)}`);
+if (isErr(4) || !/PASS probe/.test(text(4))) throw new Error(`validate did not pass: ${JSON.stringify(byId(4).result)}`);
+if (isErr(5) || typeof text(5) !== 'string') throw new Error('jobs_list errored');
+if (isErr(6) || !/Summary:/.test(text(6))) throw new Error(`doctor errored: ${JSON.stringify(byId(6).result)}`);
+if (isErr(7) || !/lane=probe/.test(text(7)) || !/vendor=exec/.test(text(7)) || !/provider_invoked=no/.test(text(7))) throw new Error(`dry_run did not resolve: ${JSON.stringify(byId(7).result)}`);
+if (!isErr(8)) throw new Error('explain without lane was not an error');
+if (!isErr(9)) throw new Error('explain with invalid lane was not an error');
+if (!isErr(10)) throw new Error('dry_run work without workdir was not an error');
+if (!isErr(11)) throw new Error('jobs_list with unexpected arg was not an error');
+} catch (e) { console.error(String((e && e.message) || e)); process.exit(1); }
+NODE
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$(tail -n 1 "$home/assert.out")"
+  elif [[ -e "$marker" ]]; then
+    fail "$name" "read-only tool executed the gate"
+  elif [[ -d "$home/jobs" ]]; then
+    fail "$name" "read-only tool created job state"
+  else
+    pass "$name"
+  fi
+}
+test_mcp_readonly_tools
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

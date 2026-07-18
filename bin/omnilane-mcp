@@ -9,6 +9,7 @@ const { spawn } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const DISPATCH_SCRIPT = path.join(ROOT, 'scripts', 'dispatch.sh');
 const JOBS_SCRIPT = path.join(ROOT, 'scripts', 'jobs.sh');
+const DOCTOR_SCRIPT = path.join(ROOT, 'scripts', 'doctor.sh');
 const LATEST_PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set([
   '2025-11-25',
@@ -146,6 +147,144 @@ const tools = [
       openWorldHint: false,
     },
   },
+  {
+    name: 'explain',
+    description: 'Explain one lane offline: every fallback candidate and the selected vendor, with no provider call and no job state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lane: {
+          type: 'string',
+          pattern: '^[a-z][a-z0-9-]*$',
+          description: 'Configured omnilane lane name.',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human table.',
+        },
+      },
+      required: ['lane'],
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'validate',
+    description: 'Lint the effective routing table offline and report PASS/WARN/FAIL per lane, with no provider call and no job state.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human report.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'dry_run',
+    description: 'Resolve a dispatch plan (vendor, model, mode, timeouts, side-effect decision) without calling any provider or creating job state. Work mode requires an explicit workdir.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lane: {
+          type: 'string',
+          pattern: '^[a-z][a-z0-9-]*$',
+          description: 'Configured omnilane lane name.',
+        },
+        task: { type: 'string', description: 'Task text used only to resolve the plan; it is never sent to a provider.' },
+        mode: {
+          type: 'string',
+          enum: ['advise', 'work'],
+          default: 'advise',
+          description: 'Read-only advice or write-enabled work.',
+        },
+        workdir: {
+          type: 'string',
+          minLength: 1,
+          description: 'Working directory. Required when mode is work.',
+        },
+        vendor: { type: 'string', description: 'Optional configured vendor override.' },
+        model: { type: 'string', description: 'Optional routed model override.' },
+        effort: { type: 'string', description: 'Optional routed effort override.' },
+        timeout: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Per-call timeout in seconds forwarded to dispatch.sh.',
+        },
+      },
+      required: ['lane', 'task'],
+      additionalProperties: false,
+      allOf: [
+        {
+          if: { properties: { mode: { const: 'work' } }, required: ['mode'] },
+          then: { required: ['workdir'] },
+        },
+      ],
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'jobs_list',
+    description: 'List omnilane background jobs. Metadata only; task and result bodies stay private.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human list.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'doctor',
+    description: 'Read-only local health report for routing, state, watchdog, and optional UI support.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human report.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ];
 
 class RpcError extends Error {
@@ -233,6 +372,50 @@ function validateJobArguments(args) {
   if (error) return error;
   if (typeof args.id !== 'string' || !JOB_ID_PATTERN.test(args.id)) {
     return 'id must match ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$';
+  }
+  return null;
+}
+
+function validateJsonOnlyArguments(args) {
+  const error = validationError(args, ['json']);
+  if (error) return error;
+  if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
+  return null;
+}
+
+function validateExplainArguments(args) {
+  const error = validationError(args, ['lane', 'json']);
+  if (error) return error;
+  if (typeof args.lane !== 'string' || !LANE_PATTERN.test(args.lane)) {
+    return 'lane must match ^[a-z][a-z0-9-]*$';
+  }
+  if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
+  return null;
+}
+
+function validateDryRunArguments(args) {
+  const error = validationError(args, [
+    'lane', 'task', 'mode', 'workdir', 'vendor', 'model', 'effort', 'timeout',
+  ]);
+  if (error) return error;
+  if (typeof args.lane !== 'string' || !LANE_PATTERN.test(args.lane)) {
+    return 'lane must match ^[a-z][a-z0-9-]*$';
+  }
+  if (typeof args.task !== 'string') return 'task must be a string';
+  if (OWN(args, 'mode') && args.mode !== 'advise' && args.mode !== 'work') {
+    return 'mode must be advise or work';
+  }
+  if (OWN(args, 'workdir') && (typeof args.workdir !== 'string' || args.workdir.length === 0)) {
+    return 'workdir must be a non-empty string';
+  }
+  for (const key of ['vendor', 'model', 'effort']) {
+    if (OWN(args, key) && typeof args[key] !== 'string') return `${key} must be a string`;
+  }
+  if (OWN(args, 'timeout') && (!Number.isInteger(args.timeout) || args.timeout < 1)) {
+    return 'timeout must be a positive integer';
+  }
+  if (args.mode === 'work' && !OWN(args, 'workdir')) {
+    return 'work mode requires an explicit workdir';
   }
   return null;
 }
@@ -362,6 +545,43 @@ async function callTool(name, args) {
     if (error) return toolError(error);
     const command = name === 'jobs_status' ? 'status' : 'result';
     return runToolScript(name, JOBS_SCRIPT, [command, args.id]);
+  }
+  if (name === 'jobs_list') {
+    const error = validateJsonOnlyArguments(args);
+    if (error) return toolError(error);
+    const argv = args.json === true ? ['--json', 'list'] : ['list'];
+    return runToolScript('jobs_list', JOBS_SCRIPT, argv);
+  }
+  if (name === 'explain') {
+    const error = validateExplainArguments(args);
+    if (error) return toolError(error);
+    const argv = ['--explain', args.lane];
+    if (args.json === true) argv.push('--json');
+    return runToolScript('explain', DISPATCH_SCRIPT, argv);
+  }
+  if (name === 'validate') {
+    const error = validateJsonOnlyArguments(args);
+    if (error) return toolError(error);
+    const argv = ['--validate'];
+    if (args.json === true) argv.push('--json');
+    return runToolScript('validate', DISPATCH_SCRIPT, argv);
+  }
+  if (name === 'dry_run') {
+    const error = validateDryRunArguments(args);
+    if (error) return toolError(error);
+    const mode = OWN(args, 'mode') ? args.mode : 'advise';
+    const argv = ['--dry-run', '--mode', mode];
+    for (const key of ['workdir', 'vendor', 'model', 'effort', 'timeout']) {
+      if (OWN(args, key)) argv.push(`--${key}`, String(args[key]));
+    }
+    argv.push(args.lane, args.task);
+    return runToolScript('dry_run', DISPATCH_SCRIPT, argv);
+  }
+  if (name === 'doctor') {
+    const error = validateJsonOnlyArguments(args);
+    if (error) return toolError(error);
+    const argv = args.json === true ? ['--json'] : [];
+    return runToolScript('doctor', DOCTOR_SCRIPT, argv);
   }
   throw new RpcError(-32602, `Unknown tool: ${name}`);
 }
