@@ -3214,8 +3214,10 @@ EOF
       fail "$name" "$vendor happy path failed (rc=$rc, out=$out)"; return
     elif ! grep -q "$hostfrag" "$home/curl-argv" || ! grep -q 'chat/completions' "$home/curl-argv"; then
       fail "$name" "$vendor did not target $hostfrag/chat/completions"; return
-    elif [[ -e "$home/out-ok.request.json" || -e "$home/out-ok.response.json" ]]; then
-      fail "$name" "$vendor request/response temp files must be cleaned up"; return
+    elif [[ -e "$home/out-ok.request.json" || -e "$home/out-ok.response.json" || -e "$home/out-ok.headers" ]]; then
+      fail "$name" "$vendor request/response/header temp files must be cleaned up"; return
+    elif grep -q 'test-key' "$home/curl-argv" 2>/dev/null; then
+      fail "$name" "$vendor passed the API key on the curl command line (ps-visible)"; return
     elif grep -q 'test-key' "$home/out-ok.stderr.log" 2>/dev/null; then
       fail "$name" "$vendor leaked the API key into stderr"; return
     fi
@@ -3223,6 +3225,31 @@ EOF
   pass "$name"
 }
 test_openai_compat_runners
+
+test_vendor_registry_membership() {
+  local name="vendor registry membership is exact" out
+  out="$(ROOT="$ROOT" /bin/bash -c '
+    . "$ROOT/scripts/lib/common.sh"
+    rc=0
+    for v in codex claude grok gemini kimi qwen opencode openrouter deepseek \
+             zai mistral groq cerebras exec; do
+      omnilane_known_vendor "$v" || { echo "known-rejected:$v"; rc=1; }
+    done
+    # Adjacent-pair strings, globs, padded and bogus names must all be rejected.
+    for v in "codex claude" "openrouter deepseek" "*" "code*" "bogus" " codex" "deepseek "; do
+      omnilane_known_vendor "$v" && { echo "bad-accepted:[$v]"; rc=1; }
+    done
+    for v in openrouter deepseek zai mistral groq cerebras; do
+      vendor_is_direct_api "$v" || { echo "direct-missed:$v"; rc=1; }
+    done
+    for v in codex claude exec "openrouter deepseek" "*" "open*"; do
+      vendor_is_direct_api "$v" && { echo "nondirect-accepted:[$v]"; rc=1; }
+    done
+    exit "$rc"
+  ' 2>&1)"
+  if [[ -n "$out" ]]; then fail "$name" "$out"; else pass "$name"; fi
+}
+test_vendor_registry_membership
 
 test_mcp_server_surface() {
   local name="MCP server surface" home output rc
