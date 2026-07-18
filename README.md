@@ -149,6 +149,8 @@ flowchart LR
   vendor without fallback.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
   identify your own model, self-execute your lane, dispatch the rest.
+- **`omnilane mcp`** — the same routing surface as an MCP stdio server,
+  for hosts that integrate via MCP instead of skills.
 
 <div align="center">
 
@@ -305,6 +307,10 @@ The server exposes `route`, `jobs_status`, `jobs_result`, and `list_lanes`.
 `route` defaults to read-only `advise` mode. Calls that select `work` must also
 provide an explicit `workdir`.
 
+Node.js is the only runtime requirement (no npm packages). If you prefer
+npm, `npm install -g omnilane` installs the CLI with the MCP server
+included.
+
 ## ⚙️ Configure
 
 Three layers, all optional:
@@ -332,6 +338,7 @@ omnilane list | route … | jobs … | configure   # global wrapper, works anywh
                                                # (install.sh links it into ~/.local/bin)
 eval "$(omnilane completion bash)"             # enable Bash completion for this shell
 source <(omnilane completion zsh)               # enable Zsh completion for this shell
+omnilane mcp                                   # MCP stdio server (needs Node.js)
 omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
 omnilane ui start                              # start/reuse the local Live UI; print its URL
 omnilane ui status                             # report whether the Live UI is running
@@ -442,7 +449,8 @@ configurator and `routing.local.yaml` exist so you can disagree.
 v0.8.3 spans eight dispatch vendors — four harness natives (codex, claude,
 grok, gemini), three aggregator/overflow CLIs (kimi, qwen, opencode), and the
 CLI-free `openrouter` direct-API vendor — on the uniform runner contract with
-contract tests, plus the Claude Code `SessionStart` auto-reminder. kimi, qwen,
+contract tests, plus the Claude Code `SessionStart`
+auto-reminder and an MCP stdio server surface (`omnilane mcp`). kimi, qwen,
 opencode, and openrouter runners are contract-tested against fake binaries;
 real-model reports welcome. Grok/Antigravity command-shell behavior may still
 vary across CLI versions. Issues and PRs welcome.
