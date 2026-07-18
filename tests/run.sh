@@ -3205,5 +3205,53 @@ NODE
 }
 test_mcp_server_surface
 
+test_jobs_list_filters() {
+  local name="jobs list --lane/--vendor/--status filters" home j out d jid lane vendor st
+  home="$TEST_ROOT/jobs-filters"; j="$home/jobs"; mkdir -p "$j"
+  while IFS='|' read -r jid lane vendor st; do
+    [[ -n "$jid" ]] || continue
+    d="$j/$jid"; mkdir -p "$d"
+    printf '{"lane":"%s","vendor":"%s"}' "$lane" "$vendor" > "$d/meta.json"
+    if [[ "$st" == done ]]; then printf '0\n' > "$d/exit"; fi
+  done <<'JOBFIXTURES'
+20260719-000001-1-1|triage|codex|done
+20260719-000002-1-1|triage|claude|running
+20260719-000003-1-1|bulk-mechanical|codex|running
+20260719-000004-1-1|triage|codex|running
+JOBFIXTURES
+
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --lane triage 2>&1)"
+  if [[ "$out" != *000001* || "$out" != *000002* || "$out" != *000004* || "$out" == *000003* ]]; then
+    fail "$name" "--lane triage wrong set: $out"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --vendor codex 2>&1)"
+  if [[ "$out" != *000001* || "$out" != *000003* || "$out" != *000004* || "$out" == *000002* ]]; then
+    fail "$name" "--vendor codex wrong set: $out"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --status done 2>&1)"
+  if [[ "$out" != *000001* || "$out" == *000002* || "$out" == *000003* || "$out" == *000004* ]]; then
+    fail "$name" "--status done wrong set: $out"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --lane triage --vendor codex --status running 2>&1)"
+  if [[ "$out" != *000004* || "$out" == *000001* || "$out" == *000002* || "$out" == *000003* ]]; then
+    fail "$name" "combined filter wrong set: $out"; return
+  fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json list --lane bulk-mechanical 2>&1)"
+  if [[ "$out" != *000003* || "$out" == *000001* || "$out" == *000002* || "$out" == *000004* ]]; then
+    fail "$name" "--json --lane wrong set: $out"; return
+  fi
+
+  local rc1 rc2 rc3 rc4
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --lane BadLane >/dev/null 2>&1; rc1=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --vendor mystery >/dev/null 2>&1; rc2=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --status weird >/dev/null 2>&1; rc3=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --lane >/dev/null 2>&1; rc4=$?
+  if [[ "$rc1" -ne 2 || "$rc2" -ne 2 || "$rc3" -ne 2 || "$rc4" -ne 2 ]]; then
+    fail "$name" "bad filters not rejected: $rc1/$rc2/$rc3/$rc4"; return
+  fi
+  pass "$name"
+}
+test_jobs_list_filters
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

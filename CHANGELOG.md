@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `jobs list` filters: `--lane`, `--vendor`, and `--status running|done` narrow
+  the listing (human and `--json`). Filtering scans all jobs and shows up to 20
+  matches; invalid filter values exit 2. Unfiltered `list` is unchanged.
+
 ## [0.8.3] - 2026-07-18
 
 ### Added

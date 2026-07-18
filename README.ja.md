@@ -348,6 +348,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 候補ごとの決定理由をオフライン表示
 dispatch.sh [--json] --validate [--json]           # プロバイダーを呼ばず実効ルーティングを検証
 jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さずメタデータのみ
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 一覧を絞り込み
 jobs.sh wait ID [--timeout N]                     # ジョブ終了値。124 はタイムアウト、125 はワーカー消失
 jobs.sh [--json] stats [--last N]                  # ローカル成功率とルーティング集計
 jobs.sh audit [--last N] [--json]                  # 読み取り専用のジョブ整合性・プライバシー検査

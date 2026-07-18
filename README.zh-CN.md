@@ -314,6 +314,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
 dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，不调用模型
 jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 过滤列表
 jobs.sh wait 作业ID [--timeout N]                  # 作业退出码；124 超时；125 工作进程消失
 jobs.sh [--json] stats [--last N]                  # 本机成功率与路由汇总
 jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私

@@ -341,6 +341,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 후보별 라우팅 결정을 오프라인 설명
 dispatch.sh [--json] --validate [--json]           # 공급자 호출 없이 실효 라우팅 검사
 jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메타데이터만 반환
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 목록 필터
 jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
 jobs.sh [--json] stats [--last N]                  # 로컬 성공률과 라우팅 집계
 jobs.sh audit [--last N] [--json]                  # 읽기 전용 작업 무결성/개인정보 검사
