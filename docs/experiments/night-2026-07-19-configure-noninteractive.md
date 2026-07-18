@@ -87,3 +87,31 @@ CHANGELOG entry. VERSION and what's-new titles untouched — no release action.
 
 Select. Fills a real automation gap, reuses the existing validator and safety
 idioms, fully offline-verified incl. real runtime, no new dependencies.
+
+## Follow-up commit — configure diff
+
+A second commit adds `configure diff`, which shows how the local overrides change
+the effective table versus the defaults. It resolves both tables through
+`dispatch.sh --list` (the real one for `OMNILANE_HOME`, a defaults-only one via a
+throwaway empty `OMNILANE_HOME`) and prints `default>` / `local>` pairs only for
+lanes that actually differ, so annotation and formatting stay consistent and
+unchanged lanes are omitted. With no overrides it says so and makes no diff.
+
+New test `test_configure_diff` covers the empty case and asserts an override
+surfaces `default>`/`local>` triage lines while an unchanged lane
+(`hardest-coding`) does not appear. Suite: `71 passed, 0 failed` (Bash 5 and
+Bash 3.2); `bash -n` + `shellcheck` clean.
+
+Real smoke:
+
+```
+diff (no overrides) -> no local overrides (...); effective table equals the defaults
+after set triage=claude, live-search=off ->
+  default> live-search:     grok grok-4.5 -
+  local  > live-search:     off
+  default> triage:          codex gpt-5.6-luna medium
+  local  > triage:          claude claude-opus-4-8 high
+```
+
+Result: **VERIFIED** — real entrypoint; only the two overridden lanes appear,
+each with its default and local resolution.

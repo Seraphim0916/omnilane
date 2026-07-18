@@ -8,9 +8,11 @@ semantic version tags.
 
 ### Added
 
-- `configure set|get|unset|list` non-interactive subcommands: script
-  `routing.local.yaml` without a tty. `set` validates the lane, refuses unsafe
-  specs, and rolls back on a structural FAIL; the interactive menu is unchanged.
+- `configure set|get|unset|list|diff` non-interactive subcommands: script or
+  inspect `routing.local.yaml` without a tty. `set` validates the lane, refuses
+  unsafe specs, and rolls back on a structural FAIL; `diff` shows how local
+  overrides change the effective table versus the defaults. The interactive menu
+  is unchanged.
 
 ## [0.8.3] - 2026-07-18
 

@@ -21,6 +21,7 @@ usage: configure                 interactive lane menu
        configure get LANE        show the effective routing line for LANE
        configure unset LANE      remove LANE's local override
        configure list            show current local overrides
+       configure diff            show how local overrides change the effective table vs the defaults
 EOF
 }
 
@@ -105,11 +106,42 @@ cfg_list() {
   fi
 }
 
+# Diff the effective table (local wins) against a defaults-only resolution, so
+# the user sees exactly which lanes their overrides change. Reuses dispatch.sh
+# --list for both, so availability annotation and formatting stay consistent; a
+# throwaway empty OMNILANE_HOME yields the defaults-only table.
+cfg_diff() {
+  if [[ ! -f "$LOCAL_FILE" ]] || ! grep -qE '^[a-z]' "$LOCAL_FILE"; then
+    echo "no local overrides ($LOCAL_FILE); effective table equals the defaults"
+    return 0
+  fi
+  local empty eff def changed=0 lane eff_line def_line
+  empty="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-diff.XXXXXX")"
+  eff="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null || true)"
+  def="$(OMNILANE_HOME="$empty" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null || true)"
+  /bin/rm -rf "$empty"
+  while IFS= read -r eff_line; do
+    [[ "$eff_line" =~ ^([a-z][a-z0-9-]*): ]] || continue
+    lane="${BASH_REMATCH[1]}"
+    def_line="$(printf '%s\n' "$def" | grep "^$lane:" | head -1 || true)"
+    if [[ "$eff_line" != "$def_line" ]]; then
+      changed=1
+      printf 'default> %s\n' "${def_line:-($lane not in defaults)}"
+      printf 'local  > %s\n' "$eff_line"
+      echo
+    fi
+  done <<DIFF_EFF
+$eff
+DIFF_EFF
+  [[ "$changed" -eq 1 ]] || echo "local overrides present, but the effective table matches the defaults"
+}
+
 case "${1:-}" in
   set)   shift; cfg_set "$@"; exit $? ;;
   get)   shift; cfg_get "$@"; exit $? ;;
   unset) shift; cfg_unset "$@"; exit $? ;;
   list)  shift; cfg_list "$@"; exit $? ;;
+  diff)  cfg_diff; exit $? ;;
   -h|--help|help) cfg_usage; exit 0 ;;
 esac
 

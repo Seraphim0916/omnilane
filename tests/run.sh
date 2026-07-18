@@ -3272,5 +3272,25 @@ test_configure_noninteractive() {
 }
 test_configure_noninteractive
 
+test_configure_diff() {
+  local name="configure diff shows overrides vs defaults" home file out
+  home="$TEST_ROOT/configure-diff"; mkdir -p "$home/.omnilane"
+  file="$home/.omnilane/routing.local.yaml"
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" bash "$ROOT/scripts/configure.sh" diff 2>&1)"
+  if [[ "$out" != *"no local overrides"* && "$out" != *"matches the defaults"* ]]; then
+    fail "$name" "empty diff did not report no overrides: $out"; return
+  fi
+  printf 'triage: claude claude-opus-4-8 high\n' > "$file"
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" bash "$ROOT/scripts/configure.sh" diff 2>&1)"
+  if [[ "$out" != *default*triage* || "$out" != *local*triage* || "$out" != *claude-opus-4-8* ]]; then
+    fail "$name" "override diff missing default/local triage lines: $out"; return
+  fi
+  if [[ "$out" == *hardest-coding* ]]; then
+    fail "$name" "diff showed an unchanged lane: $out"; return
+  fi
+  pass "$name"
+}
+test_configure_diff
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
