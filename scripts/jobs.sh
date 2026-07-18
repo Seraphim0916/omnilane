@@ -48,7 +48,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|wait ID [--timeout N]|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -420,18 +420,30 @@ case "${1:-}" in
     [[ "$findings" -eq 0 ]] || exit 1 ;;
   stats)
     limit=100
+    filter_lane=""; filter_vendor=""
     shift
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --last)
           [[ $# -ge 2 ]] || usage
           limit="$2"; shift 2 ;;
+        --lane)
+          [[ $# -ge 2 ]] || usage
+          filter_lane="$2"; shift 2 ;;
+        --vendor)
+          [[ $# -ge 2 ]] || usage
+          filter_vendor="$2"; shift 2 ;;
         *) usage ;;
       esac
     done
     [[ "$limit" =~ ^[1-9][0-9]{0,3}$ && "$limit" -le 10000 ]] || {
       die 2 "invalid --last value (want 1..10000)"
     }
+    [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
+    case "$filter_vendor" in
+      ""|codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|exec) ;;
+      *) die 2 "invalid --vendor value" ;;
+    esac
     sampled=0
     succeeded=0
     failed=0
@@ -451,8 +463,21 @@ case "${1:-}" in
     fi
     if [[ ${#ids[@]} -gt 0 ]]; then
       while IFS= read -r id; do
-        sampled=$((sampled + 1))
         job_dir="$JOBS/$id"
+        # Resolve lane/vendor first so a --lane/--vendor filter can exclude a job
+        # before it counts toward any aggregate.
+        meta_ok=0
+        metadata_path="$job_dir/meta.json"
+        if read_public_metadata "$metadata_path" &&
+           parse_stats_metadata "$PUBLIC_METADATA"; then
+          meta_ok=1
+        fi
+        if [[ -n "$filter_lane" || -n "$filter_vendor" ]]; then
+          [[ "$meta_ok" -eq 1 ]] || continue
+          [[ -z "$filter_lane" || "$filter_lane" == "$STATS_LANE" ]] || continue
+          [[ -z "$filter_vendor" || "$filter_vendor" == "$STATS_VENDOR" ]] || continue
+        fi
+        sampled=$((sampled + 1))
         exit_path="$job_dir/exit"
         if [[ -e "$exit_path" || -L "$exit_path" ]]; then
           if read_exit_code "$exit_path"; then
@@ -467,9 +492,7 @@ case "${1:-}" in
         else
           running=$((running + 1))
         fi
-        metadata_path="$job_dir/meta.json"
-        if read_public_metadata "$metadata_path" &&
-           parse_stats_metadata "$PUBLIC_METADATA"; then
+        if [[ "$meta_ok" -eq 1 ]]; then
           lanes+=("$STATS_LANE")
           vendors+=("$STATS_VENDOR")
         else

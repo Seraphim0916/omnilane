@@ -3253,5 +3253,38 @@ JOBFIXTURES
 }
 test_jobs_list_filters
 
+test_jobs_stats_filters() {
+  local name="jobs stats --lane/--vendor filters" home j out jid lane vendor ex d rc1 rc2
+  home="$TEST_ROOT/jobs-stats-filters"; j="$home/jobs"; mkdir -p "$j"
+  while IFS='|' read -r jid lane vendor ex; do
+    [[ -n "$jid" ]] || continue
+    d="$j/$jid"; mkdir -p "$d"
+    printf '{"lane":"%s","vendor":"%s"}' "$lane" "$vendor" > "$d/meta.json"
+    printf '%s\n' "$ex" > "$d/exit"
+  done <<'STATFIX'
+20260719-000001-1-1|triage|codex|0
+20260719-000002-1-1|triage|claude|0
+20260719-000003-1-1|bulk-mechanical|codex|1
+STATFIX
+
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats 2>&1)"
+  if [[ "$out" != *sampled=3* ]]; then fail "$name" "unfiltered stats wrong: $out"; return; fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --vendor codex 2>&1)"
+  if [[ "$out" != *sampled=2* ]]; then fail "$name" "--vendor codex stats wrong: $out"; return; fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --lane triage 2>&1)"
+  if [[ "$out" != *sampled=2* ]]; then fail "$name" "--lane triage stats wrong: $out"; return; fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --lane triage --vendor codex 2>&1)"
+  if [[ "$out" != *sampled=1* ]]; then fail "$name" "combined stats wrong: $out"; return; fi
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" --json stats --vendor codex 2>&1)"
+  if [[ "$out" != *'"sampled":2'* || "$out" != *'"vendors":[{"name":"codex","count":2}]'* ]]; then
+    fail "$name" "--json --vendor stats wrong: $out"; return
+  fi
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --vendor mystery >/dev/null 2>&1; rc1=$?
+  OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" stats --lane BadLane >/dev/null 2>&1; rc2=$?
+  if [[ "$rc1" -ne 2 || "$rc2" -ne 2 ]]; then fail "$name" "bad stats filters not rejected: $rc1/$rc2"; return; fi
+  pass "$name"
+}
+test_jobs_stats_filters
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

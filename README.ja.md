@@ -350,7 +350,7 @@ dispatch.sh [--json] --validate [--json]           # プロバイダーを呼ば
 jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さずメタデータのみ
 jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 一覧を絞り込み
 jobs.sh wait ID [--timeout N]                     # ジョブ終了値。124 はタイムアウト、125 はワーカー消失
-jobs.sh [--json] stats [--last N]                  # ローカル成功率とルーティング集計
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # ローカル成功率とルーティング集計
 jobs.sh audit [--last N] [--json]                  # 読み取り専用のジョブ整合性・プライバシー検査
 jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
 configure.sh                                        # 対話式レーンメニュー

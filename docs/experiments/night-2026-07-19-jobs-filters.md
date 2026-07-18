@@ -76,3 +76,31 @@ five READMEs' command reference and an `## [Unreleased]` CHANGELOG entry.
 
 Select. Useful listing ergonomics, reuses the existing metadata parser and state
 model, fully offline-verified incl. real runtime.
+
+## Follow-up commit — jobs stats filters
+
+A second commit on this branch extends the same `--lane`/`--vendor` filters to
+`jobs stats`. The stats loop now resolves each job's lane/vendor first and skips
+non-matching jobs before they count toward any aggregate, so the success rate and
+lane/vendor counts are recomputed for the filtered subset. `--last` still bounds
+the sample; the filters apply within it. Unfiltered `stats` is byte-for-byte
+unchanged (metadata still drives `invalid_metadata`; `sampled` still counts all).
+
+New test `test_jobs_stats_filters` builds three fixture jobs and asserts the
+sampled count and JSON aggregates for `--vendor`, `--lane`, and the combined
+filter, plus exit-2 on invalid values. Suite: `71 passed, 0 failed` (Bash 5 and
+Bash 3.2); `bash -n` + `shellcheck -S warning` clean.
+
+Real smoke through `omnilane jobs stats`:
+
+```
+all                        -> sampled=3 succeeded=2 failed=1 success_rate=66%
+--vendor codex             -> sampled=2 succeeded=1 failed=1 success_rate=50%
+--lane triage              -> sampled=2 succeeded=2 failed=0 success_rate=100%
+--lane triage --vendor codex -> sampled=1 success_rate=100%
+--json --vendor codex      -> {"sampled":2,...,"vendors":[{"name":"codex","count":2}]}
+--vendor mystery           -> invalid --vendor value, exit 2
+```
+
+Result: **VERIFIED** — the success rate and aggregates are correctly recomputed
+per filter over the real entrypoint, JSON included.
