@@ -40,13 +40,14 @@ case "$cmd" in
     ;;
   completion)
     [[ $# -eq 1 ]] || {
-      echo "usage: omnilane completion bash|zsh" >&2
+      echo "usage: omnilane completion bash|zsh|fish" >&2
       exit 2
     }
     case "$1" in
       bash) cat "$REPO/completions/omnilane.bash" ;;
       zsh)  cat "$REPO/completions/_omnilane" ;;
-      *) echo "usage: omnilane completion bash|zsh" >&2; exit 2 ;;
+      fish) cat "$REPO/completions/omnilane.fish" ;;
+      *) echo "usage: omnilane completion bash|zsh|fish" >&2; exit 2 ;;
     esac
     ;;
   release-audit) exec bash "$REPO/scripts/release-audit.sh" "$@" ;;
@@ -69,7 +70,7 @@ omnilane — one routing table, every harness
                                         dispatch or consult a model
   omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, wait, or audit
   omnilane mcp                          start the MCP stdio server
-  omnilane completion bash|zsh           print a shell completion script
+  omnilane completion bash|zsh|fish      print a shell completion script
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json]              read-only local health report
   omnilane ui    start|status|url|stop

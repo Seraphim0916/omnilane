@@ -8,6 +8,11 @@ semantic version tags.
 
 ### Added
 
+- `omnilane completion fish` prints a Fish completion script
+  (`completions/omnilane.fish`): static command, option, and enum completion for
+  every public command, including the direct-API vendors and `jobs cancel`/`rm`.
+  Load it with `omnilane completion fish | source`. Dynamic lane-name and job-id
+  completion remain Bash/Zsh-only for now.
 - Five OpenAI-compatible direct-API vendors — `deepseek`, `zai` (GLM),
   `mistral`, `groq`, and `cerebras` — join `openrouter` as CLI-free inference
   lanes (curl + a `<VENDOR>_API_KEY`, advise mode only). A single vendor registry
