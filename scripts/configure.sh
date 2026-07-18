@@ -157,6 +157,13 @@ QWEN_MODELS=("qwen3-coder-plus" "qwen3-coder-flash")
 # OpenCode models use provider/model form; OpenRouter models are catalog slugs.
 OPENCODE_MODELS=("openrouter/anthropic/claude-sonnet-5" "openrouter/openai/gpt-5.6-sol" "opencode/default (leave model to opencode)")
 OPENROUTER_MODELS=("anthropic/claude-sonnet-5" "openai/gpt-5.6-sol" "moonshotai/kimi-k3" "qwen/qwen3-coder-plus")
+# Direct-API OpenAI-compatible vendors (curl + <VENDOR>_API_KEY); slugs are
+# suggestions — "c" free text covers anything each provider's /models lists.
+DEEPSEEK_MODELS=("deepseek-chat" "deepseek-reasoner" "deepseek-v4-flash")
+ZAI_MODELS=("glm-4.6")
+MISTRAL_MODELS=("devstral-latest" "codestral-latest" "mistral-medium-latest")
+GROQ_MODELS=("openai/gpt-oss-120b" "qwen/qwen3.6-27b" "openai/gpt-oss-20b")
+CEREBRAS_MODELS=("gpt-oss-120b" "qwen-3-32b" "llama-3.3-70b")
 
 custom_value_is_safe() {
   case "$1" in
@@ -215,7 +222,7 @@ while true; do
     echo "$(msgf cfg_pick_range "${#LANES[@]}")"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini kimi qwen opencode openrouter "vote (multi-model panel)" "exec (your own script/gate)" off)"
+  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras "vote (multi-model panel)" "exec (your own script/gate)" off)"
   [[ "$vendor" == exec* ]] && vendor="exec"
   [[ "$vendor" == vote* ]] && vendor="vote"
   if [[ "$vendor" == "off" ]]; then
@@ -232,6 +239,11 @@ while true; do
     opencode)   model="$(pick "$(msg cfg_model)" "${OPENCODE_MODELS[@]}")"; effort="-"
                 [[ "$model" == "opencode/default"* ]] && model="-" ;;
     openrouter) model="$(pick "$(msg cfg_model)" "${OPENROUTER_MODELS[@]}")"; effort="-" ;;
+    deepseek)   model="$(pick "$(msg cfg_model)" "${DEEPSEEK_MODELS[@]}")"; effort="-" ;;
+    zai)        model="$(pick "$(msg cfg_model)" "${ZAI_MODELS[@]}")";      effort="-" ;;
+    mistral)    model="$(pick "$(msg cfg_model)" "${MISTRAL_MODELS[@]}")";  effort="-" ;;
+    groq)       model="$(pick "$(msg cfg_model)" "${GROQ_MODELS[@]}")";     effort="-" ;;
+    cerebras)   model="$(pick "$(msg cfg_model)" "${CEREBRAS_MODELS[@]}")"; effort="-" ;;
     vote)   while true; do
               count="$(pick "$(msg cfg_voters_count)" "1" "2" "3" "4")"
               [[ "$count" =~ ^[1-4]$ ]] && break

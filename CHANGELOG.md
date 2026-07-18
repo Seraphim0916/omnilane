@@ -8,9 +8,19 @@ semantic version tags.
 
 ### Added
 
+- Five OpenAI-compatible direct-API vendors — `deepseek`, `zai` (GLM),
+  `mistral`, `groq`, and `cerebras` — join `openrouter` as CLI-free inference
+  lanes (curl + a `<VENDOR>_API_KEY`, advise mode only). A single vendor registry
+  in `lib/common.sh` (endpoint, key env, and default model per vendor) now drives
+  every vendor-name check in `dispatch.sh` and `jobs.sh`, so adding another
+  OpenAI-compatible vendor is a one-line registry entry plus a thin runner
+  wrapper. `configure` lists them with suggested models. See
+  `docs/model-capabilities-2026-07.md` for the July 2026 model/benchmark snapshot
+  behind the routing defaults.
 - `omnilane doctor` now reports vendor-CLI availability: which of codex, claude,
   grok, gemini (the `agy` CLI), kimi, qwen, and opencode are reachable, plus
-  openrouter (`OPENROUTER_API_KEY` + curl). Shown in human and `--json` output;
+  the direct-API vendors openrouter, deepseek, zai, mistral, groq, and cerebras
+  (curl + each `<VENDOR>_API_KEY`). Shown in human and `--json` output;
   the probe mirrors the runners' `*_BIN` overrides and `local.sh` in an isolated
   subshell. It is a `PASS`/`WARN` check and never fails the report.
 - MCP server read-only introspection tools: `explain`, `validate`, `dry_run`,

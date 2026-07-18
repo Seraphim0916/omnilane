@@ -37,6 +37,12 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
   Advise/consult only (it cannot edit files; work mode fails with guidance)
   and the model slug is mandatory, e.g.
   `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`.
+- **`deepseek`, `zai`, `mistral`, `groq`, `cerebras` vendors** — the same
+  CLI-free direct-API path as `openrouter`, for OpenAI-compatible providers:
+  DeepSeek, Z.ai GLM, Mistral, Groq, and Cerebras. Each needs only `curl` and
+  its `<VENDOR>_API_KEY`; advise/consult only. A one-line `lib/common.sh`
+  registry entry defines each endpoint, key env, and default model. See
+  [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
 - **`opencode` vendor** — headless dispatch through the OpenCode
   multi-provider aggregator CLI (`opencode run`). Advise mode pins OpenCode's
   built-in read-only `plan` agent; work mode uses `--auto`. Joins the default
@@ -454,12 +460,13 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 🌱 Status
 
-v0.8.3 spans eight dispatch vendors — four harness natives (codex, claude,
-grok, gemini), three aggregator/overflow CLIs (kimi, qwen, opencode), and the
-CLI-free `openrouter` direct-API vendor — on the uniform runner contract with
+omnilane now spans thirteen dispatch vendors — four harness natives (codex,
+claude, grok, gemini), three aggregator/overflow CLIs (kimi, qwen, opencode),
+and six CLI-free OpenAI-compatible direct-API vendors (openrouter, deepseek,
+zai, mistral, groq, cerebras) — on the uniform runner contract with
 contract tests, plus the Claude Code `SessionStart`
-auto-reminder and an MCP stdio server surface (`omnilane mcp`). kimi, qwen,
-opencode, and openrouter runners are contract-tested against fake binaries;
+auto-reminder and an MCP stdio server surface (`omnilane mcp`). The direct-API
+and aggregator runners are contract-tested against fake binaries;
 real-model reports welcome. Grok/Antigravity command-shell behavior may still
 vary across CLI versions. Issues and PRs welcome.
 
