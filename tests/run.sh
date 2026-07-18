@@ -3228,5 +3228,35 @@ test_selfcheck_script() {
 }
 test_selfcheck_script
 
+test_doctor_vendors() {
+  local name="doctor reports vendor availability" home bindir out vline jout b
+  home="$TEST_ROOT/doctor-vendors"; bindir="$home/bin"; mkdir -p "$home" "$bindir"
+  for b in codex claude agy; do printf '#!/bin/sh\n' > "$bindir/$b"; chmod +x "$bindir/$b"; done
+
+  out="$(OMNILANE_HOME="$home" PATH="$bindir:/usr/bin:/bin" OPENROUTER_API_KEY=x \
+    /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"
+  if [[ "$out" != *"PASS  vendors"* ]]; then
+    fail "$name" "no vendors PASS line: $out"; return
+  fi
+  vline="$(printf '%s\n' "$out" | grep vendors)"
+  # present: codex, claude, gemini (via the agy CLI), openrouter (key + curl)
+  if [[ "$vline" != *present:* || "$vline" != *codex* || "$vline" != *claude* ||
+        "$vline" != *gemini* || "$vline" != *openrouter* ]]; then
+    fail "$name" "vendors present set wrong: $vline"; return
+  fi
+  # absent: grok, kimi, qwen, opencode
+  if [[ "$vline" != *missing:* || "$vline" != *grok* || "$vline" != *kimi* ||
+        "$vline" != *qwen* || "$vline" != *opencode* ]]; then
+    fail "$name" "vendors missing set wrong: $vline"; return
+  fi
+  jout="$(OMNILANE_HOME="$home" PATH="$bindir:/usr/bin:/bin" OPENROUTER_API_KEY=x \
+    /bin/bash "$ROOT/scripts/doctor.sh" --json 2>&1)"
+  if [[ "$jout" != *'"check":"vendors"'* ]]; then
+    fail "$name" "json vendors check absent: $jout"; return
+  fi
+  pass "$name"
+}
+test_doctor_vendors
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]
