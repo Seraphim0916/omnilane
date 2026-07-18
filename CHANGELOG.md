@@ -6,6 +6,18 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-07-18
+
+### Changed
+
+- Routing defaults refreshed against 2026-07 model data (Artificial Analysis
+  Coding Agent Index v1.1, vendor announcements): `hardest-coding` first
+  choice moves from GPT-5.6 Sol `xhigh` to `max` — Sol (max) scores 80, the
+  current state of the art, retiring the earlier xhigh-beats-max snapshot.
+- Claude Opus 4.8 fallbacks on `hardest-coding` and `hard-judgment` move from
+  `high` to `xhigh` effort, following Anthropic's published guidance to use
+  extra effort for difficult tasks and long-running asynchronous work.
+
 ## [0.7.0] - 2026-07-17
 
 ### Added
@@ -196,8 +208,9 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.7.1...HEAD
 
+[0.7.1]: https://github.com/Seraphim0916/omnilane/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Seraphim0916/omnilane/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Seraphim0916/omnilane/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/Seraphim0916/omnilane/compare/v0.5.0...v0.5.1

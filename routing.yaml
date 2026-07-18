@@ -12,10 +12,10 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding:  codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # AA coding 78.35; xhigh beats max (77.39) at lower cost — verified
+hardest-coding:  codex gpt-5.6-sol max | claude claude-opus-4-8 xhigh  # AA Coding Agent Index v1.1: Sol (max) 80 = SOTA (2026-07-09, Codex harness); Claude xhigh per Anthropic guidance for difficult tasks
 bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini "Gemini 3.5 Flash (High)" -  # Terra 76.66 ~= Fable-class at a fraction of the cost
 triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.5 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans
-hard-judgment:   codex gpt-5.6-sol max | claude claude-opus-4-8 high    # Sol max Intelligence 58.9 — second only to Fable 5 (59.9, fallback composite)
+hard-judgment:   codex gpt-5.6-sol max | claude claude-opus-4-8 xhigh   # Sol max Intelligence 59 — second only to Fable 5 (2026-07-09 AA); Claude xhigh per Anthropic guidance for difficult tasks
 taste-final:     claude claude-opus-4-8 high | codex gpt-5.6-sol max    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
 consult:         codex gpt-5.6-sol max | claude claude-opus-4-8 high | grok grok-4.5 - | gemini "Gemini 3.1 Pro (High)" -  # direct named-model consultation; use --vendor to prevent fallback
 ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # only with a design system / reference images; open-ended visual taste -> taste-final

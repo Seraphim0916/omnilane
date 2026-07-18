@@ -20,6 +20,16 @@
 
 ---
 
+## v0.7.1 の新機能
+
+- **ルーティング表を更新(2026-07 モデルデータ)** — hardest-coding の第一候補を
+  GPT-5.6 Sol **max** に変更。Artificial Analysis Coding Agent Index v1.1 で
+  Sol (max) が 80 点の現行最高を記録し、旧「xhigh が max を上回る」スナップ
+  ショットを置き換えました。
+- **Claude バックアップを強化** — hardest-coding と hard-judgment の
+  Claude Opus 4.8 バックアップを **xhigh** に変更。難しいタスクと長時間作業には
+  extra effort を推奨する Anthropic 公式ガイダンスに従います。
+
 ## v0.7.0 の新機能
 
 - **ディスパッチを事前にプレビュー** — `--dry-run` は解決済みの実行計画
@@ -108,10 +118,10 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | リファクタ、移行、テスト、大規模スイープ |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 大量の一次スクリーニング |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
 | 💬 consult | 明示指定したベンダー/モデル | —(フォールバックなし) | 自然言語で直接相談。`--vendor` を必ず維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | デザインシステム/参考画像がある場合の UI ドラフト |

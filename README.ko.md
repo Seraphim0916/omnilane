@@ -20,6 +20,16 @@
 
 ---
 
+## v0.7.1 새 기능
+
+- **라우팅 테이블 갱신(2026-07 모델 데이터)** — hardest-coding 1순위를
+  GPT-5.6 Sol **max** 로 변경. Artificial Analysis Coding Agent Index v1.1 에서
+  Sol (max) 이 80점으로 현행 최고를 기록해, 기존 「xhigh 가 max 보다 낫다」
+  스냅샷을 대체합니다.
+- **Claude 백업 강화** — hardest-coding 과 hard-judgment 의 Claude Opus 4.8
+  백업을 **xhigh** 로 변경. 어려운 작업과 장시간 작업에 extra effort 를
+  권장하는 Anthropic 공식 가이드를 따릅니다.
+
 ## v0.7.0 새 기능
 
 - **디스패치를 먼저 미리보기** — `--dry-run` 은 완전히 해석된 실행 계획(vendor,
@@ -108,10 +118,10 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 대량 1차 선별 |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
 | 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |

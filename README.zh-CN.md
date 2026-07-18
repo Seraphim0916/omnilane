@@ -20,6 +20,14 @@
 
 ---
 
+## v0.7.1 新功能
+
+- **路由表更新(2026-07 模型数据)** — hardest-coding 首选改为 GPT-5.6 Sol
+  **max** 档位:Artificial Analysis Coding Agent Index v1.1 测得 Sol (max)
+  80 分为当前最高,替换旧的「xhigh 胜 max」快照。
+- **Claude 备选升档** — hardest-coding 与 hard-judgment 的 Claude Opus 4.8
+  备选改为 **xhigh**,依 Anthropic 官方对困难任务与长时间工作的建议。
+
 ## v0.7.0 新功能
 
 - **先预览再派工** — `--dry-run` 打印完整解析后的派工计划(vendor、模型、
@@ -99,10 +107,10 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 最难的实现、深度调试、正确性攸关的修改 |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 最难的实现、深度调试、正确性攸关的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重构、迁移、测试、大面积扫描——机械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 高量初筛、第一轮过滤 |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | 架构仲裁、深度推理、第二意见 |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 架构仲裁、深度推理、第二意见 |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
 | 💬 consult | 明确指定的厂商/模型 | —(不降级) | 自然语言直接咨询;必须保留 `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |

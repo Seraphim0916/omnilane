@@ -20,6 +20,17 @@ Every subtask goes to the model that is actually best at it — across<br/>
 
 ---
 
+## What's new in v0.7.1
+
+- **Routing refresh (2026-07 model data)** — hardest-coding now dispatches
+  GPT-5.6 Sol at **max** effort: Artificial Analysis Coding Agent Index v1.1
+  scores Sol (max) at 80, the current state of the art, retiring the older
+  xhigh-beats-max snapshot.
+- **Claude backups sharpened** — the Claude Opus 4.8 fallback on
+  hardest-coding and hard-judgment moves to **xhigh** effort, following
+  Anthropic's guidance to use extra effort for difficult tasks and
+  long-running work.
+
 ## What's new in v0.7.0
 
 - **Preview any dispatch first** — `--dry-run` prints the fully resolved plan
@@ -109,10 +120,10 @@ flowchart LR
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (high) | Architecture arbitration, deep reasoning, second opinions |
+| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Architecture arbitration, deep reasoning, second opinions |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
 | 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images |
