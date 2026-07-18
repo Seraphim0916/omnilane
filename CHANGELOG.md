@@ -24,6 +24,11 @@ semantic version tags.
   unsafe specs, and rolls back on a structural FAIL; `diff` shows how local
   overrides change the effective table versus the defaults. The interactive menu
   is unchanged.
+- `jobs list` and `jobs stats` filters: `--lane` and `--vendor` (and, for
+  `list`, `--status running|done`) narrow the output in both human and `--json`
+  modes. `list` scans all jobs for up to 20 matches; `stats` filters within its
+  `--last` sample and recomputes the success rate and lane/vendor aggregates.
+  Invalid filter values exit 2; unfiltered behavior is unchanged.
 
 ## [0.8.3] - 2026-07-18
 

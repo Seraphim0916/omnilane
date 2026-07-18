@@ -356,8 +356,9 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
 dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
 jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # filter the listing
 jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
-jobs.sh [--json] stats [--last N]                  # local success and routing aggregates
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
 jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
