@@ -140,6 +140,36 @@ else
   report FAIL watchdog "timeout, gtimeout, and perl are all unavailable"
 fi
 
+# Vendor CLI availability. Runners resolve each vendor's binary through a *_BIN
+# override (default name otherwise) and source local.sh, so probe the same way
+# in a subshell — set +u because a machine-local local.sh may reference its own
+# unset vars, and the subshell keeps any side effects out of this report.
+vendor_line="$(
+  set +u
+  [[ -f "$OMNILANE_HOME/local.sh" ]] && . "$OMNILANE_HOME/local.sh" 2>/dev/null
+  present=""; absent=""
+  for spec in "codex:${CODEX_BIN:-codex}" "claude:${CLAUDE_BIN:-claude}" \
+              "grok:${GROK_BIN:-grok}" "gemini:${AGY_BIN:-agy}" \
+              "kimi:${KIMI_BIN:-kimi}" "qwen:${QWEN_BIN:-qwen}" \
+              "opencode:${OPENCODE_BIN:-opencode}"; do
+    name="${spec%%:*}"; bin="${spec#*:}"
+    if command -v "$bin" >/dev/null 2>&1; then present="$present $name"; else absent="$absent $name"; fi
+  done
+  if [[ -n "${OPENROUTER_API_KEY:-}" ]] && command -v curl >/dev/null 2>&1; then
+    present="$present openrouter"
+  else
+    absent="$absent openrouter"
+  fi
+  printf '%s|%s' "${present# }" "${absent# }"
+)"
+vendor_present="${vendor_line%%|*}"
+vendor_absent="${vendor_line#*|}"
+if [[ -n "$vendor_present" ]]; then
+  report PASS vendors "present: $vendor_present${vendor_absent:+; missing: $vendor_absent}"
+else
+  report WARN vendors "no vendor CLI reachable${vendor_absent:+ (missing: $vendor_absent)}; every lane degrades to off"
+fi
+
 if command -v python3 >/dev/null 2>&1; then
   if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' \
       >/dev/null 2>&1; then

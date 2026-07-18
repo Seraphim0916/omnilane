@@ -6,6 +6,14 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `omnilane doctor` now reports vendor-CLI availability: which of codex, claude,
+  grok, gemini (the `agy` CLI), kimi, qwen, and opencode are reachable, plus
+  openrouter (`OPENROUTER_API_KEY` + curl). Shown in human and `--json` output;
+  the probe mirrors the runners' `*_BIN` overrides and `local.sh` in an isolated
+  subshell. It is a `PASS`/`WARN` check and never fails the report.
+
 ## [0.8.3] - 2026-07-18
 
 ### Added
