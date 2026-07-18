@@ -285,6 +285,58 @@ const tools = [
       openWorldHint: false,
     },
   },
+  {
+    name: 'jobs_stats',
+    description: 'Aggregate local background-job outcomes and lane/vendor distribution from bounded public metadata. Never reads task or result bodies.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        last: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Limit the aggregate to the most recent N jobs.',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human report.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'jobs_audit',
+    description: 'Bounded read-only integrity and privacy scan of the local job store. Reports findings without printing task or result content.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        last: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Limit the scan to the most recent N jobs.',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human report.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
 ];
 
 class RpcError extends Error {
@@ -379,6 +431,16 @@ function validateJobArguments(args) {
 function validateJsonOnlyArguments(args) {
   const error = validationError(args, ['json']);
   if (error) return error;
+  if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
+  return null;
+}
+
+function validateJobsQueryArguments(args) {
+  const error = validationError(args, ['last', 'json']);
+  if (error) return error;
+  if (OWN(args, 'last') && (!Number.isInteger(args.last) || args.last < 1)) {
+    return 'last must be a positive integer';
+  }
   if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
   return null;
 }
@@ -582,6 +644,15 @@ async function callTool(name, args) {
     if (error) return toolError(error);
     const argv = args.json === true ? ['--json'] : [];
     return runToolScript('doctor', DOCTOR_SCRIPT, argv);
+  }
+  if (name === 'jobs_stats' || name === 'jobs_audit') {
+    const error = validateJobsQueryArguments(args);
+    if (error) return toolError(error);
+    const argv = [];
+    if (args.json === true) argv.push('--json');
+    argv.push(name === 'jobs_stats' ? 'stats' : 'audit');
+    if (OWN(args, 'last')) argv.push('--last', String(args.last));
+    return runToolScript(name, JOBS_SCRIPT, argv);
   }
   throw new RpcError(-32602, `Unknown tool: ${name}`);
 }

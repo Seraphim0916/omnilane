@@ -9,10 +9,11 @@ semantic version tags.
 ### Added
 
 - MCP server read-only introspection tools: `explain`, `validate`, `dry_run`,
-  `jobs_list`, and `doctor` join the existing `route`, `list_lanes`,
-  `jobs_status`, and `jobs_result`, mirroring the CLI's offline read-only
-  surface over MCP. All five refuse provider calls and create no job state;
-  `dry_run` requires an explicit `workdir` only when `mode` is `work`.
+  `jobs_list`, `jobs_stats`, `jobs_audit`, and `doctor` join the existing
+  `route`, `list_lanes`, `jobs_status`, and `jobs_result`, so the MCP surface
+  mirrors the CLI's full offline read-only surface. All refuse provider calls and
+  create no job state; `dry_run` requires an explicit `workdir` only when `mode`
+  is `work`. `jobs_stats`/`jobs_audit` accept an optional `last` and `json`.
 
 ## [0.8.3] - 2026-07-18
 

@@ -3284,5 +3284,47 @@ NODE
 }
 test_mcp_readonly_tools
 
+test_mcp_jobs_stats_audit() {
+  local name="MCP jobs_stats and jobs_audit" home output rc
+  if ! command -v node >/dev/null 2>&1; then
+    pass "$name (node unavailable; skipped)"
+    return
+  fi
+  # An empty (but real, owner-only) job store: stats aggregates zero jobs and
+  # audit finds no faults, so both return a clean, non-error report — enough to
+  # prove the MCP wiring and validation. Real aggregation is covered by the smoke.
+  home="$TEST_ROOT/mcp-jobs-query"; mkdir -p "$home/jobs"; chmod 700 "$home/jobs"
+  output="$home/responses.jsonl"
+  {
+    printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"jobs_stats","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"jobs_audit","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"jobs_stats","arguments":{"json":true,"last":5}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"jobs_stats","arguments":{"last":0}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"jobs_audit","arguments":{"unexpected":1}}}'
+  } | OMNILANE_HOME="$home" "$ROOT/bin/omnilane-mcp" > "$output" 2> "$home/stderr"
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "server exited $rc"; return; fi
+  node - "$output" > "$home/assert.out" 2>&1 <<'NODE'
+const fs = require('fs');
+const messages = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+const byId = (id) => messages.find((m) => m.id === id);
+const isErr = (id) => Boolean(byId(id).result && byId(id).result.isError === true);
+try {
+  const names = byId(2).result.tools.map((t) => t.name);
+  for (const n of ['jobs_stats', 'jobs_audit']) if (!names.includes(n)) throw new Error('tools/list missing ' + n);
+  if (isErr(3)) throw new Error('jobs_stats errored: ' + JSON.stringify(byId(3).result));
+  if (isErr(4)) throw new Error('jobs_audit errored: ' + JSON.stringify(byId(4).result));
+  if (isErr(5)) throw new Error('jobs_stats json+last errored: ' + JSON.stringify(byId(5).result));
+  if (!isErr(6)) throw new Error('last=0 was not rejected');
+  if (!isErr(7)) throw new Error('unexpected arg was not rejected');
+} catch (e) { console.error(String((e && e.message) || e)); process.exit(1); }
+NODE
+  rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "$(tail -n 1 "$home/assert.out")"; else pass "$name"; fi
+}
+test_mcp_jobs_stats_audit
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

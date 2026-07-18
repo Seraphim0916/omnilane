@@ -93,3 +93,37 @@ plugin manifests, and what's-new titles are untouched — no release action.
 
 Select. Pure additive read-only surface, mirrors an already-shipped CLI, full
 offline verification incl. real runtime, no new dependencies, no provider calls.
+
+## Follow-up commit — jobs_stats + jobs_audit (completes the read-only parity)
+
+A second commit on this branch adds the last two read-only CLI surfaces to MCP,
+so the server now mirrors the CLI's **full** offline read-only surface (11 tools):
+
+- `jobs_stats` → `jobs.sh [--json] stats [--last N]` — local outcome/routing aggregates
+- `jobs_audit` → `jobs.sh [--json] audit [--last N]` — bounded integrity/privacy scan
+
+Both accept optional `last` (positive integer) and `json`, share
+`validateJobsQueryArguments`, and never read task/result bodies.
+
+New test `test_mcp_jobs_stats_audit` drives the real server against an isolated
+empty store (both return clean, non-error reports) and rejects `last: 0` and an
+unexpected argument. Suite: `71 passed, 0 failed` under Bash 5 and Bash 3.2;
+`node --check` OK.
+
+Real smoke against a full-schema fixture job (`OMNILANE_HOME` isolated):
+
+```
+tools(11): route,jobs_status,jobs_result,list_lanes,explain,validate,dry_run,jobs_list,doctor,jobs_stats,jobs_audit
+jobs_stats -> jobs: sampled=1 succeeded=1 ... success_rate=100% | lane triage 1 | vendor codex 1
+jobs_audit -> PASS 20260719-000001-1-1 | audit: sampled=1 passed=1 failed=0 findings=0
+jobs_stats json -> {"schema_version":1,"command":"stats","ok":true,"sampled":1,...,"lanes":[{"name":"triage","count":1}],...}
+jobs_stats last=0 -> [isError] Error: last must be a positive integer
+```
+
+Result: **VERIFIED** — real aggregation and a clean audit over a valid store, JSON
+envelope, and adversarial validation.
+
+Note: an early test fixture that was valid for `jobs_stats` was correctly
+rejected by `jobs_audit` (which uses the stricter full-metadata schema and
+owner-only file-mode checks) — the tool working as designed, not a defect; the
+test was moved to an empty store and the smoke uses a complete fixture.
