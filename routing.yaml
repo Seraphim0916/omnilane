@@ -1,6 +1,8 @@
 # omnilane — single routing table shared by every harness (CC / Codex / Grok / Antigravity)
 # Format: one lane per line ->  lane: vendor model effort [| vendor model effort | off]
-#   vendor  = codex | claude | grok | gemini
+#   vendor  = codex | claude | grok | gemini | kimi | qwen | opencode | openrouter
+#   openrouter is direct-API (needs only OPENROUTER_API_KEY + curl) and advise/consult
+#   only — it cannot edit files, so it is not in the default work-capable chains.
 #   effort  = codex reasoning effort / claude --effort / agy thinking suffix / (grok: ignored)
 #   Fallback chain: the first candidate whose vendor CLI is installed wins, so the
 #   same table degrades gracefully when you only subscribe to one or two vendors.
@@ -22,7 +24,7 @@ ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # only w
 long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high | codex gpt-5.6-sol high  # 1M-token synthesis ONLY — never agentic loops (AA agentic 21.4)
 fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops
 live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
-coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | off  # codex-quota relief valve: mid-tier coding; verify factual claims (grok hallucination-prone). kimi/qwen model fields are CLI aliases — adjust to your login.
+coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off  # codex-quota relief valve: mid-tier coding; verify factual claims (grok hallucination-prone). kimi/qwen model fields are CLI aliases — adjust to your login. opencode "-" model = its own configured default.
 arbitrate:       off - -                        # opinion panel is OPT-IN: it costs one call per voter per round.
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.

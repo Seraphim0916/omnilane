@@ -18,6 +18,9 @@ GEMINI_MODELS=("Gemini 3.1 Pro (High)" "Gemini 3.1 Pro (Low)" "Gemini 3.5 Flash 
 GROK_MODELS=("grok-4.5" "grok-4.3")
 KIMI_MODELS=("kimi-k3" "kimi-k2.7-code")
 QWEN_MODELS=("qwen3-coder-plus" "qwen3-coder-flash")
+# OpenCode models use provider/model form; OpenRouter models are catalog slugs.
+OPENCODE_MODELS=("openrouter/anthropic/claude-sonnet-5" "openrouter/openai/gpt-5.6-sol" "opencode/default (leave model to opencode)")
+OPENROUTER_MODELS=("anthropic/claude-sonnet-5" "openai/gpt-5.6-sol" "moonshotai/kimi-k3" "qwen/qwen3-coder-plus")
 
 custom_value_is_safe() {
   case "$1" in
@@ -76,7 +79,7 @@ while true; do
     echo "$(msgf cfg_pick_range "${#LANES[@]}")"; continue
   fi
   lane="${LANES[$((n - 1))]}"
-  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini kimi qwen "vote (multi-model panel)" "exec (your own script/gate)" off)"
+  vendor="$(pick "$(msgf cfg_vendor_for "$lane")" codex claude grok gemini kimi qwen opencode openrouter "vote (multi-model panel)" "exec (your own script/gate)" off)"
   [[ "$vendor" == exec* ]] && vendor="exec"
   [[ "$vendor" == vote* ]] && vendor="vote"
   if [[ "$vendor" == "off" ]]; then
@@ -90,6 +93,9 @@ while true; do
     grok)   model="$(pick "$(msg cfg_model)" "${GROK_MODELS[@]}")";   effort="-" ;;
     kimi)   model="$(pick "$(msg cfg_model)" "${KIMI_MODELS[@]}")";   effort="-" ;;
     qwen)   model="$(pick "$(msg cfg_model)" "${QWEN_MODELS[@]}")";   effort="-" ;;
+    opencode)   model="$(pick "$(msg cfg_model)" "${OPENCODE_MODELS[@]}")"; effort="-"
+                [[ "$model" == "opencode/default"* ]] && model="-" ;;
+    openrouter) model="$(pick "$(msg cfg_model)" "${OPENROUTER_MODELS[@]}")"; effort="-" ;;
     vote)   while true; do
               count="$(pick "$(msg cfg_voters_count)" "1" "2" "3" "4")"
               [[ "$count" =~ ^[1-4]$ ]] && break

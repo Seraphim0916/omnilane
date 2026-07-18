@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `openrouter` vendor: direct OpenRouter API dispatch (curl + `OPENROUTER_API_KEY`,
+  no CLI dependency). Advise/consult only — work mode fails hard with guidance —
+  and the model slug is mandatory. Hundreds of hosted models become reachable
+  from any omnilane install without adding a coding-agent CLI.
+- `opencode` vendor: headless `opencode run` dispatch through the OpenCode
+  multi-provider aggregator CLI. Advise mode pins OpenCode's built-in read-only
+  `plan` agent; work mode uses `--auto`. Appended as the last fallback in the
+  default `coding-overflow` chain.
+
 ## [0.8.1] - 2026-07-18
 
 ### Added
