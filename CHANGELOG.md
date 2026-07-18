@@ -6,6 +6,13 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `jobs cancel ID`: stop a running background job. Signals the worker's process
+  group (SIGTERM, then SIGKILL after a grace period) so the vendor CLI child
+  dies too, and leaves a terminal exit recorded — 143 on graceful stop, 137 if
+  force-killed. Idempotent on already-finished, dead, or never-backgrounded jobs.
+
 ## [0.8.3] - 2026-07-18
 
 ### Added
