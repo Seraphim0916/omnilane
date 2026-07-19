@@ -60,7 +60,9 @@ cfg_set() {
   {
     echo "# updated by 'configure set' on $(date +%F) — first match per lane wins"
     echo "$lane: $spec"
-    [[ "$had_file" -eq 1 ]] && grep -v '^#' "$LOCAL_FILE.bak" | grep -v "^$lane:" || true
+    # Drop only our own stamp line and the lane being replaced; the user's own
+    # comments in routing.local.yaml survive a set.
+    [[ "$had_file" -eq 1 ]] && grep -v "^# updated by 'configure set'" "$LOCAL_FILE.bak" | grep -v "^$lane:" || true
   } > "$tmp"
   mv "$tmp" "$LOCAL_FILE"
 

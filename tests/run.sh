@@ -3505,6 +3505,16 @@ test_configure_noninteractive() {
     fail "$name" "duplicate lane lines after re-set"; return
   fi
 
+  echo "# my note: triage pinned for the demo" >> "$file"
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+    bash "$ROOT/scripts/configure.sh" set triage "claude claude-opus-4-8 high" >/dev/null 2>&1
+  if ! grep -q '^# my note: triage pinned for the demo$' "$file"; then
+    fail "$name" "set dropped a user comment from routing.local.yaml"; return
+  fi
+  if [[ "$(grep -c "^# updated by 'configure set'" "$file")" -ne 1 ]]; then
+    fail "$name" "set stacked duplicate stamp headers"; return
+  fi
+
   local rc_unsafe
   HOME="$home" OMNILANE_HOME="$home/.omnilane" \
     bash "$ROOT/scripts/configure.sh" set fast-agentic "codex \$(touch $proof) low" >/dev/null 2>&1; rc_unsafe=$?
