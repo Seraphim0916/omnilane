@@ -21,6 +21,11 @@
 
 ---
 
+## v0.9.0 の新機能
+
+- **direct-API ベンダーを 5 つ追加** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`。
+- **Fish シェル補完** — `omnilane completion fish | source`。
+
 ## v0.8.3 の新機能
 
 - **MCP サーバー** — `omnilane mcp` は依存ゼロの stdio MCP サーバーを起動し、

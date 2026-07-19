@@ -21,6 +21,11 @@
 
 ---
 
+## v0.9.0 새 기능
+
+- **direct-API 벤더 5개 추가** — `deepseek`, `zai` (GLM), `mistral`, `groq`, `cerebras`.
+- **Fish 셸 자동완성** — `omnilane completion fish | source`.
+
 ## v0.8.3 새 기능
 
 - **MCP 서버** — `omnilane mcp` 는 의존성 없는 stdio MCP 서버를 시작하여,

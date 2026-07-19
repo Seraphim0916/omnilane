@@ -21,6 +21,11 @@
 
 ---
 
+## v0.9.0 新功能
+
+- **新增 5 家 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`。
+- **fish shell completion** — `omnilane completion fish | source`。
+
 ## v0.8.3 新功能
 
 - **MCP server** — `omnilane mcp` 启动零依赖的 stdio MCP server,任何支持

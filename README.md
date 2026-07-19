@@ -21,6 +21,14 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ---
 
+## What's new in v0.9.0
+
+- **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
+  `mistral`, `groq`, and `cerebras` join `openrouter` as CLI-free lanes (curl +
+  a `<VENDOR>_API_KEY`). A one-line `lib/common.sh` registry entry adds each;
+  see [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+- **Fish shell completion** — `omnilane completion fish | source`.
+
 ## What's new in v0.8.3
 
 - **MCP server** — `omnilane mcp` starts a zero-dependency stdio MCP server,

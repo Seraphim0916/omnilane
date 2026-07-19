@@ -21,6 +21,14 @@
 
 ---
 
+## v0.9.0 新功能
+
+- **五個 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、
+  `mistral`、`groq`、`cerebras`,與 `openrouter` 同為免 CLI 通道(curl 加一把
+  `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一個。詳見
+  [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
+- **fish shell 補全** — `omnilane completion fish | source`。
+
 ## v0.8.3 新功能
 
 - **MCP server** — `omnilane mcp` 啟動零依賴的 stdio MCP server,任何支援
