@@ -3485,8 +3485,12 @@ test_configure_noninteractive() {
     fail "$name" "set did not write the lane: rc=$rc out=$out"; return
   fi
 
+  # get/diff report the *effective* table via dispatch --list, which drops to
+  # "unavailable" when the vendor CLI is missing (true on CI runners); pin the
+  # claude bin to /usr/bin/true so the assertion is about resolution, not the
+  # host's installed CLIs.
   local got rc_get
-  got="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+  got="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" CLAUDE_BIN=/usr/bin/true \
     bash "$ROOT/scripts/configure.sh" get triage 2>&1)"; rc_get=$?
   if [[ "$rc_get" -ne 0 || "$got" != triage:*claude*opus-4-8* ]]; then
     fail "$name" "get did not report the override: rc=$rc_get out=$got"; return
@@ -3559,7 +3563,10 @@ test_configure_diff() {
     fail "$name" "empty diff did not report no overrides: $out"; return
   fi
   printf 'triage: claude claude-opus-4-8 high\n' > "$file"
-  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" bash "$ROOT/scripts/configure.sh" diff 2>&1)"
+  # CLAUDE_BIN pin: without it, hosts lacking the claude CLI (CI) resolve the
+  # override and the default to the same "unavailable" line and the diff
+  # collapses to "matches the defaults".
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" CLAUDE_BIN=/usr/bin/true bash "$ROOT/scripts/configure.sh" diff 2>&1)"
   if [[ "$out" != *default*triage* || "$out" != *local*triage* || "$out" != *claude-opus-4-8* ]]; then
     fail "$name" "override diff missing default/local triage lines: $out"; return
   fi
