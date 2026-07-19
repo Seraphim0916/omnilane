@@ -64,6 +64,12 @@ class BrowserHarness:
                         pass
                     cls.playwright = None
                 time.sleep(0.5 * (attempt + 1))
+        # The skip keeps transient launch flakes from failing the suite, but it
+        # would also hide a persistently broken environment; set
+        # OMNILANE_TEST_REQUIRE_BROWSER=1 (e.g. on a host known to have Chrome)
+        # to surface the launch failure instead.
+        if os.environ.get("OMNILANE_TEST_REQUIRE_BROWSER") == "1":
+            raise last_error
         raise unittest.SkipTest(
             "Chrome/Playwright did not launch after 3 attempts: {}".format(last_error)
         )
