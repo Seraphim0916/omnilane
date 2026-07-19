@@ -21,6 +21,21 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ---
 
+## 👋 New here?
+
+You already drive an AI coding assistant — **Claude Code, Codex, Cursor, Gemini
+CLI**, and the like. Each one talks to a single AI model, and picking the best
+model for each task is left to you.
+
+**omnilane picks for you.** For every piece of work it routes the task to the
+model that is best (and cheapest) for it — tough coding to a top coder, quick
+checks to a fast cheap model, long documents to a big-context model — all on the
+subscriptions and API keys you already pay for. Use the built-in defaults, or
+tweak one small file. Nothing new to babysit (it runs behind your existing tool),
+and `./install.sh --uninstall` removes it cleanly.
+
+**[⬇ Jump to the 60-second start](#-60-second-start)**
+
 ## What's new in v0.9.0
 
 - **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
@@ -29,111 +44,27 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
   see [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
 - **Fish shell completion** — `omnilane completion fish | source`.
 
-## What's new in v0.8.3
-
-- **MCP server** — `omnilane mcp` starts a zero-dependency stdio MCP server,
-  so any MCP-capable host (Claude Code, Codex, Gemini CLI, Cursor, OpenCode…)
-  can discover and call omnilane without installing the skill: tools `route`,
-  `jobs_status`, `jobs_result`, and `list_lanes`. `route` defaults to
-  read-only advise mode; work mode requires an explicit workdir.
-
-## What's new in v0.8.2
-
-- **`openrouter` vendor** — dispatch straight to the OpenRouter API with
-  nothing but `curl` and an `OPENROUTER_API_KEY`: hundreds of hosted models
-  become reachable from any omnilane install, no coding-agent CLI required.
-  Advise/consult only (it cannot edit files; work mode fails with guidance)
-  and the model slug is mandatory, e.g.
-  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`.
-- **`deepseek`, `zai`, `mistral`, `groq`, `cerebras` vendors** — the same
-  CLI-free direct-API path as `openrouter`, for OpenAI-compatible providers:
-  DeepSeek, Z.ai GLM, Mistral, Groq, and Cerebras. Each needs only `curl` and
-  its `<VENDOR>_API_KEY`; advise/consult only. A one-line `lib/common.sh`
-  registry entry defines each endpoint, key env, and default model. See
-  [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
-- **`opencode` vendor** — headless dispatch through the OpenCode
-  multi-provider aggregator CLI (`opencode run`). Advise mode pins OpenCode's
-  built-in read-only `plan` agent; work mode uses `--auto`. Joins the default
-  `coding-overflow` chain as its last fallback.
-
-## What's new in v0.8.1
-
-- **Claude Code plugin auto-loads the routing reminder** — the plugin now
-  ships a `SessionStart` hook (`hooks/hooks.json`) that injects the routing
-  reminder at session open (`startup|resume|clear`), so plugin installs get
-  the persistent reminder with no edit to `~/.claude/CLAUDE.md`. The
-  `install.sh` instruction-file reminder still covers the other CLIs.
-
-## What's new in v0.8.0
-
-- **Two new dispatch vendors** — `kimi` (Moonshot Kimi Code CLI) and `qwen`
-  (Alibaba Qwen Code CLI) join the vendor set with the uniform runner
-  contract: advise stays read-only, work auto-approves, API-key env is
-  stripped so the CLIs use their own subscription logins, and empty output
-  is a loud failure. Pin them with `--vendor kimi|qwen`.
-- **coding-overflow grows a chain** — the quota relief valve now falls back
-  grok → kimi → qwen before `off`, so it works with any one of the three
-  vendors installed. Runners are contract-tested against fake binaries;
-  real-model reports welcome.
-
-## What's new in v0.7.1
-
-- **Routing refresh (2026-07 model data)** — hardest-coding now dispatches
-  GPT-5.6 Sol at **max** effort: Artificial Analysis Coding Agent Index v1.1
-  scores Sol (max) at 80, the current state of the art, retiring the older
-  xhigh-beats-max snapshot.
-- **Claude backups sharpened** — the Claude Opus 4.8 fallback on
-  hardest-coding and hard-judgment moves to **xhigh** effort, following
-  Anthropic's guidance to use extra effort for difficult tasks and
-  long-running work.
-
-## What's new in v0.7.0
-
-- **Preview any dispatch first** — `--dry-run` prints the fully resolved plan
-  (vendor, model, mode, timeouts, side-effect decision) with no provider call
-  and no job state.
-- **Automate with versioned JSON** — one `--json` envelope for `--list`,
-  `--explain`, `--validate`, and `jobs list|status|result|stats`, plus
-  read-only `jobs wait`, `jobs audit`, and an offline `omnilane release-audit`
-  gate with a deterministic manifest.
-- **Drive local jobs end to end** — `jobs tail` peeks at live output,
-  `jobs retry` re-dispatches a completed job fail-closed,
-  `prune --older-than` ages out old jobs, and `--help` covers every command.
-- **Install and complete safely** — `install.sh --check`/`--dry-run` report
-  drift without writing, `omnilane completion bash|zsh` ships safe tab
-  completion, and five macOS stock Bash 3.2 crashes are fixed.
-
-## What's new in v0.6.0
-
-- **Explain and validate routes offline** — inspect every fallback candidate
-  with `--explain`, or lint the complete effective table with `--validate`,
-  without invoking a provider or creating job state.
-- **Inspect local health and outcomes** — bounded `jobs.sh stats` aggregates and
-  `omnilane doctor --json` make local automation observable without exposing
-  task or result bodies.
-- **Compare runs in Live Board** — pin one loaded job as a memory-only reference
-  and compare its model path and public result with the current selection.
-- **Keep lock recovery quiet** — transient owner-file read races no longer leak
-  misleading missing-file diagnostics.
-
-## What's new in v0.5.1
-
-- **Use Codex work outside Git** — ordinary directories remain supported;
-  Omnilane never requires or runs `git init`.
-- **Stop non-Git hangs cleanly** — the resolved per-call watchdog becomes an
-  automatic process-group fuse when no whole-job timeout was configured, while
-  explicit timeout precedence and exit semantics remain intact.
-- **Trust the displayed version** — `VERSION` now drives `omnilane --version`
-  and both plugin manifests, with CI checking the changelog and all five READMEs.
-
 ## ⚡ 60-second start
+
+**The quick way — install from npm:**
+
+```bash
+npm i -g omnilane                                    # install the CLI
+omnilane route hardest-coding "fix the flaky auth token refresh"
+omnilane doctor                                      # see which AI CLIs / keys you have
+omnilane ui start                                    # optional: watch jobs live in your browser
+```
+
+**Or clone the repo** (gets you the routing table and skill to customise):
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # finds your CLIs, links the skill, speaks your language
 omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane ui start     # optional: watch jobs live in your browser
 ```
+
+> New to this? Run `omnilane doctor` first — it tells you which model CLIs and
+> API keys omnilane can already reach, so you know what will actually run.
 
 ## 🧭 How it works
 
@@ -466,6 +397,110 @@ configurator and `routing.local.yaml` exist so you can disagree.
 - **Non-Git Codex work is supported.** Some Codex CLI builds may stall outside
   a Git worktree, so the automatic fuse above bounds that case and cleans the
   supervised process group. Omnilane neither initializes nor requires a repository.
+
+## 📜 Release history
+
+<details>
+<summary>Older releases (v0.8.3 and earlier)</summary>
+
+## What's new in v0.8.3
+
+- **MCP server** — `omnilane mcp` starts a zero-dependency stdio MCP server,
+  so any MCP-capable host (Claude Code, Codex, Gemini CLI, Cursor, OpenCode…)
+  can discover and call omnilane without installing the skill: tools `route`,
+  `jobs_status`, `jobs_result`, and `list_lanes`. `route` defaults to
+  read-only advise mode; work mode requires an explicit workdir.
+
+## What's new in v0.8.2
+
+- **`openrouter` vendor** — dispatch straight to the OpenRouter API with
+  nothing but `curl` and an `OPENROUTER_API_KEY`: hundreds of hosted models
+  become reachable from any omnilane install, no coding-agent CLI required.
+  Advise/consult only (it cannot edit files; work mode fails with guidance)
+  and the model slug is mandatory, e.g.
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`.
+- **`deepseek`, `zai`, `mistral`, `groq`, `cerebras` vendors** — the same
+  CLI-free direct-API path as `openrouter`, for OpenAI-compatible providers:
+  DeepSeek, Z.ai GLM, Mistral, Groq, and Cerebras. Each needs only `curl` and
+  its `<VENDOR>_API_KEY`; advise/consult only. A one-line `lib/common.sh`
+  registry entry defines each endpoint, key env, and default model. See
+  [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+- **`opencode` vendor** — headless dispatch through the OpenCode
+  multi-provider aggregator CLI (`opencode run`). Advise mode pins OpenCode's
+  built-in read-only `plan` agent; work mode uses `--auto`. Joins the default
+  `coding-overflow` chain as its last fallback.
+
+## What's new in v0.8.1
+
+- **Claude Code plugin auto-loads the routing reminder** — the plugin now
+  ships a `SessionStart` hook (`hooks/hooks.json`) that injects the routing
+  reminder at session open (`startup|resume|clear`), so plugin installs get
+  the persistent reminder with no edit to `~/.claude/CLAUDE.md`. The
+  `install.sh` instruction-file reminder still covers the other CLIs.
+
+## What's new in v0.8.0
+
+- **Two new dispatch vendors** — `kimi` (Moonshot Kimi Code CLI) and `qwen`
+  (Alibaba Qwen Code CLI) join the vendor set with the uniform runner
+  contract: advise stays read-only, work auto-approves, API-key env is
+  stripped so the CLIs use their own subscription logins, and empty output
+  is a loud failure. Pin them with `--vendor kimi|qwen`.
+- **coding-overflow grows a chain** — the quota relief valve now falls back
+  grok → kimi → qwen before `off`, so it works with any one of the three
+  vendors installed. Runners are contract-tested against fake binaries;
+  real-model reports welcome.
+
+## What's new in v0.7.1
+
+- **Routing refresh (2026-07 model data)** — hardest-coding now dispatches
+  GPT-5.6 Sol at **max** effort: Artificial Analysis Coding Agent Index v1.1
+  scores Sol (max) at 80, the current state of the art, retiring the older
+  xhigh-beats-max snapshot.
+- **Claude backups sharpened** — the Claude Opus 4.8 fallback on
+  hardest-coding and hard-judgment moves to **xhigh** effort, following
+  Anthropic's guidance to use extra effort for difficult tasks and
+  long-running work.
+
+## What's new in v0.7.0
+
+- **Preview any dispatch first** — `--dry-run` prints the fully resolved plan
+  (vendor, model, mode, timeouts, side-effect decision) with no provider call
+  and no job state.
+- **Automate with versioned JSON** — one `--json` envelope for `--list`,
+  `--explain`, `--validate`, and `jobs list|status|result|stats`, plus
+  read-only `jobs wait`, `jobs audit`, and an offline `omnilane release-audit`
+  gate with a deterministic manifest.
+- **Drive local jobs end to end** — `jobs tail` peeks at live output,
+  `jobs retry` re-dispatches a completed job fail-closed,
+  `prune --older-than` ages out old jobs, and `--help` covers every command.
+- **Install and complete safely** — `install.sh --check`/`--dry-run` report
+  drift without writing, `omnilane completion bash|zsh` ships safe tab
+  completion, and five macOS stock Bash 3.2 crashes are fixed.
+
+## What's new in v0.6.0
+
+- **Explain and validate routes offline** — inspect every fallback candidate
+  with `--explain`, or lint the complete effective table with `--validate`,
+  without invoking a provider or creating job state.
+- **Inspect local health and outcomes** — bounded `jobs.sh stats` aggregates and
+  `omnilane doctor --json` make local automation observable without exposing
+  task or result bodies.
+- **Compare runs in Live Board** — pin one loaded job as a memory-only reference
+  and compare its model path and public result with the current selection.
+- **Keep lock recovery quiet** — transient owner-file read races no longer leak
+  misleading missing-file diagnostics.
+
+## What's new in v0.5.1
+
+- **Use Codex work outside Git** — ordinary directories remain supported;
+  Omnilane never requires or runs `git init`.
+- **Stop non-Git hangs cleanly** — the resolved per-call watchdog becomes an
+  automatic process-group fuse when no whole-job timeout was configured, while
+  explicit timeout precedence and exit semantics remain intact.
+- **Trust the displayed version** — `VERSION` now drives `omnilane --version`
+  and both plugin manifests, with CI checking the changelog and all five READMEs.
+
+</details>
 
 ## 🌱 Status
 

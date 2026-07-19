@@ -21,96 +21,44 @@
 
 ---
 
+## 👋 第一次用?
+
+你已经在用某个 AI 写程式助手——**Claude Code、Codex、Cursor、Gemini
+CLI** 之类。每个一次只接一个 AI 模型,而「每件工作该用哪个模型最好」得你自己决定。
+
+**omnilane 帮你决定。** 每一件工作,它会自动派给对那件事最强(也最省)的模型——硬派程式
+交给顶尖程式模型、随手的小检查交给又快又便宜的、长文件交给大脉络模型——全部用你本来就在
+付费的订阅与 API 金钥。用内建预设值就好,或改一个小设定档就能微调。不用另外顾一套东西
+(它躲在你现有工具背后跑),`./install.sh --uninstall` 可干净移除。
+
+**[⬇ 直接跳到 60 秒上手](#-60-秒上手)**
+
 ## v0.9.0 新功能
 
 - **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
 - **fish shell 补全** — `omnilane completion fish | source`。
 
-## v0.8.3 新功能
-
-- **MCP server** — `omnilane mcp` 启动零依赖的 stdio MCP server,任何支持
-  MCP 的宿主(Claude Code、Codex、Gemini CLI、Cursor、OpenCode……)无需安装
-  skill 即可发现并调用 omnilane:提供 `route`、`jobs_status`、`jobs_result`、
-  `list_lanes` 四个工具。`route` 默认只读 advise 模式;work 模式必须明确
-  指定 workdir。
-
-## v0.8.2 新功能
-
-- **`openrouter` vendor** — 只需 `curl` 加一个 `OPENROUTER_API_KEY`,
-  即可直连 OpenRouter API 派工:任何 omnilane 安装都能访问数百个
-  托管模型,无需再装任何代理 CLI。仅限 advise/consult(不能改文件,
-  work 模式会明确报错指路),模型 slug 必填,例如
-  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`。
-- **`opencode` vendor** — 通过 OpenCode 多供应商聚合 CLI 无头派工
-  (`opencode run`)。advise 模式锁定内置只读 `plan` agent;work 模式
-  用 `--auto`。加入默认 `coding-overflow` 链作为最后回退。
-
-## v0.8.1 新功能
-
-- **Claude Code 插件开场自动载入路由提醒** — 插件新增 `SessionStart`
-  hook(`hooks/hooks.json`),在会话开始(`startup|resume|clear`)时自动
-  注入路由提醒,安装插件即生效,无需修改 `~/.claude/CLAUDE.md`。其他
-  CLI 仍使用 `install.sh` 的指令文件提醒。
-
-## v0.8.0 新功能
-
-- **两个新派工 vendor** — `kimi`(Moonshot Kimi Code CLI)与 `qwen`
-  (Alibaba Qwen Code CLI)加入,沿用统一 runner 契约:advise 只读、
-  work 自动批准、剥除 API key 环境变量改用 CLI 自身订阅登录、空输出
-  视为失败。可用 `--vendor kimi|qwen` 直接指定。
-- **coding-overflow 新增备选链** — 额度溢流道改为 grok → kimi → qwen
-  再到 `off`,三家装任一家即可用。runner 以假可执行文件完成契约测试;
-  欢迎反馈真实模型实测结果。
-
-## v0.7.1 新功能
-
-- **路由表更新(2026-07 模型数据)** — hardest-coding 首选改为 GPT-5.6 Sol
-  **max** 档位:Artificial Analysis Coding Agent Index v1.1 测得 Sol (max)
-  80 分为当前最高,替换旧的「xhigh 胜 max」快照。
-- **Claude 备选升档** — hardest-coding 与 hard-judgment 的 Claude Opus 4.8
-  备选改为 **xhigh**,依 Anthropic 官方对困难任务与长时间工作的建议。
-
-## v0.7.0 新功能
-
-- **先预览再派工** — `--dry-run` 打印完整解析后的派工计划(vendor、模型、
-  模式、超时、副作用判定),不调用模型、不创建作业状态。
-- **版本化 JSON 自动化** — `--list`/`--explain`/`--validate` 与
-  `jobs list|status|result|stats` 都提供 `--json` 信封;另有只读 `jobs wait`、
-  `jobs audit`,以及带可复现 manifest 的离线 `omnilane release-audit` 发布审计。
-- **本地作业一条龙** — `jobs tail` 查看实时输出、`jobs retry` 以 fail-closed
-  方式重派已完成作业、`prune --older-than` 按时间清理,`--help` 覆盖所有命令。
-- **安装与补全更安全** — `install.sh --check`/`--dry-run` 只读报告漂移,
-  `omnilane completion bash|zsh` 提供安全的 tab 补全,并修复五个 macOS 自带
-  Bash 3.2 崩溃。
-
-## v0.6.0 新功能
-
-- **离线理解并验证路由** — 使用 `--explain` 查看每个备用候选，或使用
-  `--validate` 检查完整生效路由表；都不会调用模型或创建作业状态。
-- **用机器可读数据观察本地状态** — `jobs.sh stats` 提供有界统计，
-  `omnilane doctor --json` 提供健康检查，同时不会泄漏任务或结果正文。
-- **在 Live Board 比较两条作业** — 将一条已加载作业固定为仅存在于内存中的
-  参考快照，并排比较模型路径与公开结果。
-- **让锁恢复更安静** — 所有者文件在检查与读取之间消失时，不再泄漏容易误判的
-  缺失文件诊断，同时保持 fail-closed。
-
-## v0.5.1 新功能
-
-- **在非 Git 目录使用 Codex work** — 普通文件夹仍完整支持；Omnilane 不要求，
-  也绝不会自动执行 `git init`。
-- **干净停止非 Git 卡死** — 未设置整体上限时，解析后的单次看门狗会自动成为
-  进程组保险丝，同时保留手动 timeout 的优先级和退出码语义。
-- **让版本显示可信** — `VERSION` 现在统一提供给 `omnilane --version` 和两份
-  plugin manifest，CI 会检查变更记录和五种语言 README 是否一致。
-
 ## ⚡ 60 秒上手
+
+**最快的方式——用 npm 装:**
+
+```bash
+npm i -g omnilane                                    # 装 CLI
+omnilane route hardest-coding "修掉会间歇失败的 auth token 更新测试"
+omnilane doctor                                      # 看你手上有哪些 AI CLI / 金钥
+omnilane ui start                                    # 选配:在浏览器即时看派工
+```
+
+**或 clone 整包**(拿到路由表与可自订的技能):
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # 检测你的 CLI、接好技能、说你的语言
-omnilane route hardest-coding "修掉间歇失败的 auth token 刷新测试"
-omnilane ui start     # 可选:在浏览器实时查看派发
+./install.sh          # 侦测你的 CLI、接好技能、说你的语言
+omnilane route hardest-coding "修掉会间歇失败的 auth token 更新测试"
 ```
+
+> 第一次用?先跑 `omnilane doctor`——它会告诉你 omnilane 现在能接到哪些模型 CLI 与
+> API 金钥,你就知道实际会跑什么。
 
 ## 🧭 工作原理
 
@@ -393,6 +341,90 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 - **非 Git 的 Codex work 仍受支持。** 部分 Codex CLI 版本可能在 Git worktree
   外卡住，因此上面的自动保险丝会限制这个场景并清理受监工的进程组。Omnilane
   不会自动执行 `git init`，也不要求用户创建仓库。
+
+## 📜 版本历程
+
+<details>
+<summary>旧版本(v0.8.3 以前)</summary>
+
+## v0.8.3 新功能
+
+- **MCP server** — `omnilane mcp` 启动零依赖的 stdio MCP server,任何支持
+  MCP 的宿主(Claude Code、Codex、Gemini CLI、Cursor、OpenCode……)无需安装
+  skill 即可发现并调用 omnilane:提供 `route`、`jobs_status`、`jobs_result`、
+  `list_lanes` 四个工具。`route` 默认只读 advise 模式;work 模式必须明确
+  指定 workdir。
+
+## v0.8.2 新功能
+
+- **`openrouter` vendor** — 只需 `curl` 加一个 `OPENROUTER_API_KEY`,
+  即可直连 OpenRouter API 派工:任何 omnilane 安装都能访问数百个
+  托管模型,无需再装任何代理 CLI。仅限 advise/consult(不能改文件,
+  work 模式会明确报错指路),模型 slug 必填,例如
+  `dispatch.sh --vendor openrouter --model anthropic/claude-sonnet-5 consult "..."`。
+- **`opencode` vendor** — 通过 OpenCode 多供应商聚合 CLI 无头派工
+  (`opencode run`)。advise 模式锁定内置只读 `plan` agent;work 模式
+  用 `--auto`。加入默认 `coding-overflow` 链作为最后回退。
+
+## v0.8.1 新功能
+
+- **Claude Code 插件开场自动载入路由提醒** — 插件新增 `SessionStart`
+  hook(`hooks/hooks.json`),在会话开始(`startup|resume|clear`)时自动
+  注入路由提醒,安装插件即生效,无需修改 `~/.claude/CLAUDE.md`。其他
+  CLI 仍使用 `install.sh` 的指令文件提醒。
+
+## v0.8.0 新功能
+
+- **两个新派工 vendor** — `kimi`(Moonshot Kimi Code CLI)与 `qwen`
+  (Alibaba Qwen Code CLI)加入,沿用统一 runner 契约:advise 只读、
+  work 自动批准、剥除 API key 环境变量改用 CLI 自身订阅登录、空输出
+  视为失败。可用 `--vendor kimi|qwen` 直接指定。
+- **coding-overflow 新增备选链** — 额度溢流道改为 grok → kimi → qwen
+  再到 `off`,三家装任一家即可用。runner 以假可执行文件完成契约测试;
+  欢迎反馈真实模型实测结果。
+
+## v0.7.1 新功能
+
+- **路由表更新(2026-07 模型数据)** — hardest-coding 首选改为 GPT-5.6 Sol
+  **max** 档位:Artificial Analysis Coding Agent Index v1.1 测得 Sol (max)
+  80 分为当前最高,替换旧的「xhigh 胜 max」快照。
+- **Claude 备选升档** — hardest-coding 与 hard-judgment 的 Claude Opus 4.8
+  备选改为 **xhigh**,依 Anthropic 官方对困难任务与长时间工作的建议。
+
+## v0.7.0 新功能
+
+- **先预览再派工** — `--dry-run` 打印完整解析后的派工计划(vendor、模型、
+  模式、超时、副作用判定),不调用模型、不创建作业状态。
+- **版本化 JSON 自动化** — `--list`/`--explain`/`--validate` 与
+  `jobs list|status|result|stats` 都提供 `--json` 信封;另有只读 `jobs wait`、
+  `jobs audit`,以及带可复现 manifest 的离线 `omnilane release-audit` 发布审计。
+- **本地作业一条龙** — `jobs tail` 查看实时输出、`jobs retry` 以 fail-closed
+  方式重派已完成作业、`prune --older-than` 按时间清理,`--help` 覆盖所有命令。
+- **安装与补全更安全** — `install.sh --check`/`--dry-run` 只读报告漂移,
+  `omnilane completion bash|zsh` 提供安全的 tab 补全,并修复五个 macOS 自带
+  Bash 3.2 崩溃。
+
+## v0.6.0 新功能
+
+- **离线理解并验证路由** — 使用 `--explain` 查看每个备用候选，或使用
+  `--validate` 检查完整生效路由表；都不会调用模型或创建作业状态。
+- **用机器可读数据观察本地状态** — `jobs.sh stats` 提供有界统计，
+  `omnilane doctor --json` 提供健康检查，同时不会泄漏任务或结果正文。
+- **在 Live Board 比较两条作业** — 将一条已加载作业固定为仅存在于内存中的
+  参考快照，并排比较模型路径与公开结果。
+- **让锁恢复更安静** — 所有者文件在检查与读取之间消失时，不再泄漏容易误判的
+  缺失文件诊断，同时保持 fail-closed。
+
+## v0.5.1 新功能
+
+- **在非 Git 目录使用 Codex work** — 普通文件夹仍完整支持；Omnilane 不要求，
+  也绝不会自动执行 `git init`。
+- **干净停止非 Git 卡死** — 未设置整体上限时，解析后的单次看门狗会自动成为
+  进程组保险丝，同时保留手动 timeout 的优先级和退出码语义。
+- **让版本显示可信** — `VERSION` 现在统一提供给 `omnilane --version` 和两份
+  plugin manifest，CI 会检查变更记录和五种语言 README 是否一致。
+
+</details>
 
 ## 🌱 状态
 
