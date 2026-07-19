@@ -23,8 +23,8 @@
 
 ## v0.9.0 新功能
 
-- **新增 5 家 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`。
-- **fish shell completion** — `omnilane completion fish | source`。
+- **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
+- **fish shell 补全** — `omnilane completion fish | source`。
 
 ## v0.8.3 新功能
 
@@ -396,12 +396,7 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 
 ## 🌱 状态
 
-v0.8.3 共有八个派发 vendor——四个框架原生(codex、claude、grok、gemini)、
-三个聚合/溢流 CLI(kimi、qwen、opencode),加上免 CLI 的 `openrouter` 直连
-API vendor——全部走统一 runner 契约并附 contract 测试,另有 Claude Code
-`SessionStart` 自动提醒与 MCP stdio server 界面(`omnilane mcp`)。kimi、qwen、opencode、openrouter 的 runner 以假
-可执行文件做过契约测试;欢迎反馈真实模型使用经验。Grok/Antigravity 命令壳
-行为仍可能随 CLI 版本变动。欢迎提交 issue 与 PR。
+omnilane 现有 13 个派工 vendor——4 个框架原生(codex、claude、grok、gemini)、3 个聚合/溢流 CLI(kimi、qwen、opencode),加上 6 个免 CLI 的 OpenAI-compatible direct-API vendor(openrouter、deepseek、zai、mistral、groq、cerebras)——全部走统一 runner 契约并附 contract 测试,另有 Claude Code `SessionStart` 自动提醒与 MCP stdio server 介面(`omnilane mcp`)。direct-API 与聚合 runner 皆以假可执行档做过契约测试;欢迎反馈真实模型使用经验。Grok/Antigravity 命令壳行为仍可能随 CLI 版本变动。欢迎提交 issue 与 PR。
 
 项目文档：[贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [变更记录](CHANGELOG.md)
