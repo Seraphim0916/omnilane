@@ -1,6 +1,6 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "omnilane",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "One routing table, every harness: classify subtasks into lanes and auto-dispatch each lane to the best vendor CLI (Codex, Claude Code, Grok Build, Antigravity) with background jobs, depth guard, and serialized codex dispatch."
 }

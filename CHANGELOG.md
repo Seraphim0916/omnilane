@@ -6,6 +6,20 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-19
+
+### Fixed
+
+- `configure set` no longer deletes hand-written comments from
+  `routing.local.yaml`: it now rewrites only its own stamp header and the lane
+  being replaced, so user comments survive a set.
+
+### Added
+
+- Browser-backed UI tests honor `OMNILANE_TEST_REQUIRE_BROWSER=1`, which turns
+  a persistent Chrome/Playwright launch failure into a real failure instead of
+  a skip — for hosts known to have a working Chrome.
+
 ## [0.9.0] - 2026-07-19
 
 ### Added
@@ -307,7 +321,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Seraphim0916/omnilane/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/Seraphim0916/omnilane/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/Seraphim0916/omnilane/compare/v0.8.1...v0.8.2

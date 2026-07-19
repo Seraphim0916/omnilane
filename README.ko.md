@@ -35,6 +35,11 @@
 
 **[⬇ 60초 시작으로](#-60초-시작)**
 
+## v0.9.1 새 기능
+
+- **수정**: `configure set` 이 더 이상 `routing.local.yaml` 의 수기 주석을
+  삭제하지 않습니다. 자체 스탬프 줄과 교체 대상 레인만 다시 씁니다.
+
 ## v0.9.0 새 기능
 
 - **OpenAI 호환 direct-API 벤더 5개 추가** — `deepseek`, `zai` (GLM), `mistral`,

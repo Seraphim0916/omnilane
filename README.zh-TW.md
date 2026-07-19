@@ -33,6 +33,11 @@ CLI** 之類。每個一次只接一個 AI 模型,而「每件工作該用哪個
 
 **[⬇ 直接跳到 60 秒上手](#-60-秒上手)**
 
+## v0.9.1 新功能
+
+- **修正**:`configure set` 不再刪掉 `routing.local.yaml` 裡手寫的註解——
+  只改寫自身的戳記行與被取代的 lane。
+
 ## v0.9.0 新功能
 
 - **五個 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、

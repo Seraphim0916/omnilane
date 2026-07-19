@@ -33,6 +33,11 @@ CLI** 之类。每个一次只接一个 AI 模型,而「每件工作该用哪个
 
 **[⬇ 直接跳到 60 秒上手](#-60-秒上手)**
 
+## v0.9.1 新功能
+
+- **修复**:`configure set` 不再删除 `routing.local.yaml` 中手写的注释——
+  只改写自身的戳记行与被替换的 lane。
+
 ## v0.9.0 新功能
 
 - **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。

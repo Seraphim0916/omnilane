@@ -36,6 +36,12 @@ and `./install.sh --uninstall` removes it cleanly.
 
 **[⬇ Jump to the 60-second start](#-60-second-start)**
 
+## What's new in v0.9.1
+
+- **Fix:** `configure set` no longer deletes hand-written comments from
+  `routing.local.yaml` — it rewrites only its own stamp header and the lane
+  being replaced.
+
 ## What's new in v0.9.0
 
 - **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
