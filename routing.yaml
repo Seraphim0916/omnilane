@@ -7,30 +7,33 @@
 #   Fallback chain: the first candidate whose vendor CLI is installed wins, so the
 #   same table degrades gracefully when you only subscribe to one or two vendors.
 # Override any line in ~/.omnilane/routing.local.yaml (same format; local wins).
-# Provenance (audited 2026-07-12): defaults follow Artificial Analysis data, 2026-07
+# Provenance (audited 2026-07-12, re-audited 2026-07-21 vs official model cards —
+# see docs/model-capabilities-2026-07.md): defaults follow Artificial Analysis data, 2026-07
 # snapshot. Verified against AA site records + vendor pricing pages: Intelligence &
 # Coding indexes and 7:2:1 blended prices all match (AA field price1mBlended7To2To1);
 # coding cost-per-task is chart-only (not independently reconstructed). Prices are
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding:  codex gpt-5.6-sol max | claude claude-opus-4-8 xhigh  # AA Coding Agent Index v1.1: Sol (max) 80 = SOTA (2026-07-09, Codex harness); Claude xhigh per Anthropic guidance for difficult tasks
+hardest-coding:  codex gpt-5.6-sol max | claude claude-opus-4-8 xhigh  # AA Coding Agent Index v1.1: Sol (max) 80 = SOTA (2026-07-09, Codex harness); SWE-Bench Pro flips it (Fable 5 80.0 vs Sol 64.6 — different axis); Claude xhigh per Anthropic guidance for difficult tasks
 bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini "Gemini 3.5 Flash (High)" -  # Terra 76.66 ~= Fable-class at a fraction of the cost
 triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.5 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans
 hard-judgment:   codex gpt-5.6-sol max | claude claude-opus-4-8 xhigh   # Sol max Intelligence 59 — second only to Fable 5 (2026-07-09 AA); Claude xhigh per Anthropic guidance for difficult tasks
 taste-final:     claude claude-opus-4-8 high | codex gpt-5.6-sol max    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
 consult:         codex gpt-5.6-sol max | claude claude-opus-4-8 high | grok grok-4.5 - | gemini "Gemini 3.1 Pro (High)" -  # direct named-model consultation; use --vendor to prevent fallback
 ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-4-8 high  # only with a design system / reference images; open-ended visual taste -> taste-final
-long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high | codex gpt-5.6-sol high  # 1M-token synthesis ONLY — never agentic loops (AA agentic 21.4)
+long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-4-8 high | codex gpt-5.6-sol high  # 1M context (model card); pick for cost + long-doc synthesis. Model card shows Pro agentic-capable (Terminal-Bench 70.3) — no hard ban, but fast loops still route to fast-agentic (Flash 76.2 beats it)
 fast-agentic:    gemini "Gemini 3.5 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops
 live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
-coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off  # codex-quota relief valve: mid-tier coding; verify factual claims (grok hallucination-prone). kimi/qwen model fields are CLI aliases — adjust to your login. opencode "-" model = its own configured default.
+coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off  # codex-quota relief valve: mid-tier coding; Grok 4.5 (GA 2026-07-16) Terminal-Bench 83.3 / SWE-Bench Pro 64.7, but AA hallucination 54% — verify factual claims. qwen3-coder-plus = 2025-09-23 snapshot alias (Qwen 3.6 Plus exists; re-evaluate before swapping). kimi/qwen model fields are CLI aliases — adjust to your login. opencode "-" model = its own configured default.
 arbitrate:       off - -                        # opinion panel is OPT-IN: it costs one call per voter per round.
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.
                                                 # Custom gate: `arbitrate: exec /path/to/script -`
 # Claude Fable 5 (claude-fable-5) is deliberately absent from the defaults: the top Claude tier
-# is usually the MAIN LOOP itself, not a dispatched worker, and it prices above Opus. If you want
+# is usually the MAIN LOOP itself, not a dispatched worker, and it prices above Opus. This is a
+# cost / guardrail / main-loop policy choice, NOT a capability verdict — Anthropic positions
+# Fable 5 above Opus 4.8. If you want
 # to route to it anyway, pick it in the configurator or set e.g.
 #   taste-final: claude claude-fable-5 high
 # in ~/.omnilane/routing.local.yaml.

@@ -1,10 +1,14 @@
 # Model capabilities — July 2026 snapshot
 
-Compiled 2026-07-19 from public benchmarks and each provider's own API docs, to
-inform omnilane's routing defaults and vendor list. Model capabilities move
-fast: treat every score as of its cited date, and re-check the provider's own
-docs before pinning a model. Benchmark numbers depend heavily on scaffold and
-are quoted from the sources listed at the bottom, not re-measured here.
+Compiled 2026-07-19, re-audited 2026-07-21 against official model cards and
+vendor docs, to inform omnilane's routing defaults and vendor list. Model
+capabilities move fast: treat every score as of its cited date, and re-check
+the provider's own docs before pinning a model. Benchmark numbers depend
+heavily on scaffold: when quoting one, record the model variant/effort, the
+tool harness, and single- vs multi-attempt, and never compare raw numbers
+across harnesses. Source priority: official model cards / vendor docs first,
+then original benchmark publishers and Artificial Analysis; secondary
+aggregators (Vellum, BenchLM, Morph) only as cross-checked fallback.
 
 ## Coding benchmarks
 
@@ -63,6 +67,11 @@ Open-weight coders on Verified:
 Open-weight coding leaders (mid-2026): GLM-5.2 (1M context, long-horizon),
 MiniMax M3, Kimi K2.7 Code, DeepSeek V4, Qwen3-Coder.
 
+Note: the `qwen3-coder-plus` alias now resolves to the 2025-09-23 snapshot on
+Alibaba's side, and Qwen Code ships the newer Qwen 3.6 Plus. Re-evaluate the
+coding-overflow backup before swapping — whether the newer alias works on the
+local CLI login is unverified.
+
 ### Artificial Analysis Intelligence Index (2026-07-18, 165 models)
 
 | Model | Score | Context |
@@ -82,10 +91,13 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 |-------|-----------:|------------:|---------|
 | GPT-5.4 | 2.50 | 15.00 | 1M |
 | GPT-5.5 | 5.00 | 30.00 | 1M |
+| GPT-5.6 Sol | 5.00 | 30.00 | 1.05M |
+| GPT-5.6 Terra | 2.50 | 15.00 | 1.05M |
+| GPT-5.6 Luna | 1.00 | 6.00 | 1.05M |
 | Claude Opus 4.8 | 5.00 | 25.00 | 200K |
 | Claude Sonnet 4.6 | 3.00 | 15.00 | 1M+ |
 | Claude Fable 5 | 10.00 | — | 1M+ |
-| Gemini 3.1 Pro | 2.00 | 12.00 | ~2M (largest commercial) |
+| Gemini 3.1 Pro | 2.00 | 12.00 | 1M (model card) |
 | Gemini 3 Flash | 0.50 | 3.00 | 1M |
 | Gemini 3.1 Flash-Lite | 0.10 | 0.40 | — |
 | Grok 4.5 | 2.00 | 6.00 | — |
@@ -97,17 +109,27 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 
 Groq and Cerebras are fast-inference hosts (Llama / Qwen / gpt-oss families); the
 per-token price depends on which hosted model you pick — see their pricing pages.
-GPT-5.6 pricing / context were not published in the sources surveyed here.
+GPT-5.6 Sol / Terra / Luna prices and 1.05M context are from OpenAI's official
+model catalog (checked 2026-07-21).
 
 ## Frontier models omnilane routes (codex / claude / gemini / grok lanes)
 
 - **Gemini 3.1 Pro** (Google, 2026-02): SWE-bench Verified 80.6%, LiveCodeBench
-  Pro ~2,439 Elo (leads), ~2M context; strong agentic coding (plans before
-  editing, multi-tool orchestration) — suited to monorepo / long-context work.
+  Pro ~2,439 Elo (leads), 1M context per the official model card (earlier "~2M"
+  figures came from secondary aggregators and are wrong). The model card lists
+  it as agentic-capable — Terminal-Bench 70.3%, MCP Atlas 78.2%; Gemini 3.5
+  Flash scores 76.2% / 83.6% on the same pair. Routing prefers Flash for fast
+  agentic loops on speed/cost grounds, not because Pro cannot run loops.
   omnilane reaches it through the `gemini` lane (the `agy` CLI).
-- **Grok 4.5** (xAI, public 2026-07-09): a low-cost frontier coder ($2/$6);
-  detailed public coding benchmarks were still thin at the time of writing
-  (Grok 4.3 scored ~75% SWE-bench Verified). omnilane's `grok` lane.
+- **Grok 4.5** (xAI, GA 2026-07-16): a low-cost frontier coder ($2/$6);
+  Terminal-Bench 83.3%, SWE-Bench Pro 64.7% per xAI's launch post. Artificial
+  Analysis measures a 54% hallucination rate — more capable but also more
+  willing to guess, so verify every factual claim it ships. omnilane's `grok`
+  lane.
+- **Claude Fable 5** (Anthropic, GA): Anthropic positions it above Opus 4.8.
+  Its absence from omnilane's default lanes is a cost / guardrail / main-loop
+  policy choice — the top Claude tier is usually the main loop itself — not a
+  capability verdict.
 - **GPT-5.6 Sol / Terra / Luna** and **Claude Opus 4.8 / Fable 5** are covered in
   the benchmark and pricing tables above; they back the `codex` and `claude`
   lanes.
@@ -150,18 +172,39 @@ Coding Plan uses a separate `/api/coding/paas/v4` path. Exact model slugs change
 
 ## Sources
 
-- Artificial Analysis — Coding Agent Index: <https://artificialanalysis.ai/agents/coding-agents>
-- Artificial Analysis Intelligence Index (BenchLM mirror, 2026-07-18): <https://benchlm.ai/benchmarks/artificialAnalysis>
-- GPT-5.6 benchmarks explained (Vellum): <https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained>
-- Best open-weight AI models 2026 (Kingy): <https://kingy.ai/news/best-open-weight-ai-models-in-2026-glm-5-2-vs-deepseek-v4-vs-kimi-k2-6-vs-qwen-vs-mistral/>
-- awesome-cli-coding-agents: <https://github.com/bradAGI/awesome-cli-coding-agents>
+Priority order: tier 1 (official vendor docs / model cards) overrides tier 2
+(original benchmark publishers, Artificial Analysis), which overrides tier 3
+(secondary aggregators — use only when tiers 1-2 lack the number, and
+cross-check).
+
+Tier 1 — official vendor docs:
+
+- OpenAI model catalog (GPT-5.6 pricing/context): <https://developers.openai.com/api/docs/models>
+- Gemini 3.1 Pro model card: <https://deepmind.google/models/model-cards/gemini-3-1-pro>
+- Gemini official evals (3.5 Flash): <https://deepmind.google/models/gemini/>
+- xAI Grok 4.5 launch post: <https://x.ai/news/grok-4-5>
+- Anthropic Claude Fable 5 / Mythos 5: <https://www.anthropic.com/news/claude-fable-5-mythos-5>
+- Qwen Code updates (Qwen 3.6 Plus): <https://qwenlm.github.io/qwen-code-docs/en/blog/updates/weekly-update-2026-04-09/>
+- Alibaba Model Studio pricing (qwen3-coder-plus snapshot mapping): <https://help.aliyun.com/en/model-studio/model-pricing>
 - DeepSeek API docs: <https://api-docs.deepseek.com/>
 - Z.ai developer docs: <https://docs.z.ai/devpack/quick-start>
 - Mistral Codestral: <https://mistral.ai/news/codestral/>
 - Groq OpenAI compatibility: <https://console.groq.com/docs/openai>
 - Cerebras model catalog: <https://inference-docs.cerebras.ai/models/overview>
+
+Tier 2 — benchmark publishers:
+
+- Artificial Analysis — Coding Agent Index: <https://artificialanalysis.ai/agents/coding-agents>
+- Artificial Analysis — Grok 4.5 analysis (hallucination rate): <https://artificialanalysis.ai/articles/grok-4-5-brings-spacexai-to-the-the-intelligence-frontier>
+
+Tier 3 — secondary aggregators (cross-check before trusting; the retired "~2M
+Gemini context" claim came from this tier):
+
+- Artificial Analysis Intelligence Index (BenchLM mirror, 2026-07-18): <https://benchlm.ai/benchmarks/artificialAnalysis>
+- GPT-5.6 benchmarks explained (Vellum): <https://www.vellum.ai/blog/gpt-5-6-benchmarks-explained>
+- Best open-weight AI models 2026 (Kingy): <https://kingy.ai/news/best-open-weight-ai-models-in-2026-glm-5-2-vs-deepseek-v4-vs-kimi-k2-6-vs-qwen-vs-mistral/>
+- awesome-cli-coding-agents: <https://github.com/bradAGI/awesome-cli-coding-agents>
 - LLM API pricing (BenchLM, July 2026): <https://benchlm.ai/llm-pricing>
 - LLM context window comparison (Morph): <https://www.morphllm.com/llm-context-window-comparison>
 - SWE-bench Verified leaderboard (BenchLM): <https://benchlm.ai/benchmarks/sweVerified>
-- Gemini 3.1 Pro (Google DeepMind): <https://deepmind.google/models/gemini/pro/>
 - Google Gemini 3 benchmarks (Vellum): <https://www.vellum.ai/blog/google-gemini-3-benchmarks>
