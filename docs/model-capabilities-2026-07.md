@@ -6,9 +6,10 @@ capabilities move fast: treat every score as of its cited date, and re-check
 the provider's own docs before pinning a model. Benchmark numbers depend
 heavily on scaffold: when quoting one, record the model variant/effort, the
 tool harness, and single- vs multi-attempt, and never compare raw numbers
-across harnesses. Source priority: official model cards / vendor docs first,
-then original benchmark publishers and Artificial Analysis; secondary
-aggregators (Vellum, BenchLM, Morph) only as cross-checked fallback.
+across harnesses. Evidence authority is claim-specific: official model cards /
+vendor docs control IDs, availability, pricing, and context limits; original
+benchmark publishers and Artificial Analysis control their measured results.
+Secondary aggregators (Vellum, BenchLM, Morph) are cross-check-only fallbacks.
 
 ## Coding benchmarks
 
@@ -78,7 +79,7 @@ local CLI login is unverified.
 |-------|------:|---------|
 | Claude Fable 5 | 59.9% | 1M+ |
 | GPT-5.6 Sol | 58.9% | 1M |
-| Kimi K3 | 57.1% | 1.05M |
+| Kimi K3 | 57.1% | 1M |
 
 ## Pricing and context windows (July 2026)
 
@@ -96,21 +97,33 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 | GPT-5.6 Luna | 1.00 | 6.00 | 1.05M |
 | Claude Opus 4.8 | 5.00 | 25.00 | 200K |
 | Claude Sonnet 4.6 | 3.00 | 15.00 | 1M+ |
-| Claude Fable 5 | 10.00 | — | 1M+ |
-| Gemini 3.1 Pro | 2.00 | 12.00 | 1M (model card) |
-| Gemini 3 Flash | 0.50 | 3.00 | 1M |
-| Gemini 3.1 Flash-Lite | 0.10 | 0.40 | — |
-| Grok 4.5 | 2.00 | 6.00 | — |
+| Claude Sonnet 5 | 2.00* | 10.00* | 1M |
+| Claude Fable 5 | 10.00 | 50.00 | 1M+ |
+| Gemini 3.1 Pro | 2.00** | 12.00** | 1M |
+| Gemini 3.6 Flash | 1.50 | 7.50 | 1M |
+| Gemini 3.5 Flash | 1.50 | 9.00 | 1M |
+| Gemini 3.5 Flash-Lite | 0.30 | 2.50 | — |
+| Grok 4.5 | 2.00 | 6.00 | 500K |
 | DeepSeek V3 | 0.27 | 1.10 | — |
 | DeepSeek V4 Flash | 0.14 | 0.28 | 1M (384K output) |
 | Z.ai GLM-5.2 | 1.40 | 4.40 | 1M |
 | Mistral Ministral 3 (3B) | 0.10 | 0.10 | — |
-| Kimi K3 | — | — | 1.05M |
+| Kimi K3 | 3.00*** | 15.00 | 1M |
+
+\* Sonnet 5 launch pricing runs through 2026-08-31; standard pricing is $3/$15.
+\** Gemini 3.1 Pro requests above 200K tokens are $4/$18.
+\*** Kimi K3 cache-miss input is $3; cache-hit input is $0.30.
+
+Long-context tiers materially change comparisons: GPT-5.6 requests above 272K
+input tokens charge 2x input and 1.5x output, while Grok 4.5 requests above 200K
+charge $4 input / $12 output.
 
 Groq and Cerebras are fast-inference hosts (Llama / Qwen / gpt-oss families); the
 per-token price depends on which hosted model you pick — see their pricing pages.
 GPT-5.6 Sol / Terra / Luna prices and 1.05M context are from OpenAI's official
-model catalog (checked 2026-07-21).
+model catalog (checked 2026-07-21). Gemini Flash prices are from Google's
+Gemini API pricing page (checked 2026-07-22, post 3.6 Flash launch: 3.6 Flash
+$1.50/$7.50, 3.5 Flash $1.50/$9.00, 3.5 Flash-Lite $0.30/$2.50).
 
 ## Frontier models omnilane routes (codex / claude / gemini / grok lanes)
 
@@ -121,6 +134,14 @@ model catalog (checked 2026-07-21).
   Flash scores 76.2% / 83.6% on the same pair. Routing prefers Flash for fast
   agentic loops on speed/cost grounds, not because Pro cannot run loops.
   omnilane reaches it through the `gemini` lane (the `agy` CLI).
+- **Gemini 3.6 Flash** (Google, released 2026-07-21): the new Flash workhorse.
+  Google reports 17% fewer output tokens than 3.5 Flash at a lower output
+  price; AA measures Intelligence Index 50 (#21/186) and 303.6 tok/s output
+  speed (#1/186), 1M context. Replaces 3.5 Flash as the gemini candidate in
+  fast-agentic / triage / bulk-mechanical. Released alongside 3.5 Flash-Lite
+  (fastest/cheapest 3.5-class, not exposed by the agy CLI, so not routable)
+  and 3.5 Flash Cyber (security-specialized, government/trusted-partner
+  pilot only — no public API or CLI).
 - **Grok 4.5** (xAI, GA 2026-07-16): a low-cost frontier coder ($2/$6);
   Terminal-Bench 83.3%, SWE-Bench Pro 64.7% per xAI's launch post. Artificial
   Analysis measures a 54% hallucination rate — more capable but also more
@@ -172,18 +193,21 @@ Coding Plan uses a separate `/api/coding/paas/v4` path. Exact model slugs change
 
 ## Sources
 
-Priority order: tier 1 (official vendor docs / model cards) overrides tier 2
-(original benchmark publishers, Artificial Analysis), which overrides tier 3
-(secondary aggregators — use only when tiers 1-2 lack the number, and
-cross-check).
+Authority depends on the claim: tier 1 controls model IDs, availability, prices,
+and context limits; tier 2 controls the benchmark results it measured. Tier 3
+is only a cross-check when tiers 1-2 do not publish the needed fact.
 
 Tier 1 — official vendor docs:
 
 - OpenAI model catalog (GPT-5.6 pricing/context): <https://developers.openai.com/api/docs/models>
+- OpenAI GPT-5.6 launch and benchmark table: <https://openai.com/index/gpt-5-6/>
 - Gemini 3.1 Pro model card: <https://deepmind.google/models/model-cards/gemini-3-1-pro>
 - Gemini official evals (3.5 Flash): <https://deepmind.google/models/gemini/>
 - xAI Grok 4.5 launch post: <https://x.ai/news/grok-4-5>
+- xAI Grok 4.5 model details: <https://docs.x.ai/developers/models/grok-4.5>
 - Anthropic Claude Fable 5 / Mythos 5: <https://www.anthropic.com/news/claude-fable-5-mythos-5>
+- Anthropic Claude Sonnet 5: <https://www.anthropic.com/news/claude-sonnet-5>
+- Moonshot Kimi K3 launch and pricing: <https://www.kimi.com/blog/kimi-k3>
 - Qwen Code updates (Qwen 3.6 Plus): <https://qwenlm.github.io/qwen-code-docs/en/blog/updates/weekly-update-2026-04-09/>
 - Alibaba Model Studio pricing (qwen3-coder-plus snapshot mapping): <https://help.aliyun.com/en/model-studio/model-pricing>
 - DeepSeek API docs: <https://api-docs.deepseek.com/>

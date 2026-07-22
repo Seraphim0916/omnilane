@@ -41,20 +41,22 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 |---|---|---|---|
 | hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | High-volume scans, first-pass filtering |
+| triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
 | hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Architecture arbitration, deep reasoning, second opinions |
 | taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
-| long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis across giant docs — analysis only, never agentic loops |
-| fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash on speed/cost |
+| fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
 
 Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
-top Claude tier is usually the main loop itself, not a dispatched worker. To
-route to it anyway, select it in the configurator or override a lane in
+top Claude tier is usually the main loop itself, not a dispatched worker, and
+it prices above Opus. This is a cost / guardrail / main-loop policy choice, not
+a capability verdict; Anthropic positions Fable 5 above Opus 4.8. To route to
+it anyway, select it in the configurator or override a lane in
 `~/.omnilane/routing.local.yaml` (e.g. `taste-final: claude claude-fable-5 high`).
 
 ## Natural-language consultation
@@ -83,7 +85,7 @@ Users may speak normally; they do not need lane names.
 | Luna | codex | gpt-5.6-luna | medium |
 | Grok 4.5 | grok | grok-4.5 | - |
 | Gemini Pro | gemini | Gemini 3.1 Pro (High) | - |
-| Gemini Flash | gemini | Gemini 3.5 Flash (High) | - |
+| Gemini Flash | gemini | Gemini 3.6 Flash (High) | - |
 | Kimi | kimi | kimi-k3 | - |
 | Qwen | qwen | qwen3-coder-plus | - |
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
@@ -146,6 +148,6 @@ dispatch stay in this skill and the CLI. Manage the local board with
   signature and cited fact before shipping (measured high hallucination rate).
 - **Gemini Flash main**: fast agentic/multimodal loops are yours; never
   self-assign top judgment.
-- **Gemini 3.1 Pro main**: 1M-context synthesis is yours; route almost
-  everything else to the stronger lanes. Never take agentic tool-loop chains
-  (bottom-tier agentic score) — hand those to fast-agentic or a codex lane.
+- **Gemini 3.1 Pro main**: 1M-context synthesis and context-heavy agentic work
+  are yours. Prefer Gemini Flash for fast repeated tool loops on speed/cost;
+  route hardest coding and judgment to the stronger codex lanes.

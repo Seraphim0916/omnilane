@@ -6,6 +6,22 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+
+- Moved the default gemini candidates from Gemini 3.5 Flash to Gemini 3.6 Flash
+  (released 2026-07-21) in fast-agentic, triage, and bulk-mechanical, and
+  updated the Gemini Flash alias. Google reports 17% fewer output tokens at a
+  lower output price; Artificial Analysis measures Intelligence Index 50 and
+  the highest output speed on its leaderboard. The sibling releases are not
+  routable: 3.5 Flash-Lite is absent from the agy CLI and 3.5 Flash Cyber is a
+  restricted government/partner pilot. Refreshed the Gemini price table
+  (3.6 Flash $1.50/$7.50, 3.5 Flash $1.50/$9.00, 3.5 Flash-Lite $0.30/$2.50).
+- Re-audited model-routing evidence against current official sources, corrected
+  price/context facts for GPT-5.6, Claude 5, Gemini 3.x, Grok 4.5, and Kimi K3,
+  and aligned the canonical skill plus localized READMEs: Gemini 3.1 Pro is
+  agentic-capable, while Flash remains preferred for fast repeated loops.
+  Default route candidates and fallback order are unchanged.
+
 ## [0.9.1] - 2026-07-19
 
 ### Fixed

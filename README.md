@@ -118,13 +118,13 @@ flowchart LR
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | High-volume scans, first-pass filtering |
+| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Architecture arbitration, deep reasoning, second opinions |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
 | 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis — analysis only, never agentic loops |
-| ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash |
+| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
@@ -135,7 +135,9 @@ lane is such a chain; when nothing in it is installed the lane degrades to `off`
 
 > **Where is Claude Fable 5?** Deliberately not in the defaults: the top
 > Claude tier is usually the *main loop itself*, not a dispatched worker, and
-> it prices above Opus. It is offered in the configurator's model menu —
+> it prices above Opus. This is a cost / guardrail / main-loop policy choice,
+> not a capability verdict; Anthropic positions Fable 5 above Opus 4.8. It is
+> offered in the configurator's model menu —
 > route to it if you disagree (e.g. `taste-final: claude claude-fable-5 high`
 > in `routing.local.yaml`).
 
@@ -167,7 +169,7 @@ already are that model, so no second call) versus **dispatch**. Your harness's
 - **Codex · Sol** — self-execute: hardest-coding, hard-judgment, ui-draft. Dispatch taste-final → Claude, long-context → Gemini, live-search → Grok, bulk → Codex Terra.
 - **Codex · Terra** — self-execute: bulk-mechanical. Escalate the genuinely hardest pieces to Sol; dispatch taste → Claude, long-context → Gemini, live-search → Grok.
 - **Grok Build · Grok 4.5** — self-execute: live-search, coding-overflow (mid-tier coding). Dispatch everything hard to Codex/Claude/Gemini — and verify every API signature and cited fact first.
-- **Antigravity · Gemini** — self-execute: long-context (3.1 Pro) and fast-agentic (Flash). Dispatch coding/judgment/taste to Codex/Claude; live-search → Grok. Never take agentic tool-loop chains on 3.1 Pro.
+- **Antigravity · Gemini** — self-execute: long-context and context-heavy agentic work on 3.1 Pro, fast repeated loops on Flash. Dispatch hardest coding/judgment/taste to Codex/Claude; live-search → Grok.
 
 </details>
 

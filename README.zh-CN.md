@@ -107,13 +107,13 @@ flowchart LR
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 最难的实现、深度调试、正确性攸关的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重构、迁移、测试、大面积扫描——机械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 高量初筛、第一轮过滤 |
+| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 高量初筛、第一轮过滤 |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 架构仲裁、深度推理、第二意见 |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
 | 💬 consult | 明确指定的厂商/模型 | —(不降级) | 自然语言直接咨询;必须保留 `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 百万 token 长文整合——仅限分析,不派 agentic 长链 |
-| ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 快速多步骤 agentic 循环、多模态检查 |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 百万 token 长文整合;Pro 可跑 agentic 工作,高速重复循环仍优先 Flash |
+| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | 快速多步骤 agentic 循环、多模态检查 |
 | 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
 | 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
@@ -121,7 +121,8 @@ flowchart LR
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。
 
 > **Claude Fable 5 去哪了?** 默认表刻意不放:Claude 顶级档通常就是*主循环本人*,
-> 不是被派发的工人,且定价高于 Opus。设置菜单的模型清单里有它——
+> 不是被派发的工人,且定价高于 Opus。这是成本/护栏/主循环策略,不代表能力
+> 不如 Opus;Anthropic 将 Fable 5 定位在 Opus 4.8 之上。设置菜单的模型清单里有它——
 > 不同意就自己路由过去(例如在 `routing.local.yaml` 写
 > `taste-final: claude claude-fable-5 high`)。
 
@@ -149,7 +150,7 @@ flowchart LR
 - **Codex · Sol** — 自己做:hardest-coding、hard-judgment、ui-draft。派出去:taste-final → Claude、长文 → Gemini、实时搜索 → Grok、粗活 → Codex Terra。
 - **Codex · Terra** — 自己做:bulk-mechanical。真正最硬的往上升给 Sol;taste → Claude、长文 → Gemini、实时搜索 → Grok。
 - **Grok Build · Grok 4.5** — 自己做:live-search、coding-overflow(中量级编码)。所有硬活派给 Codex/Claude/Gemini——先验每个 API 签名与引用事实。
-- **Antigravity · Gemini** — 自己做:long-context(3.1 Pro)、fast-agentic(Flash)。编码/判断/文字派给 Codex/Claude;实时搜索 → Grok。3.1 Pro 绝不接 agentic 工具长链。
+- **Antigravity · Gemini** — 自己做:3.1 Pro 的长文与重上下文 agentic 工作、Flash 的高速重复循环。最难的编码/判断/文字派给 Codex/Claude;实时搜索 → Grok。
 
 </details>
 

@@ -115,13 +115,13 @@ flowchart LR
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.5 Flash (Low) | 대량 1차 선별 |
+| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 대량 1차 선별 |
 | ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
 | ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
 | 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합——분석 전용, agentic 루프 금지 |
-| ⚡ fast-agentic | Gemini 3.5 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 100만 토큰급 장문 통합. Pro 도 agentic 지원, 빠른 반복 루프는 Flash 우선 |
+| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
@@ -131,7 +131,9 @@ flowchart LR
 
 > **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다:
 > Claude 최상위 티어는 보통 *메인 루프 자신*이지 디스패치되는 워커가 아니며,
-> 가격도 Opus 보다 높습니다. 설정 메뉴의 모델 목록에는 있으니 원하면 직접
+> 가격도 Opus 보다 높습니다. 이는 비용/가드레일/메인 루프 정책이며 능력 평가가
+> 아닙니다. Anthropic 은 Fable 5 를 Opus 4.8 보다 상위에 둡니다. 설정 메뉴의
+> 모델 목록에는 있으니 원하면 직접
 > 라우팅하세요(예: `routing.local.yaml` 에
 > `taste-final: claude claude-fable-5 high`).
 
@@ -164,7 +166,7 @@ flowchart LR
 - **Codex · Sol** — 직접 실행: hardest-coding, hard-judgment, ui-draft. 디스패치: taste-final → Claude, 장문 → Gemini, 실시간 검색 → Grok, 대량 작업 → Codex Terra.
 - **Codex · Terra** — 직접 실행: bulk-mechanical. 정말 가장 어려운 부분은 Sol 로 에스컬레이션; taste → Claude, 장문 → Gemini, 실시간 검색 → Grok.
 - **Grok Build · Grok 4.5** — 직접 실행: live-search, coding-overflow(중급 코딩). 어려운 작업은 모두 Codex/Claude/Gemini 로——먼저 모든 API 시그니처와 인용 사실을 검증.
-- **Antigravity · Gemini** — 직접 실행: long-context(3.1 Pro), fast-agentic(Flash). 코딩/판단/문장은 Codex/Claude 로; 실시간 검색 → Grok. 3.1 Pro 에서는 agentic 툴 루프 체인을 절대 맡지 않음.
+- **Antigravity · Gemini** — 직접 실행: 3.1 Pro 로 장문과 무거운 컨텍스트의 agentic 작업, Flash 로 빠른 반복 루프. 가장 어려운 코딩/판단/문장은 Codex/Claude 로; 실시간 검색 → Grok.
 
 </details>
 
