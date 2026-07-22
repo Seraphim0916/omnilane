@@ -36,6 +36,15 @@ and `./install.sh --uninstall` removes it cleanly.
 
 **[⬇ Jump to the 60-second start](#-60-second-start)**
 
+## What's new in v0.10.0
+
+- **Gemini 3.6 Flash defaults** — the gemini candidates in `fast-agentic`,
+  `triage`, and `bulk-mechanical` (and the `Gemini Flash` alias) now run
+  Gemini 3.6 Flash (released 2026-07-21): fewer output tokens, a lower output
+  price, and the fastest output speed measured by Artificial Analysis.
+- **Evidence re-audit** — routing comments, model capability notes, and the
+  Gemini price table refreshed against official sources (2026-07-21/22).
+
 ## What's new in v0.9.1
 
 - **Fix:** `configure set` no longer deletes hand-written comments from

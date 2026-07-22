@@ -35,6 +35,15 @@
 
 **[⬇ 60초 시작으로](#-60초-시작)**
 
+## v0.10.0 새 기능
+
+- **Gemini 3.6 Flash 기본 라우팅** — `fast-agentic`, `triage`,
+  `bulk-mechanical` 의 gemini 후보(그리고 `Gemini Flash` 별칭)를 2026-07-21
+  출시된 Gemini 3.6 Flash 로 변경: 출력 토큰 감소, 출력 단가 인하, Artificial
+  Analysis 측정 출력 속도 1위.
+- **근거 재감사** — 라우팅 주석, 모델 능력 노트, Gemini 가격표를 공식 소스에
+  맞춰 갱신 (2026-07-21/22).
+
 ## v0.9.1 새 기능
 
 - **수정**: `configure set` 이 더 이상 `routing.local.yaml` 의 수기 주석을

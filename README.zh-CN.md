@@ -33,6 +33,14 @@ CLI** 之类。每个一次只接一个 AI 模型,而「每件工作该用哪个
 
 **[⬇ 直接跳到 60 秒上手](#-60-秒上手)**
 
+## v0.10.0 新功能
+
+- **Gemini 3.6 Flash 默认路由**——`fast-agentic`、`triage`、`bulk-mechanical`
+  的 gemini 候选(与 `Gemini Flash` 别名)改用 2026-07-21 发布的 Gemini 3.6
+  Flash:输出 token 更少、输出单价更低、Artificial Analysis 实测输出速度第一。
+- **证据重审计**——路由注释、模型能力笔记与 Gemini 价格表对官方来源刷新
+  (2026-07-21/22)。
+
 ## v0.9.1 新功能
 
 - **修复**:`configure set` 不再删除 `routing.local.yaml` 中手写的注释——

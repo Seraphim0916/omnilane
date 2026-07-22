@@ -36,6 +36,15 @@ CLI** など——を使っていますよね。どれも一度に一つの AI �
 
 **[⬇ 60 秒クイックスタートへ](#-60-秒クイックスタート)**
 
+## v0.10.0 の新機能
+
+- **Gemini 3.6 Flash を既定に** — `fast-agentic`・`triage`・`bulk-mechanical`
+  の gemini 候補(および `Gemini Flash` エイリアス)を 2026-07-21 リリースの
+  Gemini 3.6 Flash に更新。出力トークンが減り、出力単価も下がり、Artificial
+  Analysis 計測の出力速度は首位です。
+- **エビデンス再監査** — ルーティングのコメント、モデル能力ノート、Gemini
+  価格表を公式ソースに合わせて更新(2026-07-21/22)。
+
 ## v0.9.1 の新機能
 
 - **修正**: `configure set` が `routing.local.yaml` の手書きコメントを削除しなく
