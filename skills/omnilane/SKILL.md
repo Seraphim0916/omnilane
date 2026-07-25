@@ -39,14 +39,14 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (max) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
-| hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| hard-judgment | Claude Opus 5 (max) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
-| ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
-| long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash on speed/cost |
+| ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
+| long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash on speed/cost |
 | fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
@@ -76,7 +76,7 @@ Users may speak normally; they do not need lane names.
 
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
-| Opus | claude | claude-opus-4-8 | high |
+| Opus | claude | claude-opus-5 | high |
 | Fable | claude | claude-fable-5 | high |
 | Sonnet | claude | claude-sonnet-5 | high |
 | Haiku | claude | claude-haiku-4-5 | - |
@@ -100,7 +100,7 @@ its model slug is mandatory. "Ask <any hosted model> via OpenRouter" →
 Examples:
 
 - Ask Opus to challenge this architecture →
-  `dispatch.sh --vendor claude --model claude-opus-4-8 --effort high consult "challenge this architecture"`
+  `dispatch.sh --vendor claude --model claude-opus-5 --effort high consult "challenge this architecture"`
 - 請 Grok 查最新公開資訊 →
   `dispatch.sh --vendor grok consult "查最新公開資訊"`
 - 哪個模型適合檢查大型 repo？ → answer only; do not dispatch.

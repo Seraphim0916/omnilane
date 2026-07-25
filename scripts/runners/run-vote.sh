@@ -31,7 +31,7 @@ trap cleanup_temp_files EXIT
 voter_spec() { # vendor -> "model<TAB>effort"
   case "$1" in
     codex)  printf 'gpt-5.6-sol\thigh' ;;
-    claude) printf 'claude-opus-4-8\thigh' ;;
+    claude) printf 'claude-opus-5\thigh' ;;
     gemini) printf 'Gemini 3.1 Pro (High)\t-' ;;
     grok)   printf 'grok-4.5\t-' ;;
     *)      return 1 ;;

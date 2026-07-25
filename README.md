@@ -93,7 +93,7 @@ flowchart LR
     M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
     T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
     T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
-    T -->|taste-final| C3["Claude — Opus 4.8"]
+  T -->|taste-final| C3["Claude — Opus 5"]
     T -->|long-context| C4["Gemini — 3.1 Pro"]
     T -->|live-search| C5["Grok — 4.5"]
     T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
@@ -125,14 +125,14 @@ flowchart LR
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (max) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | GPT-5.6 Sol (max) | Claude Opus 4.8 (xhigh) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Opus 4.8 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
+| ⚖️ hard-judgment | Claude Opus 5 (max) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
 | 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 4.8 (high) | UI drafts only WITH a design system / reference images |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 4.8 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash |
 | ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
@@ -145,7 +145,7 @@ lane is such a chain; when nothing in it is installed the lane degrades to `off`
 > **Where is Claude Fable 5?** Deliberately not in the defaults: the top
 > Claude tier is usually the *main loop itself*, not a dispatched worker, and
 > it prices above Opus. This is a cost / guardrail / main-loop policy choice,
-> not a capability verdict; Anthropic positions Fable 5 above Opus 4.8. It is
+> not a capability verdict; Anthropic positions Fable 5 above Opus 5. It is
 > offered in the configurator's model menu —
 > route to it if you disagree (e.g. `taste-final: claude claude-fable-5 high`
 > in `routing.local.yaml`).
@@ -174,7 +174,7 @@ already are that model, so no second call) versus **dispatch**. Your harness's
 `omnilane` skill applies the right row automatically; this is the human view.
 
 - **Claude Code · Fable 5** — self-execute: hard-judgment, taste-final, the hardest correctness-critical fixes. Dispatch mechanical coding volume → Codex, long-context → Gemini, live-search → Grok.
-- **Claude Code · Opus 4.8** — self-execute: taste-final. Dispatch hard-judgment to Codex Sol (it out-scores Opus on raw intelligence), all coding to the Codex lanes, long-context → Gemini, live-search → Grok.
+- **Claude Code · Opus 5** — self-execute: hard-judgment and taste-final. Dispatch bulk coding to Codex lanes, long-context → Gemini, live-search → Grok.
 - **Codex · Sol** — self-execute: hardest-coding, hard-judgment, ui-draft. Dispatch taste-final → Claude, long-context → Gemini, live-search → Grok, bulk → Codex Terra.
 - **Codex · Terra** — self-execute: bulk-mechanical. Escalate the genuinely hardest pieces to Sol; dispatch taste → Claude, long-context → Gemini, live-search → Grok.
 - **Grok Build · Grok 4.5** — self-execute: live-search, coding-overflow (mid-tier coding). Dispatch everything hard to Codex/Claude/Gemini — and verify every API signature and cited fact first.

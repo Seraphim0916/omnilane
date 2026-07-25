@@ -3802,6 +3802,46 @@ EOF
 }
 test_jobs_rm
 
+test_configure_model_catalogs() {
+  local name="configure exposes expanded provider model catalogs"
+  local vendor vendor_index model_index effort_index expected home input out
+  while IFS='|' read -r vendor vendor_index model_index effort_index expected; do
+    [[ -n "$vendor" ]] || continue
+    home="$TEST_ROOT/configure-catalog-$vendor"
+    mkdir -p "$home"
+    input="1\n${vendor_index}\n${model_index}\n"
+    [[ -n "$effort_index" ]] && input+="${effort_index}\n"
+    input+="\n"
+    if ! printf '%b' "$input" |
+      HOME="$home" OMNILANE_HOME="$home/.omnilane" \
+      bash "$ROOT/scripts/configure.sh" >"$home/out" 2>&1; then
+      out="$(tail -20 "$home/out" 2>/dev/null || true)"
+      fail "$name" "$vendor menu failed: $out"
+      return
+    fi
+    if ! grep -Fq "hardest-coding: $vendor $expected " "$home/.omnilane/routing.local.yaml"; then
+      fail "$name" "$vendor did not write expected model '$expected'"
+      return
+    fi
+  done <<'EOF'
+codex|1|8|1|gpt-5.3-codex-spark
+claude|2|20|1|claude-haiku-4-5-20251001
+grok|3|3||grok-4.3-official
+gemini|4|11||gpt-oss-120b-medium
+kimi|5|3||kimi-k2.5
+qwen|6|8||qwen3-coder-flash
+opencode|7|13||openrouter/qwen/qwen3-coder-plus
+openrouter|8|13||qwen/qwen3-coder-plus
+deepseek|9|2||deepseek-v4-flash
+zai|10|7||glm-4.6
+mistral|11|5||mistral-large-latest
+groq|12|7||llama-3.1-8b-instant
+cerebras|13|5||llama3.1-8b
+EOF
+  pass "$name"
+}
+test_configure_model_catalogs
+
 test_completion_fish() {
   local name="fish completion script" out rc badrc fish_rc tmp w
   out="$(bash "$ROOT/bin/omnilane" completion fish 2>&1)"; rc=$?
