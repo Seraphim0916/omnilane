@@ -21,6 +21,12 @@
 
 ---
 
+## 2026-07-25 업데이트
+
+- 기본 라우팅에 `claude-opus-5`를 추가했습니다. `hard-judgment`와 `taste-final`의 첫 번째 선택이며, 가장 어려운 코딩 작업의 대체 경로로도 사용됩니다.
+- `omnilane configure`를 13개 전체 제공자로 확장했습니다. 선택 가능한 모델은 106개이며 Codex, Claude Code, Grok Build, Antigravity의 최신 카탈로그와 검증된 OpenRouter／OpenCode 바로가기를 포함합니다. `c`를 통한 사용자 지정 모델 ID 입력도 계속 지원합니다.
+
+---
 ## 👋 처음이신가요?
 
 이미 AI 코딩 어시스턴트——**Claude Code, Codex, Cursor, Gemini CLI** 같은——를 쓰고

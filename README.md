@@ -21,6 +21,12 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ---
 
+## 2026-07-25 update
+
+- Added `claude-opus-5` to default routing: first choice for `hard-judgment` and `taste-final`, plus a fallback for the hardest coding work.
+- Expanded `omnilane configure` across all 13 providers: 106 selectable model entries, complete live catalogs for Codex, Claude Code, Grok Build, and Antigravity, plus verified OpenRouter/OpenCode shortcuts. Custom model IDs remain available through `c`.
+
+---
 ## 👋 New here?
 
 You already drive an AI coding assistant — **Claude Code, Codex, Cursor, Gemini

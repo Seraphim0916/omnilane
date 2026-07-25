@@ -21,6 +21,12 @@
 
 ---
 
+## 2026-07-25 更新
+
+- デフォルトルーティングに `claude-opus-5` を追加しました。`hard-judgment` と `taste-final` の第一候補となり、最難関のコーディング作業でもフォールバックとして利用できます。
+- `omnilane configure` を全 13 プロバイダーへ拡張しました。選択可能なモデルは 106 件で、Codex、Claude Code、Grok Build、Antigravity の最新カタログに加え、検証済みの OpenRouter／OpenCode ショートカットを収録しています。`c` によるカスタムモデル ID の入力も引き続き利用できます。
+
+---
 ## 👋 はじめての方へ
 
 すでに AI コーディングアシスタント——**Claude Code、Codex、Cursor、Gemini

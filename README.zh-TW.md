@@ -21,6 +21,12 @@
 
 ---
 
+## 2026-07-25 更新
+
+- 預設路由加入 `claude-opus-5`：成為 `hard-judgment`、`taste-final` 第一順位，也納入最高難度程式任務的備援。
+- `omnilane configure` 已擴充全部 13 個供應商：共 106 個可選模型，完整收錄 Codex、Claude Code、Grok Build、Antigravity 即時清單，並加入已驗證的 OpenRouter／OpenCode 捷徑；仍可用 `c` 輸入自訂模型 ID。
+
+---
 ## 👋 第一次用?
 
 你已經在用某個 AI 寫程式助手——**Claude Code、Codex、Cursor、Gemini
