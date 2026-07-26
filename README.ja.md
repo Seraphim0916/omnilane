@@ -130,10 +130,10 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (max) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | リファクタ、移行、テスト、大規模スイープ |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 大量の一次スクリーニング |
-| ⚖️ hard-judgment | Claude Opus 5 (max) | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
+| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
 | 💬 consult | 明示指定したベンダー/モデル | —(フォールバックなし) | 自然言語で直接相談。`--vendor` を必ず維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | デザインシステム/参考画像がある場合の UI ドラフト |

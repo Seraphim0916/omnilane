@@ -39,10 +39,10 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (max) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Opus 5 (max) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
+| hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
 | taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |

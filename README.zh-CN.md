@@ -119,10 +119,10 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (max) | 最难的实现、深度调试、正确性攸关的修改 |
+| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | 最难的实现、深度调试、正确性攸关的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重构、迁移、测试、大面积扫描——机械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 高量初筛、第一轮过滤 |
-| ⚖️ hard-judgment | Claude Opus 5 (max) | GPT-5.6 Sol (max) | 架构仲裁、深度推理、第二意见 |
+| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | 架构仲裁、深度推理、第二意见 |
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
 | 💬 consult | 明确指定的厂商/模型 | —(不降级) | 自然语言直接咨询;必须保留 `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |

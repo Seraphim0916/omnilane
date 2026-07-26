@@ -6,6 +6,24 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-07-26
+
+### Changed
+
+- Lowered the shipped Claude effort on `hardest-coding` and `hard-judgment`
+  from `max` to `xhigh`, matching Anthropic's documented guidance for Claude
+  Opus 5: start at `xhigh` for coding and agentic work, keep `high` as the
+  floor for other intelligence-sensitive work, and reserve `max` for cases
+  where correctness outweighs cost (it can show diminishing returns and
+  overthink simpler tasks). Raise it back per lane with
+  `omnilane configure set <lane> "<spec>"` if your workload needs it.
+
+### Fixed
+
+- Repaired two dead CHANGELOG compare links that pointed at a `v0.10.0` tag
+  which was never published. `0.10.1` now compares against `v0.9.1`, and
+  `0.10.0` points at its release commit.
+
 ## [0.10.1] - 2026-07-26
 
 ### Added
@@ -354,9 +372,10 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...HEAD
-[0.10.1]: https://github.com/Seraphim0916/omnilane/compare/v0.10.0...v0.10.1
-[0.10.0]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...v0.10.0
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...v0.10.1
+[0.10.0]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...1ea55e5
 [0.9.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Seraphim0916/omnilane/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/Seraphim0916/omnilane/compare/v0.8.2...v0.8.3
