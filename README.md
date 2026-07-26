@@ -533,6 +533,25 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.10.4
+
+- **`long-context` no longer points multi-hop work at the wrong model** — the
+  lane called itself long-document *synthesis* while shipping Gemini first, but
+  published multi-needle scores at 1M favour Claude by roughly threefold while
+  Gemini leads single-needle retrieval. The lane now describes retrieval and
+  volume sweeps and names the Claude candidate for integration work. Ordering is
+  unchanged; the evidence is secondary and covers prior model generations.
+- **The Coding Agent Index is no longer quoted as a number** — the same model
+  reads 80, 78 or 67 depending on index version and harness. It is now cited for
+  ordering only, with every observed value and its provenance recorded.
+- **`taste-final` has writing evidence behind it** — previously ordered from
+  general and agentic indexes that do not measure prose. Added EQ-Bench Creative
+  Writing v3, EQ-Bench Longform, and the Lech Mazur benchmark, read from the
+  publishers.
+- **Per-effort cost and throughput** added to the model notes, showing why the
+  defaults use `xhigh`: it reaches the same index score as `max` for 30-53% less
+  per task.
+
 ## What's new in v0.10.3
 
 - **Restructured READMEs in all five languages** — the reader now meets a plain

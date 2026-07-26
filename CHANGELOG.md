@@ -6,6 +6,42 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-07-26
+
+No lane ordering changes. This release corrects documentation that could send
+work to the wrong model, and records the evidence behind the shipped defaults.
+
+### Changed
+
+- Narrowed the `long-context` lane description in `routing.yaml` and in all five
+  localized README lane tables. It previously called the lane long-document
+  *synthesis* while shipping Gemini first; published multi-needle scores at 1M
+  favour Claude by roughly threefold, while Gemini leads single-needle
+  retrieval. These are different capabilities with different leaders, and the
+  old wording pointed multi-hop work at the wrong candidate. The lane now
+  describes retrieval and volume sweeps, and names the Claude candidate for
+  integration across scattered sources. Ordering is deliberately unchanged: the
+  supporting evidence is secondary and covers prior model generations, which is
+  not a sufficient basis for moving a shipped default.
+
+### Fixed
+
+- `docs/model-capabilities-2026-07.md` quoted the Artificial Analysis Coding
+  Agent Index at v1.1 while the index had re-based twice more. The same model
+  reads 80, 78 or 67 depending on the version and harness a source used, so the
+  figure is not portable across versions. The section now records every observed
+  value with its provenance, documents the v1.3 composition, and states that the
+  index may be cited for ordering but never for a number.
+- Documented the writing evidence behind `taste-final`, which previously rested
+  entirely on general and agentic indexes that do not measure prose. Added
+  EQ-Bench Creative Writing v3, EQ-Bench Longform, and the Lech Mazur
+  story-writing benchmark, each read from the publisher. Recorded that Mazur has
+  not yet evaluated Claude Opus 5 and that Claude Fable 5 leads that board, so
+  the question stays open rather than being presented as settled.
+- Added per-effort cost and throughput to the Intelligence Index table, which is
+  what justifies the shipped effort levels: `xhigh` reaches the same index score
+  as `max` for 30% (Opus 5) and 53% (GPT-5.6 Sol) less per task.
+
 ## [0.10.3] - 2026-07-26
 
 ### Changed
@@ -411,7 +447,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/Seraphim0916/omnilane/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...v0.10.1
