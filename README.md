@@ -122,7 +122,7 @@ actually resolves.
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
 | 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash |
+| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token sweeps and retrieval; for multi-hop synthesis prefer the Claude candidate, and Flash for fast repeated loops |
 | ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |

@@ -13,25 +13,41 @@ Secondary aggregators (Vellum, BenchLM, Morph) are cross-check-only fallbacks.
 
 ## Coding benchmarks
 
-### Artificial Analysis Coding Agent Index (v1.1)
+### Artificial Analysis Coding Agent Index — do not quote a number
 
-Agentic coding — terminal workflows, tool coordination, real codebase
-navigation. This is the index omnilane's routing defaults track.
+⚠️ **This index has re-based three times in two months and its published values
+are not comparable across versions. Cite it for ordering, never for a number.**
 
-| Model | Score |
-|-------|------:|
-| GPT-5.6 Sol (max reasoning, Codex env) | 80.0 |
-| GPT-5.6 Terra | 77.4 |
-| Claude Fable 5 | 77.2 |
-| GPT-5.6 Luna | 74.6 |
+Observed values for GPT-5.6 Sol, all describing "leads the index":
 
-2026-07-24 addendum: Artificial Analysis reports Claude Opus 5 (`xhigh`,
-Claude Code harness) joint first on the Coding Agent Index and highest on
-SWE-Atlas-QnA. The publisher did not expose a stable numeric aggregate in the
-article text, so the earlier numeric snapshot above remains dated rather than
-being silently overwritten.
+| Version | Sol figure | Where it came from |
+|---------|-----------:|--------------------|
+| v1.1 | 80.0 (max, Codex env) | earlier snapshot in this file |
+| v1.2 | 80 (max, Codex harness) | AA GPT-5.6 launch article, 2026-07-09 |
+| v1.3 | 78 (xhigh) / 77 (max) | secondary summaries, unverified |
+| v1.3 | 67 (tied with Opus 5) | press coverage citing an AA chart |
 
-Sol beats Fable 5 by 2.8 points while using less than half the output tokens.
+The v1.1 row that used to sit here (Sol 80.0 / Terra 77.4 / Fable 5 77.2 /
+Luna 74.6) is retained above only as provenance. It is **two versions stale**,
+and pairing it with a current figure produces a false comparison.
+
+v1.3 composition (AA, current): equal weight over **DeepSWE** (113 tasks,
+Datacurve), **Terminal-Bench v2** (84 tasks, Laude Institute), and
+**SWE-Atlas-QnA** (124 tasks, Scale AI), each scored as pass@1 averaged over
+three attempts.
+
+What can be stated safely, from AA's own articles:
+
+- 2026-07-09: GPT-5.6 Sol (max) in the Codex harness led every one of the three
+  component evaluations (tying Grok 4.5 in Grok Build on SWE-Atlas-QnA), at
+  ~40% lower cost per task than Claude Fable 5 (max) and ~10% lower than
+  Claude Opus 4.8 (max) in Claude Code.
+- 2026-07-24: Claude Opus 5 (`xhigh`) with Claude Code is **joint first** on the
+  index and holds the highest SWE-Atlas-QnA score.
+
+Retrieval note: AA renders these leaderboards to canvas, so the numbers are not
+in the DOM and cannot be scraped. Anyone re-checking this section needs the AA
+API or a Premium account; do not substitute a secondary summary for it.
 
 ### SWE-Bench Pro
 
@@ -84,13 +100,39 @@ local CLI login is unverified.
 Index points, not percentages. Figures below are quoted verbatim from the
 Artificial Analysis Opus 5 launch article (2026-07-24).
 
-| Model | Score | Context |
-|-------|------:|---------|
-| Claude Opus 5 (max) | 61 | 1M |
-| Claude Fable 5 (max) | 60 | 1M+ |
-| GPT-5.6 Sol (max) | 59 | 1.05M |
-| Kimi K3 | 57 | 1M |
-| Claude Opus 4.8 (max) | 56 | 200K |
+| Model | Score | Cost/task | Median tok/s | Context |
+|-------|------:|----------:|-------------:|---------|
+| Claude Opus 5 (max) | 61 | $2.03 | 53 | 1M |
+| Claude Opus 5 (xhigh) | 60 | $1.56 | 53 | 1M |
+| Claude Fable 5 (with fallback) | 60 | $2.75 | 71 | 1M+ |
+| GPT-5.6 Sol (max) | 59 | $1.04 | 66 | 1.05M |
+| Claude Opus 5 (high) | 59 | $1.06 | 57 | 1M |
+| GPT-5.6 Sol (xhigh) | 58 | $0.68 | 70 | 1.05M |
+| Kimi K3 | 57 | $0.95 | 32 | 1.05M |
+| GPT-5.6 Sol (high) | 56 | $0.45 | 63 | 1.05M |
+| Claude Opus 4.8 (max) | 56 | $1.80 | 56 | 1M |
+| GPT-5.6 Terra (max) | 55 | $0.82 | 136 | 1M |
+| Grok 4.5 (high) | 54 | $0.31 | 61 | 500K |
+| Claude Sonnet 5 (max) | 53 | $1.53 | 76 | 1M |
+| GPT-5.6 Luna (max) | 51 | $0.21 | 188 | 1M |
+| Gemini 3.6 Flash | 50 | $0.50 | 231 | 1M |
+| Gemini 3.5 Flash | 50 | $0.59 | 185 | 1M |
+| Gemini 3.1 Pro Preview | 46 | $0.29 | 124 | 1M |
+| Claude Haiku 4.5 | 30 | $0.24 | 92 | 200K |
+
+Per-effort rows are what justify the shipped effort levels, and both of the
+defaults that look conservative are the cheap side of a flat trade:
+
+- **Opus 5 `xhigh` over `max`** — 1 index point for 30% more cost per task.
+- **Sol `xhigh` over `max`** — 1 index point for 53% more cost per task.
+  `hardest-coding` nonetheless keeps Sol at `max`, because that lane should be
+  ordered by the Coding Agent Index rather than this one, and that index cannot
+  currently be quoted (see above). Revisit if AA publishes retrievable v1.3
+  per-effort figures.
+- **Gemini 3.6 Flash over 3.5 Flash** — same score, 15% cheaper, 25% faster.
+- **Gemini 3.1 Pro scores 46**, below 3.6 Flash's 50 and at roughly half its
+  throughput. It holds first place in `long-context` on context-retrieval
+  grounds, not general intelligence — see the long-context section.
 
 Artificial Analysis calls Opus 5 and Fable 5 "effectively tied" and Opus 5 only
 "narrowly the most intelligent" — a 1-point gap here is not a capability verdict.
@@ -120,6 +162,113 @@ Two results cut the other way and are load-bearing for routing:
   GPT-5.6 Sol's 1666 at max. Pure layout/presentation taste is the one axis
   where Sol leads Claude, which is why `taste-final` keeps Sol as its backup
   rather than treating it as a formality.
+
+One operational difference favours Opus 5 over Fable 5 beyond the scores:
+Anthropic states Opus 5's cyber classifiers intervene roughly **85% less often**
+than Fable 5's, and flagged requests fall back to Opus 4.8 rather than failing.
+Refusal rate is a real cost on security, reverse-engineering, and dark-themed
+creative work; a lane that silently loses a fraction of its dispatches is worse
+than its benchmark position suggests.
+
+## Writing benchmarks — the evidence behind `taste-final`
+
+Until 2026-07-26 this lane was ordered from general and agentic indexes, none of
+which measure prose. Three writing-specific benchmarks now cover it. All figures
+below were read directly from the publishers, not from secondary summaries.
+
+### EQ-Bench Creative Writing v3 (Elo)
+
+| Model | Elo | Rubric | Slop |
+|-------|----:|-------:|-----:|
+| **claude-opus-5** | **2429.5** | **85.35** | **0.9** |
+| kimi-k3 | 2340.4 | 84.25 | 1.3 |
+| gpt-5.6-sol | 2091.8 | 83.90 | 1.6 |
+| claude-fable-5 | 2064.6 | 84.05 | 1.4 |
+| claude-opus-4-7 | 2031.8 | 82.85 | 1.5 |
+| claude-opus-4-8 | 1889.4 | 83.30 | 1.8 |
+| grok-4.5 | 1581.3 | 81.25 | 2.5 |
+| gemini-3.1-pro-preview | 1459.5 | 80.20 | 4.2 |
+
+`Slop` counts LLM-typical filler phrasing; lower is better. Opus 5's 0.9 is the
+lowest on the board, which matters more than the Elo margin for user-facing copy.
+
+### EQ-Bench Longform Writing — closest proxy for docs and reports
+
+| Model | Score | Slop | Degradation |
+|-------|------:|-----:|------------:|
+| **claude-opus-5** | **86.3** | 5.6 | 0.000 |
+| claude-fable-5 | 83.0 | 8.3 | 0.000 |
+| claude-opus-4-7 | 81.8 | 9.1 | 0.000 |
+| gpt-5.6-sol | 81.7 | 12.0 | 0.000 |
+| claude-opus-4-8 | 80.8 | 9.4 | 0.000 |
+| kimi-k3 | 79.6 | 9.7 | 0.067 |
+
+`Degradation` measures quality decay across a long passage. Kimi K3 places second
+on short-form CW v3 but drops to seventh here and is the only model in this group
+that degrades — which is why it stays in `coding-overflow` and does not enter
+`taste-final`, whose real workload is long documents.
+
+### Lech Mazur Story-Writing Benchmark (pairwise, 2026-07-18)
+
+| Rank | Model | Score | Est. win rate |
+|-----:|-------|------:|--------------:|
+| 1 | Claude Fable 5 (high) | 3.3 | 91% |
+| 2 | GPT-5.5 (xhigh) | 3.0 | 88% |
+| 3 | Kimi K3 | 2.9 | 87% |
+| 4 | GPT-5.6 Sol (xhigh) | 2.9 | 87% |
+| 8 | Claude Opus 4.7 (adaptive) | 2.4 | 82% |
+| 12 | Claude Opus 4.8 (xhigh) | 1.3 | 69% |
+| 31 | Gemini 3.1 Pro Preview | -1.8 | 24% |
+| **39** | **Grok 4.5 (high)** | **-4.6** | **2%** |
+
+**Claude Opus 5 is absent** — the leaderboard's last refresh predates its
+release, so this board cannot yet arbitrate the current default.
+
+Two findings worth carrying forward: Fable 5 leads the one writing board Opus 5
+has not entered, and **Grok 4.5 places last of 39** with a 2% expected win rate,
+which is a hard veto against ever routing Grok into a prose lane.
+
+### What this settles
+
+`taste-final: claude claude-opus-5 high | codex gpt-5.6-sol max` is confirmed on
+both boards that have measured Opus 5, on which it ranks first outright. Sol is
+third and fourth respectively — the strongest non-Claude option, so its backup
+slot is earned rather than nominal. The open question is Mazur, where Fable 5
+leads and Opus 5 is untested.
+
+A cross-check on the "newer is better at prose" assumption: Opus 4.8 scores below
+Opus 4.7 on **both** CW v3 (1889.4 vs 2031.8) and Mazur (1.3 vs 2.4), matching
+Anthropic's coding/agentic tuning focus for that release. Opus 5 then recovers
+and leads. Tuning direction can cost prose quality, so a new release does not
+inherit this lane by default — re-measure each time.
+
+## Long-context retrieval vs synthesis — unresolved for `long-context`
+
+⚠️ **Secondary sources only, and the published figures cover prior model
+generations (Opus 4.6, Gemini 3 Pro) rather than the current defaults. Treat
+this section as a flagged question, not as settled evidence.**
+
+A shared 1M context window does not imply shared behaviour at that length. The
+public benchmarks split along one axis:
+
+| Task shape | Leader | Reported figure |
+|------------|--------|-----------------|
+| Single-needle retrieval @ 1M | Gemini 3.1 Pro | only model sustaining >90% on RULER |
+| Single-needle MRCR @ 1M | DeepSeek V4 Pro 83.5% | Gemini 3.1 Pro 76.3% |
+| **Multi-needle / multi-hop @ 1M** | **Claude** | Opus 4.6 ~76-78% vs Gemini 3 Pro 24.5%, GPT-5.4 36.6% |
+| Either shape @ 128K | tied | Gemini 3.1 Pro ≈ Claude Sonnet 4.6, both 84.9% |
+
+The gap on multi-hop work is not marginal — roughly threefold in the numbers
+above. Pulling one fact out of a large corpus and integrating facts scattered
+across it are different capabilities, and the leaders differ.
+
+This matters because `long-context` ships Gemini 3.1 Pro first while its comment
+described the lane as long-document *synthesis*, which is the multi-hop shape.
+The lane comment has been narrowed to say retrieval and volume, and to point at
+the Claude candidate for integration work. **The ordering is unchanged**: the
+evidence above is secondary and generation-stale, which is not a sufficient basis
+for moving a shipped default. Re-check against first-party numbers for Gemini 3.1
+Pro and Opus 5 before reordering.
 
 ## Pricing and context windows (July 2026)
 
@@ -196,7 +345,9 @@ $1.50/$7.50, 3.5 Flash $1.50/$9.00, 3.5 Flash-Lite $0.30/$2.50).
 - **Claude Fable 5** (Anthropic, GA): Anthropic positions it above Opus 5.
   Its absence from omnilane's default lanes is a cost / guardrail / main-loop
   policy choice — the top Claude tier is usually the main loop itself — not a
-  capability verdict.
+  capability verdict. On the writing boards it still leads Mazur, the one board
+  Opus 5 has not yet entered, while trailing on both EQ-Bench boards; see the
+  writing benchmarks section.
 - **GPT-5.6 Sol / Terra / Luna** and **Claude Opus 5 / Opus 4.8 / Fable 5** are covered in
   the benchmark and pricing tables above; they back the `codex` and `claude`
   lanes.
@@ -266,8 +417,14 @@ Tier 1 — official vendor docs:
 Tier 2 — benchmark publishers:
 
 - Artificial Analysis — Coding Agent Index: <https://artificialanalysis.ai/agents/coding-agents>
+- Artificial Analysis — model leaderboard (index, cost/task, throughput; the one AA surface that renders to DOM): <https://artificialanalysis.ai/leaderboards/models>
 - Artificial Analysis — Claude Opus 5 evaluation (2026-07-24): <https://artificialanalysis.ai/articles/opus-5>
+- Artificial Analysis — GPT-5.6 evaluation (2026-07-09): <https://artificialanalysis.ai/articles/gpt-5-6-has-landed>
 - Artificial Analysis — Grok 4.5 analysis (hallucination rate): <https://artificialanalysis.ai/articles/grok-4-5-brings-spacexai-to-the-the-intelligence-frontier>
+- EQ-Bench Creative Writing v3 (Elo, rubric, slop): <https://eqbench.com/creative_writing.html>
+- EQ-Bench Longform Writing (score, slop, degradation): <https://eqbench.com/creative_writing_longform.html>
+- Lech Mazur Story-Writing Benchmark (pairwise): <https://github.com/lechmazur/writing>
+- Anthropic Claude Opus 5 announcement (classifier intervention rate, effort behaviour): <https://www.anthropic.com/news/claude-opus-5>
 
 Tier 3 — secondary aggregators (cross-check before trusting; the retired "~2M
 Gemini context" claim came from this tier):
