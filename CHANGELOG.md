@@ -6,6 +6,21 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-07-26
+
+### Added
+
+- Added `claude-opus-5` to default routing as the first choice for
+  `hard-judgment` and `taste-final`, with a fallback position for the hardest
+  coding work.
+- Expanded `omnilane configure` across all 13 providers with 106 selectable
+  model entries. Codex, Claude Code, Grok Build, and Antigravity use their
+  current native catalogs; OpenRouter and OpenCode shortcuts were verified
+  against the live OpenRouter catalog. Custom model IDs remain available via
+  `c`.
+- Added the 2026-07-25 release summary to all five localized READMEs and
+  included `README.ja.md` in the NPM package.
+
 ## [0.10.0] - 2026-07-22
 
 ### Changed
@@ -339,7 +354,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/Seraphim0916/omnilane/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Seraphim0916/omnilane/compare/v0.8.3...v0.9.0
