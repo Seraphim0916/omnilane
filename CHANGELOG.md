@@ -6,6 +6,45 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-07-26
+
+### Changed
+
+- Restructured all five localized READMEs for first-time readers: a plain
+  "what is this and why would I want it" section now opens the document,
+  version history is consolidated into a single section at the bottom instead
+  of interrupting the introduction, and a new FAQ answers the recurring
+  questions — whether every subscription is required, where code is sent, why
+  Claude Fable 5 is absent from the defaults, why the Claude lanes use `xhigh`
+  rather than `max`, what happens when a lane's first-choice CLI is missing,
+  and whether a dispatched worker can edit files.
+- Documented the Claude Fable 5 routing decision with measurements rather than
+  cost alone: Artificial Analysis calls Opus 5 (61) and Fable 5 (60)
+  "effectively tied" on the Intelligence Index and Epoch AI ranks them the
+  other way, but Opus 5 leads AA-Briefcase by 146 Elo and GDPval-AA v2 by 114
+  Elo at 20% lower cost per task, so the top Claude tier stays a main-loop
+  choice rather than a dispatch target.
+
+### Fixed
+
+- `plugin.json` and `.claude-plugin/plugin.json` still advertised `0.10.0`
+  after the 0.10.1 and 0.10.2 releases, so plugin installations reported a
+  stale version. Both now track `VERSION`, and the release version test that
+  covers them passes again.
+- `routing.local.yaml.example` shipped starter profiles pinned to retired
+  models: seven `claude-opus-4-8` references now use `claude-opus-5` with
+  lane-appropriate effort, and the Gemini 3.5 Flash candidates move to 3.6
+  Flash, matching the defaults since 0.10.0.
+- Corrected the Artificial Analysis Intelligence Index figures in
+  `docs/model-capabilities-2026-07.md` against the source article (index
+  points, not percentages; Fable 5 60 and GPT-5.6 Sol 59), added the
+  AA-Briefcase / GDPval-AA v2 comparison, and recorded the two results that
+  cut against the defaults: Fable 5 leads on factual knowledge, and GPT-5.6 Sol
+  leads on presentation quality.
+- Replaced the stale "Anthropic positions Fable 5 above Opus 4.8" note in
+  `routing.yaml` and `skills/omnilane/SKILL.md`, which had not been updated
+  when Opus 5 shipped.
+
 ## [0.10.2] - 2026-07-26
 
 ### Changed
@@ -372,7 +411,8 @@ semantic version tags.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...v0.10.1
 [0.10.0]: https://github.com/Seraphim0916/omnilane/compare/v0.9.1...1ea55e5
