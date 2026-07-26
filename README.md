@@ -21,49 +21,30 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ---
 
-## 2026-07-25 update
+## 🤔 What is omnilane?
 
-- Added `claude-opus-5` to default routing: first choice for `hard-judgment` and `taste-final`, plus a fallback for the hardest coding work.
-- Expanded `omnilane configure` across all 13 providers: 106 selectable model entries, complete live catalogs for Codex, Claude Code, Grok Build, and Antigravity, plus verified OpenRouter/OpenCode shortcuts. Custom model IDs remain available through `c`.
+**The problem.** You already drive an AI coding assistant — Claude Code, Codex,
+Cursor, Gemini CLI. Each one talks to a single model family. So every task you
+give it runs on that one model, whether or not it is the right tool: a
+throwaway file rename burns your most expensive model, and a genuinely hard
+architecture question runs on whatever you happened to open.
 
----
-## 👋 New here?
+**What omnilane does.** It gives your assistant a routing table. Work gets
+sorted into **lanes** — hardest coding, bulk mechanical, triage, hard judgment,
+final polish — and each lane names the model that is best (and cheapest) for
+it. Your assistant keeps the lanes it is already good at and hands the rest to
+another vendor's CLI in the background, using the logins you already have.
 
-You already drive an AI coding assistant — **Claude Code, Codex, Cursor, Gemini
-CLI**, and the like. Each one talks to a single AI model, and picking the best
-model for each task is left to you.
+**What it is not.** Not a proxy, not a new subscription, not another service to
+keep alive. It is a table plus a dispatch script that runs behind the tool you
+already use. `./install.sh --uninstall` removes every trace.
 
-**omnilane picks for you.** For every piece of work it routes the task to the
-model that is best (and cheapest) for it — tough coding to a top coder, quick
-checks to a fast cheap model, long documents to a big-context model — all on the
-subscriptions and API keys you already pay for. Use the built-in defaults, or
-tweak one small file. Nothing new to babysit (it runs behind your existing tool),
-and `./install.sh --uninstall` removes it cleanly.
+**You do not need every vendor.** Each lane is a fallback chain. Install one
+CLI or seven — dispatch picks the first candidate you actually have, and a lane
+with nothing available simply turns off. The default table works on a single
+subscription.
 
-**[⬇ Jump to the 60-second start](#-60-second-start)**
-
-## What's new in v0.10.0
-
-- **Gemini 3.6 Flash defaults** — the gemini candidates in `fast-agentic`,
-  `triage`, and `bulk-mechanical` (and the `Gemini Flash` alias) now run
-  Gemini 3.6 Flash (released 2026-07-21): fewer output tokens, a lower output
-  price, and the fastest output speed measured by Artificial Analysis.
-- **Evidence re-audit** — routing comments, model capability notes, and the
-  Gemini price table refreshed against official sources (2026-07-21/22).
-
-## What's new in v0.9.1
-
-- **Fix:** `configure set` no longer deletes hand-written comments from
-  `routing.local.yaml` — it rewrites only its own stamp header and the lane
-  being replaced.
-
-## What's new in v0.9.0
-
-- **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
-  `mistral`, `groq`, and `cerebras` join `openrouter` as CLI-free lanes (curl +
-  a `<VENDOR>_API_KEY`). A one-line `lib/common.sh` registry entry adds each;
-  see [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
-- **Fish shell completion** — `omnilane completion fish | source`.
+**[⬇ Jump to the 60-second start](#-60-second-start)** · **[❓ Read the FAQ](#-faq)**
 
 ## ⚡ 60-second start
 
@@ -127,7 +108,10 @@ flowchart LR
 
 </div>
 
-## 🛤️ Lanes (defaults — run `scripts/dispatch.sh --list` for your effective table)
+## 🛤️ Lanes
+
+Defaults below — run `scripts/dispatch.sh --list` for the table your machine
+actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
@@ -147,14 +131,6 @@ flowchart LR
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
 dispatch falls back to when the first-choice vendor CLI is not installed. Every
 lane is such a chain; when nothing in it is installed the lane degrades to `off`.
-
-> **Where is Claude Fable 5?** Deliberately not in the defaults: the top
-> Claude tier is usually the *main loop itself*, not a dispatched worker, and
-> it prices above Opus. This is a cost / guardrail / main-loop policy choice,
-> not a capability verdict; Anthropic positions Fable 5 above Opus 5. It is
-> offered in the configurator's model menu —
-> route to it if you disagree (e.g. `taste-final: claude claude-fable-5 high`
-> in `routing.local.yaml`).
 
 ### Natural-language consultation
 
@@ -238,12 +214,14 @@ optional per-CLI **routing reminder**: a marked, reversible block appended to
 each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 `~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
 versions) so the main loop remembers to consult the table; non-interactive
-installs can pass `OMNILANE_HOOKS=all|none|claude,codex`. Manual wiring:
+installs can pass `OMNILANE_HOOKS=all|none|claude,codex`.
 
 Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
 install or `--uninstall` to preview every checkout-owned file action.
 Rollback the installer-owned links and marked reminders with
 `./install.sh --uninstall`.
+
+Manual wiring:
 
 - **Claude Code**: install as a plugin (ships the skill + `/route`,
   `/route-jobs` commands, and a `SessionStart` hook that auto-injects the
@@ -394,7 +372,7 @@ code passes through.
   non-Git work running through the existing per-call watchdog path, which emits
   its own warning if no watchdog tool exists.
   Expiry cleans the supervised process group and returns 124. For a deep audit
-  of a fubon-autotrade-sized repository, start around 2–4 hours (7200–14400s)
+  of a large repository, start around 2–4 hours (7200–14400s)
   with a 30-minute per-call watchdog; these are recommendations, not defaults.
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
@@ -402,12 +380,144 @@ code passes through.
 - **Payload caps** — oversized task text is truncated head+tail before it can
   blow a worker's context.
 
+## ❓ FAQ
+
+<details>
+<summary><b>Do I need all of these subscriptions?</b></summary>
+
+<br/>
+
+No. Every lane is a fallback chain, and dispatch picks the first candidate
+whose CLI is actually installed. With one subscription the whole table collapses
+onto that vendor; lanes with nothing available turn off rather than failing.
+`omnilane doctor` shows exactly what your machine can reach today, and
+`routing.local.yaml.example` ships starter profiles for common situations
+(Claude-only, Codex-heavy, no-Codex).
+
+</details>
+
+<details>
+<summary><b>Does omnilane send my code somewhere new?</b></summary>
+
+<br/>
+
+No new destination. Dispatch shells out to vendor CLIs you already installed
+and logged into, so your code reaches exactly the vendors you already use.
+Runners strip API-key environment variables before invoking a subscription CLI,
+so a stray key cannot silently switch you onto pay-per-token billing. The one
+exception is the direct-API vendor family (`openrouter`, `deepseek`, `zai`,
+`mistral`, `groq`, `cerebras`), which by definition calls that provider's API
+with the key you set — those are advise-only and never edit files.
+
+</details>
+
+<details>
+<summary><b>Where is Claude Fable 5? Why is it not in the default table?</b></summary>
+
+<br/>
+
+**Because the top Claude tier is usually the main loop itself, not a dispatched
+worker.** Lanes exist to send work to a model *other than* the one you are
+driving. If Fable 5 is your main loop, routing judgment and taste back to Fable 5
+just adds a second call for no gain — which is why the "pick your main model"
+list above gives Fable 5 its own row as a **driver**, self-executing
+hard-judgment, taste-final, and the hardest correctness-critical fixes.
+
+**The measurements do not argue for it as a worker either.** On the Artificial
+Analysis Intelligence Index (2026-07-24) Opus 5 (max) scores 61 and Fable 5 (max)
+scores 60 — Artificial Analysis calls them "effectively tied", and Epoch AI's
+Capability Index ranks them the other way (Fable 5 161, Opus 5 159). Call it a
+draw on general intelligence. Where they are not tied is agentic professional
+output, and Opus 5 leads by a wide margin:
+
+| Benchmark | Claude Opus 5 (max) | Claude Fable 5 | |
+|---|---:|---:|---|
+| AA-Briefcase (agentic knowledge work, Elo) | 1720 | 1574 | **+146** |
+| GDPval-AA v2 (Elo) | 1861 | 1747 | **+114** |
+| Cost per AA-Briefcase task | $17.79 | $22.30 | **-20%** |
+| API price, input / output per 1M | $5 / $25 | $10 / $50 | **half** |
+
+Opus 5's max, xhigh and high tiers sweep the top three AA-Briefcase places, and
+its `high` tier still beats Fable 5 at under half the cost per task. So Fable 5
+costs twice as much without buying an advantage on any axis a lane is defined
+around.
+
+**What Fable 5 is genuinely better at**: factual breadth. It stays ahead of
+Opus 5 on AA-Omniscience, as its size class suggests, and Opus 5 answers more
+readily when uncertain — its hallucination rate is 50%, up 14 points from
+Opus 4.8. If your task is recall-heavy rather than execution-heavy, name
+Fable 5 explicitly:
+
+```bash
+dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
+```
+
+**This is a cost / main-loop policy choice, not a capability verdict.** Fable 5
+is in the configurator's model menu, and one line in `routing.local.yaml`
+overrides the default if you disagree:
+
+```yaml
+taste-final: claude claude-fable-5 high
+```
+
+</details>
+
+<details>
+<summary><b>Why do the Claude lanes use <code>xhigh</code> instead of <code>max</code>?</b></summary>
+
+<br/>
+
+Because more effort is not monotonically better. Anthropic documents `xhigh` as
+the starting point for coding and agentic work, `high` as the floor for other
+intelligence-sensitive work, and `max` as the setting for cases where
+correctness outweighs cost. Independent testing agrees: on Vals.ai's Vibe Code
+Bench, Opus 5 scores 89.8% at `high` but only 88.3% at `xhigh` and 88.4% at
+`max` — the top tiers produce more elaborate solutions that fail more often.
+Raise any lane locally if your workload disagrees:
+
+```bash
+omnilane configure set hard-judgment "claude claude-opus-5 max"
+```
+
+</details>
+
+<details>
+<summary><b>What happens when a lane's first-choice CLI is missing?</b></summary>
+
+<br/>
+
+Dispatch walks the chain and uses the first vendor you have. Inspect the
+decision without spending a call:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # candidate-by-candidate trace
+scripts/dispatch.sh --list                     # whole effective table
+scripts/dispatch.sh --dry-run hardest-coding "…"   # fully resolved plan, no provider call
+```
+
+</details>
+
+<details>
+<summary><b>Can a dispatched worker edit my files?</b></summary>
+
+<br/>
+
+Only if you ask for it. Dispatch defaults to `advise`, a read-only mode enforced
+per vendor (read-only sandbox, plan mode, or read-only tool set depending on the
+CLI). Editing requires both `--mode work` and an explicit `--workdir`. Workers
+also cannot dispatch again — the depth guard refuses nested fan-out with exit 86,
+so one command can never spiral into a chain of agents spending your quota.
+
+</details>
+
 ## 📊 Defaults and provenance
 
 Default lane assignments follow Artificial Analysis coding/intelligence data
 (2026-07 snapshot, cross-checked against AA site records and vendor pricing
 pages) plus published head-to-head reviews; they are opinions, not laws — the
-configurator and `routing.local.yaml` exist so you can disagree.
+configurator and `routing.local.yaml` exist so you can disagree. The full
+working notes, including per-benchmark caveats, live in
+[`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
 
 ## ⚠️ Known limitations
 
@@ -423,8 +533,71 @@ configurator and `routing.local.yaml` exist so you can disagree.
 
 ## 📜 Release history
 
+## What's new in v0.10.3
+
+- **Restructured READMEs in all five languages** — the reader now meets a plain
+  "what is this and why would I want it" section first, version history is
+  consolidated at the bottom instead of interrupting the introduction, and a new
+  FAQ answers the questions that kept coming up: do I need every subscription,
+  where does my code go, why is Fable 5 not in the table, why `xhigh` and not
+  `max`, what happens when a CLI is missing, can a worker edit files.
+- **Fixed: plugin manifests advertised a stale version** — `plugin.json` and
+  `.claude-plugin/plugin.json` still reported `0.10.0` after the 0.10.1 and
+  0.10.2 releases, so plugin installs showed the wrong version.
+- **Fixed: `routing.local.yaml.example` shipped retired models** — the starter
+  profiles still pointed at `claude-opus-4-8` and Gemini 3.5 Flash; they now use
+  Claude Opus 5 (with lane-appropriate effort) and Gemini 3.6 Flash.
+- **Corrected the Intelligence Index figures** in
+  `docs/model-capabilities-2026-07.md` against the Artificial Analysis source
+  (index points, not percentages), added the AA-Briefcase / GDPval-AA v2
+  comparison, and recorded the two results that cut against the defaults:
+  Fable 5's lead on factual knowledge and Sol's lead on presentation quality.
+
+## What's new in v0.10.2
+
+- **Claude effort on `hardest-coding` and `hard-judgment` moved from `max` to
+  `xhigh`**, matching Anthropic's documented guidance for Claude Opus 5: start
+  at `xhigh` for coding and agentic work, keep `high` as the floor for other
+  intelligence-sensitive work, and reserve `max` for cases where correctness
+  outweighs cost. Raise it back per lane with
+  `omnilane configure set <lane> "<spec>"`.
+- **Fixed two dead CHANGELOG compare links** that pointed at a `v0.10.0` tag
+  which was never published.
+
+## What's new in v0.10.1
+
+- **`claude-opus-5` joins the default table** as first choice for
+  `hard-judgment` and `taste-final`, plus a fallback for the hardest coding work.
+- **`omnilane configure` covers all 13 providers** with 106 selectable model
+  entries — current native catalogs for Codex, Claude Code, Grok Build and
+  Antigravity, plus verified OpenRouter/OpenCode shortcuts. Custom model IDs
+  remain available through `c`.
+
 <details>
-<summary>Older releases (v0.8.3 and earlier)</summary>
+<summary>Older releases (v0.10.0 and earlier)</summary>
+
+## What's new in v0.10.0
+
+- **Gemini 3.6 Flash defaults** — the gemini candidates in `fast-agentic`,
+  `triage`, and `bulk-mechanical` (and the `Gemini Flash` alias) now run
+  Gemini 3.6 Flash: fewer output tokens, a lower output price, and the fastest
+  output speed measured by Artificial Analysis.
+- **Evidence re-audit** — routing comments, model capability notes, and the
+  Gemini price table refreshed against official sources.
+
+## What's new in v0.9.1
+
+- **Fix:** `configure set` no longer deletes hand-written comments from
+  `routing.local.yaml` — it rewrites only its own stamp header and the lane
+  being replaced.
+
+## What's new in v0.9.0
+
+- **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
+  `mistral`, `groq`, and `cerebras` join `openrouter` as CLI-free lanes (curl +
+  a `<VENDOR>_API_KEY`). A one-line `lib/common.sh` registry entry adds each;
+  see [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+- **Fish shell completion** — `omnilane completion fish | source`.
 
 ## What's new in v0.8.3
 

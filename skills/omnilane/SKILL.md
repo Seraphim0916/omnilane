@@ -54,8 +54,11 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
 top Claude tier is usually the main loop itself, not a dispatched worker, and
-it prices above Opus. This is a cost / guardrail / main-loop policy choice, not
-a capability verdict; Anthropic positions Fable 5 above Opus 4.8. To route to
+it prices at twice Opus 5. This is a cost / guardrail / main-loop policy choice,
+not a capability verdict — Artificial Analysis calls Opus 5 (61) and Fable 5 (60)
+"effectively tied" on the Intelligence Index, but Opus 5 leads AA-Briefcase by
+146 Elo at 20% lower cost per task. Fable 5 keeps the lead on factual breadth
+(AA-Omniscience), so name it explicitly for recall-heavy consults. To route to
 it anyway, select it in the configurator or override a lane in
 `~/.omnilane/routing.local.yaml` (e.g. `taste-final: claude claude-fable-5 high`).
 

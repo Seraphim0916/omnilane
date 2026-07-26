@@ -33,9 +33,12 @@ arbitrate:       off - -                        # opinion panel is OPT-IN: it co
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.
                                                 # Custom gate: `arbitrate: exec /path/to/script -`
 # Claude Fable 5 (claude-fable-5) is deliberately absent from the defaults: the top Claude tier
-# is usually the MAIN LOOP itself, not a dispatched worker, and it prices above Opus. This is a
-# cost / guardrail / main-loop policy choice, NOT a capability verdict — Anthropic positions
-# Fable 5 above Opus 4.8. If you want
+# is usually the MAIN LOOP itself, not a dispatched worker, and it prices at twice Opus 5
+# ($10/$50 vs $5/$25). This is a cost / guardrail / main-loop policy choice, NOT a capability
+# verdict — AA calls Opus 5 (61) and Fable 5 (60) "effectively tied" on the Intelligence Index
+# (2026-07-24) and Epoch AI ranks them the other way, but Opus 5 leads AA-Briefcase by 146 Elo
+# and GDPval-AA v2 by 114 Elo at 20% lower cost per task. Fable 5 does keep the lead on factual
+# breadth (AA-Omniscience), so name it explicitly for recall-heavy consults. If you want
 # to route to it anyway, pick it in the configurator or set e.g.
 #   taste-final: claude claude-fable-5 high
 # in ~/.omnilane/routing.local.yaml.

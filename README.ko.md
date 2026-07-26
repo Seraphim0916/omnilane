@@ -21,47 +21,29 @@
 
 ---
 
-## 2026-07-25 업데이트
+## 🤔 omnilane 이란?
 
-- 기본 라우팅에 `claude-opus-5`를 추가했습니다. `hard-judgment`와 `taste-final`의 첫 번째 선택이며, 가장 어려운 코딩 작업의 대체 경로로도 사용됩니다.
-- `omnilane configure`를 13개 전체 제공자로 확장했습니다. 선택 가능한 모델은 106개이며 Codex, Claude Code, Grok Build, Antigravity의 최신 카탈로그와 검증된 OpenRouter／OpenCode 바로가기를 포함합니다. `c`를 통한 사용자 지정 모델 ID 입력도 계속 지원합니다.
+**무엇이 문제인가.** 이미 AI 코딩 어시스턴트——**Claude Code, Codex, Cursor,
+Gemini CLI** 같은——를 쓰고 계시죠. 각각은 하나의 모델 계열하고만 대화합니다.
+그래서 맡기는 모든 일이 그 한 모델에서 돌아갑니다, 적합하든 아니든——일회성 파일
+이름 변경이 가장 비싼 모델을 소모하고, 정작 어려운 설계 문제는 마침 열어 둔
+모델에 걸립니다.
 
----
-## 👋 처음이신가요?
+**omnilane 이 하는 일.** 어시스턴트에게 라우팅 표를 줍니다. 작업은 **레인**——
+가장 어려운 코딩, 기계적인 물량, 분류, 어려운 판단, 최종 다듬기——으로 나뉘고,
+각 레인에는 그 일에 가장 강하고(그리고 가장 저렴한) 모델이 지정됩니다.
+어시스턴트는 자신이 잘하는 레인을 직접 처리하고, 나머지는 이미 가진 로그인으로
+다른 벤더의 CLI 에 백그라운드로 넘깁니다.
 
-이미 AI 코딩 어시스턴트——**Claude Code, Codex, Cursor, Gemini CLI** 같은——를 쓰고
-계시죠. 각각은 한 번에 하나의 AI 모델과 대화하며, "어떤 작업에 어떤 모델이 최선인가"는
-당신 몫으로 남습니다.
+**omnilane 이 아닌 것.** 프록시도, 새 구독도, 계속 돌봐야 할 서비스도 아닙니다.
+표 한 장과 디스패치 스크립트 하나가 기존 도구 뒤에서 돌아갈 뿐입니다.
+`./install.sh --uninstall` 로 흔적 없이 제거됩니다.
 
-**omnilane 이 대신 골라 줍니다.** 모든 작업을 그 일에 가장 강한(그리고 가장 저렴한) 모델로
-자동 라우팅합니다——어려운 코딩은 최고 코더에게, 간단한 확인은 빠르고 싼 모델에게, 긴 문서는
-큰 컨텍스트 모델에게——전부 이미 결제 중인 구독과 API 키로. 기본값 그대로 쓰거나, 작은 설정
-파일 하나만 손보면 됩니다. 새로 관리할 대상이 늘지 않고(기존 도구 뒤에서 동작),
-`./install.sh --uninstall` 로 깔끔히 제거됩니다.
+**모든 구독이 필요하지는 않습니다.** 각 레인은 대체 체인이며, 실제로 설치된 첫
+후보가 선택됩니다. CLI 가 하나든 일곱이든 동작하고, 아무것도 없는 레인은 실패
+대신 그냥 꺼집니다. 구독이 하나여도 기본 표는 그 벤더로 수렴합니다.
 
-**[⬇ 60초 시작으로](#-60초-시작)**
-
-## v0.10.0 새 기능
-
-- **Gemini 3.6 Flash 기본 라우팅** — `fast-agentic`, `triage`,
-  `bulk-mechanical` 의 gemini 후보(그리고 `Gemini Flash` 별칭)를 2026-07-21
-  출시된 Gemini 3.6 Flash 로 변경: 출력 토큰 감소, 출력 단가 인하, Artificial
-  Analysis 측정 출력 속도 1위.
-- **근거 재감사** — 라우팅 주석, 모델 능력 노트, Gemini 가격표를 공식 소스에
-  맞춰 갱신 (2026-07-21/22).
-
-## v0.9.1 새 기능
-
-- **수정**: `configure set` 이 더 이상 `routing.local.yaml` 의 수기 주석을
-  삭제하지 않습니다. 자체 스탬프 줄과 교체 대상 레인만 다시 씁니다.
-
-## v0.9.0 새 기능
-
-- **OpenAI 호환 direct-API 벤더 5개 추가** — `deepseek`, `zai` (GLM), `mistral`,
-  `groq`, `cerebras` 가 `openrouter` 처럼 CLI 없는 레인으로 추가(curl 과
-  `<VENDOR>_API_KEY` 만 필요). `lib/common.sh` 레지스트리에 한 줄로 추가되며,
-  모델 능력 비교는 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) 참고.
-- **Fish 셸 자동완성** — `omnilane completion fish | source`.
+**[⬇ 60초 시작으로](#-60초-시작)** · **[❓ FAQ 보기](#-faq)**
 
 ## ⚡ 60초 시작
 
@@ -142,15 +124,11 @@ flowchart LR
 | 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
-디스패치가 강등되는 대상입니다.
+디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
+설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
 
-> **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다:
-> Claude 최상위 티어는 보통 *메인 루프 자신*이지 디스패치되는 워커가 아니며,
-> 가격도 Opus 보다 높습니다. 이는 비용/가드레일/메인 루프 정책이며 능력 평가가
-> 아닙니다. Anthropic 은 Fable 5 를 Opus 5 보다 상위에 둡니다. 설정 메뉴의
-> 모델 목록에는 있으니 원하면 직접
-> 라우팅하세요(예: `routing.local.yaml` 에
-> `taste-final: claude claude-fable-5 high`).
+> **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다——
+> 이유와 실측 데이터는 [FAQ](#-faq) 에 정리했습니다.
 
 ### 자연어 상담
 
@@ -365,12 +343,136 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
   `jobs.sh status` 가 `dead` 를 보고.
 - **페이로드 상한** — 과대한 태스크 텍스트는 머리/꼬리만 남기고 자동 절단.
 
+## ❓ FAQ
+
+<details>
+<summary><b>이 구독들이 전부 필요한가요?</b></summary>
+
+<br/>
+
+아닙니다. 각 레인은 대체 체인이며 실제로 설치된 첫 후보가 사용됩니다. 구독이
+하나면 표 전체가 그 벤더로 수렴하고, 체인에 아무것도 없는 레인은 오류 대신 그냥
+꺼집니다. `omnilane doctor` 로 이 머신이 지금 실제로 닿을 수 있는 곳을 확인할 수
+있고, `routing.local.yaml.example` 에는 흔한 상황별 시작 프로필(Claude 만,
+Codex 중심, Codex 없음)이 들어 있습니다.
+
+</details>
+
+<details>
+<summary><b>omnilane 이 제 코드를 새로운 곳으로 보내나요?</b></summary>
+
+<br/>
+
+새로운 목적지는 생기지 않습니다. 디스패치는 이미 설치하고 로그인해 둔 벤더 CLI 를
+호출할 뿐이라, 코드가 도달하는 곳은 원래 쓰던 벤더뿐입니다. 러너는 구독형 CLI 를
+호출하기 전에 API 키 환경 변수를 제거하므로, 남아 있던 키 때문에 토큰 종량제로
+조용히 전환되는 일도 없습니다. 유일한 예외는 direct-API 벤더군(`openrouter`,
+`deepseek`, `zai`, `mistral`, `groq`, `cerebras`)으로, 이들은 정의상 당신이 설정한
+키로 해당 제공자의 API 를 호출합니다——모두 advise 전용이며 파일을 수정하지 않습니다.
+
+</details>
+
+<details>
+<summary><b>Claude Fable 5 는 어디에? 왜 기본 테이블에 없나요?</b></summary>
+
+<br/>
+
+**Claude 최상위 티어는 보통 메인 루프 자신이지 디스패치되는 워커가 아니기
+때문입니다.** 레인은 "지금 당신이 몰고 있는 모델 이외"에 작업을 보내려고 존재합니다.
+Fable 5 가 메인 루프라면 판단과 문장을 다시 Fable 5 로 라우팅하는 것은 호출만 한 번
+늘 뿐 얻는 것이 없습니다——그래서 위의 "메인 모델 고르기" 목록에서 Fable 5 는
+**드라이버**로 독립된 줄을 가지며, hard-judgment, taste-final, 정확성이 핵심인
+가장 어려운 수정을 직접 처리합니다.
+
+**측정 데이터도 워커로 쓰는 쪽을 지지하지 않습니다.** Artificial Analysis
+Intelligence Index(2026-07-24)에서 Opus 5(max)는 61점, Fable 5(max)는 60점 ——
+AA 자신이 "사실상 동점"이라 표현했고, Epoch AI 의 Capability Index 는 순위가
+반대입니다(Fable 5 161, Opus 5 159). 종합 지능은 무승부로 보면 됩니다. 실제로
+벌어지는 곳은 에이전트형 전문 산출물이며, 그 격차는 작지 않습니다:
+
+| 벤치마크 | Claude Opus 5 (max) | Claude Fable 5 | |
+|---|---:|---:|---|
+| AA-Briefcase(에이전트형 지식 노동, Elo) | 1720 | 1574 | **+146** |
+| GDPval-AA v2(Elo) | 1861 | 1747 | **+114** |
+| AA-Briefcase 작업당 비용 | $17.79 | $22.30 | **-20%** |
+| API 가격, 입력/출력 1M 당 | $5 / $25 | $10 / $50 | **절반** |
+
+Opus 5 의 max, xhigh, high 세 티어가 AA-Briefcase 상위 세 자리를 차지하며,
+`high` 티어조차 작업당 비용 절반 이하로 Fable 5 를 이깁니다. 즉 Fable 5 는 가격이
+두 배이면서 레인이 중시하는 어떤 축에서도 우위를 사지 못합니다.
+
+**Fable 5 가 실제로 더 나은 지점**: 사실 지식의 폭입니다. AA-Omniscience 에서는
+여전히 Opus 5 를 앞서며(두 모델의 규모 차이를 감안하면 당연), 반대로 Opus 5 는
+확신이 없을 때도 답하는 경향이 있어 환각률이 50%(Opus 4.8 대비 +14 포인트)입니다.
+실행보다 회상이 중심인 작업이라면 명시적으로 지목하세요:
+
+```bash
+dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
+```
+
+**이는 비용과 메인 루프 정책의 선택이지 능력 평가가 아닙니다.** Fable 5 는 설정
+메뉴의 모델 목록에 있으며, `routing.local.yaml` 한 줄로 기본값을 덮어쓸 수 있습니다:
+
+```yaml
+taste-final: claude claude-fable-5 high
+```
+
+</details>
+
+<details>
+<summary><b>Claude 레인은 왜 <code>max</code> 가 아니라 <code>xhigh</code> 인가요?</b></summary>
+
+<br/>
+
+노력 수준이 높을수록 좋은 것이 아니기 때문입니다. Anthropic 은 `xhigh` 를 코딩과
+에이전트 작업의 출발점, `high` 를 그 외 지능이 필요한 작업의 하한, `max` 를
+정확성이 비용보다 중요한 경우의 설정으로 문서화합니다. 제3자 측정도 일치합니다:
+Vals.ai 의 Vibe Code Bench 에서 Opus 5 는 `high` 에서 89.8%, `xhigh` 에서 88.3%,
+`max` 에서 88.4% —— 최상위 티어는 더 복잡한 해법을 내놓고 그만큼 더 자주 실패합니다.
+워크로드가 다르다면 레인 단위로 올리세요:
+
+```bash
+omnilane configure set hard-judgment "claude claude-opus-5 max"
+```
+
+</details>
+
+<details>
+<summary><b>레인의 1순위 CLI 가 없으면 어떻게 되나요?</b></summary>
+
+<br/>
+
+디스패치가 체인을 따라 내려가며 보유한 첫 벤더를 사용합니다. 호출을 쓰지 않고도
+결정을 먼저 확인할 수 있습니다:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # 후보별 추적
+scripts/dispatch.sh --list                     # 전체 유효 테이블
+scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계획, 제공자 호출 없음
+```
+
+</details>
+
+<details>
+<summary><b>디스패치된 워커가 제 파일을 수정할 수 있나요?</b></summary>
+
+<br/>
+
+요청했을 때만 가능합니다. 디스패치의 기본값은 읽기 전용 `advise` 이며 벤더별로
+구현되어 있습니다(읽기 전용 샌드박스, plan 모드, 또는 읽기 전용 도구 집합).
+수정하려면 `--mode work` 와 명시적인 `--workdir` 가 모두 필요합니다. 워커는 다시
+디스패치할 수도 없습니다——깊이 가드가 종료 코드 86 으로 중첩 팬아웃을 거부하므로,
+명령 하나가 에이전트 연쇄로 번져 할당량을 태우는 일은 없습니다.
+
+</details>
+
 ## 📊 기본값과 출처
 
 기본 레인 배치는 Artificial Analysis 2026-07 스냅샷(AA 사이트 원본 레코드와
 각사 공식 가격 페이지로 교차 검증)과 공개 비교 리뷰에 근거합니다.
 이는 의견이지 법칙이 아닙니다——설정 메뉴와 `routing.local.yaml` 이
-그래서 존재합니다.
+그래서 존재합니다. 벤치마크별 단서를 포함한 작업 노트는
+[`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) 에 있습니다.
 
 ## ⚠️ 알려진 제한
 
@@ -385,8 +487,67 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
 
 ## 📜 릴리스 기록
 
+## v0.10.3 새 기능
+
+- **5개 언어 README 전면 재구성** — 문서 첫머리에서 "이게 무엇이고 왜 필요한가"를
+  먼저 설명하고, 버전 기록은 도입부를 끊지 않도록 맨 아래로 모았습니다. 그리고
+  반복해서 들어온 질문에 답하는 FAQ 를 새로 넣었습니다: 구독이 전부 필요한지,
+  코드가 어디로 가는지, 왜 Fable 5 가 기본 테이블에 없는지, 왜 `max` 가 아니라
+  `xhigh` 인지, CLI 가 없으면 어떻게 되는지, 워커가 파일을 수정할 수 있는지.
+- **수정: 플러그인 매니페스트가 옛 버전을 표시** — `plugin.json` 과
+  `.claude-plugin/plugin.json` 이 0.10.1, 0.10.2 릴리스 후에도 `0.10.0` 으로
+  남아 있어 플러그인 설치 시 잘못된 버전이 표시되었습니다.
+- **수정: `routing.local.yaml.example` 이 퇴역 모델을 가리킴** — 시작 프로필의
+  `claude-opus-4-8` 을 모두 `claude-opus-5`(레인에 맞는 노력 수준 포함)로,
+  Gemini 3.5 Flash 후보를 3.6 Flash 로 바꿔 0.10.0 이후 기본값과 맞췄습니다.
+- **Intelligence Index 수치를 원본과 대조해 정정**
+  (`docs/model-capabilities-2026-07.md`): 퍼센트가 아니라 지수 점수입니다.
+  AA-Briefcase / GDPval-AA v2 비교를 추가하고, 기본값과 반대 방향인 두 결과도
+  기록했습니다: 사실 지식은 Fable 5 가, 표현 품질은 GPT-5.6 Sol 이 앞섭니다.
+
+## v0.10.2 새 기능
+
+- **`hardest-coding` 과 `hard-judgment` 의 Claude 노력 수준을 `max` 에서 `xhigh`
+  로 변경**. Claude Opus 5 에 대한 Anthropic 의 문서화된 지침에 맞췄습니다:
+  코딩과 에이전트 작업은 `xhigh` 에서 시작, 그 외 지능이 필요한 작업의 하한은
+  `high`, `max` 는 정확성이 비용보다 중요한 경우에 한합니다. 되돌리려면
+  `omnilane configure set <lane> "<spec>"` 을 쓰세요.
+- **깨진 CHANGELOG 비교 링크 2건 수정** — 공개된 적 없는 `v0.10.0` 태그를
+  가리키고 있었습니다.
+
+## v0.10.1 새 기능
+
+- **기본 라우팅에 `claude-opus-5` 추가**. `hard-judgment` 와 `taste-final` 의
+  첫 번째 선택이며, 가장 어려운 코딩 작업의 대체 경로로도 사용됩니다.
+- **`omnilane configure` 를 13개 전체 제공자로 확장**. 선택 가능한 모델은
+  106개이며 Codex, Claude Code, Grok Build, Antigravity 의 최신 카탈로그와
+  검증된 OpenRouter／OpenCode 바로가기를 포함합니다. `c` 를 통한 사용자 지정
+  모델 ID 입력도 계속 지원합니다.
+
 <details>
-<summary>이전 릴리스(v0.8.3 이하)</summary>
+<summary>이전 릴리스(v0.10.0 이하)</summary>
+
+## v0.10.0 새 기능
+
+- **Gemini 3.6 Flash 기본 라우팅** — `fast-agentic`, `triage`,
+  `bulk-mechanical` 의 gemini 후보(그리고 `Gemini Flash` 별칭)를 Gemini 3.6
+  Flash 로 변경: 출력 토큰 감소, 출력 단가 인하, Artificial Analysis 측정 출력
+  속도 1위.
+- **근거 재감사** — 라우팅 주석, 모델 능력 노트, Gemini 가격표를 공식 소스에
+  맞춰 갱신.
+
+## v0.9.1 새 기능
+
+- **수정**: `configure set` 이 더 이상 `routing.local.yaml` 의 수기 주석을
+  삭제하지 않습니다. 자체 스탬프 줄과 교체 대상 레인만 다시 씁니다.
+
+## v0.9.0 새 기능
+
+- **OpenAI 호환 direct-API 벤더 5개 추가** — `deepseek`, `zai` (GLM), `mistral`,
+  `groq`, `cerebras` 가 `openrouter` 처럼 CLI 없는 레인으로 추가(curl 과
+  `<VENDOR>_API_KEY` 만 필요). `lib/common.sh` 레지스트리에 한 줄로 추가되며,
+  모델 능력 비교는 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) 참고.
+- **Fish 셸 자동완성** — `omnilane completion fish | source`.
 
 ## v0.8.3 새 기능
 

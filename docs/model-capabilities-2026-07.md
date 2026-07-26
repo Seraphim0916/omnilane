@@ -81,12 +81,45 @@ local CLI login is unverified.
 
 ### Artificial Analysis Intelligence Index (updated 2026-07-24)
 
+Index points, not percentages. Figures below are quoted verbatim from the
+Artificial Analysis Opus 5 launch article (2026-07-24).
+
 | Model | Score | Context |
 |-------|------:|---------|
 | Claude Opus 5 (max) | 61 | 1M |
-| Claude Fable 5 | 59.9% | 1M+ |
-| GPT-5.6 Sol | 58.9% | 1M |
-| Kimi K3 | 57.1% | 1M |
+| Claude Fable 5 (max) | 60 | 1M+ |
+| GPT-5.6 Sol (max) | 59 | 1.05M |
+| Kimi K3 | 57 | 1M |
+| Claude Opus 4.8 (max) | 56 | 200K |
+
+Artificial Analysis calls Opus 5 and Fable 5 "effectively tied" and Opus 5 only
+"narrowly the most intelligent" — a 1-point gap here is not a capability verdict.
+Epoch AI's Capability Index ranks them the other way (Fable 5 161, Opus 5 159,
+tied at 161 on the software-engineering subset), which is the honest reading:
+these two are level on general intelligence.
+
+Where they are *not* level is agentic professional output, and that gap is large:
+
+| Benchmark | Claude Opus 5 (max) | Claude Fable 5 | Gap |
+|-----------|--------------------:|---------------:|-----|
+| AA-Briefcase (agentic knowledge work, Elo) | 1720 | 1574 | +146 |
+| GDPval-AA v2 (Elo) | 1861 | 1747 | +114 |
+| Cost per AA-Briefcase task | $17.79 | $22.30 | -20% |
+| Cost per Intelligence Index task | $2.03 | $2.75 | -26% |
+
+Opus 5's max / xhigh / high tiers sweep the top three AA-Briefcase places, and
+the `high` tier ($10.41/task) still beats Fable 5 at under half the cost.
+
+Two results cut the other way and are load-bearing for routing:
+
+- **Factual knowledge**: Opus 5 remains below Fable 5 on AA-Omniscience, as
+  expected from the size classes, and answers more readily when uncertain — its
+  hallucination rate is 50%, up 14 points from Opus 4.8. Fable 5 is the better
+  pick when breadth of recall matters more than agentic execution.
+- **Presentation quality**: Opus 5 scores 1628 Presentation Elo against
+  GPT-5.6 Sol's 1666 at max. Pure layout/presentation taste is the one axis
+  where Sol leads Claude, which is why `taste-final` keeps Sol as its backup
+  rather than treating it as a formality.
 
 ## Pricing and context windows (July 2026)
 

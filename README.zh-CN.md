@@ -21,41 +21,25 @@
 
 ---
 
-## 2026-07-25 更新
+## 🤔 omnilane 是什么?
 
-- 默认路由加入 `claude-opus-5`：成为 `hard-judgment`、`taste-final` 第一顺位，也纳入最高难度编程任务的备选。
-- `omnilane configure` 已扩展全部 13 个提供商：共 106 个可选模型，完整收录 Codex、Claude Code、Grok Build、Antigravity 实时列表，并加入已验证的 OpenRouter／OpenCode 快捷项；仍可用 `c` 输入自定义模型 ID。
+**问题在哪。** 你已经在用某个 AI 写代码助手——**Claude Code、Codex、Cursor、
+Gemini CLI** 之类。每一个都只接一个模型家族,所以你交代的每件事都跑在那同一个
+模型上,不管它合不合适:随手改个文件名烧掉最贵的模型,真正难的架构问题却刚好落在
+你当下开着的那个。
 
----
-## 👋 第一次用?
+**omnilane 做什么。** 它给你的助手一张路由表。工作被分进**通道**——最难的实现、
+机械粗活、初筛、硬判断、文字终审——每条通道指名对那件事最强(也最省)的模型。
+助手保留自己本来就擅长的通道,其余用你既有的登录,在后台交给别家厂商的 CLI。
 
-你已经在用某个 AI 写程式助手——**Claude Code、Codex、Cursor、Gemini
-CLI** 之类。每个一次只接一个 AI 模型,而「每件工作该用哪个模型最好」得你自己决定。
+**它不是什么。** 不是 proxy、不是另一笔订阅、不是又一个要维护的服务。它就是一张表
+加一支派工脚本,躲在你现有工具背后跑。`./install.sh --uninstall` 可完全清除。
 
-**omnilane 帮你决定。** 每一件工作,它会自动派给对那件事最强(也最省)的模型——硬派程式
-交给顶尖程式模型、随手的小检查交给又快又便宜的、长文件交给大脉络模型——全部用你本来就在
-付费的订阅与 API 金钥。用内建预设值就好,或改一个小设定档就能微调。不用另外顾一套东西
-(它躲在你现有工具背后跑),`./install.sh --uninstall` 可干净移除。
+**你不需要每一家订阅。** 每条通道都是候选链,派工时自动采用本机实际装了的第一个
+候选。装一家或七家都行,整条链都没有的通道就自动关闭,而不是报错。只有一份订阅
+时,整张默认表会收敛到那一家。
 
-**[⬇ 直接跳到 60 秒上手](#-60-秒上手)**
-
-## v0.10.0 新功能
-
-- **Gemini 3.6 Flash 默认路由**——`fast-agentic`、`triage`、`bulk-mechanical`
-  的 gemini 候选(与 `Gemini Flash` 别名)改用 2026-07-21 发布的 Gemini 3.6
-  Flash:输出 token 更少、输出单价更低、Artificial Analysis 实测输出速度第一。
-- **证据重审计**——路由注释、模型能力笔记与 Gemini 价格表对官方来源刷新
-  (2026-07-21/22)。
-
-## v0.9.1 新功能
-
-- **修复**:`configure set` 不再删除 `routing.local.yaml` 中手写的注释——
-  只改写自身的戳记行与被替换的 lane。
-
-## v0.9.0 新功能
-
-- **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
-- **fish shell 补全** — `omnilane completion fish | source`。
+**[⬇ 直接跳到 60 秒上手](#-60-秒上手)** · **[❓ 看常见问题](#-常见问题)**
 
 ## ⚡ 60 秒上手
 
@@ -132,13 +116,11 @@ flowchart LR
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
 | 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
 
-**备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。
+**备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
+通道都是这样一条链;整条都没装时,通道自动降为 `off`。
 
-> **Claude Fable 5 去哪了?** 默认表刻意不放:Claude 顶级档通常就是*主循环本人*,
-> 不是被派发的工人,且定价高于 Opus。这是成本/护栏/主循环策略,不代表能力
-> 不如 Opus;Anthropic 将 Fable 5 定位在 Opus 5 之上。设置菜单的模型清单里有它——
-> 不同意就自己路由过去(例如在 `routing.local.yaml` 写
-> `taste-final: claude claude-fable-5 high`)。
+> **Claude Fable 5 去哪了?** 默认表刻意不放——理由与完整数据见
+> [常见问题](#-常见问题)。
 
 ### 自然语言咨询
 
@@ -343,6 +325,121 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
   而不是永远显示 `running`。
 - **任务载荷上限** — 过大的任务文本自动头尾截断,防止撑爆工作端上下文。
 
+## ❓ 常见问题
+
+<details>
+<summary><b>这些订阅我全都要有吗?</b></summary>
+
+<br/>
+
+不用。每条通道都是候选链,派工时采用本机实际装了的第一个候选。只有一份订阅时,
+整张表会收敛到那一家;整条链都没有的通道自动关闭,不会报错。运行
+`omnilane doctor` 可以看到这台机器现在实际接得到什么,`routing.local.yaml.example`
+也附了常见情形的起手配置(只有 Claude、以 Codex 为主、没有 Codex)。
+
+</details>
+
+<details>
+<summary><b>omnilane 会不会把我的代码送到新的地方?</b></summary>
+
+<br/>
+
+不会多出新的去处。派工是调用你早就装好也登录过的厂商 CLI,所以代码只会到达
+你本来就在用的那几家。执行器在调用订阅制 CLI 前会剥掉 API 密钥环境变量,避免
+一把残留的密钥把你悄悄切到按 token 计费。唯一的例外是 direct-API vendor 家族
+(`openrouter`、`deepseek`、`zai`、`mistral`、`groq`、`cerebras`),它们本来就是
+拿你配置的密钥直调该提供商的 API——这几家只做 advise,不会改文件。
+
+</details>
+
+<details>
+<summary><b>Claude Fable 5 去哪了?为什么默认表不放它?</b></summary>
+
+<br/>
+
+**因为 Claude 顶级档通常就是主循环本人,不是被派发的工人。** 通道存在的意义,
+是把工作送给「你正在开的那个模型以外」的模型。如果 Fable 5 就是你的主循环,把
+判断和文字再路由回 Fable 5 只是多一次调用、毫无增益——所以上面那份「选你的主控
+模型」清单里,Fable 5 有自己独立的一行,身份是**主控**:自己做 hard-judgment、
+taste-final、最吃正确性的硬修。
+
+**测量数据也不支持把它当工人。** Artificial Analysis 智能指数(2026-07-24)
+Opus 5(max)61 分、Fable 5(max)60 分——AA 自己的用词是「实质打平」,而 Epoch AI
+的能力指数排序还是反过来的(Fable 5 161、Opus 5 159)。综合智力就当它平手。真正
+拉开差距的是 agentic 专业产出,而且差很多:
+
+| 评测 | Claude Opus 5 (max) | Claude Fable 5 | |
+|---|---:|---:|---|
+| AA-Briefcase(agentic 知识工作,Elo) | 1720 | 1574 | **+146** |
+| GDPval-AA v2(Elo) | 1861 | 1747 | **+114** |
+| AA-Briefcase 每任务成本 | $17.79 | $22.30 | **-20%** |
+| API 单价,输入/输出 每 1M | $5 / $25 | $10 / $50 | **一半** |
+
+Opus 5 的 max、xhigh、high 三个档位包揽 AA-Briefcase 前三名,连 `high` 档都在
+不到一半的每任务成本下赢过 Fable 5。也就是说,Fable 5 贵一倍,却换不到任何一条
+通道所在意的优势。
+
+**Fable 5 真正更强的地方**:事实广度。它在 AA-Omniscience 上仍领先 Opus 5
+(符合两者的规模差),而 Opus 5 在没把握时更倾向直接作答——幻觉率 50%,比
+Opus 4.8 高 14 个百分点。任务偏「回想」而非「执行」时,直接点名它:
+
+```bash
+dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
+```
+
+**这是成本与主循环策略的选择,不是能力判决。** 设置菜单的模型清单里有 Fable 5,
+在 `routing.local.yaml` 写一行就能覆盖默认:
+
+```yaml
+taste-final: claude claude-fable-5 high
+```
+
+</details>
+
+<details>
+<summary><b>Claude 那几条通道为什么用 <code>xhigh</code> 而不是 <code>max</code>?</b></summary>
+
+<br/>
+
+因为推理档位不是越高越好。Anthropic 官方把 `xhigh` 定为编码与 agentic 工作的
+起手档位,`high` 是其他吃智力任务的下限,`max` 保留给「正确性重于成本」的场合。
+第三方实测也一致:Vals.ai 的 Vibe Code Bench 上,Opus 5 在 `high` 拿 89.8%,
+`xhigh` 只有 88.3%、`max` 88.4%——最高档倾向产出更繁复的解,反而更常出错。
+你的工作类型如果不同意,单条通道自己拉高:
+
+```bash
+omnilane configure set hard-judgment "claude claude-opus-5 max"
+```
+
+</details>
+
+<details>
+<summary><b>通道首选的 CLI 没装会怎样?</b></summary>
+
+<br/>
+
+派工会沿着候选链往下走,用你手上有的第一家。不花任何额度就能先看决策:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # 逐候选解释
+scripts/dispatch.sh --list                     # 整张生效表
+scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,不调用模型
+```
+
+</details>
+
+<details>
+<summary><b>被派工的模型会不会乱改我的文件?</b></summary>
+
+<br/>
+
+除非你明说要它改。派工默认是 `advise` 只读模式,而且是逐厂商实现的(只读沙箱、
+plan 模式,或只给只读工具集)。要改文件必须同时给 `--mode work` 和明确的
+`--workdir`。工作端也不能再往外派——深度守卫会用退出码 86 拒绝嵌套派工,一道
+命令不可能失控变成一整串 AI 烧你的额度。
+
+</details>
+
 ## 📊 默认值与数据来源
 
 默认通道配置依据 Artificial Analysis 2026-07 快照(已对 AA 站上原始记录与
@@ -350,7 +447,8 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 设置菜单和 `routing.local.yaml` 就是让你不同意用的。评审团(arbitrate)
 默认关闭;要用就在 `routing.local.yaml` 写
 `arbitrate: vote codex,claude,grok -`(从四家里任选 1-4 个评审),
-或改用 `exec` 厂商指向你自己的多模型审查闸脚本。
+或改用 `exec` 厂商指向你自己的多模型审查闸脚本。完整工作笔记(含各评测的
+但书)见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
 
 ## ⚠️ 已知限制
 
@@ -364,8 +462,58 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 
 ## 📜 版本历程
 
+## v0.10.3 新功能
+
+- **五种语言的 README 全面重整**——文档开头改成先讲清楚「这是什么、我为什么会
+  想要它」,版本历程全部收拢到最下方,不再打断开头的介绍;新增常见问题,回答
+  一直被问到的几件事:是不是每家订阅都要有、代码会被送去哪、为什么默认表没有
+  Fable 5、为什么用 `xhigh` 而不是 `max`、首选 CLI 没装会怎样、被派工的模型会不会
+  改文件。
+- **修复:插件清单的版本号没跟上**——`plugin.json` 与
+  `.claude-plugin/plugin.json` 在 0.10.1、0.10.2 发布后仍写着 `0.10.0`,导致插件
+  安装显示错误版本。
+- **修复:`routing.local.yaml.example` 还指着已退场的模型**——起手配置里的
+  `claude-opus-4-8` 全数改为 `claude-opus-5`(并按通道给对应档位),Gemini 3.5
+  Flash 候选改为 3.6 Flash,与 0.10.0 以来的默认值一致。
+- **对照原始资料修正智能指数数字**(`docs/model-capabilities-2026-07.md`):
+  那是指数点数不是百分比;补上 AA-Briefcase / GDPval-AA v2 对照,并记下两项与
+  默认值相反的结果:Fable 5 在事实知识领先、GPT-5.6 Sol 在呈现质量领先。
+
+## v0.10.2 新功能
+
+- **`hardest-coding` 与 `hard-judgment` 的 Claude 档位由 `max` 降为 `xhigh`**,
+  对齐 Anthropic 对 Claude Opus 5 的官方建议:编码与 agentic 工作从 `xhigh` 起跳,
+  `high` 是其他吃智力任务的下限,`max` 保留给正确性重于成本的场合。要拉回去用
+  `omnilane configure set <通道> "<配置>"`。
+- **修掉两条死的 CHANGELOG 比较链接**——它们指向从未发布的 `v0.10.0` tag。
+
+## v0.10.1 新功能
+
+- **默认路由加入 `claude-opus-5`**:成为 `hard-judgment`、`taste-final` 第一顺位,
+  也纳入最高难度编程任务的备选。
+- **`omnilane configure` 已扩展全部 13 个提供商**:共 106 个可选模型,完整收录
+  Codex、Claude Code、Grok Build、Antigravity 实时列表,并加入已验证的
+  OpenRouter／OpenCode 快捷项;仍可用 `c` 输入自定义模型 ID。
+
 <details>
-<summary>旧版本(v0.8.3 以前)</summary>
+<summary>旧版本(v0.10.0 以前)</summary>
+
+## v0.10.0 新功能
+
+- **Gemini 3.6 Flash 默认路由**——`fast-agentic`、`triage`、`bulk-mechanical`
+  的 gemini 候选(与 `Gemini Flash` 别名)改用 Gemini 3.6 Flash:输出 token
+  更少、输出单价更低、Artificial Analysis 实测输出速度第一。
+- **证据重审计**——路由注释、模型能力笔记与 Gemini 价格表对官方来源刷新。
+
+## v0.9.1 新功能
+
+- **修复**:`configure set` 不再删除 `routing.local.yaml` 中手写的注释——
+  只改写自身的戳记行与被替换的 lane。
+
+## v0.9.0 新功能
+
+- **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
+- **fish shell 补全** — `omnilane completion fish | source`。
 
 ## v0.8.3 新功能
 
