@@ -1011,6 +1011,33 @@ class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
         self.assertTrue(panel.is_hidden())
         self.assertEqual("false", compare_button.get_attribute("aria-pressed"))
 
+    def test_language_switch_translates_chrome_and_survives_reload(self):
+        self.open_board(1440, 900)
+        self.assertEqual("en", self.page.evaluate("() => document.documentElement.lang"))
+        self.assertEqual("Read only", self.page.locator(".read-only-tag").text_content())
+        self.assertEqual("Live local signal", self.page.locator("#connection-label").text_content())
+
+        self.page.select_option("#language-select", "zh-TW")
+        self.page.wait_for_function("() => document.documentElement.lang === 'zh-TW'")
+        self.assertEqual("唯讀", self.page.locator(".read-only-tag").text_content())
+        self.assertEqual("本機訊號即時連線", self.page.locator("#connection-label").text_content())
+        self.assertEqual("尋找任務", self.page.locator(".search-control span").text_content())
+        self.assertEqual(
+            "任務、ID、車道、模型",
+            self.page.locator("#job-search").get_attribute("placeholder"),
+        )
+        card_states = self.page.locator(".card-state").all_text_contents()
+        self.assertTrue(card_states)
+        self.assertLessEqual(
+            set(card_states),
+            {"啟動中", "執行中", "成功", "失敗", "消失", "無效"},
+        )
+
+        self.page.reload(wait_until="domcontentloaded")
+        self.page.locator('#connection-status[data-mode="live"]').wait_for()
+        self.assertEqual("zh-TW", self.page.evaluate("() => document.documentElement.lang"))
+        self.assertEqual("zh-TW", self.page.locator("#language-select").input_value())
+
 
 class FrontendContractTests(unittest.TestCase):
     def setUp(self):
@@ -1046,7 +1073,15 @@ class FrontendContractTests(unittest.TestCase):
             'requestJson("/api/jobs")',
         ):
             self.assertIn(literal, self.javascript)
-        self.assertNotIn("localStorage", self.javascript)
+        # The board persists the language choice, so localStorage is no longer banned
+        # outright; the token must still never leave sessionStorage.
+        local_store_calls = re.findall(r"localStorage\.\w+\(([^)]*)\)", self.javascript)
+        self.assertTrue(local_store_calls)
+        for arguments in local_store_calls:
+            self.assertIn("LANGUAGE_STORAGE_KEY", arguments)
+        token_stores = re.findall(r"(\w+Storage)\.\w+\(\s*TOKEN_STORAGE_KEY", self.javascript)
+        self.assertTrue(token_stores)
+        self.assertEqual({"sessionStorage"}, set(token_stores))
         self.assertIn("EventSource.CLOSED", self.javascript)
         self.assertIn("window.setTimeout", self.javascript)
 
@@ -1082,6 +1117,70 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("renderCompare", self.javascript)
         self.assertNotIn("sessionStorage.setItem(\"omnilane.live-ui.compare", self.javascript)
         self.assertNotRegex(self.javascript, r'fetch\([^\n]+(?:POST|PUT|PATCH|DELETE)')
+
+    def _message_tables(self):
+        body = re.search(r"\n  const MESSAGES = \{\n(.*?)\n  \};\n", self.javascript, re.S)
+        self.assertIsNotNone(body)
+        tables = {}
+        for block in re.finditer(
+            r'^    (?:"([A-Za-z-]+)"|([A-Za-z-]+)): \{\n(.*?)^    \},$',
+            body.group(1),
+            re.S | re.M,
+        ):
+            language = block.group(1) or block.group(2)
+            tables[language] = dict(
+                re.findall(r'^      "([^"]+)": (.+),$', block.group(3), re.M)
+            )
+        return tables
+
+    def test_locale_tables_share_one_key_set_and_placeholder_set(self):
+        tables = self._message_tables()
+        declared = re.findall(r'\{ code: "([A-Za-z-]+)", label:', self.javascript)
+        self.assertEqual(set(declared), set(tables))
+        self.assertIn("en", tables)
+        base = tables["en"]
+        self.assertTrue(base)
+        for language, entries in tables.items():
+            self.assertEqual(set(base), set(entries), language)
+            for key, value in entries.items():
+                self.assertEqual(
+                    set(re.findall(r"\{(\w+)\}", base[key])),
+                    set(re.findall(r"\{(\w+)\}", value)),
+                    (language, key),
+                )
+                if value.startswith("{"):
+                    self.assertIn("other:", value, (language, key))
+
+    def test_every_message_key_the_board_uses_is_defined(self):
+        base = self._message_tables()["en"]
+        # jobStateLabel builds its key by concatenation, so the literal prefix it passes
+        # to t() is not a key on its own; the six job states are checked explicitly below.
+        used = {
+            literal
+            for literal in re.findall(r'\bt\("([^"]+)"', self.javascript)
+            if not literal.endswith(".")
+        }
+        for call in re.finditer(
+            r"(?:showInspectorState|setConnection)\((.*?)\)", self.javascript, re.S
+        ):
+            used.update(
+                literal for literal in re.findall(r'"([^"]+)"', call.group(1)) if "." in literal
+            )
+        used.update(re.findall(r'data-i18n="([^"]+)"', self.html))
+        used.update(re.findall(r'data-i18n-attr="[^"]*?:([^";]+)"', self.html))
+        used.update(
+            "jobState." + name
+            for name in ("starting", "running", "succeeded", "failed", "dead", "invalid")
+        )
+        self.assertTrue(used)
+        self.assertEqual(set(), used - set(base))
+
+    def test_language_switcher_is_wired_and_defaults_to_english(self):
+        self.assertIn('id="language-select"', self.html)
+        self.assertIn('<html lang="en">', self.html)
+        self.assertIn('const DEFAULT_LANGUAGE = "en";', self.javascript)
+        self.assertIn("document.documentElement.lang = state.language;", self.javascript)
+        self.assertIn("new Intl.PluralRules(state.language)", self.javascript)
 
 
 if __name__ == "__main__":

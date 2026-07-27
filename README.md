@@ -195,6 +195,10 @@ The reference is memory-only and disappears when the page closes. The board
 binds only to `127.0.0.1`, uses a random token, and is read-only. It shows
 `task.txt` and the public `out.txt`, but never raw worker or vendor logs.
 
+The board reads in English, Japanese, Korean, Traditional Chinese and Simplified
+Chinese. It follows the browser language on first load; the switcher in the
+header overrides that and the choice is remembered locally.
+
 Core routing does not need Python; only this UI requires Python 3.9 or newer.
 
 ## 📦 Install

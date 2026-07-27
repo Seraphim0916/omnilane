@@ -147,6 +147,29 @@ summary:focus-visible,
   background: var(--quiet);
 }
 
+.language-control {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  padding: 0 10px;
+}
+
+.language-select {
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 4px 8px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  background: var(--paper);
+}
+
+.language-select:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
 .connection-status[data-mode="live"] .connection-lamp {
   background: var(--good);
 }
@@ -836,6 +859,11 @@ summary:focus-visible,
     min-width: 0;
     border-left: 0;
     padding: 0 12px;
+  }
+
+  .language-control {
+    border-left: 0;
+    padding: 0 12px 0 0;
   }
 
   .board-layout {
