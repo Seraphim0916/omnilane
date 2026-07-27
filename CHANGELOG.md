@@ -6,6 +6,34 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-27
+
+No routing changes. The Live Board is now readable in five languages.
+
+### Added
+
+- The Live Board reads in English, Japanese, Korean, Traditional Chinese and
+  Simplified Chinese. On first load it follows the browser languages; a switcher
+  in the header overrides that and the choice is remembered in `localStorage`.
+  Every string is covered, including headings, the search placeholder, filter
+  buttons, empty and error states, content markers, and the `aria-label`
+  attributes that screen readers announce. `<html lang>` follows the selection.
+- Job states are translated for display. The `state-` CSS classes still carry
+  the raw value, so status colours are unchanged, and the search index holds
+  both spellings: `running` and its translation both match the same job.
+
+### Changed
+
+- Counts use `Intl.PluralRules`, so English distinguishes `1 job` from `2 jobs`
+  while languages without that distinction get a single form.
+- The locale tables are embedded in `ui/app.js` rather than fetched as a
+  separate asset. `scripts/ui.py` deliberately allow-lists exactly three
+  read-only files, and translating the board leaves that surface untouched.
+- The token contract test no longer bans `localStorage` by name, because the
+  language preference needs it. The replacement is narrower and stronger: every
+  `localStorage` call must reference `LANGUAGE_STORAGE_KEY`, and the session
+  token must only ever reach `sessionStorage`.
+
 ## [0.10.4] - 2026-07-26
 
 No lane ordering changes. This release corrects documentation that could send
@@ -447,7 +475,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Seraphim0916/omnilane/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/Seraphim0916/omnilane/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/Seraphim0916/omnilane/compare/v0.10.1...v0.10.2

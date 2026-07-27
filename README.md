@@ -537,6 +537,20 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.11.0
+
+- **The Live Board reads in five languages** — English, Japanese, Korean,
+  Traditional Chinese and Simplified Chinese. It follows the browser languages
+  on first load, the switcher in the header overrides that, and the choice is
+  remembered locally. Headings, the search placeholder, filter buttons, empty
+  and error states, content markers and the `aria-label` attributes screen
+  readers announce are all covered, and `<html lang>` follows the selection.
+- **Job states are translated without breaking anything that reads them** — the
+  `state-` CSS classes keep the raw value so status colours are unchanged, and
+  the search index holds both spellings, so `running` and its translation match
+  the same job.
+- **No routing changes.** Dispatch behaviour is identical to v0.10.4.
+
 ## What's new in v0.10.4
 
 - **`long-context` no longer points multi-hop work at the wrong model** — the
