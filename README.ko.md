@@ -110,7 +110,7 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 대량 1차 선별 |
 | ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
@@ -118,7 +118,7 @@ flowchart LR
 | 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 100만 토큰급 훑기와 검색. 여러 곳을 잇는 다중 홉 통합은 Claude 후보를, 빠른 반복 루프는 Flash 우선 |
-| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
@@ -283,7 +283,7 @@ omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
 omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
-dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
 dispatch.sh [--json] --list [--json]
@@ -316,6 +316,11 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
   workspace-write, Claude 는 편집 자동 승인, Gemini 는 accept-edits 모드.
   `openrouter` vendor 는 work 모드를 명확한 오류로 거부합니다——파일 편집은
   에이전트형 CLI 벤더로 보내세요.
+- **sysops** — `work` 에서 벤더 샌드박스를 뺀 모드. 샌드박스가 거부하는 서비스
+  작업(`launchctl` 등)을 위한 것입니다. Codex 는 `-s danger-full-access` 로
+  실행하고, 다른 벤더는 일반 `work` 로 취급합니다. 워커에게 머신 전체 접근 권한을
+  주는 셈이므로 디스패치마다 명시적으로 지정해야 하며 레인 기본값이 될 수 없습니다.
+  `work` 가 샌드박스 거부로 실패하는 것을 직접 확인한 경우에만 쓰세요.
 
 ## 🔒 안전 장치
 
@@ -463,7 +468,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 요청했을 때만 가능합니다. 디스패치의 기본값은 읽기 전용 `advise` 이며 벤더별로
 구현되어 있습니다(읽기 전용 샌드박스, plan 모드, 또는 읽기 전용 도구 집합).
-수정하려면 `--mode work` 와 명시적인 `--workdir` 가 모두 필요합니다. 워커는 다시
+수정하려면 `--mode work` 와 명시적인 `--workdir` 가 모두 필요합니다. 세 번째 모드인
+`--mode sysops` 는 `work` 에서 벤더 샌드박스를 뺀 것으로, 샌드박스가 거부하는 서비스
+작업(`launchctl` 등)을 위한 것입니다. codex 는 `-s danger-full-access` 로 실행하고
+다른 벤더는 `work` 로 취급하며, 디스패치마다 명시해야 할 뿐 레인 기본값이 될 수
+없습니다. 워커는 다시
 디스패치할 수도 없습니다——깊이 가드가 종료 코드 86 으로 중첩 팬아웃을 거부하므로,
 명령 하나가 에이전트 연쇄로 번져 할당량을 태우는 일은 없습니다.
 
@@ -489,6 +498,27 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.12.0 새 기능
+
+- **`hardest-coding`의 Sol을 `max`에서 `xhigh`로** — AA의 노력 수준별 Coding Index
+  에서 Sol의 xhigh가 자신의 max와 모든 Claude 티어를 앞서면서 비용은 약 3분의 1
+  적다. 이 작업에서 xhigh를 넘는 노력은 정확도가 아니라 과잉 사고를 산다.
+- **`fast-agentic`의 1순위가 GPT-5.6 Luna로**, Gemini 3.6 Flash는 2순위. Luna는 AA
+  Agentic Index에서 Flash를 크게 앞서고, 2026-07-30 가격 인하 후 태스크당 비용이
+  극히 낮다. Flash에 남은 우위는 처리량뿐 — 레이턴시가 병목인 루프라면 로컬 설정에서
+  다시 앞에 두면 된다.
+- **레인 주석에서 수치 제거.** `routing.yaml`은 각 순서가 성립하는 "이유"만 서술하고,
+  점수·가격·처리량은 조회 날짜와 함께 `docs/model-capabilities-2026-07.md`에만 둔다.
+  수치가 낡아도 라우팅 표를 고칠 필요가 없다.
+- **value 프로파일** 추가(`routing.local.yaml.example`) — Intelligence Index 약 1점을
+  내주고 태스크당 비용을 30~40% 절감.
+- **`--mode sysops` 추가** — 벤더 샌드박스를 뺀 `work`. 샌드박스가 거부하는 서비스
+  작업을 위한 것입니다. 워커에게 머신 전체 접근 권한을 주므로 디스패치별 지정만
+  가능하며 레인 기본값이 될 수 없습니다.
+- **가격·벤치마크 갱신**(2026-07-30 OpenAI 인하 반영). 그리고 AA의 Coding Index는
+  Coding Agent Index가 **아니라는** 점을 문서화 — 구성 요소가 전혀 다른데 수치가
+  겹친다.
 
 ## v0.11.0 새 기능
 

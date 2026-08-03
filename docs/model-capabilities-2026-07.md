@@ -1,7 +1,11 @@
 # Model capabilities — July 2026 snapshot
 
-Compiled 2026-07-19, re-audited 2026-07-25 against official model cards and
-vendor docs, to inform omnilane's routing defaults and vendor list. Model
+Compiled 2026-07-19, re-audited 2026-07-25 and again 2026-08-02 against
+official model cards and vendor docs, to inform omnilane's routing defaults and
+vendor list. The 2026-08-02 pass found no new frontier model — Google has still
+not shipped a Gemini Pro refresh, xAI has not shipped Grok 5, and Anthropic's
+line stops at Opus 5 — but it did find that prices moved: see the reprice
+footnote on the pricing table and the cheap-tier section below. Model
 capabilities move fast: treat every score as of its cited date, and re-check
 the provider's own docs before pinning a model. Benchmark numbers depend
 heavily on scaffold: when quoting one, record the model variant/effort, the
@@ -95,41 +99,149 @@ Alibaba's side, and Qwen Code ships the newer Qwen 3.6 Plus. Re-evaluate the
 coding-overflow backup before swapping — whether the newer alias works on the
 local CLI login is unverified.
 
-### Artificial Analysis Intelligence Index (updated 2026-07-24)
+### AA Capability Indices — Coding Index and Agentic Index (retrieved 2026-08-03)
 
-Index points, not percentages. Figures below are quoted verbatim from the
-Artificial Analysis Opus 5 launch article (2026-07-24).
+These are the two indices that should order `hardest-coding`, `hard-judgment`
+and `fast-agentic`, because they measure those lanes' actual work rather than
+general intelligence. Both are published by Artificial Analysis under
+Capability Indices, both are equal-weighted averages of two component
+benchmarks, and both are retrievable at full precision:
+
+- **Coding Index** = 50% Terminal-Bench v2.1 + 50% SciCode.
+- **Agentic Index** = 50% GDPval-AA v2 (agentic knowledge work, 220 tasks, one
+  attempt, judged pairwise as Elo against human experts anchored at 1000) +
+  50% τ³-Banking (agentic customer interaction, 97 tasks, five attempts,
+  verified against backend database state, pass@1).
+
+| Model | Coding | Agentic |
+|-------|-------:|--------:|
+| GPT-5.6 Sol (xhigh) | 78.35 | 51.80 |
+| Claude Opus 5 (max) | 77.98 | 55.26 |
+| GPT-5.6 Sol (max) | 77.39 | 54.00 |
+| GPT-5.6 Sol (high) | 77.16 | 48.53 |
+| Claude Opus 5 (xhigh) | 77.00 | 54.53 |
+| GPT-5.6 Terra (max) | 76.66 | 47.38 |
+| Claude Opus 5 (high) | 76.52 | 52.07 |
+| Claude Fable 5 | 76.49 | 52.81 |
+| Kimi K3 (max) | 76.24 | 50.07 |
+| Claude Opus 5 (medium) | 74.33 | 47.08 |
+| Grok 4.5 (high) | 72.45 | 45.69 |
+| Claude Sonnet 5 (max) | 71.55 | 46.69 |
+| GPT-5.6 Luna (max) | 71.45 | 45.60 |
+| GPT-5.6 Terra (xhigh) | 70.64 | 44.70 |
+| Gemini 3.6 Flash (high) | 69.24 | 38.72 |
+| GPT-5.6 Luna (xhigh) | 68.60 | 42.92 |
+
+Two orderings follow directly and are why the shipped defaults look the way
+they do:
+
+- **`hardest-coding` runs Sol at `xhigh`, not `max`.** Sol at xhigh is first on
+  the Coding Index — ahead of Sol at max and of every Claude tier — while
+  costing about a third less per task. Raising effort past xhigh buys
+  overthinking on this workload, not accuracy.
+- **`hard-judgment` and `fast-agentic` are ordered on the Agentic Index, where
+  Claude Opus 5 and GPT-5.6 Luna respectively lead their fields.** Note how far
+  the two indices diverge: Gemini 3.6 Flash is mid-pack on coding (69.24) but
+  last on agentic (38.72), which is why it lost first place in `fast-agentic`.
+
+⚠️ **The Coding Index is NOT the Coding Agent Index, and the numbers collide.**
+This is the easiest mistake to make in this file. They share no components:
+
+| | Coding Index | Coding Agent Index |
+|---|---|---|
+| Where | Capability Indices | Agents section |
+| Components | Terminal-Bench v2.1 + SciCode | DeepSWE + Terminal-Bench v2 + SWE-Atlas-QnA |
+| Versioning | none published | v1.0 through v1.3, re-based three times |
+| Quotable | yes, with a retrieval date | ordering only, never a number |
+
+Claude Opus 5 reads **77.98** on the Coding Index, which sits right on top of
+the **77 / 78** figures floating around for the Coding Agent Index v1.3. Those
+are different measurements of different things that happen to land on the same
+number. Never pair one with the other.
+
+Caveats on both Capability Indices, stated because AA does not state them:
+they carry **no version label and no published version history**, so a change
+in composition would arrive silently — cite them with the date you retrieved
+them, and compare across dates by ordering only. The published component
+scores also do not reproduce the published index: equal-weighting Opus 5's
+GDPval-AA v2 and τ³-Banking components yields ~49.1 against a published 55.26,
+so there is an undisclosed normalisation step between components and index.
+That is an observation about the arithmetic, not a documented AA behaviour.
+
+### Artificial Analysis Intelligence Index (retrieved 2026-08-02)
+
+Index points, not percentages. Figures below are Artificial Analysis's own
+values for every model omnilane can route, read off the leaderboard on
+2026-08-02 — score to one decimal, cost per task to the cent.
+
+Two things to know before quoting this table. First, **AA re-measures**: an
+earlier revision of this file quoted the AA Opus 5 launch article (2026-07-24),
+and most rows have since moved by 10-20% on cost — Opus 5 (max) was published
+at $2.03/task there and reads $2.34 today. Cite the retrieval date with the
+number. Second, **cost per task is derived from current list prices**, so it
+already reflects OpenAI's 2026-07-30 reprice: AA lists Terra at $2/$12 and Luna
+at $0.20/$1.20, and multiplying each row's output-token count by those prices
+reproduces AA's published output-cost component exactly.
 
 | Model | Score | Cost/task | Median tok/s | Context |
 |-------|------:|----------:|-------------:|---------|
-| Claude Opus 5 (max) | 61 | $2.03 | 53 | 1M |
-| Claude Opus 5 (xhigh) | 60 | $1.56 | 53 | 1M |
-| Claude Fable 5 (with fallback) | 60 | $2.75 | 71 | 1M+ |
-| GPT-5.6 Sol (max) | 59 | $1.04 | 66 | 1.05M |
-| Claude Opus 5 (high) | 59 | $1.06 | 57 | 1M |
-| GPT-5.6 Sol (xhigh) | 58 | $0.68 | 70 | 1.05M |
-| Kimi K3 | 57 | $0.95 | 32 | 1.05M |
-| GPT-5.6 Sol (high) | 56 | $0.45 | 63 | 1.05M |
-| Claude Opus 4.8 (max) | 56 | $1.80 | 56 | 1M |
-| GPT-5.6 Terra (max) | 55 | $0.82 | 136 | 1M |
-| Grok 4.5 (high) | 54 | $0.31 | 61 | 500K |
-| Claude Sonnet 5 (max) | 53 | $1.53 | 76 | 1M |
-| GPT-5.6 Luna (max) | 51 | $0.21 | 188 | 1M |
-| Gemini 3.6 Flash | 50 | $0.50 | 231 | 1M |
-| Gemini 3.5 Flash | 50 | $0.59 | 185 | 1M |
-| Gemini 3.1 Pro Preview | 46 | $0.29 | 124 | 1M |
-| Claude Haiku 4.5 | 30 | $0.24 | 92 | 200K |
+| Claude Opus 5 (max) | 60.7 | $2.34 | 54 | 1M |
+| Claude Opus 5 (xhigh) | 60.1 | $1.80 | 52 | 1M |
+| Claude Fable 5 (with Opus 4.8 fallback) | 59.9 | $3.15 | 67 | 1M |
+| GPT-5.6 Sol (max) | 58.9 | $1.86 | 64 | 1M |
+| Claude Opus 5 (high) | 58.9 | $1.23 | 52 | 1M |
+| GPT-5.6 Sol (xhigh) | 57.7 | $1.17 | 63 | 1M |
+| Kimi K3 (max) | 57.1 | $0.86 | 35 | 1.05M |
+| Claude Opus 5 (medium) | 56.3 | $0.72 | 51 | 1M |
+| GPT-5.6 Sol (high) | 55.9 | $0.77 | 57 | 1M |
+| GPT-5.6 Terra (max) | 55.0 | $0.73 | 125 | 1M |
+| Grok 4.5 (high) | 53.8 | $0.44 | 56 | 500K |
+| GPT-5.6 Sol (medium) | 53.6 | $0.51 | 58 | 1M |
+| Claude Sonnet 5 (max) | 53.4 | $1.72 | 75 | 1M |
+| GPT-5.6 Terra (xhigh) | 51.6 | $0.43 | 110 | 1M |
+| GPT-5.6 Luna (max) | 51.2 | $0.07 | 178 | 1M |
+| GLM-5.2 (max) | 51.1 | $0.69 | 143 | 1M |
+| Claude Opus 5 (low) | 50.6 | $0.43 | 51 | 1M |
+| Gemini 3.5 Flash | 50.2 | $0.69 | 178 | 1M |
+| Gemini 3.6 Flash (high) | 50.1 | $0.56 | 222 | 1M |
+| DeepSeek V4 Flash 0731 (max) | 49.9 | $0.03 | not yet measured | 1M |
+| GPT-5.6 Sol (low) | 49.4 | $0.31 | 58 | 1M |
+| GPT-5.6 Luna (xhigh) | 49.1 | $0.04 | 164 | 1M |
+| GPT-5.6 Terra (high) | 49.0 | $0.30 | 108 | 1M |
+| Kimi K3 (low) | 46.6 | $0.24 | 35 | 1.05M |
+| Gemini 3.1 Pro Preview | 46.5 | $0.34 | 125 | 1M |
+| GPT-5.6 Luna (high) | 46.1 | $0.03 | 160 | 1M |
+| GPT-5.6 Terra (medium) | 45.6 | $0.16 | 103 | 1M |
+| DeepSeek V4 Pro (max) | 44.3 | $0.05 | 57 | 1M |
+| GPT-5.6 Terra (low) | 40.5 | $0.13 | 98 | 1M |
+| Qwen3.6 Plus | 39.6 | $0.36 | 56 | 1M |
+| GPT-5.6 Luna (medium) | 38.1 | $0.02 | 148 | 1M |
+| Gemini 3.5 Flash-Lite | 36.5 | $0.10 | 370 | 1M |
+| GPT-5.6 Luna (low) | 33.3 | $0.01 | 149 | 1M |
+| Claude Haiku 4.5 (reasoning) | 29.6 | $0.25 | 98 | 200K |
+
+Absent by design rather than by oversight: **Claude Opus 4.8** (55.7, $2.03) is
+flagged deprecated and no longer appears on the rendered board; **Claude Sonnet
+5** is scored only at `max`, its other four effort rows carry a null score;
+**Gemini 3.6 Flash** and **Grok 4.5** publish a single effort row each, so their
+ladders cannot be compared against Sol's or Opus 5's.
+
+Retrieval note: this is the one AA surface whose data survives scraping. The
+leaderboard is server-rendered, and the full model records — score, per-task
+cost breakdown, throughput, context, and list prices — are recoverable by
+decoding the `self.__next_f` RSC payload segments in the page HTML, which is
+more reliable than parsing the rendered table. AA's other leaderboards render
+to canvas and cannot be read this way.
 
 Per-effort rows are what justify the shipped effort levels, and both of the
 defaults that look conservative are the cheap side of a flat trade:
 
 - **Opus 5 `xhigh` over `max`** — 1 index point for 30% more cost per task.
-- **Sol `xhigh` over `max`** — 1 index point for 53% more cost per task.
-  `hardest-coding` nonetheless keeps Sol at `max`, because that lane should be
-  ordered by the Coding Agent Index rather than this one, and that index cannot
-  currently be quoted (see above). Revisit if AA publishes retrievable v1.3
-  per-effort figures.
-- **Gemini 3.6 Flash over 3.5 Flash** — same score, 15% cheaper, 25% faster.
+- **Sol `xhigh` over `max`** — 1 index point for 59% more cost per task.
+  `hardest-coding` no longer takes that trade at all: it is ordered on the
+  Coding Index, not this one, and there Sol at `xhigh` beats Sol at `max`
+  outright. Cheaper and better, so the lane ships `xhigh` as of 2026-08-03.
+- **Gemini 3.6 Flash over 3.5 Flash** — same score, 19% cheaper, 25% faster.
 - **Gemini 3.1 Pro scores 46**, below 3.6 Flash's 50 and at roughly half its
   throughput. It holds first place in `long-context` on context-retrieval
   grounds, not general intelligence — see the long-context section.
@@ -169,6 +281,44 @@ than Fable 5's, and flagged requests fall back to Opus 4.8 rather than failing.
 Refusal rate is a real cost on security, reverse-engineering, and dark-themed
 creative work; a lane that silently loses a fraction of its dispatches is worse
 than its benchmark position suggests.
+
+### The cheap tier after the 2026-07-30 reprice
+
+OpenAI's price cut lands entirely on the two lanes omnilane runs at volume, and
+it moves one ordering that was previously decided on cost:
+
+- **GPT-5.6 Luna is now the cheapest way to buy a ~50-point model.** At 51.2
+  index points and $0.07 per task it scores one point above Gemini 3.6 Flash
+  (50.1, $0.56) at about an eighth of the cost. Flash keeps one advantage: 222
+  median output tok/s against Luna's 178, a 25% speed edge. `fast-agentic` is
+  ordered on latency and still ships Flash first; `triage` is ordered on cost
+  and already shipped Luna first, so the cut only widens its margin.
+- **Terra's 20% cut does not change `bulk-mechanical`'s ordering.** Terra (max)
+  stays ahead of Claude Sonnet 5 (max) on both score (55.0 vs 53.4) and cost
+  ($0.73 vs $1.72).
+- **Effort level is a bigger cost lever than vendor choice.** Sol `xhigh` is
+  57.7 points at $1.17 against `max`'s 58.9 at $1.86; Opus 5 `high` is 58.9 at
+  $1.23 against `xhigh`'s 60.1 at $1.80. Each step down costs about one index
+  point and saves 30-40%. The shipped lanes buy the point; the value profile in
+  `routing.local.yaml.example` sells it back.
+
+Open-weight and third-party API models now sit on the same frontier:
+
+- **DeepSeek V4 Flash 0731** (2026-07-31) scores 49.9 on the Intelligence
+  Index, a 10-point jump over the April DeepSeek V4 Flash and 6 points above
+  DeepSeek V4 Pro, on identical architecture and pricing ($0.14/$0.28, 1M
+  context, 284B total / 13B active). Its cost per task is $0.03 against
+  post-cut GPT-5.6 Luna (max)'s $0.07 — the ~60% gap AA reports, driven by
+  DeepSeek's ~98% cache-hit discount — which puts it on the
+  Intelligence-vs-cost Pareto frontier. The catch is factual reliability:
+  AA-Omniscience Index -16 with an 84% hallucination rate. Fine for mechanical
+  volume, wrong for anything whose output is a factual claim. AA has not
+  measured its throughput yet. Full weights are expected within weeks.
+- **Kimi K3 (max, 57.1)** remains the open-weights intelligence frontier, with
+  **GLM-5.2 (max, 51.1)** and DeepSeek V4 Flash 0731 (49.9) a tier below.
+
+These reach omnilane only through the direct-API vendors, which are
+advise-only — they cannot edit files, so they stay out of work-capable chains.
 
 ## Writing benchmarks — the evidence behind `taste-final`
 
@@ -282,8 +432,8 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 | GPT-5.4 | 2.50 | 15.00 | 1M |
 | GPT-5.5 | 5.00 | 30.00 | 1M |
 | GPT-5.6 Sol | 5.00 | 30.00 | 1.05M |
-| GPT-5.6 Terra | 2.50 | 15.00 | 1.05M |
-| GPT-5.6 Luna | 1.00 | 6.00 | 1.05M |
+| GPT-5.6 Terra | 2.00† | 12.00† | 1.05M |
+| GPT-5.6 Luna | 0.20† | 1.20† | 1.05M |
 | Claude Opus 5 | 5.00 | 25.00 | 1M |
 | Claude Opus 4.8 | 5.00 | 25.00 | 200K |
 | Claude Sonnet 4.6 | 3.00 | 15.00 | 1M+ |
@@ -295,7 +445,7 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 | Gemini 3.5 Flash-Lite | 0.30 | 2.50 | — |
 | Grok 4.5 | 2.00 | 6.00 | 500K |
 | DeepSeek V3 | 0.27 | 1.10 | — |
-| DeepSeek V4 Flash | 0.14 | 0.28 | 1M (384K output) |
+| DeepSeek V4 Flash / V4 Flash 0731 | 0.14 | 0.28 | 1M (384K output) |
 | Z.ai GLM-5.2 | 1.40 | 4.40 | 1M |
 | Mistral Ministral 3 (3B) | 0.10 | 0.10 | — |
 | Kimi K3 | 3.00*** | 15.00 | 1M |
@@ -303,6 +453,9 @@ Filling one 1M-token input request ranges from ~$0.14 (DeepSeek V4 Flash) to ~$1
 \* Sonnet 5 launch pricing runs through 2026-08-31; standard pricing is $3/$15.
 \** Gemini 3.1 Pro requests above 200K tokens are $4/$18.
 \*** Kimi K3 cache-miss input is $3; cache-hit input is $0.30.
+† Repriced by OpenAI on 2026-07-30: Luna cut ~80% (from $1.00/$6.00) and Terra
+cut ~20% (from $2.50/$15.00); Sol is unchanged. Codex/ChatGPT subscription
+prices and quotas are unchanged, but Terra and Luna now consume fewer credits.
 
 Long-context tiers materially change comparisons: GPT-5.6 requests above 272K
 input tokens charge 2x input and 1.5x output, while Grok 4.5 requests above 200K
@@ -398,6 +551,7 @@ Tier 1 — official vendor docs:
 
 - OpenAI model catalog (GPT-5.6 pricing/context): <https://developers.openai.com/api/docs/models>
 - OpenAI GPT-5.6 launch and benchmark table: <https://openai.com/index/gpt-5-6/>
+- OpenAI GPT-5.6 Terra/Luna reprice, 2026-07-30: <https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6/>
 - Gemini 3.1 Pro model card: <https://deepmind.google/models/model-cards/gemini-3-1-pro>
 - Gemini official evals (3.5 Flash): <https://deepmind.google/models/gemini/>
 - xAI Grok 4.5 launch post: <https://x.ai/news/grok-4-5>
@@ -417,9 +571,14 @@ Tier 1 — official vendor docs:
 Tier 2 — benchmark publishers:
 
 - Artificial Analysis — Coding Agent Index: <https://artificialanalysis.ai/agents/coding-agents>
+- Artificial Analysis — Agentic Index (capability index): <https://artificialanalysis.ai/models/capabilities/agentic>
+- Artificial Analysis — Coding Index (capability index; not the Coding Agent Index): <https://artificialanalysis.ai/models/capabilities/coding>
+- Artificial Analysis — capability-index components and weights: <https://artificialanalysis.ai/methodology/capability-indices>
+- Artificial Analysis — how the component benchmarks are run: <https://artificialanalysis.ai/methodology/intelligence-benchmarking>
 - Artificial Analysis — model leaderboard (index, cost/task, throughput; the one AA surface that renders to DOM): <https://artificialanalysis.ai/leaderboards/models>
 - Artificial Analysis — Claude Opus 5 evaluation (2026-07-24): <https://artificialanalysis.ai/articles/opus-5>
 - Artificial Analysis — GPT-5.6 evaluation (2026-07-09): <https://artificialanalysis.ai/articles/gpt-5-6-has-landed>
+- Artificial Analysis — DeepSeek V4 Flash 0731 evaluation (2026-07-31), incl. its cost-per-task comparison against post-cut GPT-5.6 Luna: <https://artificialanalysis.ai/articles/deepseek-v4-flash-0731-scores-50-on-the-artificial-analysis-intelligence-index-10-points-above-previous-deepseek-v4-flash>
 - Artificial Analysis — Grok 4.5 analysis (hallucination rate): <https://artificialanalysis.ai/articles/grok-4-5-brings-spacexai-to-the-the-intelligence-frontier>
 - EQ-Bench Creative Writing v3 (Elo, rubric, slop): <https://eqbench.com/creative_writing.html>
 - EQ-Bench Longform Writing (score, slop, degradation): <https://eqbench.com/creative_writing_longform.html>

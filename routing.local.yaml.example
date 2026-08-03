@@ -39,3 +39,24 @@
 # hardest-coding:  claude claude-opus-5 xhigh
 # bulk-mechanical: gemini "Gemini 3.6 Flash (High)" -
 # triage:          gemini "Gemini 3.6 Flash (Low)" -
+
+# Profile: value — same vendors, one effort notch cheaper. Each reasoning lane
+# below gives up about one Artificial Analysis Intelligence Index point to save
+# 30-40% of the cost per task; the fast-agentic line gives up nothing but
+# throughput. Figures are in docs/model-capabilities-2026-07.md (AA leaderboard,
+# retrieved 2026-08-02, post the 2026-07-30 OpenAI reprice). Take this when you
+# pay per token and the work is not correctness-critical; the shipped defaults
+# buy that point back.
+# hardest-coding:  codex gpt-5.6-sol xhigh     # 57.7 pts @ $1.17 vs max 58.9 @ $1.86
+# hard-judgment:   claude claude-opus-5 high   # 58.9 pts @ $1.23 vs xhigh 60.1 @ $1.80
+# taste-final:     claude claude-opus-5 high   # already the value tier — unchanged
+# fast-agentic:    codex gpt-5.6-luna max      # 51.2 pts @ $0.07 vs Gemini 3.6 Flash 50.1 @ $0.56; costs 25% throughput
+# ui-draft:        claude claude-opus-5 high
+# bulk-mechanical is already the value pick at Terra (max), 55.0 pts @ $0.73 — leave it.
+#
+# Cheaper still, and correspondingly riskier — these two are the current
+# Intelligence-vs-cost Pareto frontier but both are heavy hallucinators
+# (Grok 4.5 54%, DeepSeek V4 Flash 0731 84%), so route only work whose output
+# is mechanical rather than factual, and verify anything they assert:
+# bulk-mechanical: grok grok-4.5 -             # 53.8 pts @ $0.44, but 500K context, not 1M
+# triage:          deepseek deepseek-v4-flash - # 49.9 pts @ $0.03, ~60% under post-cut Luna (advise-only: cannot edit files)

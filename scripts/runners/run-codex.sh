@@ -3,6 +3,9 @@ set -euo pipefail
 # omnilane runner: OpenAI Codex CLI
 # Usage: run-codex.sh MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE
 #   MODE = advise (read-only, ephemeral) | work (may edit files in WORKDIR)
+#          | sysops (work minus the Seatbelt sandbox: service operations like
+#            launchctl are denied under workspace-write, so sysops runs with
+#            -s danger-full-access; explicit per-dispatch opt-in only)
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
@@ -17,6 +20,8 @@ ARGS=(exec -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 if [[ "$MODE" == "advise" ]]; then
   ARGS+=(--ephemeral -s read-only)
+elif [[ "$MODE" == "sysops" ]]; then
+  ARGS+=(-s danger-full-access)
 else
   ARGS+=(-s workspace-write)
 fi

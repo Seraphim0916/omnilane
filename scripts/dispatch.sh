@@ -3,7 +3,7 @@ set -euo pipefail
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
-#   dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
+#   dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh [--json] --list [--json]
@@ -50,7 +50,11 @@ flags:
   --background           run in the background and print the JOB_ID
   --dry-run              print the fully resolved dispatch plan and stop
                          before any provider call or job state
-  --mode advise|work     advise (read-only, default) or work (may edit files)
+  --mode advise|work|sysops
+                         advise (read-only, default), work (may edit files),
+                         or sysops (work without the vendor sandbox, for
+                         service operations like launchctl — codex only;
+                         other vendors treat it as work)
   --workdir DIR          working directory handed to the vendor CLI
   --vendor V             pin one configured vendor (codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|deepseek|zai|mistral|groq|cerebras)
   --model M              override the routed model
@@ -124,7 +128,7 @@ print_dry_run_plan() {
   local background=no task_source=argument write_worktree=no job_timeout=disabled
   [[ "$BACKGROUND" -eq 1 ]] && background=yes
   [[ "$TASK" == "-" ]] && task_source=stdin
-  [[ "$MODE" == "work" ]] && write_worktree=yes
+  [[ "$MODE" == "work" || "$MODE" == "sysops" ]] && write_worktree=yes
   [[ -n "$JOB_TIMEOUT" ]] && job_timeout="$JOB_TIMEOUT"
   printf 'dry_run=yes\n'
   print_dry_run_value lane "$LANE"
@@ -487,7 +491,7 @@ LANE="$1"
 TASK="$2"
 [[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name" >&2; exit 2; }
 # A typo like --mode advice must not fall through to the write-enabled branch.
-[[ "$MODE" == "advise" || "$MODE" == "work" ]] || { echo "omnilane: invalid --mode (advise|work)" >&2; exit 2; }
+[[ "$MODE" == "advise" || "$MODE" == "work" || "$MODE" == "sysops" ]] || { echo "omnilane: invalid --mode (advise|work|sysops)" >&2; exit 2; }
 if [[ -n "$OVERRIDE_VENDOR" ]] &&
    ! [[ "$OVERRIDE_VENDOR" =~ ^(${OMNILANE_OVERRIDE_VENDOR_ALT})$ ]]; then
   echo "omnilane: invalid vendor (${OMNILANE_OVERRIDE_VENDOR_ALT})" >&2
@@ -567,7 +571,7 @@ fi
 [[ -n "$JOB_TIMEOUT" ]] || JOB_TIMEOUT="${OMNILANE_JOB_TIMEOUT:-}"
 CODEX_NONGIT_WORK=0
 CODEX_NONGIT_AUTO_JOB_TIMEOUT=0
-if [[ "$VENDOR" == "codex" && "$MODE" == "work" ]]; then
+if [[ "$VENDOR" == "codex" && ( "$MODE" == "work" || "$MODE" == "sysops" ) ]]; then
   # The target directory is authoritative. Caller-supplied GIT_* state must not
   # redirect or corrupt discovery, so probe with a minimal clean environment.
   GIT_WORKTREE_STATE="$(env -i PATH="$PATH" HOME="${HOME:-}" \

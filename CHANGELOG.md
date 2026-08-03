@@ -6,6 +6,60 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-03
+
+### Changed
+
+- `hardest-coding` now runs GPT-5.6 Sol at `xhigh` instead of `max`. On
+  Artificial Analysis's per-effort Coding Index, Sol at xhigh scores ahead of
+  Sol at max and of every Claude tier, at roughly a third less cost per task:
+  past xhigh, more effort buys overthinking on this workload rather than
+  accuracy. The lane's Claude candidate is unchanged.
+- `fast-agentic` now runs GPT-5.6 Luna first, with Gemini 3.6 Flash as the
+  second candidate. Luna leads Flash on AA's Agentic Index by a wide margin,
+  and OpenAI's 2026-07-30 reprice left it costing a fraction as much per task.
+  Flash keeps only a throughput advantage, so put it back in front locally if
+  your loops are latency-bound. Both models accept image input, so the lane's
+  multimodal checks are unaffected either way.
+- Lane comments in `routing.yaml` no longer carry benchmark scores, prices or
+  throughput figures. They state why a lane is ordered the way it is, which
+  stays true for months; the figures, each with the date it was retrieved, now
+  live only in `docs/model-capabilities-2026-07.md`. A number going stale
+  should not require a routing-table edit. This refresh found a Coding Agent
+  Index figure that had survived two re-bases inside a comment while the docs
+  forbade quoting that index at all.
+
+### Added
+
+- **`--mode sysops`**, a third dispatch mode: `work` minus the vendor sandbox,
+  for service operations the sandbox denies (`launchctl` and similar). Codex
+  runs it with `-s danger-full-access`; every other vendor treats it as plain
+  `work`. It hands the worker full access to the machine, so it is an explicit
+  per-dispatch flag and cannot be set as a lane default — an invalid `--mode`
+  still exits 2 rather than falling through to a write-enabled branch. Codex
+  under `work` or `sysops` continues to require a git-repo `--workdir`.
+- `routing.local.yaml.example` ships a **value profile**: the same vendors one
+  effort notch cheaper, trading about one Intelligence Index point for 30-40%
+  off the cost per task, plus a clearly-marked riskier tier for models on the
+  cost/intelligence frontier that hallucinate heavily.
+- `docs/model-capabilities-2026-07.md` documents AA's two Capability Indices —
+  Coding Index (Terminal-Bench v2.1 + SciCode) and Agentic Index (GDPval-AA v2
+  + τ³-Banking) — with the composition, weights and the caveat that neither
+  carries a version label, so a re-base would arrive silently.
+
+### Fixed
+
+- Corrected the pricing table for OpenAI's 2026-07-30 reprice: GPT-5.6 Terra is
+  $2/$12 and Luna is $0.20/$1.20; Sol is unchanged. Subscription quotas are
+  unchanged but Terra and Luna now consume fewer credits.
+- Replaced the Intelligence Index table, which quoted a 2026-07-24 article, with
+  values retrieved from AA on 2026-08-02. AA re-measures, and most rows had
+  moved 10-20% on cost per task in the interim.
+- Documented that AA's **Coding Index is not the Coding Agent Index**. They
+  share no components, and their numbers collide: Claude Opus 5 reads 77.98 on
+  the former, right on top of the 77/78 figures circulating for the latter's
+  v1.3.
+
 ## [0.11.0] - 2026-07-27
 
 No routing changes. The Live Board is now readable in five languages.
@@ -475,7 +529,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Seraphim0916/omnilane/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Seraphim0916/omnilane/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/Seraphim0916/omnilane/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/Seraphim0916/omnilane/compare/v0.10.2...v0.10.3

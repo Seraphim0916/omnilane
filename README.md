@@ -115,7 +115,7 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
 | ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
@@ -123,7 +123,7 @@ actually resolves.
 | 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token sweeps and retrieval; for multi-hop synthesis prefer the Claude candidate, and Flash for fast repeated loops |
-| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
@@ -300,7 +300,7 @@ omnilane ui status                             # report whether the Live UI is r
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json]                       # read-only routing and runtime health report
-dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh [--json] --list [--json]
@@ -349,6 +349,12 @@ code passes through.
   Codex gets a workspace-write sandbox; Claude auto-accepts edits; Gemini runs
   in accept-edits mode. The `openrouter` vendor refuses work mode with a clear
   error — route edits to an agentic CLI vendor instead.
+- **sysops** — `work` minus the vendor sandbox, for service operations the
+  sandbox denies (`launchctl` and friends). Codex runs it with
+  `-s danger-full-access`; every other vendor treats it as plain `work`. This
+  hands the worker full access to the machine, so it is an explicit
+  per-dispatch opt-in and can never be a lane default. Reach for it only when
+  you have watched `work` fail on a sandbox denial.
 
 ## 🔒 Safety rails
 
@@ -508,7 +514,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # fully resolved plan, no p
 
 Only if you ask for it. Dispatch defaults to `advise`, a read-only mode enforced
 per vendor (read-only sandbox, plan mode, or read-only tool set depending on the
-CLI). Editing requires both `--mode work` and an explicit `--workdir`. Workers
+CLI). Editing requires both `--mode work` and an explicit `--workdir`. A third
+mode, `--mode sysops`, is `work` minus the vendor sandbox — for service
+operations the sandbox denies (e.g. `launchctl`); codex runs it with
+`-s danger-full-access`, other vendors treat it as `work`, and it is an
+explicit per-dispatch opt-in, never a lane default. Workers
 also cannot dispatch again — the depth guard refuses nested fan-out with exit 86,
 so one command can never spiral into a chain of agents spending your quota.
 
@@ -536,6 +546,30 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.12.0
+
+- **`hardest-coding` drops Sol from `max` to `xhigh`** — on AA's per-effort
+  Coding Index, Sol at xhigh outscores Sol at max and every Claude tier while
+  costing about a third less. Past xhigh, effort buys overthinking rather than
+  accuracy on this workload.
+- **`fast-agentic` leads with GPT-5.6 Luna**, Gemini 3.6 Flash second. Luna
+  leads Flash on AA's Agentic Index by a wide margin and, after OpenAI's
+  2026-07-30 reprice, costs a fraction as much per task. Flash keeps only a
+  throughput edge — put it back in front locally if your loops are
+  latency-bound.
+- **Lane comments no longer carry numbers.** `routing.yaml` now states why each
+  ordering holds; every score, price and throughput figure lives in
+  `docs/model-capabilities-2026-07.md` with its retrieval date, so a stale
+  figure never requires a routing-table edit.
+- **A value profile** in `routing.local.yaml.example` trades about one
+  Intelligence Index point for 30-40% off the cost per task.
+- **New `--mode sysops`** — `work` without the vendor sandbox, for service
+  operations the sandbox denies. It gives the worker full machine access, so it
+  is a per-dispatch flag only and can never be a lane default.
+- **Refreshed pricing and benchmark data** for the 2026-07-30 OpenAI reprice,
+  and documented that AA's Coding Index is *not* the Coding Agent Index — they
+  share no components and their numbers collide.
 
 ## What's new in v0.11.0
 

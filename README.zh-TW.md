@@ -103,7 +103,7 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 最難的實作、深度除錯、正確性攸關的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重構、搬遷、測試、大面積掃描——機械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 高量初篩、第一輪過濾 |
 | ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | 架構仲裁、深度推理、第二意見 |
@@ -111,7 +111,7 @@ flowchart LR
 | 💬 consult | 明確點名的廠商/模型 | —(不降級) | 自然語言直接諮詢;必須保留 `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 有設計規範/參考圖時的 UI 出稿;開放式視覺品味交給 taste-final |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 百萬 token 掃讀與檢索;要跨段落多跳整合請改用 Claude 候選,高速重複迴圈仍優先 Flash |
-| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | 快速多步驟 agentic 迴圈、多模態檢查 |
+| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 快速多步驟 agentic 迴圈、多模態檢查 |
 | 📡 live-search | Grok 4.5 | —(off) | 即時 X/網路搜尋與社群脈絡 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 額度吃緊時的中量級編碼溢流道;事實性宣稱須另行查證 |
 | 🗳️ arbitrate | off(選配評審團) | — | 內建意見評審團,重大決定用——預設關閉,要用在 `routing.local.yaml` 開;每評審每輪燒一次額度 |
@@ -267,7 +267,7 @@ omnilane ui status                             # 查看 Live UI 是否運作中
 omnilane ui url                                # 印出目前通過驗證的本機網址
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 唯讀檢查路由與本機執行環境
-dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir 目錄]
+dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任務"                              # "-" 表示從 stdin 讀任務
 dispatch.sh [--json] --list [--json]
@@ -311,6 +311,11 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 - **work** — 允許改檔案,僅限你指定的 `--workdir`。Codex 給
   workspace-write 沙箱;Claude 自動接受編輯;Gemini 跑 accept-edits 模式。
   `openrouter` vendor 會明確拒絕 work 模式——改檔請走代理式 CLI vendor。
+- **sysops** — 等於 `work` 拿掉 vendor 沙箱,用於沙箱會擋掉的服務操作
+  (`launchctl` 之類)。Codex 以 `-s danger-full-access` 執行;其他 vendor
+  一律當成一般 `work`。這等於把整台機器的存取權交給工作端,因此只能逐次
+  明確指定,永遠不能設成 lane 預設。只有在你親眼看到 `work` 因沙箱拒絕而
+  失敗時才動用它。
 
 ## 🔒 內建安全機制
 
@@ -451,7 +456,10 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 除非你明講要它改。派工預設是 `advise` 唯讀模式,而且是逐廠商實作的(唯讀沙箱、
 plan 模式,或只給唯讀工具集)。要改檔必須同時給 `--mode work` 和明確的
-`--workdir`。工作端也不能再往外派——深度守衛會用退出碼 86 拒絕巢狀派工,一道
+`--workdir`。第三種模式 `--mode sysops` 等於 `work` 拿掉 vendor 沙箱,用於沙箱會
+擋掉的服務操作(例如 `launchctl`);codex 以 `-s danger-full-access` 執行,其他
+vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane 預設。
+工作端也不能再往外派——深度守衛會用退出碼 86 拒絕巢狀派工,一道
 指令不可能失控變成一整串 AI 燒你的額度。
 
 </details>
@@ -474,6 +482,24 @@ plan 模式,或只給唯讀工具集)。要改檔必須同時給 `--mode work` �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.12.0 新功能
+
+- **`hardest-coding` 的 Sol 從 `max` 降到 `xhigh`**——在 AA 分檔位的 Coding Index
+  上,Sol 的 xhigh 不但勝過自己的 max,也勝過所有 Claude 檔位,成本還少約三分之一。
+  這種工作超過 xhigh 之後,多加的 effort 買到的是過度思考,不是正確率。
+- **`fast-agentic` 改由 GPT-5.6 Luna 領頭**,Gemini 3.6 Flash 退居第二。Luna 在 AA
+  的 Agentic Index 上大幅領先 Flash,而且 2026-07-30 砍價後每任務成本只剩零頭。
+  Flash 只剩吞吐量優勢——若你的迴圈受延遲限制,可在本機覆寫把它調回第一。
+- **lane 註解不再放數字。**`routing.yaml` 只說明每條排序「為什麼」成立;所有分數、
+  價格與吞吐量連同取數日期,一律住在 `docs/model-capabilities-2026-07.md`。數字過期
+  不再需要動路由表。
+- **新增 value profile**(在 `routing.local.yaml.example`):用約一個 Intelligence
+  Index 分數,換每任務成本降三到四成。
+- **新增 `--mode sysops`**——等於 `work` 拿掉 vendor 沙箱,用於沙箱會擋掉的服務操作。
+  它會把整台機器的存取權交給工作端,因此只能逐次指定,永遠不能設成 lane 預設。
+- **價格與基準數據刷新**至 2026-07-30 OpenAI 砍價後的版本,並記錄 AA 的 Coding Index
+  **不是** Coding Agent Index——兩者成分完全不同,數值卻會撞在一起。
 
 ## v0.11.0 新功能
 

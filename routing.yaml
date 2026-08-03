@@ -7,9 +7,12 @@
 #   Fallback chain: the first candidate whose vendor CLI is installed wins, so the
 #   same table degrades gracefully when you only subscribe to one or two vendors.
 # Override any line in ~/.omnilane/routing.local.yaml (same format; local wins).
-# Provenance (audited 2026-07-12, re-audited 2026-07-25 vs official model cards;
-# Gemini Flash candidates moved 3.5 -> 3.6 on 2026-07-22; Claude Opus defaults moved
-# 4.8 -> 5 after the 2026-07-24 release — see docs/model-capabilities-2026-07.md):
+# Every benchmark score, price and throughput figure behind these orderings lives in
+# docs/model-capabilities-2026-07.md, with the date it was retrieved. The comments below
+# deliberately carry no numbers: they state WHY a lane is ordered the way it is, which
+# stays true for months, while the numbers move every few weeks. Change an ordering and
+# you update the doc; a figure going stale should never need a routing-table edit.
+# (Audited 2026-07-12; re-audited 2026-07-25, 2026-08-02 and 2026-08-03.)
 # defaults follow Artificial Analysis data, 2026-07
 # snapshot. Verified against AA site records + vendor pricing pages: Intelligence &
 # Coding indexes and 7:2:1 blended prices all match (AA field price1mBlended7To2To1);
@@ -17,28 +20,27 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding:  codex gpt-5.6-sol max | claude claude-opus-5 xhigh  # Opus 5 xhigh is joint-first on AA Coding Agent Index (2026-07-24) and is Anthropic's documented starting point for coding/agentic work; max shows diminishing returns and can overthink. Keep Sol first for the established Codex harness lane.
-bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini "Gemini 3.6 Flash (High)" -  # AA Coding Agent Index v1.1: Terra 77.4 ~= Fable 77.2 at a fraction of the cost
-triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.6 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans
-hard-judgment:   claude claude-opus-5 xhigh | codex gpt-5.6-sol max   # AA Intelligence Index 2026-07-24: Opus 5 61, Sol max 59; Opus leads AA agentic knowledge-work benchmarks. xhigh per Anthropic guidance (high is the documented floor for intelligence-sensitive work; max is for correctness-over-cost only) — raise to max locally via `omnilane configure set` if your workload needs it.
+hardest-coding:  codex gpt-5.6-sol xhigh | claude claude-opus-5 xhigh  # ordered on coding capability specifically, not general intelligence. Sol dropped from max to xhigh on 2026-08-03: on AA's per-effort Coding Index, Sol at xhigh outscores both Sol at max and every Claude tier, at a third less cost — max buys overthinking here, not accuracy. xhigh is also Anthropic's documented starting point for coding/agentic work. Keep Sol first for the established Codex harness lane.
+bulk-mechanical: codex gpt-5.6-terra max | claude claude-sonnet-5 high | gemini "Gemini 3.6 Flash (High)" -  # ordered on endurance per dollar: Terra leads Sonnet 5 on both intelligence and cost per task
+triage:          codex gpt-5.6-luna medium | gemini "Gemini 3.6 Flash (Low)" - | claude claude-haiku-4-5 -  # high-volume scans, ordered on cost per task: Luna is the cheapest model at its intelligence tier by a wide margin
+hard-judgment:   claude claude-opus-5 xhigh | codex gpt-5.6-sol max   # ordered on agentic knowledge work, where Opus 5 leads Sol on AA's benchmarks. xhigh per Anthropic guidance (high is the documented floor for intelligence-sensitive work; max is for correctness-over-cost only) — raise to max locally via `omnilane configure set` if your workload needs it.
 taste-final:     claude claude-opus-5 high | codex gpt-5.6-sol max    # user-facing prose, prompt/doc polish, Chinese phrasing, style arbitration
 consult:         codex gpt-5.6-sol max | claude claude-opus-5 high | grok grok-4.5 - | gemini "Gemini 3.1 Pro (High)" -  # direct named-model consultation; use --vendor to prevent fallback
 ui-draft:        codex gpt-5.6-sol xhigh | claude claude-opus-5 high  # only with a design system / reference images; open-ended visual taste -> taste-final
 long-context:    gemini "Gemini 3.1 Pro (High)" - | claude claude-opus-5 high | codex gpt-5.6-sol high  # all have 1M context; Gemini leads single-needle retrieval at full length and is the cheapest way to sweep volume, Flash for fast loops. For multi-hop synthesis across a large corpus prefer the claude candidate: published multi-needle scores at 1M favour Claude by a wide margin (see docs/model-capabilities-2026-07.md)
-fast-agentic:    gemini "Gemini 3.6 Flash (High)" - | codex gpt-5.6-luna high  # speed + agentic tool loops; 3.6 Flash (released 2026-07-21): AA Intelligence 50, #1 output speed 303.6 tok/s, -17% output tokens vs 3.5 Flash per Google
+fast-agentic:    codex gpt-5.6-luna max | gemini "Gemini 3.6 Flash (High)" -  # fast multi-step tool loops. Reordered 2026-08-03: Luna leads Flash on agentic benchmarks AND costs a fraction as much per task, so Flash's remaining edge is raw throughput alone. Keep Flash first only if your loops are latency-bound. Both take image input, so the lane's multimodal checks are unaffected
 live-search:     grok grok-4.5 - | off          # native X/web search lane; no real substitute
-coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off  # codex-quota relief valve: mid-tier coding; Grok 4.5 (GA 2026-07-16) Terminal-Bench 83.3 / SWE-Bench Pro 64.7, but AA hallucination 54% — verify factual claims. qwen3-coder-plus = 2025-09-23 snapshot alias (Qwen 3.6 Plus exists; re-evaluate before swapping). kimi/qwen model fields are CLI aliases — adjust to your login. opencode "-" model = its own configured default.
+coding-overflow: grok grok-4.5 - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off  # codex-quota relief valve: mid-tier coding; Grok 4.5 is a capable mid-tier coder but AA measures a high hallucination rate — verify every factual claim it ships. qwen3-coder-plus = 2025-09-23 snapshot alias (Qwen 3.6 Plus exists; re-evaluate before swapping). kimi/qwen model fields are CLI aliases — adjust to your login. opencode "-" model = its own configured default.
 arbitrate:       off - -                        # opinion panel is OPT-IN: it costs one call per voter per round.
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.
                                                 # Custom gate: `arbitrate: exec /path/to/script -`
 # Claude Fable 5 (claude-fable-5) is deliberately absent from the defaults: the top Claude tier
-# is usually the MAIN LOOP itself, not a dispatched worker, and it prices at twice Opus 5
-# ($10/$50 vs $5/$25). This is a cost / guardrail / main-loop policy choice, NOT a capability
-# verdict — AA calls Opus 5 (61) and Fable 5 (60) "effectively tied" on the Intelligence Index
-# (2026-07-24) and Epoch AI ranks them the other way, but Opus 5 leads AA-Briefcase by 146 Elo
-# and GDPval-AA v2 by 114 Elo at 20% lower cost per task. Fable 5 does keep the lead on factual
-# breadth (AA-Omniscience), so name it explicitly for recall-heavy consults. If you want
+# is usually the MAIN LOOP itself, not a dispatched worker, and it prices at twice Opus 5.
+# This is a cost / guardrail / main-loop policy choice, NOT a capability verdict — AA and
+# Epoch AI disagree on which of the two leads general intelligence and call it effectively a
+# tie, while Opus 5 leads clearly on agentic knowledge work at a lower cost per task. Fable 5
+# does keep the lead on factual breadth, so name it explicitly for recall-heavy consults. If you want
 # to route to it anyway, pick it in the configurator or set e.g.
 #   taste-final: claude claude-fable-5 high
 # in ~/.omnilane/routing.local.yaml.

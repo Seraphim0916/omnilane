@@ -112,7 +112,7 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
+| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
 | 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | リファクタ、移行、テスト、大規模スイープ |
 | 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 大量の一次スクリーニング |
 | ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
@@ -120,7 +120,7 @@ flowchart LR
 | 💬 consult | 明示指定したベンダー/モデル | —(フォールバックなし) | 自然言語で直接相談。`--vendor` を必ず維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | デザインシステム/参考画像がある場合の UI ドラフト |
 | 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 100 万トークン級の走査と検索。複数箇所をまたぐ統合には Claude 候補を、高速反復ループは Flash を優先 |
-| ⚡ fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.5 | —(off) | リアルタイム X/ウェブ検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ逼迫時の中級コーディング逃し弁 |
 | 🗳️ arbitrate | off(オプトイン) | — | 内蔵オピニオンパネル(重大な判断用)——デフォルト無効。`routing.local.yaml` で有効化;投票者×ラウンドごとに 1 コール消費 |
@@ -291,7 +291,7 @@ omnilane ui status                             # Live UI の稼働状態を表�
 omnilane ui url                                # 現在の認証済みローカル URL を表示
 omnilane ui stop                               # Live UI を停止
 omnilane doctor [--json]                       # ルーティングとローカル実行環境を読み取り専用で診断
-dispatch.sh [--background] [--dry-run] [--mode advise|work] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" で stdin から読む
 dispatch.sh [--json] --list [--json]
@@ -326,6 +326,12 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非�
   workspace-write、Claude は編集自動承認、Gemini は accept-edits モード。
   `openrouter` vendor は work モードを明確に拒否します——編集はエージェント型
   CLI ベンダーへ。
+- **sysops** — `work` からベンダーのサンドボックスを外したモード。サンドボックスが
+  拒否するサービス操作(`launchctl` など)向けです。Codex は
+  `-s danger-full-access` で実行し、他のベンダーは通常の `work` として扱います。
+  マシン全体へのアクセスをワーカーに与えることになるため、ディスパッチごとに
+  明示指定する必要があり、レーンの既定値には決してできません。`work` が
+  サンドボックス拒否で失敗するのを実際に確認した場合にのみ使ってください。
 
 ## 🔒 安全機構
 
@@ -478,6 +484,10 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 依頼した場合のみです。ディスパッチの既定は読み取り専用の `advise` で、ベンダーごとに
 実装されています(読み取り専用サンドボックス、plan モード、あるいは読み取り専用の
 ツールセット)。編集には `--mode work` と明示的な `--workdir` の両方が必要です。
+第三のモード `--mode sysops` は `work` からベンダーのサンドボックスを外したもので、
+サンドボックスが拒否するサービス操作(`launchctl` など)向けです。codex は
+`-s danger-full-access` で実行し、他のベンダーは `work` として扱います。
+ディスパッチごとの明示指定のみで、レーンの既定値にはなりません。
 ワーカー自身は再ディスパッチできません——深度ガードが終了コード 86 で入れ子の
 ファンアウトを拒否するため、一つのコマンドがエージェントの連鎖に膨らんでクォータを
 食い潰すことはありません。
@@ -505,6 +515,27 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.12.0 の新機能
+
+- **`hardest-coding` の Sol を `max` から `xhigh` へ** — AA の努力度別 Coding Index
+  では、Sol の xhigh が自身の max も Claude の全ティアも上回り、コストは約 3 分の 1
+  少ない。この種の作業では xhigh を超えた努力度は正確さではなく考えすぎを買う。
+- **`fast-agentic` の第一候補が GPT-5.6 Luna に**、Gemini 3.6 Flash は第二候補へ。
+  Luna は AA の Agentic Index で Flash を大きく上回り、2026-07-30 の値下げ後は
+  タスクあたりコストがごく僅か。Flash に残る優位はスループットのみ — レイテンシ律速の
+  ループならローカル設定で先頭に戻すこと。
+- **レーンのコメントから数値を排除。** `routing.yaml` は各順序の「理由」だけを述べ、
+  スコア・価格・スループットは取得日とともに `docs/model-capabilities-2026-07.md` に
+  集約。数値が古くなってもルーティング表の編集は不要になった。
+- **value プロファイル**を `routing.local.yaml.example` に追加 — Intelligence Index
+  約 1 ポイントと引き換えに、タスクあたりコストを 30〜40% 削減。
+- **`--mode sysops` を追加** — ベンダーのサンドボックスを外した `work`。サンドボックスが
+  拒否するサービス操作向けです。ワーカーにマシン全体へのアクセスを与えるため、
+  ディスパッチごとの指定のみで、レーンの既定値にはできません。
+- **価格とベンチマークを更新**(2026-07-30 の OpenAI 値下げ反映)。あわせて AA の
+  Coding Index が Coding Agent Index **ではない**ことを明記 — 構成要素は全く別物だが
+  数値が近接する。
 
 ## v0.11.0 の新機能
 

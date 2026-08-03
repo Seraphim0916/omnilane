@@ -39,7 +39,7 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | GPT-5.6 Sol (max) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
 | hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
@@ -47,7 +47,7 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 | consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
 | long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash on speed/cost |
-| fast-agentic | Gemini 3.6 Flash (High) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | Fast multi-step agentic loops, multimodal checks |
 | live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
 | coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
@@ -125,6 +125,13 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 - **Dispatch in `advise` mode by default** (read-only worker). Use `--mode work`
   only when the worker must edit files, and give it an explicit `--workdir`.
+- **`--mode sysops`** is `work` minus the vendor sandbox, for service
+  operations the sandbox denies (launchctl, system daemons). Codex runs with
+  `-s danger-full-access`; other vendors treat it as `work`. Explicit
+  per-dispatch opt-in only — never a lane default, and the task text must
+  name the exact service commands the worker is authorized to run.
+  Codex `work`/`sysops` still needs a git-repo `--workdir` (non-git
+  directories trip the whole-job fuse).
 - **Every dispatched task states acceptance criteria and the exact verification
   command.** Do not accept "done" without evidence.
 - **No nested dispatch**: workers must not fan out again (enforced via
