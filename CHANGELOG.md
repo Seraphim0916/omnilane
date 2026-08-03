@@ -6,6 +6,38 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+
+- `long-context` now orders on AA-LCR, Artificial Analysis's long-context
+  reasoning benchmark, which scores exactly this lane's work: extracting and
+  synthesising across long-form documents. Gemini 3.1 Pro leads both fallbacks
+  there, so first place is now positively justified rather than merely
+  unrevisited. The two fallbacks swapped — GPT-5.6 Sol at `high` precedes
+  Claude Opus 5 at `high`.
+- Corrected the advice this lane used to give. It sent multi-hop synthesis to
+  the Claude candidate on the strength of second-hand figures for a prior model
+  generation; on first-party current-generation data Claude is the weakest of
+  the three shipped candidates, not the strongest. The claim is gone from
+  `routing.yaml` and from all five lane tables.
+
+### Added
+
+- `release-audit --require-tag` now reports whether recently pushed tags have a
+  matching GitHub release. v0.11.0 shipped a tag with no release and nothing
+  noticed for a week. The check warns rather than fails, skips silently when
+  `gh` is absent, unauthenticated or offline so the audit still works in CI,
+  excludes the target being released (whose release does not exist yet at audit
+  time), and looks only at the few most recent tags — a check that stays yellow
+  forever is one everyone learns to ignore.
+
+### Notes
+
+- AA-LCR runs on documents of 10k-100k tokens, so it settles synthesis quality
+  across long documents and settles nothing at a full 1M. GPT-5.6 Luna tops
+  that table at a fraction of the cost and was deliberately *not* promoted:
+  this lane's headline case is the 1M sweep, which the benchmark does not
+  reach. See `docs/model-capabilities-2026-07.md`.
+
 ## [0.12.0] - 2026-08-03
 
 ### Changed

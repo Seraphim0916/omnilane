@@ -117,7 +117,7 @@ flowchart LR
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
 | 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 100만 토큰급 훑기와 검색. 여러 곳을 잇는 다중 홉 통합은 Claude 후보를, 빠른 반복 루프는 Flash 우선 |
+| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 100만 토큰급 훑기·검색과 긴 문서를 잇는 통합. 빠른 반복 루프는 Flash 우선 |
 | ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |

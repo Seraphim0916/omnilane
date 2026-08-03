@@ -285,6 +285,43 @@ if [[ "$require_tag" -eq 1 ]]; then
   else
     fail annotated-release-tag
   fi
+
+  # A pushed tag with no GitHub release is invisible to anyone browsing the
+  # releases page, and nothing else in this audit notices: v0.11.0 sat that way
+  # for a week. Warn rather than fail — this audit must work offline and in CI,
+  # and the target's own release legitimately does not exist yet at audit time,
+  # so the target tag is excluded and only older tags are checked.
+  release_gap_checked=0
+  if command -v gh >/dev/null 2>&1 &&
+    git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'github\.com' &&
+    gh auth status >/dev/null 2>&1; then
+    remote_tags="$(git -C "$ROOT" ls-remote --tags origin 2>/dev/null |
+      grep -v '\^{}$' | sed -n 's#.*refs/tags/##p' | sort -u)"
+    if [[ -n "$remote_tags" ]]; then
+      released_tags="$(gh release list --limit 200 --json tagName --jq '.[].tagName' 2>/dev/null || true)"
+      if [[ -n "$released_tags" ]]; then
+        release_gap_checked=1
+        missing_releases=""
+        # Only the few most recent tags. Older gaps are real but historical, and
+        # a check that stays yellow forever is a check everyone learns to ignore;
+        # this one exists to catch the release you just forgot.
+        while IFS= read -r remote_tag; do
+          [[ -n "$remote_tag" ]] || continue
+          [[ "$remote_tag" == "v$target" ]] && continue
+          printf '%s\n' "$remote_tags" | grep -Fxq "$remote_tag" || continue
+          if ! printf '%s\n' "$released_tags" | grep -Fxq "$remote_tag"; then
+            missing_releases="$missing_releases $remote_tag"
+          fi
+        done <<<"$(git -C "$ROOT" tag -l --sort=-creatordate | head -6)"
+        if [[ -n "$missing_releases" ]]; then
+          warn "github-release-missing:${missing_releases# }"
+        else
+          pass github-release-coverage
+        fi
+      fi
+    fi
+  fi
+  [[ "$release_gap_checked" -eq 1 ]] || warn github-release-check-skipped
 else
   warn release-tag-not-required
 fi

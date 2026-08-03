@@ -392,11 +392,63 @@ Anthropic's coding/agentic tuning focus for that release. Opus 5 then recovers
 and leads. Tuning direction can cost prose quality, so a new release does not
 inherit this lane by default — re-measure each time.
 
-## Long-context retrieval vs synthesis — unresolved for `long-context`
+## Long-context reasoning — resolved for `long-context` at 10k-100k (2026-08-03)
+
+Artificial Analysis publishes **AA-LCR**, a long-context reasoning benchmark
+that is per-model, per-effort and retrievable from the same leaderboard payload
+as the indices above. It measures a model's ability to extract, reason about
+and synthesise information across long-form documents — company and industry
+reports, government consultations, academic papers, legal documents, survey
+reports — which is precisely the work this lane exists for.
+
+⚠️ **Scope limit that decides how far this evidence reaches: AA-LCR documents
+run 10k to 100k tokens (cl100k_base).** It therefore settles which model
+synthesises better across long documents, and settles nothing about behaviour
+at a full 1M. Do not cite it as a 1M result.
+
+| Model | AA-LCR | Cost/task |
+|-------|-------:|----------:|
+| Kimi K3 (max) | 74.7 | $0.86 |
+| GPT-5.6 Luna (max) | 74.0 | $0.07 |
+| GPT-5.6 Terra (max) | 74.0 | $0.73 |
+| GPT-5.6 Sol (max) | 73.7 | $1.86 |
+| **Gemini 3.1 Pro Preview** | **72.7** | $0.34 |
+| GPT-5.6 Terra (high) | 72.3 | $0.30 |
+| GLM-5.2 (max) | 71.3 | $0.69 |
+| GPT-5.6 Sol (xhigh) | 71.0 | $1.17 |
+| Claude Sonnet 5 (max) | 70.7 | $1.72 |
+| Claude Opus 5 (max) | 70.0 | $2.34 |
+| Claude Fable 5 | 70.0 | $3.15 |
+| Gemini 3.6 Flash (high) | 69.7 | $0.56 |
+| GPT-5.6 Sol (high) | 68.3 | $0.77 |
+| Claude Opus 5 (high) | 67.0 | $1.23 |
+
+What this changes:
+
+- **The lane's first candidate is now positively justified rather than merely
+  unrevisited.** Gemini 3.1 Pro Preview (72.7) leads both shipped fallbacks and
+  costs a fraction of what the frontier tiers do.
+- **The old rationale was backwards and has been corrected.** This section used
+  to route multi-hop synthesis to the Claude candidate on the strength of
+  second-hand multi-needle figures for Opus 4.6 against Gemini 3 Pro. On
+  first-party current-generation data, Claude Opus 5 at `high` is the *lowest*
+  of the three shipped candidates. The two fallbacks have swapped so that Sol
+  (68.3) precedes Opus 5 (67.0).
+- **A deliberate non-change:** GPT-5.6 Luna scores 74.0 — above every shipped
+  candidate — at $0.07 per task, and its $0.20/1M input price makes it by far
+  the cheapest way to actually fill a large context. It was not promoted,
+  because this lane's defining workload is the 1M sweep and AA-LCR stops at
+  100k; promoting a small model to first place on a benchmark that does not
+  cover the lane's headline case would repeat the error this file exists to
+  prevent. Worth revisiting if AA extends AA-LCR's range, and worth choosing
+  locally today if your sweeps are cost-bound and stay under ~100k.
+
+The prior-generation secondary figures are retained below for provenance. They
+are superseded for ordering purposes by the table above.
 
 ⚠️ **Secondary sources only, and the published figures cover prior model
 generations (Opus 4.6, Gemini 3 Pro) rather than the current defaults. Treat
-this section as a flagged question, not as settled evidence.**
+this section as provenance, not as settled evidence.**
 
 A shared 1M context window does not imply shared behaviour at that length. The
 public benchmarks split along one axis:
@@ -412,13 +464,12 @@ The gap on multi-hop work is not marginal — roughly threefold in the numbers
 above. Pulling one fact out of a large corpus and integrating facts scattered
 across it are different capabilities, and the leaders differ.
 
-This matters because `long-context` ships Gemini 3.1 Pro first while its comment
-described the lane as long-document *synthesis*, which is the multi-hop shape.
-The lane comment has been narrowed to say retrieval and volume, and to point at
-the Claude candidate for integration work. **The ordering is unchanged**: the
-evidence above is secondary and generation-stale, which is not a sufficient basis
-for moving a shipped default. Re-check against first-party numbers for Gemini 3.1
-Pro and Opus 5 before reordering.
+This was the basis for pointing multi-hop work at the Claude candidate. That
+call has since been reversed: the re-check it asked for arrived as AA-LCR, and
+on first-party current-generation numbers Claude is the weakest of the three
+shipped candidates rather than the strongest. See the AA-LCR table above, which
+governs the ordering; these rows survive only to show where the earlier
+reasoning came from.
 
 ## Pricing and context windows (July 2026)
 
@@ -574,6 +625,7 @@ Tier 2 — benchmark publishers:
 - Artificial Analysis — Agentic Index (capability index): <https://artificialanalysis.ai/models/capabilities/agentic>
 - Artificial Analysis — Coding Index (capability index; not the Coding Agent Index): <https://artificialanalysis.ai/models/capabilities/coding>
 - Artificial Analysis — capability-index components and weights: <https://artificialanalysis.ai/methodology/capability-indices>
+- Artificial Analysis — AA-LCR long-context reasoning (note the 10k-100k document range): <https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning>
 - Artificial Analysis — how the component benchmarks are run: <https://artificialanalysis.ai/methodology/intelligence-benchmarking>
 - Artificial Analysis — model leaderboard (index, cost/task, throughput; the one AA surface that renders to DOM): <https://artificialanalysis.ai/leaderboards/models>
 - Artificial Analysis — Claude Opus 5 evaluation (2026-07-24): <https://artificialanalysis.ai/articles/opus-5>

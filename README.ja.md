@@ -119,7 +119,7 @@ flowchart LR
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
 | 💬 consult | 明示指定したベンダー/モデル | —(フォールバックなし) | 自然言語で直接相談。`--vendor` を必ず維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | デザインシステム/参考画像がある場合の UI ドラフト |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 100 万トークン級の走査と検索。複数箇所をまたぐ統合には Claude 候補を、高速反復ループは Flash を優先 |
+| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 100 万トークン級の走査・検索と、長文をまたぐ統合。高速反復ループは Flash を優先 |
 | ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.5 | —(off) | リアルタイム X/ウェブ検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ逼迫時の中級コーディング逃し弁 |

@@ -110,7 +110,7 @@ flowchart LR
 | ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
 | 💬 consult | 明确指定的厂商/模型 | —(不降级) | 自然语言直接咨询;必须保留 `--vendor` |
 | 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |
-| 📚 long-context | Gemini 3.1 Pro (High) | Claude Opus 5 (high) | 百万 token 扫读与检索;要跨段落多跳整合请改用 Claude 候选,高速重复循环仍优先 Flash |
+| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 百万 token 扫读、检索与长文跨段整合;高速重复循环仍优先 Flash |
 | ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 快速多步骤 agentic 循环、多模态检查 |
 | 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
 | 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
