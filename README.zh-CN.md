@@ -473,6 +473,20 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## 📜 版本历程
 
+## v0.13.0 新功能
+
+- **`long-context` 改用 AA-LCR 排序**——那是 Artificial Analysis 的长脉络推理基准,
+  量的正是这条通道的工作。Gemini 3.1 Pro 在该榜领先两个备援,因此它的第一顺位
+  从「未复审」升格为「有据」。
+- **这条通道原本的建议是反的,已移除。** 它原先要人把多跳整合改派给 Claude 候选,
+  依据是上一代模型的二手数字;以第一手当代数据看,Claude 反而是三个候选里最弱的。
+  备援因此换位,GPT-5.6 Sol (high) 排在 Claude Opus 5 (high) 前面。
+- **`release-audit --require-tag` 会标出没有 GitHub release 的 tag。** 只警告不中断,
+  `gh` 缺席或离线时自动跳过(CI 仍可跑),且只看最近几个 tag。
+- **范围注记:** AA-LCR 测的是 10k–100k token 的文件,所以它能定「长文整合谁强」,
+  定不了 1M 的行为。GPT-5.6 Luna 在该榜居首且便宜得多,**刻意不升**——这条通道的
+  招牌工作是 1M 扫读,而该基准涵盖不到。
+
 ## v0.12.0 新功能
 
 - **`hardest-coding` 的 Sol 从 `max` 降到 `xhigh`**——在 AA 分档位的 Coding Index

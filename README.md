@@ -547,6 +547,25 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.13.0
+
+- **`long-context` is ordered on AA-LCR** — Artificial Analysis's long-context
+  reasoning benchmark, which scores exactly this lane's work. Gemini 3.1 Pro
+  leads both fallbacks there, so its first place is now positively justified
+  rather than merely unrevisited.
+- **The lane's old advice was backwards and is gone.** It used to send
+  multi-hop synthesis to the Claude candidate on second-hand figures for a
+  prior model generation; on first-party current-generation data Claude is the
+  weakest of the three shipped candidates. The fallbacks swapped, so GPT-5.6
+  Sol (high) now precedes Claude Opus 5 (high).
+- **`release-audit --require-tag` flags tags with no GitHub release.** It warns
+  rather than fails, skips when `gh` is absent or offline so the audit still
+  runs in CI, and looks only at recent tags.
+- **Scope note:** AA-LCR runs on 10k-100k-token documents, so it settles
+  synthesis across long documents and nothing at a full 1M. GPT-5.6 Luna tops
+  that table far more cheaply and was deliberately *not* promoted, because this
+  lane exists for the 1M sweep the benchmark does not reach.
+
 ## What's new in v0.12.0
 
 - **`hardest-coding` drops Sol from `max` to `xhigh`** — on AA's per-effort
