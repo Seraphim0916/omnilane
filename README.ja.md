@@ -516,6 +516,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 
 ## 📜 リリース履歴
 
+## v0.14.0 の新機能
+
+- **根拠に基づくルーティング提案**：`jobs recommend` と MCP `jobs_recommend` は公開ジョブメタデータだけを読み、ルーティングを自動変更しません。
+- **任意の実動プローブ**：`doctor --probe V` と MCP `provider_probe` は明示された場合だけプロバイダーを呼び出し、応答本文を報告しません。
+- **Live Board の履歴検索・絞り込み・エクスポート**：直近 50 件を対象に、表示中の公開メタデータだけを出力します。
+- **固定品質／コストベンチマーク**：`omnilane benchmark` は既定で dry-run、実呼び出しには `--run` が必要です。
+- **厳格なインストール検証**：CI で隔離された `doctor --strict --json` を実行し、macOS／GNU `stat` の権限判定差も修正しました。
+
 ## v0.13.0 の新機能
 
 - **`long-context` を AA-LCR で順序付け** — Artificial Analysis の長文脈推論

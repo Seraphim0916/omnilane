@@ -499,6 +499,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 ## 📜 릴리스 기록
 
+## v0.14.0 새 기능
+
+- **근거 기반 라우팅 제안**: `jobs recommend`와 MCP `jobs_recommend`는 공개 작업 메타데이터만 읽고 라우팅을 자동 변경하지 않습니다.
+- **선택형 실제 기능 탐지**: `doctor --probe V`와 MCP `provider_probe`는 명시적으로 요청할 때만 공급자를 호출하며 응답 본문을 보고하지 않습니다.
+- **Live Board 기록 검색·필터·내보내기**: 최근 50개 작업을 검색하고 현재 표시된 공개 메타데이터만 내보냅니다.
+- **고정 품질／비용 벤치마크**: `omnilane benchmark`는 기본적으로 dry-run이며 실제 호출에는 `--run`이 필요합니다.
+- **엄격한 설치 검증**: CI에서 격리된 `doctor --strict --json`을 실행하고 macOS／GNU `stat` 권한 판정 차이도 수정했습니다.
+
 ## v0.13.0 새 기능
 
 - **`long-context` 를 AA-LCR 기준으로 정렬** — Artificial Analysis 의 장문맥 추론

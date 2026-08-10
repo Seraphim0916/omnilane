@@ -473,6 +473,14 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## 📜 版本历程
 
+## v0.14.0 新功能
+
+- **基于证据的路由建议**：`jobs recommend` 与 MCP `jobs_recommend` 只读取公开作业元数据，并且不会自动修改路由。
+- **可选的真实能力探测**：`doctor --probe V` 与 MCP `provider_probe` 仅在明确请求时调用供应商，报告不包含回答正文。
+- **Live Board 历史搜索、筛选与导出**：支持最近 50 条作业，并且只导出当前可见的公开元数据。
+- **固定质量／成本基准**：`omnilane benchmark` 默认只做 dry-run，`--run` 才实际调用供应商。
+- **严格安装验收**：CI 在隔离环境执行 `doctor --strict --json`，并修正 macOS／GNU `stat` 权限检测差异。
+
 ## v0.13.0 新功能
 
 - **`long-context` 改用 AA-LCR 排序**——那是 Artificial Analysis 的长脉络推理基准,
