@@ -178,6 +178,9 @@ omnilane ui stop     # 正常停止
 `127.0.0.1`、用隨機 token 保護、全程唯讀。畫面只顯示 `task.txt` 與公開的
 `out.txt`，不顯示工作端或廠商原始 log。
 
+搜尋與狀態篩選會套用到最近保留的 50 筆工作歷史。按「匯出目前結果」只會把畫面上
+目前可見的公開中繼資料下載成 JSON；不含 token、任務本文、結果本文、工作目錄與原始 log。
+
 畫面提供英文、日文、韓文、繁體中文與簡體中文。首次載入依瀏覽器語言決定，可用標題列
 的切換器覆寫，選擇會記在本機。
 
@@ -228,7 +231,7 @@ omnilane ui stop     # 正常停止
 }
 ```
 
-Server 提供 `route`,以及一組唯讀查詢工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor`。
+Server 提供 `route`,以及一組唯讀查詢工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_recommend`、`jobs_audit`、`doctor`,以及必須明確選用的 `provider_probe`。
 `route` 預設唯讀 `advise` 模式;選 `work` 的呼叫必須同時提供明確的
 `workdir`。
 
@@ -266,7 +269,8 @@ omnilane ui start                              # 啟動或沿用本機 Live UI,�
 omnilane ui status                             # 查看 Live UI 是否運作中
 omnilane ui url                                # 印出目前通過驗證的本機網址
 omnilane ui stop                               # 停止 Live UI
-omnilane doctor [--json]                       # 唯讀檢查路由與本機執行環境
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # 實際探測必須明確選用
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # 預設只乾跑
 dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任務"                              # "-" 表示從 stdin 讀任務
@@ -279,6 +283,7 @@ jobs.sh wait 工作ID [--timeout N]                  # 工作結束碼；124 逾
 jobs.sh cancel 工作ID                              # 停止執行中的工作:整組 SIGTERM,再 SIGKILL
 jobs.sh rm 工作ID                                  # 刪除單一已完成/已死工作(執行中會被拒絕)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 本機成功率與路由彙整
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # 有證據門檻的廠商建議
 jobs.sh audit [--last N] [--json]                  # 唯讀檢查工作完整性與隱私
 jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
 omnilane mcp                                   # MCP stdio server(需 Node.js)
@@ -286,6 +291,15 @@ omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布
 configure.sh                                        # 互動通道選單
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非互動編輯/檢視 routing.local.yaml
 ```
+
+`jobs recommend` 只讀取通過驗證的公開中繼資料與退出碼。候選達到最低樣本數後，
+依成功率、樣本數、廠商名稱排序；預設至少三筆已完成工作。它不讀任務／結果本文，
+也不修改路由。
+
+`doctor --probe V` 只會做一次有逾時上限的 advise 模式供應商呼叫，回傳可用性、
+選到的模型、耗時與回應位元組數，不回傳回答本文；未帶 `--probe` 時仍完全離線。
+`benchmark` 使用 `benchmarks/workloads.tsv` 的固定題組，預設只解析路由、不呼叫供應商；
+`--run` 才是實際呼叫閘門，成本總額也只依 `--cost-per-call` 明確提供的估值計算。
 
 **重大決定可以開評審團,不是問一個人。**`arbitrate` 通道**預設關閉**——
 評審團每評審每輪燒一次額度,所以做成選配。要用就在 `routing.local.yaml`
@@ -482,6 +496,19 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.14.0 新功能
+
+- **依證據產生路由建議**：`jobs recommend` 與 MCP `jobs_recommend` 只用已完成工作的
+  公開中繼資料排序供應商，設有最低樣本門檻，也不會自動修改路由。
+- **選配實際能力探測**：`doctor --probe V` 與 MCP `provider_probe` 可分辨「CLI 已安裝」
+  和「供應商呼叫真的可用」。doctor 預設仍離線，探測報告不含回答本文。
+- **Live Board 歷史搜尋、篩選與匯出**：搜尋與狀態篩選涵蓋最近 50 筆工作；
+  「匯出目前結果」只下載篩選後的公開中繼資料。
+- **可重現的品質／成本基準**：`omnilane benchmark` 內建固定題組，預設不呼叫供應商；
+  `--run` 才會實際執行，成本也只依明確提供的 `--cost-per-call` 估值計算。
+- **嚴格安裝驗收**：CI 以隔離環境執行 `omnilane doctor --strict --json`，
+  不接觸供應商也能抓出 runtime 接線不完整。
 
 ## v0.13.0 新功能
 

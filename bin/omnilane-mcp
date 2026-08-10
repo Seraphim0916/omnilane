@@ -10,6 +10,8 @@ const ROOT = path.resolve(__dirname, '..');
 const DISPATCH_SCRIPT = path.join(ROOT, 'scripts', 'dispatch.sh');
 const JOBS_SCRIPT = path.join(ROOT, 'scripts', 'jobs.sh');
 const DOCTOR_SCRIPT = path.join(ROOT, 'scripts', 'doctor.sh');
+const PROVIDER_PROBE_SCRIPT = process.env.OMNILANE_PROVIDER_PROBE_SCRIPT ||
+  path.join(ROOT, 'scripts', 'provider-probe.sh');
 const LATEST_PROTOCOL_VERSION = '2025-11-25';
 const SUPPORTED_PROTOCOL_VERSIONS = new Set([
   '2025-11-25',
@@ -286,6 +288,37 @@ const tools = [
     },
   },
   {
+    name: 'provider_probe',
+    description: 'Explicitly invoke one configured provider with a bounded fixed prompt to verify live inference. Incurs one provider call; never returns the provider response.',
+    inputSchema: {
+      type: 'object',
+      required: ['vendor'],
+      properties: {
+        vendor: {
+          type: 'string',
+          enum: ['codex', 'claude', 'grok', 'gemini', 'kimi', 'qwen', 'opencode', 'openrouter', 'deepseek', 'zai', 'mistral', 'groq', 'cerebras'],
+        },
+        timeout: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 300,
+          default: 30,
+        },
+        json: {
+          type: 'boolean',
+          default: true,
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+  },
+  {
     name: 'jobs_stats',
     description: 'Aggregate local background-job outcomes and lane/vendor distribution from bounded public metadata. Never reads task or result bodies.',
     inputSchema: {
@@ -295,6 +328,45 @@ const tools = [
           type: 'integer',
           minimum: 1,
           description: 'Limit the aggregate to the most recent N jobs.',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Return the versioned JSON envelope instead of the human report.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  {
+    name: 'jobs_recommend',
+    description: 'Recommend a vendor per lane from bounded local completed-job outcomes. Read-only, evidence-gated, and never reads task or result bodies.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        last: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 10000,
+          description: 'Limit analysis to the most recent N jobs.',
+        },
+        lane: {
+          type: 'string',
+          pattern: '^[a-z][a-z0-9-]*$',
+          description: 'Optionally analyze one lane.',
+        },
+        min_samples: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 1000,
+          default: 3,
+          description: 'Completed samples required before a vendor is eligible for recommendation.',
         },
         json: {
           type: 'boolean',
@@ -435,11 +507,46 @@ function validateJsonOnlyArguments(args) {
   return null;
 }
 
+function validateProviderProbeArguments(args) {
+  const error = validationError(args, ['vendor', 'timeout', 'json']);
+  if (error) return error;
+  const vendors = new Set([
+    'codex', 'claude', 'grok', 'gemini', 'kimi', 'qwen', 'opencode',
+    'openrouter', 'deepseek', 'zai', 'mistral', 'groq', 'cerebras',
+  ]);
+  if (typeof args.vendor !== 'string' || !vendors.has(args.vendor)) {
+    return 'vendor must name one probe-capable provider';
+  }
+  if (OWN(args, 'timeout') &&
+      (!Number.isInteger(args.timeout) || args.timeout < 1 || args.timeout > 300)) {
+    return 'timeout must be an integer from 1 to 300';
+  }
+  if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
+  return null;
+}
+
 function validateJobsQueryArguments(args) {
   const error = validationError(args, ['last', 'json']);
   if (error) return error;
   if (OWN(args, 'last') && (!Number.isInteger(args.last) || args.last < 1)) {
     return 'last must be a positive integer';
+  }
+  if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
+  return null;
+}
+
+function validateJobsRecommendArguments(args) {
+  const error = validationError(args, ['last', 'lane', 'min_samples', 'json']);
+  if (error) return error;
+  if (OWN(args, 'last') && (!Number.isInteger(args.last) || args.last < 1 || args.last > 10000)) {
+    return 'last must be an integer from 1 to 10000';
+  }
+  if (OWN(args, 'lane') && (typeof args.lane !== 'string' || !LANE_PATTERN.test(args.lane))) {
+    return 'lane must match ^[a-z][a-z0-9-]*$';
+  }
+  if (OWN(args, 'min_samples') &&
+      (!Number.isInteger(args.min_samples) || args.min_samples < 1 || args.min_samples > 1000)) {
+    return 'min_samples must be an integer from 1 to 1000';
   }
   if (OWN(args, 'json') && typeof args.json !== 'boolean') return 'json must be a boolean';
   return null;
@@ -645,6 +752,14 @@ async function callTool(name, args) {
     const argv = args.json === true ? ['--json'] : [];
     return runToolScript('doctor', DOCTOR_SCRIPT, argv);
   }
+  if (name === 'provider_probe') {
+    const error = validateProviderProbeArguments(args);
+    if (error) return toolError(error);
+    const argv = ['--vendor', args.vendor];
+    if (OWN(args, 'timeout')) argv.push('--timeout', String(args.timeout));
+    if (args.json !== false) argv.push('--json');
+    return runToolScript('provider_probe', PROVIDER_PROBE_SCRIPT, argv);
+  }
   if (name === 'jobs_stats' || name === 'jobs_audit') {
     const error = validateJobsQueryArguments(args);
     if (error) return toolError(error);
@@ -652,6 +767,17 @@ async function callTool(name, args) {
     if (args.json === true) argv.push('--json');
     argv.push(name === 'jobs_stats' ? 'stats' : 'audit');
     if (OWN(args, 'last')) argv.push('--last', String(args.last));
+    return runToolScript(name, JOBS_SCRIPT, argv);
+  }
+  if (name === 'jobs_recommend') {
+    const error = validateJobsRecommendArguments(args);
+    if (error) return toolError(error);
+    const argv = [];
+    if (args.json === true) argv.push('--json');
+    argv.push('recommend');
+    if (OWN(args, 'last')) argv.push('--last', String(args.last));
+    if (OWN(args, 'lane')) argv.push('--lane', args.lane);
+    if (OWN(args, 'min_samples')) argv.push('--min-samples', String(args.min_samples));
     return runToolScript(name, JOBS_SCRIPT, argv);
   }
   throw new RpcError(-32602, `Unknown tool: ${name}`);

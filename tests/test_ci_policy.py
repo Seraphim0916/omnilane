@@ -11,6 +11,17 @@ WORKFLOW = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8
 
 
 class WorkflowPolicyTests(unittest.TestCase):
+    def test_strict_doctor_is_an_offline_acceptance_gate(self):
+        self.assertIn("Strict doctor acceptance", WORKFLOW)
+        self.assertIn("bin/omnilane doctor --strict --json", WORKFLOW)
+        self.assertIn("OMNILANE_HOME=", WORKFLOW)
+        self.assertIn("$RUNNER_TEMP/omnilane-doctor-", WORKFLOW)
+
+        step = WORKFLOW.split("Strict doctor acceptance", 1)[1].split(
+            "- name:", 1
+        )[0]
+        self.assertNotIn("--probe", step)
+
     def test_token_is_read_only_and_stale_runs_are_cancelled(self):
         self.assertRegex(
             WORKFLOW,

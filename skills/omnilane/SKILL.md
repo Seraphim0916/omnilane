@@ -12,6 +12,9 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 3. **If the lane's model is you, self-execute.** Otherwise dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
+   Before changing lane order from anecdotal outcomes, run
+   `scripts/jobs.sh recommend [--last N] [--lane L] [--min-samples N]` and report
+   its evidence threshold. The command is read-only and never changes routing.
    Preview old completed-job cleanup with `scripts/jobs.sh prune --keep <N>`;
    deletion requires the explicit `--apply` flag and never targets running jobs.
    A deep task whose CLI call may outrun the 600s per-call watchdog can raise its
@@ -29,6 +32,10 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 Run `scripts/dispatch.sh --list` to see the effective table (local overrides win).
 When routing is unexpectedly unavailable, run `bin/omnilane doctor` before
 changing configuration; it reports state and dependencies without repairing them.
+Doctor remains offline unless the operator explicitly adds `--probe V`; that
+bounded probe returns metadata only. Use `bin/omnilane benchmark` for a fixed
+no-call route plan, and add `--run` only when actual advise-mode comparison calls
+were explicitly requested. Neither command changes routing.
 Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,
 so the same table works with any subset of subscriptions.
 
@@ -116,6 +123,8 @@ an explicit edit request. Missing explicit targets fail clearly; never remove
 
 The optional Live UI is a read-only observer, not a prompt or dispatch path.
 It displays existing jobs' `task.txt` and public `out.txt`, but never raw logs;
+its history search and state filters can export only the currently visible public
+metadata as local JSON; tokens and task/result bodies are excluded from export.
 it cannot interpret natural language, choose routes, dispatch, retry, cancel,
 delete jobs, or edit configuration. Natural-language interpretation and
 dispatch stay in this skill and the CLI. Manage the local board with
