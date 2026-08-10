@@ -75,7 +75,7 @@ fi
 
 # 4) python compile of the UI and test modules
 py_files=()
-for rel in scripts/ui.py tests/test_ui.py tests/test_ci_policy.py tests/ui_browser_harness.py; do
+for rel in scripts/ui.py scripts/benchmark.py tests/test_ui.py tests/test_benchmark.py tests/test_ci_policy.py tests/ui_browser_harness.py; do
   [[ -f "$REPO/$rel" ]] && py_files+=("$REPO/$rel")
 done
 if ! command -v python3 >/dev/null 2>&1; then

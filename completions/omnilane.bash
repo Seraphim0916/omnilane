@@ -58,7 +58,7 @@ _omnilane() {
   prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   command="${COMP_WORDS[1]:-}"
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-    words="version list route dispatch jobs doctor release-audit ui configure completion help"
+      words="version list route dispatch jobs doctor benchmark release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)
@@ -84,7 +84,7 @@ _omnilane() {
           sub="${COMP_WORDS[3]:-}"
         fi
         if [[ "$COMP_CWORD" -eq "$sub_index" ]]; then
-          words="list status result tail retry stats wait audit prune help"
+          words="list status result tail retry stats recommend wait audit prune help"
         elif [[ "$COMP_CWORD" -eq $((sub_index + 1)) &&
                 ( "$sub" == status || "$sub" == result || "$sub" == wait ||
                   "$sub" == tail || "$sub" == retry ) ]]; then
@@ -99,7 +99,11 @@ _omnilane() {
           words="--background"
         elif [[ "$sub" == wait ]]; then
           words="--timeout"
-        elif [[ "$sub" == stats || "$sub" == audit ]]; then
+        elif [[ "$sub" == stats ]]; then
+          words="--last --lane --vendor --json"
+        elif [[ "$sub" == recommend ]]; then
+          words="--last --lane --min-samples --json"
+        elif [[ "$sub" == audit ]]; then
           words="--last --json"
         elif [[ "$sub" == prune ]]; then
           words="--keep --older-than --apply"
@@ -107,7 +111,18 @@ _omnilane() {
           return
         fi
         ;;
-      doctor) words="--json" ;;
+      doctor) words="--json --strict --probe --probe-timeout" ;;
+      benchmark)
+        case "$prev" in
+          --vendor) words="codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras" ;;
+          --workloads)
+            COMPREPLY=( $(compgen -f -- "$cur") )
+            return
+            ;;
+          --timeout|--cost-per-call) return ;;
+          *) words="--json --run --vendor --timeout --workloads --cost-per-call" ;;
+        esac
+        ;;
       release-audit) words="--target --allow-dirty --require-tag --manifest --json" ;;
       ui) words="start status url stop" ;;
       completion) words="bash zsh" ;;

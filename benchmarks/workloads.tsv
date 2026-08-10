@@ -1,0 +1,4 @@
+# id<TAB>preferred_lane<TAB>weight<TAB>Python regex<TAB>prompt
+exact_alpha	consult	1	^ALPHA\s*$	Return exactly ALPHA and nothing else.
+arithmetic	consult	2	^42\s*$	Return only the integer result of 17 + 25.
+json_contract	hard-judgment	2	^\{"status":"pass","count":3\}\s*$	Return exactly this compact JSON object with the stated key order: {"status":"pass","count":3}

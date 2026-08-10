@@ -21,6 +21,7 @@
     connectionLabel: document.getElementById("connection-label"),
     languageSelect: document.getElementById("language-select"),
     jobCount: document.getElementById("job-count"), search: document.getElementById("job-search"),
+    exportVisible: document.getElementById("export-visible"),
     filter: document.getElementById("status-filter"),
     filterButtons: Array.from(document.querySelectorAll(".filter-button")),
     jobList: document.getElementById("job-list"), listMessage: document.getElementById("list-message"),
@@ -296,6 +297,7 @@
 
   function setControlsDisabled(disabled) {
     elements.search.disabled = disabled;
+    elements.exportVisible.disabled = disabled;
     elements.filterButtons.forEach(function (button) {
       button.disabled = disabled;
     });
@@ -471,6 +473,52 @@
     });
   }
 
+  function exportField(meta, key) {
+    return typeof meta[key] === "string" && meta[key].length > 0 ? meta[key] : null;
+  }
+
+  function exportVisibleJobs() {
+    const jobs = visibleJobs();
+    if (jobs.length === 0) {
+      return;
+    }
+    const exportedAt = new Date();
+    const payload = {
+      schema_version: 1,
+      exported_at: exportedAt.toISOString(),
+      query: state.query,
+      filter: state.filter,
+      jobs: jobs.map(function (job) {
+        const meta = job.meta;
+        return {
+          id: job.id,
+          state: job.state,
+          exit_code: job.exitCode,
+          lane: exportField(meta, "lane"),
+          vendor: exportField(meta, "vendor"),
+          model: exportField(meta, "model"),
+          effort: exportField(meta, "effort"),
+          mode: exportField(meta, "mode"),
+          candidate: exportField(meta, "candidate"),
+          started: exportField(meta, "started"),
+          timeout: Number.isInteger(meta.timeout) ? meta.timeout : null,
+        };
+      }),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const stamp = exportedAt.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "omnilane-jobs-" + stamp + ".json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
   function routeLabel(job) {
     const meta = job.meta;
     return [
@@ -525,6 +573,7 @@
 
   function renderQueue() {
     const jobs = visibleJobs();
+    elements.exportVisible.disabled = state.unauthorized || jobs.length === 0;
     const listScroll = elements.jobList.scrollTop;
     const inspectorScroll = elements.inspector.scrollTop;
     const focusedCard = document.activeElement && document.activeElement.closest
@@ -1270,6 +1319,8 @@
       updateFilterSelection();
     });
 
+    elements.exportVisible.addEventListener("click", exportVisibleJobs);
+
     elements.mobileBack.addEventListener("click", function () {
       returnToMobileList(true);
     });
@@ -1327,6 +1378,7 @@
       "filter.active": "Active",
       "filter.done": "Done",
       "filter.issues": "Issues",
+      "export.visible": "Export visible",
       "list.ariaLabel": "Recent tasks",
       "list.waiting": "Waiting for tasks.",
       "list.empty": "No tasks yet.",
@@ -1438,6 +1490,7 @@
       "filter.active": "実行中",
       "filter.done": "完了",
       "filter.issues": "問題あり",
+      "export.visible": "表示中をエクスポート",
       "list.ariaLabel": "最近のタスク",
       "list.waiting": "タスクを待機しています。",
       "list.empty": "タスクはまだありません。",
@@ -1549,6 +1602,7 @@
       "filter.active": "진행 중",
       "filter.done": "완료",
       "filter.issues": "문제",
+      "export.visible": "표시 항목 내보내기",
       "list.ariaLabel": "최근 작업",
       "list.waiting": "작업을 기다리는 중입니다.",
       "list.empty": "아직 작업이 없습니다.",
@@ -1660,6 +1714,7 @@
       "filter.active": "進行中",
       "filter.done": "完成",
       "filter.issues": "有問題",
+      "export.visible": "匯出目前結果",
       "list.ariaLabel": "最近的任務",
       "list.waiting": "等待任務中。",
       "list.empty": "尚無任務。",
@@ -1771,6 +1826,7 @@
       "filter.active": "进行中",
       "filter.done": "完成",
       "filter.issues": "有问题",
+      "export.visible": "导出当前结果",
       "list.ariaLabel": "最近的任务",
       "list.waiting": "等待任务中。",
       "list.empty": "暂无任务。",

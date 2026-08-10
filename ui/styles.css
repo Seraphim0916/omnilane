@@ -210,6 +210,28 @@ summary:focus-visible,
   border-bottom: 1px solid var(--line);
 }
 
+.export-button {
+  min-height: 36px;
+  margin-left: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0 10px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.export-button:hover:not(:disabled) {
+  color: var(--ink);
+  background: #edf0f2;
+}
+
+.export-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .section-label,
 .state-code {
   margin: 0 0 3px;

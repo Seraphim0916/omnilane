@@ -992,6 +992,94 @@ test_jobs_stats_aggregates_only_public_metadata() {
   fi
 }
 
+test_jobs_recommend_is_evidence_gated_and_private() {
+  local name="jobs recommend evidence gate" home id out json lane_json empty_json bad rc rc_bad
+  name="jobs recommend evidence gate"
+  home="$TEST_ROOT/jobs-recommend"
+  mkdir -p "$home/jobs"
+
+  add_recommend_job() {
+    local job_id="$1" lane="$2" vendor="$3" exit_code="$4"
+    mkdir "$home/jobs/$job_id"
+    printf '%s\n' "$exit_code" > "$home/jobs/$job_id/exit"
+    printf '{"lane":"%s","vendor":"%s"}\n' "$lane" "$vendor" > "$home/jobs/$job_id/meta.json"
+  }
+
+  add_recommend_job 20260715-120013-123-13 triage codex 0
+  add_recommend_job 20260715-120012-123-12 triage codex 0
+  add_recommend_job 20260715-120011-123-11 triage codex 0
+  add_recommend_job 20260715-120010-123-10 triage codex 7
+  add_recommend_job 20260715-120009-123-9 triage claude 0
+  add_recommend_job 20260715-120008-123-8 triage claude 0
+  add_recommend_job 20260715-120007-123-7 hard-judgment claude 0
+  add_recommend_job 20260715-120006-123-6 hard-judgment claude 0
+  add_recommend_job 20260715-120005-123-5 hard-judgment claude 2
+  add_recommend_job 20260715-120004-123-4 bulk-mechanical gemini 0
+  id=20260715-120003-123-3; mkdir "$home/jobs/$id"
+  printf '{"lane":"triage","vendor":"grok"}\n' > "$home/jobs/$id/meta.json"
+  id=20260715-120002-123-2; mkdir "$home/jobs/$id"
+  printf '0\nINJECTED-EXIT\n' > "$home/jobs/$id/exit"
+  printf '{"lane":"triage","vendor":"gemini"}\n' > "$home/jobs/$id/meta.json"
+  id=20260715-120001-123-1; mkdir "$home/jobs/$id"
+  printf '0\n' > "$home/jobs/$id/exit"
+  printf 'PRIVATE-METADATA-CANARY\n' > "$home/jobs/$id/meta.json"
+  printf 'PRIVATE-TASK-CANARY\n' > "$home/jobs/$id/task.txt"
+
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" \
+    recommend --last 20 --min-samples 3 2>&1)"
+  rc=$?
+  json="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" \
+    --json recommend --last 20 --min-samples 3 2>&1)"
+  lane_json="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" \
+    recommend --lane triage --min-samples 1 --json 2>&1)"
+  empty_json="$(OMNILANE_HOME="$TEST_ROOT/jobs-recommend-empty" \
+    /bin/bash "$ROOT/scripts/jobs.sh" recommend --json 2>&1)"
+  OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" recommend --min-samples 0 \
+    > "$home/bad.out" 2>&1
+  rc_bad=$?
+  bad="$(cat "$home/bad.out")"
+
+  if [[ "$rc" -ne 0 || "$out" != *"recommend lane=triage vendor=codex"* ||
+        "$out" != *"recommend lane=bulk-mechanical status=insufficient_data"* ]]; then
+    fail "$name" "human recommendation mismatch: rc=$rc out=$out"
+  elif [[ "$out" == *"PRIVATE-"* || "$json" == *"PRIVATE-"* || "$json" == *"INJECTED-"* ]]; then
+    fail "$name" "recommend disclosed private or malformed job content"
+  elif ! python3 - "$json" "$lane_json" "$empty_json" <<'PY'
+import json
+import sys
+
+report, lane_report, empty = map(json.loads, sys.argv[1:])
+assert report["schema_version"] == 1 and report["command"] == "recommend" and report["ok"] is True
+assert report["minimum_samples"] == 3
+assert report["sampled"] == 13 and report["completed"] == 10
+assert report["excluded"] == {"running": 1, "invalid_exit": 1, "invalid_metadata": 1}
+by_lane = {item["lane"]: item for item in report["recommendations"]}
+assert set(by_lane) == {"bulk-mechanical", "hard-judgment", "triage"}
+assert by_lane["triage"]["status"] == "ready"
+assert by_lane["triage"]["recommended_vendor"] == "codex"
+assert by_lane["triage"]["candidates"][0] == {
+    "vendor": "codex", "samples": 4, "succeeded": 3, "failed": 1,
+    "success_rate": 75, "eligible": True,
+}
+assert by_lane["triage"]["candidates"][1]["vendor"] == "claude"
+assert by_lane["triage"]["candidates"][1]["success_rate"] == 100
+assert by_lane["triage"]["candidates"][1]["eligible"] is False
+assert by_lane["bulk-mechanical"]["status"] == "insufficient_data"
+assert by_lane["bulk-mechanical"]["recommended_vendor"] is None
+assert [item["lane"] for item in lane_report["recommendations"]] == ["triage"]
+assert lane_report["recommendations"][0]["recommended_vendor"] == "claude"
+assert empty["sampled"] == 0 and empty["completed"] == 0 and empty["recommendations"] == []
+PY
+  then
+    fail "$name" "JSON recommendation contract mismatch: $json"
+  elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid --min-samples"* ]]; then
+    fail "$name" "invalid sample threshold was not rejected: rc=$rc_bad out=$bad"
+  else
+    pass "$name"
+  fi
+}
+test_jobs_recommend_is_evidence_gated_and_private
+
 test_jobs_json_is_versioned_and_private_by_default() {
   local name="jobs JSON is versioned and private by default" home done_id running_id
   local list_prefix list_suffix status_json result_json stats_json empty_stats_json
@@ -2096,6 +2184,143 @@ EOF
   fi
 }
 
+test_doctor_strict_policy() {
+  local name="doctor strict warning policy" home repo out json_default json
+  local rc_default rc_json_default rc_strict rc_json
+  home="$TEST_ROOT/doctor-strict-home"
+  repo="$TEST_ROOT/doctor-strict-repo"
+  mkdir -p "$repo/scripts"
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  chmod +x "$repo/scripts/dispatch.sh"
+  printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
+  rc_default=$?
+  json_default="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --json 2>&1)"
+  rc_json_default=$?
+  HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --strict > "$TEST_ROOT/doctor-strict.out" 2>&1
+  rc_strict=$?
+  json="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --strict --json 2>&1)"
+  rc_json=$?
+
+  if [[ "$rc_default" -ne 0 || "$out" != *WARN*state* ]]; then
+    fail "$name" "default policy changed: rc=$rc_default out=$out"
+  elif [[ "$rc_json_default" -ne 0 || "$json_default" != *'"ok":true'* || "$json_default" != *'"strict":false'* ]]; then
+    fail "$name" "default JSON policy mismatch: rc=$rc_json_default json=$json_default"
+  elif [[ "$rc_strict" -ne 1 ]] || ! grep -q 'WARN.*state' "$TEST_ROOT/doctor-strict.out"; then
+    fail "$name" "strict policy did not fail on warning: rc=$rc_strict"
+  elif [[ "$rc_json" -ne 1 || "$json" != *'"ok":false'* || "$json" != *'"strict":true'* ]]; then
+    fail "$name" "strict JSON policy mismatch: rc=$rc_json json=$json"
+  elif ! bash "$ROOT/bin/omnilane" doctor --bogus 2>&1 | grep -q -- '--strict'; then
+    fail "$name" "usage does not advertise --strict"
+  else
+    pass "$name"
+  fi
+}
+test_doctor_strict_policy
+
+test_provider_probe_is_opt_in_bounded_and_private() {
+  local name="provider probe opt-in bounded private" repo marker out doctor_json rc bad rc_bad
+  local mcp_output mcp_ok=1 expected_invocations
+  name="provider probe opt-in bounded private"
+  repo="$TEST_ROOT/provider-probe-repo"
+  marker="$TEST_ROOT/provider-probe-invoked"
+  mkdir -p "$repo/scripts/runners"
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--list" ]]; then
+  printf 'probe: codex "probe model" medium\n'
+  exit 0
+fi
+if [[ "$*" == *'--dry-run'* && "$*" == *'--vendor codex'* ]]; then
+  printf 'dry_run=yes\nlane=probe\nvendor=codex\nmodel=probe\\ model\neffort=medium\nprovider_invoked=no\n'
+  exit 0
+fi
+exit 4
+EOF
+  cat > "$repo/scripts/runners/run-codex.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s|%s|%s|%s\n' "$1" "$3" "$4" "${OMNILANE_TIMEOUT:-}" >> "$OMNILANE_TEST_PROBE_MARKER"
+printf 'PRIVATE-PROVIDER-RESPONSE\n' > "$6"
+EOF
+  chmod +x "$repo/scripts/dispatch.sh" "$repo/scripts/runners/run-codex.sh"
+  printf 'probe: codex "probe model" medium\n' > "$repo/routing.yaml"
+
+  OMNILANE_DOCTOR_REPO="$repo" OMNILANE_HOME="$TEST_ROOT/provider-probe-default-home" \
+    OMNILANE_PROVIDER_PROBE_SCRIPT="$ROOT/scripts/provider-probe.sh" \
+    OMNILANE_TEST_PROBE_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/doctor.sh" >/dev/null 2>&1
+  if [[ -e "$marker" ]]; then
+    fail "$name" "default doctor invoked a provider"
+    return
+  fi
+
+  out="$(OMNILANE_PROBE_REPO="$repo" OMNILANE_TEST_PROBE_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/provider-probe.sh" --vendor codex --timeout 7 --json 2>&1)"
+  rc=$?
+  doctor_json="$(OMNILANE_DOCTOR_REPO="$repo" OMNILANE_HOME="$TEST_ROOT/provider-probe-doctor-home" \
+    OMNILANE_PROVIDER_PROBE_SCRIPT="$ROOT/scripts/provider-probe.sh" \
+    OMNILANE_TEST_PROBE_MARKER="$marker" \
+    /bin/bash "$ROOT/scripts/doctor.sh" --probe codex --probe-timeout 7 --json 2>&1)"
+  if command -v node >/dev/null 2>&1; then
+    mcp_output="$TEST_ROOT/provider-probe-mcp.jsonl"
+    {
+      printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"probe-test","version":"1"}}}'
+      printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"provider_probe","arguments":{"vendor":"codex","timeout":7,"json":true}}}'
+    } | OMNILANE_PROVIDER_PROBE_SCRIPT="$ROOT/scripts/provider-probe.sh" \
+      OMNILANE_PROBE_REPO="$repo" OMNILANE_TEST_PROBE_MARKER="$marker" \
+      "$ROOT/bin/omnilane-mcp" > "$mcp_output" 2>/dev/null
+    node - "$mcp_output" <<'NODE' || mcp_ok=0
+const fs = require('fs');
+const messages = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').map(JSON.parse);
+const response = messages.find((item) => item.id === 2);
+if (!response || response.error || response.result.isError) process.exit(1);
+const report = JSON.parse(response.result.content[0].text);
+if (!report.ok || report.status !== 'usable' || !report.provider_invoked) process.exit(1);
+NODE
+  fi
+  OMNILANE_PROBE_REPO="$repo" /bin/bash "$ROOT/scripts/provider-probe.sh" \
+    --vendor mystery > "$TEST_ROOT/provider-probe-bad.out" 2>&1
+  rc_bad=$?
+  bad="$(cat "$TEST_ROOT/provider-probe-bad.out")"
+
+  expected_invocations=2
+  command -v node >/dev/null 2>&1 && expected_invocations=3
+  if [[ "$rc" -ne 0 || "$(wc -l < "$marker" | tr -d '[:space:]')" -ne "$expected_invocations" ||
+     "$(sed -n '1p' "$marker")" != "advise|probe model|medium|7" ]]; then
+    fail "$name" "probe did not invoke bounded advise runner: rc=$rc out=$out"
+  elif [[ "$mcp_ok" -ne 1 ]]; then
+    fail "$name" "MCP provider_probe did not preserve the probe contract"
+  elif [[ "$doctor_json" != *'"check":"provider-probe"'* || "$doctor_json" != *'"level":"PASS"'* ]]; then
+    fail "$name" "doctor did not report successful opt-in probe: $doctor_json"
+  elif [[ "$out" == *"PRIVATE-PROVIDER-RESPONSE"* ]]; then
+    fail "$name" "probe leaked provider response"
+  elif ! python3 - "$out" <<'PY'
+import json
+import sys
+d = json.loads(sys.argv[1])
+assert d["schema_version"] == 1 and d["ok"] is True
+assert d["vendor"] == "codex" and d["model"] == "probe model"
+assert d["status"] == "usable" and d["provider_invoked"] is True
+assert d["timeout"] == 7 and d["response_bytes"] > 0
+PY
+  then
+    fail "$name" "probe JSON contract mismatch: $out"
+  elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid vendor"* ]]; then
+    fail "$name" "invalid vendor was not rejected: rc=$rc_bad out=$bad"
+  else
+    pass "$name"
+  fi
+}
+test_provider_probe_is_opt_in_bounded_and_private
+
 make_fake_installer_home() {
   local home="$1"
   mkdir -p "$home/bin" "$home/.codex"
@@ -2537,7 +2762,8 @@ EOF
   if [[ "$bash_out" != *'_omnilane_lanes'* || "$zsh_out" != *'_omnilane_job_ids'* ]]; then
     fail "$name" "completion output lacked bounded lane/job helpers"
   elif [[ "$bash_out$zsh_out" != *'--job-timeout'* || "$bash_out$zsh_out" != *'--dry-run'* ||
-          "$bash_out$zsh_out" != *'release-audit'* || "$bash_out$zsh_out" != *'start status url stop'* ]]; then
+          "$bash_out$zsh_out" != *'release-audit'* || "$bash_out$zsh_out" != *'start status url stop'* ||
+          "$bash_out$zsh_out" != *'recommend'* || "$bash_out$zsh_out" != *'--min-samples'* ]]; then
     fail "$name" "public option or UI command inventory was incomplete"
   elif [[ "$bash_lanes" != *"safe-custom"* || "$bash_lanes" != *"triage"* || "$zsh_lanes" != *"safe-custom"* ]]; then
     fail "$name" "effective lane completion missed local/default lanes"
@@ -3431,8 +3657,8 @@ NODE
 }
 test_mcp_readonly_tools
 
-test_mcp_jobs_stats_audit() {
-  local name="MCP jobs_stats and jobs_audit" home output rc
+test_mcp_jobs_stats_recommend_audit() {
+  local name="MCP jobs_stats, jobs_recommend, and jobs_audit" home output rc
   if ! command -v node >/dev/null 2>&1; then
     pass "$name (node unavailable; skipped)"
     return
@@ -3450,6 +3676,10 @@ test_mcp_jobs_stats_audit() {
     printf '%s\n' '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"jobs_stats","arguments":{"json":true,"last":5}}}'
     printf '%s\n' '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"jobs_stats","arguments":{"last":0}}}'
     printf '%s\n' '{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"jobs_audit","arguments":{"unexpected":1}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"jobs_recommend","arguments":{}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"jobs_recommend","arguments":{"json":true,"last":5,"lane":"triage","min_samples":2}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"jobs_recommend","arguments":{"min_samples":0}}}'
+    printf '%s\n' '{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"jobs_recommend","arguments":{"unexpected":1}}}'
   } | OMNILANE_HOME="$home" "$ROOT/bin/omnilane-mcp" > "$output" 2> "$home/stderr"
   rc=$?
   if [[ "$rc" -ne 0 ]]; then fail "$name" "server exited $rc"; return; fi
@@ -3458,20 +3688,27 @@ const fs = require('fs');
 const messages = fs.readFileSync(process.argv[2], 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
 const byId = (id) => messages.find((m) => m.id === id);
 const isErr = (id) => Boolean(byId(id).result && byId(id).result.isError === true);
+const text = (id) => byId(id).result.content[0].text;
 try {
   const names = byId(2).result.tools.map((t) => t.name);
-  for (const n of ['jobs_stats', 'jobs_audit']) if (!names.includes(n)) throw new Error('tools/list missing ' + n);
+  for (const n of ['jobs_stats', 'jobs_recommend', 'jobs_audit']) if (!names.includes(n)) throw new Error('tools/list missing ' + n);
   if (isErr(3)) throw new Error('jobs_stats errored: ' + JSON.stringify(byId(3).result));
   if (isErr(4)) throw new Error('jobs_audit errored: ' + JSON.stringify(byId(4).result));
   if (isErr(5)) throw new Error('jobs_stats json+last errored: ' + JSON.stringify(byId(5).result));
   if (!isErr(6)) throw new Error('last=0 was not rejected');
   if (!isErr(7)) throw new Error('unexpected arg was not rejected');
+  if (isErr(8) || !text(8).includes('recommendations:')) throw new Error('jobs_recommend errored');
+  if (isErr(9)) throw new Error('jobs_recommend json query errored');
+  const recommendation = JSON.parse(text(9));
+  if (recommendation.command !== 'recommend' || recommendation.minimum_samples !== 2) throw new Error('jobs_recommend JSON mismatch');
+  if (!isErr(10)) throw new Error('min_samples=0 was not rejected');
+  if (!isErr(11)) throw new Error('unexpected recommend arg was not rejected');
 } catch (e) { console.error(String((e && e.message) || e)); process.exit(1); }
 NODE
   rc=$?
   if [[ "$rc" -ne 0 ]]; then fail "$name" "$(tail -n 1 "$home/assert.out")"; else pass "$name"; fi
 }
-test_mcp_jobs_stats_audit
+test_mcp_jobs_stats_recommend_audit
 
 test_configure_noninteractive() {
   local name="configure non-interactive set/get/unset/list" home file out rc proof
@@ -3853,7 +4090,8 @@ test_completion_fish() {
     if [[ "$out" != *"$w"* ]]; then fail "$name" "fish completion missing command: $w"; return; fi
   done
   if [[ "$out" != *'advise work'* || "$out" != *openrouter* || "$out" != *deepseek* ||
-        "$out" != *'bash zsh fish'* || "$out" != *'start status url stop'* ]]; then
+        "$out" != *'bash zsh fish'* || "$out" != *'start status url stop'* ||
+        "$out" != *recommend* || "$out" != *min-samples* ]]; then
     fail "$name" "fish completion option/enum inventory incomplete"; return
   fi
   bash "$ROOT/bin/omnilane" completion nushell >/dev/null 2>&1; badrc=$?

@@ -2,6 +2,7 @@
 set -euo pipefail
 # omnilane background-job helper.
 # Usage: jobs.sh [--json] list | status JOB_ID | result JOB_ID | stats [--last N]
+#        jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
 #        jobs.sh wait JOB_ID [--timeout N]
 #        jobs.sh audit [--last N] [--json] | prune [--keep N] [--apply]
 
@@ -48,7 +49,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -168,6 +169,83 @@ json_stat_counts() {
   printf ']'
 }
 
+build_recommendation_rows() {
+  local minimum="$1"
+  shift
+  [[ $# -gt 0 ]] || return 0
+  printf '%s\n' "$@" | awk -F '\t' -v minimum="$minimum" '
+    {
+      key = $1 SUBSEP $2
+      samples[key]++
+      if ($3 == 0) succeeded[key]++
+      else failed[key]++
+    }
+    END {
+      for (key in samples) {
+        split(key, parts, SUBSEP)
+        rate = int((succeeded[key] * 100) / samples[key])
+        eligible = samples[key] >= minimum ? 1 : 0
+        printf "%s\t%d\t%d\t%d\t%s\t%d\t%d\n", \
+          parts[1], eligible, rate, samples[key], parts[2], \
+          succeeded[key] + 0, failed[key] + 0
+      }
+    }
+  ' | LC_ALL=C sort -t $'\t' -k1,1 -k2,2nr -k3,3nr -k4,4nr -k5,5
+}
+
+recommendations_json() {
+  local rows="$1"
+  [[ -n "$rows" ]] || { printf '[]'; return 0; }
+  printf '%s\n' "$rows" | awk -F '\t' '
+    function close_lane( status, recommendation) {
+      if (current == "") return
+      status = recommended == "" ? "insufficient_data" : "ready"
+      recommendation = recommended == "" ? "null" : "\"" recommended "\""
+      printf "],\"status\":\"%s\",\"recommended_vendor\":%s}", status, recommendation
+    }
+    BEGIN { printf "["; current = ""; first_lane = 1 }
+    {
+      if ($1 != current) {
+        close_lane()
+        if (!first_lane) printf ","
+        first_lane = 0
+        current = $1
+        first_candidate = 1
+        recommended = ""
+        printf "{\"lane\":\"%s\",\"candidates\":[", current
+      }
+      if (!first_candidate) printf ","
+      first_candidate = 0
+      eligible = $2 == 1 ? "true" : "false"
+      printf "{\"vendor\":\"%s\",\"samples\":%d,\"succeeded\":%d,\"failed\":%d,\"success_rate\":%d,\"eligible\":%s}", \
+        $5, $4, $6, $7, $3, eligible
+      if (recommended == "" && $2 == 1) recommended = $5
+    }
+    END { close_lane(); printf "]" }
+  '
+}
+
+print_recommendations() {
+  local rows="$1" minimum="$2"
+  [[ -n "$rows" ]] || return 0
+  printf '%s\n' "$rows" | awk -F '\t' -v minimum="$minimum" '
+    $1 != current {
+      current = $1
+      if ($2 == 1) {
+        printf "recommend lane=%s vendor=%s success_rate=%d%% samples=%d succeeded=%d failed=%d\n", \
+          $1, $5, $3, $4, $6, $7
+      } else {
+        printf "recommend lane=%s status=insufficient_data min_samples=%d\n", $1, minimum
+      }
+    }
+    {
+      eligible = $2 == 1 ? "yes" : "no"
+      printf "candidate lane=%s vendor=%s success_rate=%d%% samples=%d succeeded=%d failed=%d eligible=%s\n", \
+        $1, $5, $3, $4, $6, $7, eligible
+    }
+  '
+}
+
 path_mode() {
   if stat -f '%Lp' "$1" >/dev/null 2>&1; then
     stat -f '%Lp' "$1"
@@ -191,7 +269,7 @@ set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
-    list|status|result|stats|audit) ;;
+    list|status|result|stats|recommend|audit) ;;
     *) usage ;;
   esac
 fi
@@ -418,6 +496,88 @@ case "${1:-}" in
         "$sampled" "$passed" "$failed" "$findings"
     fi
     [[ "$findings" -eq 0 ]] || exit 1 ;;
+  recommend)
+    limit=100
+    minimum_samples=3
+    filter_lane=""
+    shift
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --last)
+          [[ $# -ge 2 ]] || usage
+          limit="$2"; shift 2 ;;
+        --lane)
+          [[ $# -ge 2 ]] || usage
+          filter_lane="$2"; shift 2 ;;
+        --min-samples)
+          [[ $# -ge 2 ]] || usage
+          minimum_samples="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [[ "$limit" =~ ^[1-9][0-9]{0,3}$ && "$limit" -le 10000 ]] || {
+      die 2 "invalid --last value (want 1..10000)"
+    }
+    [[ "$minimum_samples" =~ ^[1-9][0-9]{0,2}$ && "$minimum_samples" -le 1000 ]] || {
+      die 2 "invalid --min-samples value (want 1..1000)"
+    }
+    [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
+    sampled=0
+    completed=0
+    running=0
+    invalid_exit=0
+    invalid_metadata=0
+    ids=()
+    outcomes=()
+    if [[ -d "$JOBS" ]]; then
+      for job_dir in "$JOBS"/*; do
+        [[ -d "$job_dir" && ! -L "$job_dir" ]] || continue
+        id="${job_dir##*/}"
+        [[ "$id" =~ $JOB_ID_PATTERN ]] || continue
+        ids+=("$id")
+      done
+    fi
+    if [[ ${#ids[@]} -gt 0 ]]; then
+      while IFS= read -r id; do
+        job_dir="$JOBS/$id"
+        metadata_path="$job_dir/meta.json"
+        meta_ok=0
+        if read_public_metadata "$metadata_path" &&
+           parse_stats_metadata "$PUBLIC_METADATA"; then
+          meta_ok=1
+        fi
+        if [[ -n "$filter_lane" ]]; then
+          [[ "$meta_ok" -eq 1 && "$filter_lane" == "$STATS_LANE" ]] || continue
+        fi
+        sampled=$((sampled + 1))
+        if [[ "$meta_ok" -ne 1 ]]; then
+          invalid_metadata=$((invalid_metadata + 1))
+          continue
+        fi
+        exit_path="$job_dir/exit"
+        if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
+          running=$((running + 1))
+          continue
+        fi
+        if ! read_exit_code "$exit_path"; then
+          invalid_exit=$((invalid_exit + 1))
+          continue
+        fi
+        completed=$((completed + 1))
+        outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$RECORDED_EXIT")
+      done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
+    fi
+    rows="$(build_recommendation_rows "$minimum_samples" ${outcomes[@]+"${outcomes[@]}"})"
+    if [[ "$JSON_MODE" -eq 1 ]]; then
+      recommendations="$(recommendations_json "$rows")"
+      printf '{"schema_version":1,"command":"recommend","ok":true,"sampled":%s,"completed":%s,"excluded":{"running":%s,"invalid_exit":%s,"invalid_metadata":%s},"minimum_samples":%s,"recommendations":%s}\n' \
+        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" \
+        "$minimum_samples" "$recommendations"
+    else
+      printf 'recommendations: sampled=%s completed=%s running=%s invalid_exit=%s invalid_metadata=%s min_samples=%s\n' \
+        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" "$minimum_samples"
+      print_recommendations "$rows" "$minimum_samples"
+    fi ;;
   stats)
     limit=100
     filter_lane=""; filter_vendor=""

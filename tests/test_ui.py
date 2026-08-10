@@ -711,6 +711,26 @@ class LifecycleTests(unittest.TestCase):
 @unittest.skipUnless(browser_available, "a Playwright browser is required")
 class FrontendBrowserBehaviorTests(BrowserHarness, unittest.TestCase):
     root, ui_module = ROOT, ui
+
+    def test_search_filter_and_export_visible_history(self):
+        self.open_board(1440, 900)
+        self.page.locator("#job-search").fill("hard-judgment")
+        self.assertEqual(7, self.page.locator(".job-card").count())
+        with self.page.expect_download() as download_info:
+            self.page.locator("#export-visible").click()
+        download = download_info.value
+        self.assertRegex(download.suggested_filename, r"^omnilane-jobs-\d{8}T\d{6}Z\.json$")
+        payload = json.loads(Path(download.path()).read_text(encoding="utf-8"))
+        self.assertEqual(1, payload["schema_version"])
+        self.assertEqual("hard-judgment", payload["query"])
+        self.assertEqual("all", payload["filter"])
+        self.assertEqual(7, len(payload["jobs"]))
+        self.assertEqual({"hard-judgment"}, {job["lane"] for job in payload["jobs"]})
+        serialized = json.dumps(payload)
+        self.assertNotIn("browser-test-token", serialized)
+        self.assertNotIn("Investigate payment reconciliation", serialized)
+        self.assertNotIn("Result 01", serialized)
+
     def test_desktop_layout_and_sse_reconcile_preserve_dom_focus_and_scroll(self):
         self.open_board(1440, 900)
         metrics = self.page.evaluate(
@@ -1117,6 +1137,23 @@ class FrontendContractTests(unittest.TestCase):
         self.assertIn("renderCompare", self.javascript)
         self.assertNotIn("sessionStorage.setItem(\"omnilane.live-ui.compare", self.javascript)
         self.assertNotRegex(self.javascript, r'fetch\([^\n]+(?:POST|PUT|PATCH|DELETE)')
+
+    def test_visible_history_export_is_local_filtered_and_body_free(self):
+        self.assertIn('id="export-visible"', self.html)
+        self.assertIn("function exportVisibleJobs()", self.javascript)
+        self.assertIn("visibleJobs()", self.javascript)
+        self.assertIn("new Blob", self.javascript)
+        self.assertIn("URL.createObjectURL", self.javascript)
+        self.assertIn('anchor.download = "omnilane-jobs-"', self.javascript)
+        match = re.search(
+            r"function exportVisibleJobs\(\) \{(.*?)\n  \}",
+            self.javascript,
+            re.S,
+        )
+        self.assertIsNotNone(match)
+        export_body = match.group(1)
+        for private_surface in ("cachedDetail", "taskSummary", "resultContent", "state.token"):
+            self.assertNotIn(private_surface, export_body)
 
     def _message_tables(self):
         body = re.search(r"\n  const MESSAGES = \{\n(.*?)\n  \};\n", self.javascript, re.S)

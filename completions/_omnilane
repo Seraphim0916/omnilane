@@ -53,7 +53,7 @@ _omnilane() {
   local command="${words[2]:-}" sub sub_index=3
   local -a lanes ids
   if (( CURRENT == 2 )); then
-    _values 'command' version list route dispatch jobs doctor release-audit ui configure completion help
+    _values 'command' version list route dispatch jobs doctor benchmark release-audit ui configure completion help
     return
   fi
   case "$command" in
@@ -78,7 +78,7 @@ _omnilane() {
         sub="${words[4]:-}"
       fi
       if (( CURRENT == sub_index )); then
-        _values 'job command' list status result tail retry stats wait audit prune help
+        _values 'job command' list status result tail retry stats recommend wait audit prune help
       elif (( CURRENT == sub_index + 1 )) &&
            [[ "$sub" == status || "$sub" == result || "$sub" == wait ||
               "$sub" == tail || "$sub" == retry ]]; then
@@ -92,7 +92,13 @@ _omnilane() {
         _arguments '--background[re-dispatch in the background]'
       elif [[ "$sub" == wait ]]; then
         _arguments '--timeout[maximum wait seconds]:seconds:'
-      elif [[ "$sub" == stats || "$sub" == audit ]]; then
+      elif [[ "$sub" == stats ]]; then
+        _arguments '--last[maximum jobs]:count:' '--lane[filter by lane]:lane:' \
+          '--vendor[filter by vendor]:vendor:' '--json[versioned metadata output]'
+      elif [[ "$sub" == recommend ]]; then
+        _arguments '--last[maximum jobs]:count:' '--lane[filter by lane]:lane:' \
+          '--min-samples[minimum completed samples]:count:' '--json[versioned metadata output]'
+      elif [[ "$sub" == audit ]]; then
         _arguments '--last[maximum jobs]:count:' '--json[versioned metadata output]'
       elif [[ "$sub" == prune ]]; then
         _arguments '--keep[completed jobs to retain]:count:' \
@@ -100,7 +106,18 @@ _omnilane() {
           '--apply[delete eligible jobs]'
       fi
       ;;
-    doctor) _values 'option' --json ;;
+    doctor)
+      _arguments '--json[versioned JSON output]' '--strict[fail on warnings]' \
+        '--probe[run one opt-in live provider probe]:vendor:' \
+        '--probe-timeout[probe timeout in seconds]:seconds:'
+      ;;
+    benchmark)
+      _arguments '--json[versioned JSON output]' '--run[invoke providers in advise mode]' \
+        '*--vendor[vendor to compare]:vendor:(codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras)' \
+        '--timeout[per-workload timeout]:seconds:' \
+        '--workloads[TSV workload file]:file:_files' \
+        '*--cost-per-call[user-supplied vendor USD estimate]:vendor=USD:'
+      ;;
     release-audit)
       _arguments '--target[release version]:version:' '--allow-dirty[permit a dirty worktree]' \
         '--require-tag[require an annotated tag at HEAD]' '--manifest[include tracked inventory]' \

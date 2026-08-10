@@ -195,6 +195,10 @@ The reference is memory-only and disappears when the page closes. The board
 binds only to `127.0.0.1`, uses a random token, and is read-only. It shows
 `task.txt` and the public `out.txt`, but never raw worker or vendor logs.
 
+Search and state filters apply to the latest 50 retained jobs. **Export visible**
+downloads only the currently visible public metadata as local JSON; it excludes
+tokens, task text, result bodies, workdirs, and raw logs.
+
 The board reads in English, Japanese, Korean, Traditional Chinese and Simplified
 Chinese. It follows the browser language on first load; the switcher in the
 header overrides that and the choice is remembered locally.
@@ -255,7 +259,8 @@ adding a routing reminder. Configure the host to launch the installed CLI:
 
 The server exposes `route` plus read-only introspection: `list_lanes`,
 `explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`,
-`jobs_stats`, `jobs_audit`, and `doctor`. `route` defaults to read-only `advise` mode. Calls that select `work` must also
+`jobs_stats`, `jobs_recommend`, `jobs_audit`, `doctor`, and the explicitly opt-in
+`provider_probe`. `route` defaults to read-only `advise` mode. Calls that select `work` must also
 provide an explicit `workdir`.
 
 Node.js is the only runtime requirement (no npm packages). If you prefer
@@ -299,7 +304,8 @@ omnilane ui start                              # start/reuse the local Live UI; 
 omnilane ui status                             # report whether the Live UI is running
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
-omnilane doctor [--json]                       # read-only routing and runtime health report
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
 dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
@@ -312,11 +318,23 @@ jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 d
 jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
 jobs.sh rm ID                                     # delete one finished/dead job (refuses a running job)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # evidence-gated vendor suggestion
 jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
 jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
 configure.sh                                        # interactive lane menu
 configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```
+
+`jobs recommend` reads only validated public metadata and exit codes. It ranks
+eligible vendors by success rate, sample count, then name; the default minimum
+is three completed jobs. It never reads task/result bodies or changes routing.
+
+`doctor --probe V` makes one bounded advise-mode provider call and returns only
+availability, selected model, timing, and response byte count—not the response
+body. Without `--probe`, doctor remains offline. `benchmark` uses the fixed TSV
+suite in `benchmarks/workloads.tsv`; its default dry-run resolves every route
+without provider calls. `--run` is the explicit call gate, and cost totals are
+estimates based only on values supplied with `--cost-per-call`.
 
 **Big decisions can get a panel, not a person.** The `arbitrate` lane ships
 **disabled** — a panel costs one call per voter per round, so it is opt-in.
@@ -546,6 +564,24 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.14.0
+
+- **Evidence-based routing recommendations** — `jobs recommend` and MCP
+  `jobs_recommend` rank vendors from completed public job metadata, enforce a
+  minimum sample gate, and never change routing automatically.
+- **Opt-in live capability probes** — `doctor --probe V` and MCP
+  `provider_probe` distinguish an installed CLI from a working provider call.
+  Default doctor remains offline; probe reports never include response bodies.
+- **Search, filter, and export Live Board history** — search and state filters
+  cover the latest 50 jobs, while **Export visible** downloads only filtered
+  public metadata.
+- **Repeatable quality/cost benchmark** — `omnilane benchmark` ships a fixed
+  workload suite, defaults to provider-free dry-run, and requires `--run` for
+  actual calls. Cost estimates use only explicit `--cost-per-call` values.
+- **Strict installation acceptance** — CI runs isolated
+  `omnilane doctor --strict --json`, catching incomplete runtime wiring without
+  contacting providers.
 
 ## What's new in v0.13.0
 

@@ -6,6 +6,31 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-10
+
+### Added
+
+- Optional `omnilane doctor --probe V` and read-only MCP `provider_probe` perform
+  one bounded advise-mode live capability check only when explicitly requested;
+  reports include routing/timing metadata but never the provider response body.
+- Live Board retained-history search and state filters now drive a local
+  **Export visible** JSON download that excludes tokens, task/result bodies,
+  workdirs, and logs.
+- `omnilane benchmark` provides a versioned fixed-workload quality/timing report,
+  transparent user-supplied per-call cost estimates, default no-call dry-run,
+  and an explicit `--run` provider-call gate.
+- CI runs `omnilane doctor --strict --json` against an isolated, offline fixture
+  as a post-install acceptance contract.
+
+- `omnilane jobs recommend` and the read-only MCP `jobs_recommend` tool derive
+  per-lane vendor suggestions from bounded completed-job metadata. A configurable
+  minimum sample gate prevents one-off successes from outranking established
+  evidence; neither surface reads task/result bodies or changes routing.
+- `omnilane doctor --strict` keeps warning diagnostics intact but exits nonzero
+  when any warning is present, so local automation and CI can enforce a complete
+  runtime setup. JSON output now includes the applied `strict` policy and makes
+  `ok` reflect it.
+
 ## [0.13.0] - 2026-08-03
 
 ### Changed
@@ -563,7 +588,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.14.0...HEAD
+
+[0.14.0]: https://github.com/Seraphim0916/omnilane/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Seraphim0916/omnilane/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Seraphim0916/omnilane/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Seraphim0916/omnilane/compare/v0.10.4...v0.11.0

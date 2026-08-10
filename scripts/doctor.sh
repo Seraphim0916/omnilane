@@ -3,14 +3,34 @@ set -u
 # Read-only health report for routing, state, watchdog, and optional UI support.
 
 JSON_MODE=0
-if [[ $# -eq 1 && "$1" == "--json" ]]; then
-  JSON_MODE=1
-elif [[ $# -ne 0 ]]; then
-  echo "usage: omnilane doctor [--json]" >&2
+STRICT_MODE=0
+PROBE_VENDOR=""
+PROBE_TIMEOUT=30
+PROBE_TIMEOUT_GIVEN=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --json) JSON_MODE=1 ;;
+    --strict) STRICT_MODE=1 ;;
+    --probe)
+      [[ $# -ge 2 ]] || { echo "omnilane: --probe needs a vendor" >&2; exit 2; }
+      PROBE_VENDOR="$2"; shift ;;
+    --probe-timeout)
+      [[ $# -ge 2 ]] || { echo "omnilane: --probe-timeout needs seconds" >&2; exit 2; }
+      PROBE_TIMEOUT="$2"; PROBE_TIMEOUT_GIVEN=1; shift ;;
+    *)
+      echo "usage: omnilane doctor [--json] [--strict] [--probe V [--probe-timeout SEC]]" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+[[ "$PROBE_TIMEOUT_GIVEN" -eq 0 || -n "$PROBE_VENDOR" ]] || {
+  echo "omnilane: --probe-timeout requires --probe V" >&2
   exit 2
-fi
+}
 REPO="${OMNILANE_DOCTOR_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
+PROBE_SCRIPT="${OMNILANE_PROVIDER_PROBE_SCRIPT:-$REPO/scripts/provider-probe.sh}"
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
@@ -178,6 +198,24 @@ else
   report WARN vendors "no vendor CLI reachable${vendor_absent:+ (missing: $vendor_absent)}; every lane degrades to off"
 fi
 
+# A real inference call is explicit and single-vendor only. Default doctor
+# remains local/offline. Never relay provider output or runner stderr.
+if [[ -n "$PROBE_VENDOR" ]]; then
+  if [[ ! -x "$PROBE_SCRIPT" ]]; then
+    report FAIL provider-probe "probe runner is unavailable"
+  else
+    probe_output="$(OMNILANE_PROBE_REPO="$REPO" "$PROBE_SCRIPT" \
+      --vendor "$PROBE_VENDOR" --timeout "$PROBE_TIMEOUT" 2>/dev/null)"
+    probe_rc=$?
+    if [[ "$probe_rc" -eq 0 ]]; then
+      report PASS provider-probe "$PROBE_VENDOR bounded live inference succeeded"
+    else
+      report FAIL provider-probe "$PROBE_VENDOR bounded live inference failed (exit $probe_rc)"
+    fi
+    : "$probe_output"
+  fi
+fi
+
 if command -v python3 >/dev/null 2>&1; then
   if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' \
       >/dev/null 2>&1; then
@@ -192,13 +230,15 @@ fi
 
 if [[ "$JSON_MODE" -eq 1 ]]; then
   ok=true
-  [[ "$FAIL_COUNT" -eq 0 ]] || ok=false
-  printf '{"ok":%s,"checks":[%s],"summary":{"passed":%s,"warnings":%s,"failed":%s}}\n' \
-    "$ok" "$JSON_REPORTS" "$PASS_COUNT" "$WARN_COUNT" "$FAIL_COUNT"
+  [[ "$FAIL_COUNT" -eq 0 && ( "$STRICT_MODE" -eq 0 || "$WARN_COUNT" -eq 0 ) ]] || ok=false
+  strict=false
+  [[ "$STRICT_MODE" -eq 0 ]] || strict=true
+  printf '{"ok":%s,"checks":[%s],"summary":{"passed":%s,"warnings":%s,"failed":%s},"strict":%s}\n' \
+    "$ok" "$JSON_REPORTS" "$PASS_COUNT" "$WARN_COUNT" "$FAIL_COUNT" "$strict"
 else
   warning_suffix=s
   [[ "$WARN_COUNT" -eq 1 ]] && warning_suffix=""
   printf '\nSummary: %s passed, %s warning%s, %s failed\n' \
     "$PASS_COUNT" "$WARN_COUNT" "$warning_suffix" "$FAIL_COUNT"
 fi
-[[ "$FAIL_COUNT" -eq 0 ]]
+[[ "$FAIL_COUNT" -eq 0 && ( "$STRICT_MODE" -eq 0 || "$WARN_COUNT" -eq 0 ) ]]
