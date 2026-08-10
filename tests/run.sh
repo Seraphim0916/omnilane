@@ -2224,6 +2224,45 @@ EOF
     pass "$name"
   fi
 }
+test_doctor_gnu_stat_fallback() {
+  local name="doctor falls back from GNU stat -f to stat -c"
+  local home repo fake json rc
+  home="$TEST_ROOT/doctor-gnu-stat-home"
+  repo="$TEST_ROOT/doctor-gnu-stat-repo"
+  fake="$TEST_ROOT/doctor-gnu-stat-bin"
+  mkdir -p "$home/jobs" "$repo/scripts" "$fake"
+  chmod 700 "$home/jobs"
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  cat > "$fake/stat" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+  -f) printf 'GNU-FILESYSTEM-MODE\n' ;;
+  -c) printf '700\n' ;;
+  *) exit 2 ;;
+esac
+EOF
+  cat > "$fake/codex" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$repo/scripts/dispatch.sh" "$fake/stat" "$fake/codex"
+  printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+
+  json="$(PATH="$fake:$PATH" OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --strict --json 2>&1)"
+  rc=$?
+  if [[ "$rc" -ne 0 || "$json" != *'"ok":true'* ||
+        "$json" != *'"check":"job-privacy"'* || "$json" != *'mode is 700'* ]]; then
+    fail "$name" "strict doctor rejected GNU stat fallback: rc=$rc json=$json"
+  else
+    pass "$name"
+  fi
+}
+
+test_doctor_gnu_stat_fallback
 test_doctor_strict_policy
 
 test_provider_probe_is_opt_in_bounded_and_private() {

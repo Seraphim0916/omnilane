@@ -41,13 +41,17 @@ jobs:
           acceptance="$RUNNER_TEMP/omnilane-doctor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           mkdir -p "$acceptance/home/jobs" "$acceptance/bin"
           chmod 700 "$acceptance/home/jobs"
-          for cli in codex claude grok gemini; do
+          for cli in codex claude grok gemini agy; do
             printf '#!/usr/bin/env bash\nexit 0\n' > "$acceptance/bin/$cli"
             chmod +x "$acceptance/bin/$cli"
           done
-          OMNILANE_HOME="$acceptance/home" PATH="$acceptance/bin:$PATH" \
-            bin/omnilane doctor --strict --json \
-            | python -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["strict"]'
+          if ! OMNILANE_HOME="$acceptance/home" PATH="$acceptance/bin:$PATH" \
+            bin/omnilane doctor --strict --json > "$acceptance/doctor.json"; then
+            cat "$acceptance/doctor.json"
+            exit 1
+          fi
+          python -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["strict"]' \
+            < "$acceptance/doctor.json"
       - name: Python syntax
         run: python -m py_compile scripts/ui.py scripts/benchmark.py tests/test_ui.py tests/test_benchmark.py tests/test_ci_policy.py
       - name: Python unit tests

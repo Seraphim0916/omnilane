@@ -31,6 +31,12 @@ semantic version tags.
   runtime setup. JSON output now includes the applied `strict` policy and makes
   `ok` reflect it.
 
+### Fixed
+
+- `doctor` now validates macOS `stat -f` output before falling back to GNU
+  `stat -c`, so owner-only job-store permissions are classified consistently on
+  Linux CI instead of becoming a false strict-mode warning.
+
 ## [0.13.0] - 2026-08-03
 
 ### Changed

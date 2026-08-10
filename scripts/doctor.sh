@@ -135,7 +135,10 @@ if [[ -L "$OMNILANE_HOME/jobs" ||
       ( -e "$OMNILANE_HOME/jobs" && ! -d "$OMNILANE_HOME/jobs" ) ]]; then
   report FAIL job-privacy "$OMNILANE_HOME/jobs must be a real directory, not a symlink or file"
 elif [[ -d "$OMNILANE_HOME/jobs" ]]; then
-  jobs_mode="$(stat -f '%Lp' "$OMNILANE_HOME/jobs" 2>/dev/null || stat -c '%a' "$OMNILANE_HOME/jobs" 2>/dev/null || true)"
+  jobs_mode="$(stat -f '%Lp' "$OMNILANE_HOME/jobs" 2>/dev/null || true)"
+  if [[ ! "$jobs_mode" =~ ^[0-7]{3,4}$ ]]; then
+    jobs_mode="$(stat -c '%a' "$OMNILANE_HOME/jobs" 2>/dev/null || true)"
+  fi
   if [[ "$jobs_mode" =~ ^[0-7]*00$ ]]; then
     report PASS job-privacy "$OMNILANE_HOME/jobs mode is $jobs_mode"
   elif [[ -n "$jobs_mode" ]]; then
