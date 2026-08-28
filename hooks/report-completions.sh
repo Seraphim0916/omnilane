@@ -92,7 +92,10 @@ report_completions() {
         # The tail is whatever a provider wrote, which may itself quote a web
         # page or a file the worker read. Strip control characters, then indent
         # every line so nothing inside it can forge a header at column zero.
-        $tail =~ s/[^\P{C}\n]//g;
+        # U+2028/U+2029 are Zl/Zp, not C, so the control-character class leaves
+        # them in place while many renderers still break a line on them — which
+        # would put forged text back at column zero past the indent below.
+        $tail =~ s/[^\P{C}\n]|[\p{Zl}\p{Zp}]//g;
         $tail =~ s/\n\z//;
         $tail =~ s/^/  /mg;
         $output .= "\n" if length $output;
