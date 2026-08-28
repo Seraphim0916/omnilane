@@ -4145,5 +4145,16 @@ test_completion_fish() {
 }
 test_completion_fish
 
+test_foreman_completion_inbox() {
+  local name="foreman completion inbox" out rc=0
+  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_foreman_completion_inbox
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

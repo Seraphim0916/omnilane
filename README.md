@@ -205,6 +205,10 @@ header overrides that and the choice is remembered locally.
 
 Core routing does not need Python; only this UI requires Python 3.9 or newer.
 
+### Foreman completion inbox
+
+Finished dispatches write a private completion record under `$OMNILANE_HOME/inbox/`. The bundled Claude Code `UserPromptSubmit` hook atomically delivers up to ten matching records on the foreman's next prompt, scoped by the dispatch `workdir`; claimed records move to `inbox/consumed/`. Set `OMNILANE_INBOX=0` on dispatch to disable record creation. The default is enabled.
+
 ## 📦 Install
 
 Requirements: the vendor CLIs you want to route to, logged in (`codex`,

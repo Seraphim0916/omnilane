@@ -655,10 +655,58 @@ secure_job_files() {
   find "$JOB_DIR" -type f -exec chmod 600 {} +
 }
 
+completion_tail() {
+  local path="$1" size=0 keep value="" sentinel=$'\001'
+  local note=$'[truncated: leading output omitted]\n'
+  local LC_ALL=C
+
+  if [[ -f "$path" && ! -L "$path" ]]; then
+    size="$(wc -c < "$path" 2>/dev/null | tr -d '[:space:]')" || return 1
+    [[ "$size" =~ ^[0-9]+$ ]] || return 1
+    if [[ "$size" -gt 2000 ]]; then
+      keep=$((2000 - ${#note}))
+      value="$(printf '%s' "$note"; tail -c "$keep" "$path"; printf '%s' "$sentinel")" || return 1
+    else
+      value="$(cat "$path"; printf '%s' "$sentinel")" || return 1
+    fi
+    value="${value%"$sentinel"}"
+  fi
+  printf '%s' "$value"
+}
+
+write_completion_record() {
+  local rc="$1" inbox="$OMNILANE_HOME/inbox"
+  local final="$inbox/$JOB_ID.json" tmp="$inbox/.$JOB_ID.tmp.$$-$RANDOM"
+  local tail_value finished old_umask write_rc=0 sentinel=$'\001'
+
+  prepare_inbox_store || return 1
+  tail_value="$(completion_tail "$JOB_DIR/out.txt"; printf '%s' "$sentinel")" || return 1
+  tail_value="${tail_value%"$sentinel"}"
+  finished="$(date -u +%FT%TZ)" || return 1
+  old_umask="$(umask)"
+  umask 077
+  printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
+    "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
+    "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
+    "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" > "$tmp" || write_rc=$?
+  if [[ "$write_rc" -eq 0 ]]; then
+    chmod 600 "$tmp" || write_rc=$?
+  fi
+  if [[ "$write_rc" -eq 0 ]]; then
+    mv "$tmp" "$final" || write_rc=$?
+  fi
+  umask "$old_umask"
+  rm -f "$tmp" 2>/dev/null || true
+  return "$write_rc"
+}
+
 finish_job() {
   local rc="$1"
   secure_job_files
   (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+  if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
+    write_completion_record "$rc" >/dev/null 2>&1 || true
+  fi
 }
 
 run_job() {

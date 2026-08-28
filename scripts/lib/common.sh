@@ -181,6 +181,25 @@ read_lock_owner() {
   LOCK_OWNER_VALUE="$value"
 }
 
+prepare_private_store() { # path, diagnostic label
+  local store_root="$1" store_label="$2"
+  mkdir -p "$OMNILANE_HOME" || return 1
+  if [[ -L "$store_root" || ( -e "$store_root" && ! -d "$store_root" ) ]]; then
+    echo "omnilane: unsafe $store_label path (want real directory): $store_root" >&2
+    return 1
+  fi
+  [[ -d "$store_root" ]] || mkdir -m 700 "$store_root" || return 1
+  [[ -d "$store_root" && ! -L "$store_root" ]] || {
+    echo "omnilane: $store_label changed while preparing it" >&2
+    return 1
+  }
+  chmod 700 "$store_root" || return 1
+}
+
+prepare_inbox_store() {
+  prepare_private_store "$OMNILANE_HOME/inbox" "inbox store"
+}
+
 prepare_lock_store() {
   local lock_root="$OMNILANE_HOME/locks"
   mkdir -p "$OMNILANE_HOME"
