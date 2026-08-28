@@ -497,6 +497,16 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
 
 ## 📜 版本歷程
 
+## v0.15.0 新功能
+
+- **串流保留 Codex 進度證據**：`codex exec --json` 會把 JSONL 事件逐筆寫入
+  `out.txt.progress.log`，即使逾時也能留下最後做到哪一步。`out.txt` 與工作清單顯示維持不變。
+- **逾時診斷回到證據**：逾時訊息明示它本身不足以判定原因，提供三步檢查清單，並說明空的
+  進度日誌不是 Codex 未曾前進的證據。
+- **直接指出 rollout 記錄位置**：逾時輸出會依第一筆進度事件的 `thread_id`，印出
+  ${CODEX_HOME:-$HOME/.codex}/sessions 下對應 `rollout-*.jsonl` 的絕對路徑，方便查看
+  被中斷而未回報的完整對話歷程。
+
 ## v0.14.0 新功能
 
 - **依證據產生路由建議**：`jobs recommend` 與 MCP `jobs_recommend` 只用已完成工作的

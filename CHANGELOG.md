@@ -6,6 +6,28 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-28
+
+### Added
+
+- Timed-out Codex jobs now print the absolute path to the matching
+  `rollout-*.jsonl` session file, resolved from the first progress event's
+  `thread_id`, so an interrupted conversation remains directly inspectable.
+
+### Changed
+
+- Codex runner now invokes `codex exec --json`, streaming JSONL events to
+  `out.txt.progress.log` before the run exits or times out. `out.txt` and the
+  Jobs display, which reads only `out.txt` and `stderr.log`, remain unchanged.
+
+### Fixed
+
+- Timeout diagnostics no longer blame a usage-limit retry loop without evidence.
+  They now state that a timeout does not identify its cause, provide a
+  three-step check, and clarify that an empty progress log does not prove the
+  run made no progress.
+
+
 ## [0.14.0] - 2026-08-10
 
 ### Added
@@ -594,7 +616,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.15.0...HEAD
+
+[0.15.0]: https://github.com/Seraphim0916/omnilane/compare/v0.14.0...v0.15.0
 
 [0.14.0]: https://github.com/Seraphim0916/omnilane/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Seraphim0916/omnilane/compare/v0.12.0...v0.13.0

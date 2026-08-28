@@ -565,6 +565,18 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.15.0
+
+- **Streaming Codex progress evidence** — `codex exec --json` now streams JSONL
+  events into `out.txt.progress.log`, so a timeout still records its last known
+  step. `out.txt` and the Jobs display remain unchanged.
+- **Evidence-led timeout diagnostics** — timeouts now state that they do not
+  identify the cause, list a three-step check, and clarify that an empty
+  progress log does not prove Codex made no progress.
+- **Direct rollout recovery path** — timeout output now prints the absolute path
+  to the matching `rollout-*.jsonl`, found from the first progress event's
+  `thread_id`, so the interrupted conversation history can be inspected.
+
 ## What's new in v0.14.0
 
 - **Evidence-based routing recommendations** — `jobs recommend` and MCP

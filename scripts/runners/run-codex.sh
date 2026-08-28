@@ -16,7 +16,9 @@ RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
 # --skip-git-repo-check: the operator chose WORKDIR explicitly; codex would
 # otherwise refuse any directory that is not a trusted git repo.
-ARGS=(exec -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
+# --json: without it codex writes nothing until it exits, so a watchdog kill
+# leaves an empty progress log that looks identical to a run that never started.
+ARGS=(exec --json -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 if [[ "$MODE" == "advise" ]]; then
   ARGS+=(--ephemeral -s read-only)
@@ -41,10 +43,25 @@ set +e
 RC=$?
 set -e
 
-# Watchdog kill with an empty progress log = codex produced nothing at all;
-# the usual cause is a quota-window 429 retry loop, which codex retries silently.
-if [[ ("$RC" -eq 142 || "$RC" -eq 124) && ! -s "${OUTPUT_FILE}.progress.log" ]]; then
-  echo "omnilane: codex timed out after ${RUN_TIMEOUT}s with no output — likely a usage-limit retry loop; check your codex quota window and retry" >> "${OUTPUT_FILE}.stderr.log"
+if [[ "$RC" -eq 142 || "$RC" -eq 124 ]]; then
+  {
+    echo "omnilane: codex timed out after ${RUN_TIMEOUT}s. This does NOT identify the cause."
+    echo "omnilane: an empty progress log is NOT evidence of a stall — check, in order:"
+    echo "  1. the streamed events in ${OUTPUT_FILE}.progress.log — the last event says how far the run got"
+    echo "  2. the rollout file below — if it stops at task_started, the request never left the CLI"
+    echo "  3. your provider proxy's log for the run window: rate-limit responses, and whether a"
+    echo "     request was ever sent upstream at all"
+    # The rollout holds the full turn history a killed run never got to report;
+    # thread_id is the only handle onto it once the process is gone.
+    thread_id="$(head -1 "${OUTPUT_FILE}.progress.log" 2>/dev/null |
+      sed -n 's/.*"thread_id":"\([^"]*\)".*/\1/p')"
+    if [[ -n "$thread_id" ]]; then
+      rollout="$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-${thread_id}.jsonl" 2>/dev/null | head -1)"
+      echo "omnilane: rollout: ${rollout:-not found (thread ${thread_id})}"
+    else
+      echo "omnilane: rollout: unknown — no thread_id in the progress log, so codex died before its first event"
+    fi
+  } >> "${OUTPUT_FILE}.stderr.log"
 fi
 
 if [[ -f "${OUTPUT_FILE}.tmp" ]]; then

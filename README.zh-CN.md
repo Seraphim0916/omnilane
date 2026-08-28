@@ -473,6 +473,16 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## 📜 版本历程
 
+## v0.15.0 新功能
+
+- **流式保留 Codex 进度证据**：`codex exec --json` 会将 JSONL 事件逐条写入
+  `out.txt.progress.log`，即使超时也会留下最后执行到哪一步。`out.txt` 与任务列表显示保持不变。
+- **超时诊断回归证据**：超时提示明确说明它本身不足以判定原因，提供三步检查清单，并说明空的
+  进度日志不是 Codex 从未推进的证据。
+- **直接给出 rollout 记录位置**：超时输出会根据第一条进度事件的 `thread_id`，打印
+  ${CODEX_HOME:-$HOME/.codex}/sessions 下对应 `rollout-*.jsonl` 的绝对路径，便于查看
+  被中断而未回报的完整对话历程。
+
 ## v0.14.0 新功能
 
 - **基于证据的路由建议**：`jobs recommend` 与 MCP `jobs_recommend` 只读取公开作业元数据，并且不会自动修改路由。

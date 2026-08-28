@@ -499,6 +499,16 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 ## 📜 릴리스 기록
 
+## v0.15.0 새 기능
+
+- **Codex 진행 증거의 스트리밍 보존** — `codex exec --json`이 JSONL 이벤트를
+  `out.txt.progress.log`에 순차 기록하므로 시간 초과가 나도 마지막으로 도달한 단계를 남깁니다.
+  `out.txt`와 Jobs 표시는 그대로입니다.
+- **증거 기반 시간 초과 진단** — 시간 초과 자체로 원인을 특정하지 않는다고 밝히고,
+  세 단계 점검 목록과 빈 진행 로그가 Codex 미진행의 증거가 아니라는 점을 안내합니다.
+- **rollout 기록으로 가는 직접 경로** — 첫 진행 이벤트의 `thread_id`로 찾은
+  `rollout-*.jsonl`의 절대 경로를 시간 초과 출력에 표시하여, 중단된 대화 이력을 확인할 수 있습니다.
+
 ## v0.14.0 새 기능
 
 - **근거 기반 라우팅 제안**: `jobs recommend`와 MCP `jobs_recommend`는 공개 작업 메타데이터만 읽고 라우팅을 자동 변경하지 않습니다.
