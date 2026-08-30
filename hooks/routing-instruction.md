@@ -1,13 +1,19 @@
 <!-- omnilane-routing:start -->
 ## omnilane — model routing (persistent reminder)
 
-Before delegating any subtask or choosing a model for a piece of work,
-consult the omnilane routing table: run `omnilane list` (or
-`scripts/dispatch.sh --list` inside the omnilane repo) and classify the
-subtask into a lane. If the lane's first available model is the one you are
-running as, self-execute; otherwise dispatch it headlessly:
+Implementation work — code edits, new files, tests, builds, deploys — is
+dispatched by default, even when the lane's first available model is the one
+you are running as. Consult the routing table with `omnilane list` (or
+`scripts/dispatch.sh --list` inside the omnilane repo), classify the subtask
+into a lane, then dispatch it headlessly:
 
     omnilane route [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"
+
+The commander self-executes only reserved items: planning and decomposition,
+writing task briefs, reviewing reports, acceptance checks, replies to the
+operator, git commit/push, read-only verification, and fixes of one line or
+less. "This lane is mine, so I'll do it myself" is not a valid reason to
+skip dispatch.
 
 If the user explicitly names Claude, Codex, Grok, Gemini, or a canonical model
 alias, use the omnilane skill's consult rules and keep `--vendor` in the

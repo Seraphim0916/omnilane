@@ -1,6 +1,6 @@
 ---
 name: omnilane
-description: 'Universal model-routing table + cross-vendor dispatch for ANY harness (Claude Code, Codex, Grok Build, Antigravity). Use when delegating subtasks, choosing a model for work, planning multi-part tasks, or when asked about model routing, delegate, dispatch, which model, tier selection, escalate, 派工, 模型路由. One routing table; the main loop self-executes its own lane and shells out to every other vendor via dispatch.sh.'
+description: 'Universal model-routing table + cross-vendor dispatch for ANY harness (Claude Code, Codex, Grok Build, Antigravity). Use when delegating subtasks, choosing a model for work, planning multi-part tasks, or when asked about model routing, delegate, dispatch, which model, tier selection, escalate, 派工, 模型路由. One routing table; implementation work dispatches by default via dispatch.sh — the main loop self-executes only reserved commander items.'
 ---
 
 # omnilane — one routing table, every harness
@@ -9,7 +9,11 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 
 1. **Identify your main model.** You know which model you are running as.
 2. **Split the work into subtasks and classify each into a lane** (table below).
-3. **If the lane's model is you, self-execute.** Otherwise dispatch:
+3. **Dispatch implementation work by default — even when the lane's model is
+   you.** Self-execute only reserved commander items: planning and
+   decomposition, writing task briefs, reviewing reports, acceptance checks,
+   replies to the operator, git commit/push, read-only verification, and
+   fixes of one line or less. Dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    Before changing lane order from anecdotal outcomes, run
@@ -155,8 +159,9 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 ## Per-model notes (apply the row matching YOUR main model)
 
-- **Claude (Fable/Opus main)**: top judgment and taste are yours — self-execute;
-  push mechanical coding volume out to the codex lanes.
+- **Claude (Fable/Opus main)**: top judgment and taste are yours, but
+  implementation still dispatches by default — self-execute only reserved
+  commander items; push all coding volume out to the lanes.
 - **Claude Sonnet main**: coordination/tools/mid-tier coding only; never
   self-assign top judgment or hardest implementation.
 - **GPT Sol main**: hardest coding + hard judgment are yours (use max for
