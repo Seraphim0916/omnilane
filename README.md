@@ -439,6 +439,22 @@ scripts/jobs.sh retry "$ID" --background
 
 An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
 
+## 🎯 Goal orchestration
+
+`omnilane goal` handles bounded, exploratory work: a resident planner thinks through the next step, while omnilane performs every dispatch. Job, wall-clock, and parallelism budgets keep the loop bounded. The planner vendor is Claude today; worker vendors still follow the effective routing table.
+
+```bash
+omnilane goal "Diagnose and fix the flaky integration" \
+  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
+  --workdir /path/to/repo
+
+omnilane goal status GOAL_ID
+```
+
+Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Every terminal outcome writes `report.md` there, and the final output line prints its path. Use `goal status` to inspect current status, budget usage, rounds, fuse trips, and completed jobs.
+
+Do not use goal orchestration for a single obvious task; dispatch that task directly. Also do not start it when no budget is available for exploration—the budgets are hard bounds, not completion promises.
+
 ## ❓ FAQ
 
 <details>

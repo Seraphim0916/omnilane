@@ -2145,13 +2145,14 @@ test_doctor_is_read_only_and_reports_failures() {
   local json_good json_bad rc_json_good rc_json_bad
   local state_created=no
   home="$TEST_ROOT/doctor-home"; good="$TEST_ROOT/doctor-good"; bad="$TEST_ROOT/doctor-bad"
-  mkdir -p "$good/scripts" "$bad"
+  mkdir -p "$good/scripts/lib" "$bad"
   cat > "$good/scripts/dispatch.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 'triage: exec /bin/true -\n'
 EOF
   chmod +x "$good/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$good/routing.yaml"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$good/scripts/lib/goal-loop.sh"
 
   out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
     /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
@@ -2212,13 +2213,14 @@ test_doctor_strict_policy() {
   local rc_default rc_json_default rc_strict rc_json
   home="$TEST_ROOT/doctor-strict-home"
   repo="$TEST_ROOT/doctor-strict-repo"
-  mkdir -p "$repo/scripts"
+  mkdir -p "$repo/scripts/lib"
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 'triage: exec /bin/true -\n'
 EOF
   chmod +x "$repo/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
 
   out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
@@ -2254,7 +2256,7 @@ test_doctor_gnu_stat_fallback() {
   repo="$TEST_ROOT/doctor-gnu-stat-repo"
   fake="$TEST_ROOT/doctor-gnu-stat-bin"
   config="$TEST_ROOT/doctor-gnu-stat-config"
-  mkdir -p "$home/jobs" "$repo/scripts" "$repo/hooks" "$fake" "$config"
+  mkdir -p "$home/jobs" "$repo/scripts/lib" "$repo/hooks" "$fake" "$config"
   chmod 700 "$home/jobs"
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -2291,6 +2293,7 @@ EOF
   chmod +x "$repo/scripts/dispatch.sh" "$repo/hooks/report-completions.sh" \
     "$fake/stat" "$fake/codex" "$fake/claude"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
 
   json="$(PATH="$fake:$PATH" CLAUDE_CONFIG_DIR="$config" \
     OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
@@ -2313,7 +2316,7 @@ test_provider_probe_is_opt_in_bounded_and_private() {
   name="provider probe opt-in bounded private"
   repo="$TEST_ROOT/provider-probe-repo"
   marker="$TEST_ROOT/provider-probe-invoked"
-  mkdir -p "$repo/scripts/runners"
+  mkdir -p "$repo/scripts/runners" "$repo/scripts/lib"
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "--list" ]]; then
@@ -2332,6 +2335,7 @@ printf '%s|%s|%s|%s\n' "$1" "$3" "$4" "${OMNILANE_TIMEOUT:-}" >> "$OMNILANE_TEST
 printf 'PRIVATE-PROVIDER-RESPONSE\n' > "$6"
 EOF
   chmod +x "$repo/scripts/dispatch.sh" "$repo/scripts/runners/run-codex.sh"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
   printf 'probe: codex "probe model" medium\n' > "$repo/routing.yaml"
 
   OMNILANE_DOCTOR_REPO="$repo" OMNILANE_HOME="$TEST_ROOT/provider-probe-default-home" \
@@ -4146,6 +4150,7 @@ test_goal_loop_case() {
 }
 
 test_goal_loop_case dispatch-done "goal loop dispatches sequential worker and records summary"
+test_goal_loop_case report-done "goal loop writes done report"
 test_goal_loop_case multi "goal loop runs multi-job actions"
 test_goal_loop_case worker-single-shot "goal loop dispatches workers single-shot"
 test_goal_loop_case parallel-two "goal loop reports parallel completions in finish order"
@@ -4158,6 +4163,7 @@ test_goal_loop_case planner-timeout "goal loop derives planner timeout from goal
 test_goal_loop_case planner-dies "goal loop records dead planner exit and job directory"
 test_goal_loop_case invalid "goal loop reprompts invalid JSON once then aborts"
 test_goal_loop_case budget-jobs "goal loop enforces budget-jobs cap and forces summary"
+test_goal_loop_case report-budget "goal loop writes budget report"
 test_goal_loop_case budget-seconds "goal loop enforces wall-clock budget and forces summary"
 test_goal_loop_case abort "goal loop honors planner abort action"
 test_goal_loop_case depth-guard "goal loop preserves planner depth guard exit 86"
@@ -4242,7 +4248,8 @@ test_foreman_completion_inbox
 
 test_completion_settings_detection() {
   local name="completion settings detection" out rc=0
-  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --doctor-settings 2>&1)" || rc=$?
+  out="$(OMNILANE_DOCTOR_GOAL_LOOP="$ROOT/scripts/lib/goal-loop.sh" \
+    bash "$ROOT/tests/test_foreman_inbox.sh" --doctor-settings 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4261,6 +4268,33 @@ test_install_check_read_only() {
   fi
 }
 test_install_check_read_only
+
+test_doctor_goal_orchestrator_check() {
+  local name="doctor checks goal orchestrator syntax and store permissions"
+  local home="$TEST_ROOT/doctor-goal-home"
+  local repo="$TEST_ROOT/doctor-goal-repo"
+  local out rc=0
+
+  mkdir -p "$repo/scripts/lib" "$home/goals"
+  chmod 700 "$home/goals"
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  chmod +x "$repo/scripts/dispatch.sh"
+  printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+
+  out="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/scripts/doctor.sh" --json 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 || "$out" != *'"check":"goal-orchestrator"'* ||
+        "$out" != *'"check":"goal-orchestrator","message":"goal-loop.sh parses; goals store mode is 700"'* ]]; then
+    fail "$name" "goal orchestrator doctor check missing: rc=$rc out=$out"
+  else
+    pass "$name"
+  fi
+}
+test_doctor_goal_orchestrator_check
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

@@ -54,13 +54,20 @@ while IFS= read -r line; do
   printf '%s\n' "$line" >> "${FAKE_PLANNER_INPUT:?}"
   turn=$((turn + 1))
   case "${PLANNER_SCENARIO:?}" in
-    dispatch-done)
-      if [[ "$turn" -eq 1 ]]; then
-        emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"inspect fixture"}]}'
-      else
-        emit_result '{"action":"done","summary":"fixture goal complete"}'
-      fi
-      ;;
+      dispatch-done)
+        if [[ "$turn" -eq 1 ]]; then
+          emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"inspect fixture"}]}'
+        else
+          emit_result '{"action":"done","summary":"fixture goal complete"}'
+        fi
+        ;;
+      report-done)
+        if [[ "$turn" -eq 1 ]]; then
+          emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"inspect fixture"}]}'
+        else
+          emit_result '{"action":"done","summary":"fixture goal complete; artifact: /tmp/fixture-output.txt"}'
+        fi
+        ;;
     worker-single-shot)
       if [[ "$line" == *'single-shot worker'* ]]; then
         emit_result 'worker finished'
@@ -230,6 +237,29 @@ case_dispatch_done() {
   [[ "$status_out" == *"status: done"* && "$status_out" == *"jobs: 1/3"* &&
      "$status_out" == *"last action: done"* ]] ||
     fail "goal status output incomplete: $status_out"
+}
+
+case_report_done() {
+  local home="$TEST_ROOT/report-done" goal_dir
+  mkdir -p "$home"
+  make_fixture "$home" report-done
+  run_goal "$home" report-done --budget-jobs 3 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" ||
+    fail "report done goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  [[ -f "$goal_dir/report.md" ]] || fail "done report.md was not written"
+  grep -Fq 'Rounds: 2' "$goal_dir/report.md" ||
+    fail "done report omitted round count"
+  grep -Fq 'fixture goal complete' "$goal_dir/report.md" ||
+    fail "done report omitted planner summary"
+  grep -Fq 'Action: dispatch' "$goal_dir/report.md" ||
+    fail "done report omitted round action"
+  grep -Eq 'lane=worker; vendor=[^;]+; exit=0; seconds=[0-9]+' "$goal_dir/report.md" ||
+    fail "done report omitted worker narrative"
+  grep -Fq '/tmp/fixture-output.txt' "$goal_dir/report.md" ||
+    fail "done report omitted planner-named artifact path"
+  [[ "$(tail -n 1 "$home/out")" == "report: $goal_dir/report.md" ]] ||
+    fail "report path was not the last goal output line"
 }
 
 case_invalid_lane() {
@@ -429,6 +459,21 @@ case_budget_jobs() {
     fail "planner never received 75% budget warning"
 }
 
+case_report_budget() {
+  local home="$TEST_ROOT/report-budget" goal_dir
+  mkdir -p "$home"
+  make_fixture "$home" budget
+  run_goal "$home" budget --budget-jobs 2 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" ||
+    fail "report budget goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  [[ -f "$goal_dir/report.md" ]] || fail "budget report.md was not written"
+  grep -Fq 'Rounds:' "$goal_dir/report.md" ||
+    fail "budget report omitted round count"
+  grep -Fq 'budget summary' "$goal_dir/report.md" ||
+    fail "budget report omitted planner summary"
+}
+
 case_budget_seconds() {
   local home="$TEST_ROOT/budget-seconds" goal_dir
   mkdir -p "$home"
@@ -503,6 +548,7 @@ PY
 
 case "$CASE" in
   dispatch-done) case_dispatch_done ;;
+  report-done) case_report_done ;;
   worker-single-shot) case_worker_single_shot ;;
   multi) case_multi ;;
   parallel-two) case_parallel_two ;;
@@ -515,8 +561,9 @@ case "$CASE" in
   planner-dies) case_planner_dies ;;
   invalid) case_invalid ;;
   budget-jobs) case_budget_jobs ;;
+  report-budget) case_report_budget ;;
   budget-seconds) case_budget_seconds ;;
   abort) case_abort ;;
   depth-guard) case_depth_guard ;;
-  *) fail "usage: test_goal_loop.sh dispatch-done|worker-single-shot|multi|parallel-two|parallel-one|fuse|status-p2|invalid-lane|launch-failure|planner-timeout|planner-dies|invalid|budget-jobs|budget-seconds|abort|depth-guard" ;;
+  *) fail "usage: test_goal_loop.sh dispatch-done|report-done|worker-single-shot|multi|parallel-two|parallel-one|fuse|status-p2|invalid-lane|launch-failure|planner-timeout|planner-dies|invalid|budget-jobs|report-budget|budget-seconds|abort|depth-guard" ;;
 esac

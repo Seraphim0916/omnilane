@@ -310,19 +310,195 @@ cleanup_planner() {
 }
 trap cleanup_planner EXIT
 
+assemble_goal_report() {
+  local report_path="$GOAL_DIR/report.md"
+  local report_tmp="$GOAL_DIR/.report.md.tmp.$$-$RANDOM"
+
+  python3 - "$GOAL_DIR" "$GOAL_ID" "$report_tmp" <<'PY'
+import glob
+import json
+import os
+import re
+import sys
+
+goal_dir, goal_id, output_path = sys.argv[1:]
+
+
+def read_recorded_text(name):
+    with open(os.path.join(goal_dir, name), encoding="utf-8") as handle:
+        value = handle.read()
+    # The controller records values with one terminating newline. Remove only
+    # that delimiter, preserving any newline that belonged to planner data.
+    return value[:-1] if value.endswith("\n") else value
+
+
+def data_block(value):
+    longest = max((len(run) for run in re.findall(r"`+", value)), default=0)
+    fence = "`" * max(3, longest + 1)
+    suffix = "" if value.endswith("\n") else "\n"
+    return f"{fence}text\n{value}{suffix}{fence}\n"
+
+
+def load_json(path):
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def named_artifact_paths(summary):
+    candidates = []
+
+    def add(value):
+        value = value.strip()
+        if not value or value.startswith(("http://", "https://")):
+            return
+        looks_like_path = (
+            value.startswith(("/", "./", "../", "~/"))
+            or "/" in value
+            or re.fullmatch(r"[^\s/]+\.[A-Za-z0-9]{1,12}", value)
+        )
+        if looks_like_path and value not in candidates:
+            candidates.append(value)
+
+    for value in re.findall(r"`([^`\r\n]+)`", summary):
+        add(value)
+    for value in re.findall(r"\]\(([^)\r\n]+)\)", summary):
+        add(value)
+    bare_pattern = re.compile(
+        r"(?<![\w:/])(?:~|\.\.?)?/[^\s`\"'<>]+"
+        r"|(?<![\w./-])(?:[A-Za-z0-9_.@%+=-]+/)+[A-Za-z0-9_.@%+=,:-]+"
+    )
+    for match in bare_pattern.finditer(summary):
+        add(match.group(0).rstrip(".,;:!?)]}"))
+    return candidates
+
+
+goal_text = read_recorded_text("goal.txt")
+summary = read_recorded_text("summary.txt")
+budget = load_json(os.path.join(goal_dir, "budget.json"))
+
+lines = [
+    f"# Goal report: {goal_id}",
+    "",
+    "## Goal",
+    "",
+    data_block(goal_text).rstrip("\n"),
+    "",
+    "## Outcome",
+    "",
+    f"- Status: {budget['status']}",
+    "",
+    "## Budget",
+    "",
+    f"- Jobs: {budget['spent_jobs']} / {budget['budget_jobs']}",
+    f"- Seconds: {budget['spent_seconds']} / {budget['budget_seconds']}",
+    f"- Parallel limit: {budget.get('budget_parallel', 1)}",
+    f"- Rounds: {budget['rounds']}",
+    f"- Fuse trips: {budget.get('fuse_trips', 0)}",
+    "",
+    "## Per-round narrative",
+    "",
+]
+
+round_dirs = sorted(glob.glob(os.path.join(goal_dir, "rounds", "[0-9][0-9][0-9][0-9]")))
+if not round_dirs:
+    lines.extend(["No rounds recorded.", ""])
+
+for round_dir in round_dirs:
+    round_name = os.path.basename(round_dir)
+    narrative = []
+    action_path = os.path.join(round_dir, "action.json")
+    if os.path.isfile(action_path) and not os.path.islink(action_path):
+        action = load_json(action_path)
+        narrative.append(f"Action: {action.get('action', 'unknown')}")
+    else:
+        narrative.append("Action: unavailable")
+
+    job_paths = sorted(glob.glob(os.path.join(round_dir, "job-*.json")))
+    if job_paths:
+        narrative.append("Jobs:")
+        for job_path in job_paths:
+            job = load_json(job_path)
+            narrative.append(
+                "- lane={lane}; vendor={vendor}; exit={exit_code}; seconds={seconds}".format(
+                    lane=job.get("lane") or "unknown",
+                    vendor=job.get("vendor") or "unknown",
+                    exit_code=job.get("exit"),
+                    seconds=job.get("seconds", 0),
+                )
+            )
+    else:
+        narrative.append("Jobs: none")
+
+    fuse_paths = sorted(glob.glob(os.path.join(round_dir, "fuse-*.json")))
+    if fuse_paths:
+        narrative.append("Fuse trips:")
+        for fuse_path in fuse_paths:
+            fuse = load_json(fuse_path)
+            narrative.append(
+                "- lane={lane}; failures={failures}; task={task}".format(
+                    lane=fuse.get("lane") or "unknown",
+                    failures=fuse.get("failures", "unknown"),
+                    task=fuse.get("task") or "unknown",
+                )
+            )
+    else:
+        narrative.append("Fuse trips: none")
+
+    lines.extend(
+        [
+            f"### Round {int(round_name)}",
+            "",
+            data_block("\n".join(narrative)).rstrip("\n"),
+            "",
+        ]
+    )
+
+lines.extend(
+    [
+        "## Planner summary (data)",
+        "",
+        data_block(summary).rstrip("\n"),
+        "",
+        "## Artifact paths named by planner",
+        "",
+    ]
+)
+
+artifacts = named_artifact_paths(summary)
+if artifacts:
+    lines.append(data_block("\n".join(artifacts)).rstrip("\n"))
+else:
+    lines.append("None named.")
+lines.append("")
+
+with open(output_path, "w", encoding="utf-8") as handle:
+    handle.write("\n".join(lines))
+os.chmod(output_path, 0o600)
+PY
+
+  mv "$report_tmp" "$report_path"
+  chmod 600 "$report_path"
+}
+
 finish_goal() {
-  local final_status="$1" summary="$2" rc="$3" close_rc=0
+  local final_status="$1" summary="$2" rc="$3" close_rc=0 report_rc=0
   STATUS="$final_status"
   printf '%s\n' "$summary" > "$GOAL_DIR/summary.txt"
   chmod 600 "$GOAL_DIR/summary.txt"
   append_event "goal_finished" "status=$STATUS"
   write_budget
+  assemble_goal_report || report_rc=$?
   close_planner || close_rc=$?
   printf 'goal: %s\nstatus: %s\nsummary: %s\n' "$GOAL_ID" "$STATUS" "$summary"
+  if [[ "$report_rc" -ne 0 ]]; then
+    printf 'omnilane goal: report assembly failed with exit %s\n' "$report_rc" >&2
+    return "$report_rc"
+  fi
   if [[ "$close_rc" -ne 0 && "$rc" -eq 0 ]]; then
     printf 'omnilane goal: planner close failed with exit %s\n' "$close_rc" >&2
-    return "$close_rc"
+    rc="$close_rc"
   fi
+  printf 'report: %s\n' "$GOAL_DIR/report.md"
   return "$rc"
 }
 

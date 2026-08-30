@@ -31,6 +31,7 @@ done
 REPO="${OMNILANE_DOCTOR_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
 PROBE_SCRIPT="${OMNILANE_PROVIDER_PROBE_SCRIPT:-$REPO/scripts/provider-probe.sh}"
+GOAL_LOOP="${OMNILANE_DOCTOR_GOAL_LOOP:-$REPO/scripts/lib/goal-loop.sh}"
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
@@ -121,6 +122,31 @@ elif [[ ! -r "$OMNILANE_HOME" || ! -w "$OMNILANE_HOME" || ! -x "$OMNILANE_HOME" 
   report FAIL state "$OMNILANE_HOME is not readable, writable, and searchable"
 else
   report PASS state "$OMNILANE_HOME is accessible"
+fi
+
+goals_store="$OMNILANE_HOME/goals"
+if [[ ! -f "$GOAL_LOOP" || -L "$GOAL_LOOP" ]]; then
+  report FAIL goal-orchestrator "$GOAL_LOOP must be a regular file"
+elif ! /bin/bash -n "$GOAL_LOOP" 2>/dev/null; then
+  report FAIL goal-orchestrator "$GOAL_LOOP has invalid bash syntax"
+elif [[ -L "$goals_store" || ( -e "$goals_store" && ! -d "$goals_store" ) ]]; then
+  report FAIL goal-orchestrator "$goals_store must be a real directory, not a symlink or file"
+elif [[ -d "$goals_store" ]]; then
+  goals_mode="$(stat -f '%Lp' "$goals_store" 2>/dev/null || true)"
+  if [[ ! "$goals_mode" =~ ^[0-7]{3,4}$ ]]; then
+    goals_mode="$(stat -c '%a' "$goals_store" 2>/dev/null || true)"
+  fi
+  if [[ "$goals_mode" =~ ^0?700$ ]]; then
+    report PASS goal-orchestrator "goal-loop.sh parses; goals store mode is $goals_mode"
+  elif [[ -n "$goals_mode" ]]; then
+    report WARN goal-orchestrator \
+      "goal-loop.sh parses; goals store mode is $goals_mode, owner-only 700 is safer"
+  else
+    report WARN goal-orchestrator \
+      "goal-loop.sh parses; could not determine goals store permissions"
+  fi
+else
+  report PASS goal-orchestrator "goal-loop.sh parses; goals store is not present yet"
 fi
 
 completion_plugin_state() {

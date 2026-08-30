@@ -378,6 +378,22 @@ scripts/jobs.sh retry "$ID" --background
 
 閒置時不會發出 API 呼叫，也不會增加 API 費用。預設若 900 秒內沒有新信箱訊息或新結果事件，工作程序會自動收尾；整體工作逾時仍是外層上限。處理完成可提早執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請使用新的派工，或在工作完成後使用 `retry`。
 
+## 🎯 目標編排
+
+`omnilane goal` 適合有明確預算上限、但需要逐步探索的工作：常駐規劃器負責思考下一步，所有派工都由 omnilane 執行。工作數、經過秒數與平行數預算會限制整個循環。目前規劃器供應商是 Claude；執行工作的供應商仍依有效路由表決定。
+
+```bash
+omnilane goal "找出並修正不穩定的整合問題" \
+  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
+  --workdir /path/to/repo
+
+omnilane goal status GOAL_ID
+```
+
+目標狀態存放在 `$OMNILANE_HOME/goals/<goal-id>/`。每種終止結果都會在該資料夾寫入 `report.md`，最後一行輸出會顯示報告路徑。用 `goal status` 可查看目前狀態、預算用量、輪次、熔斷次數與已完成工作。
+
+單一而且作法明確的工作不要使用目標編排，直接派工即可。若沒有可供探索的預算，也不要啟動；預算是硬上限，不是保證完成的額度。
+
 ## ❓ 常見問題
 
 <details>
