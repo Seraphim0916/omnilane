@@ -6,6 +6,15 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-30
+
+### Added
+
+- Explicit session-mode selection for background dispatches: `--live` requires a resident session, while `--single-shot` forces a one-shot job. `--live` fails fast for a vendor without live support and names the live-capable vendors; the chosen `session_mode` is recorded in `meta.json`.
+- Gemini joins Claude in the live mailbox through the `agy` stream protocol, with the shared protocol implementation in `scripts/lib/live-protocol.sh`.
+- `--idle-timeout N` automatically closes an untended live session, records `closed by idle cap after Ns` as its close reason, and writes `idle_timeout` to `meta.json`.
+- `tests/test_live_mailbox.sh` is wired into `tests/run.sh`, expanding the suite to 94 checks.
+
 ## [0.20.0] - 2026-08-30
 
 ### Added
@@ -660,7 +669,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.21.0...HEAD
+
+[0.21.0]: https://github.com/Seraphim0916/omnilane/compare/v0.20.0...v0.21.0
 
 [0.20.0]: https://github.com/Seraphim0916/omnilane/compare/v0.15.0...v0.20.0
 

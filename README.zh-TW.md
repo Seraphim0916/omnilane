@@ -362,7 +362,7 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 
 ## 📬 即時信箱
 
-即時信箱是 Claude 專用的常駐背景派工，不是一次性派工。派工者以 `--background` 開啟後，執行中仍能補傳指示，並負責用 `jobs.sh close ID` 收尾。即使沒人處理，也不會永久存在：設定的整體工作逾時（`--job-timeout`）一到就會結束。
+即時信箱是 Claude 與 Gemini 可用的常駐背景派工，不是一次性派工。派工者以 `--background` 開啟後，執行中仍能補傳指示，並負責用 `jobs.sh close ID` 收尾。即使沒人處理，也不會永久存在：閒置上限或設定的整體工作逾時（`--job-timeout`）一到就會結束。
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "檢查逾時測試失敗的原因"
@@ -374,9 +374,9 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。目前只有 Claude 支援即時信箱。其他供應商都會降級成一般的一次性派工，但通知不會被隱藏：stderr 與 `$JOB_DIR/mode-notice.txt` 都會留下提示，`jobs.sh status ID` 也會顯示它。
+`watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。目前 Claude 與 Gemini 支援即時信箱；其他供應商會執行一般的一次性派工，stderr 與 `$JOB_DIR/mode-notice.txt` 都會留下提示。`--live` 會明確要求常駐工作階段，解析出的供應商不支援時立即失敗。`--single-shot` 即使遇到 Claude 或 Gemini 也會強制一次性派工。`--idle-timeout SECONDS` 設定閒置上限，預設 900 秒，設為 `0` 則停用。
 
-閒置時不會發出 API 呼叫，也不會增加 API 費用，但仍會持續消耗整體工作逾時的時間。處理完成就應執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請改用新的派工，或在工作完成後使用 `retry`。
+閒置時不會發出 API 呼叫，也不會增加 API 費用。預設若 900 秒內沒有新信箱訊息或新結果事件，工作程序會自動收尾；整體工作逾時仍是外層上限。處理完成可提早執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請使用新的派工，或在工作完成後使用 `retry`。
 
 ## ❓ 常見問題
 
@@ -514,6 +514,12 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.21.0 新功能
+
+- **明確選擇工作階段模式。** 可用 `dispatch --live` 要求常駐工作階段，或以 `--single-shot` 強制單次派工；對不支援即時工作階段的供應商，`--live` 會立即失敗並列出可用供應商。
+- **Gemini 加入即時信箱。** Gemini 透過 `agy` 串流協定加入常駐即時工作，與 Claude 並列支援。
+- **即時工作的閒置上限。** `--idle-timeout N` 會自動關閉無人處理的即時工作階段，並在關閉原因與 `meta.json` 留下逾時資訊。
 
 ## v0.20.0 新功能
 

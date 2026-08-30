@@ -353,7 +353,7 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
 
 ## 📬 라이브 메일함
 
-라이브 메일함은 일회성 dispatch와 다른 Claude 전용 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
+라이브 메일함은 일회성 dispatch와 다른 Claude 및 Gemini용 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 유휴 상한 또는 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "시간 제한 테스트 실패를 확인해 주세요"
@@ -365,9 +365,9 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch`는 `$JOB_DIR/events.jsonl`을 따라가고, `tail`은 공개 `out.txt`를 읽습니다. 라이브 메일함은 현재 Claude만 지원합니다. 다른 벤더는 일반 일회성 dispatch로 내려가지만 조용히 처리되지는 않습니다. stderr와 `$JOB_DIR/mode-notice.txt`에 알림이 남고, `jobs.sh status ID`에도 표시됩니다.
+`watch`는 `$JOB_DIR/events.jsonl`을 따라가고, `tail`은 공개 `out.txt`를 읽습니다. 라이브 메일함은 Claude와 Gemini를 지원하며, 다른 벤더는 일반 일회성 dispatch로 실행되고 stderr와 `$JOB_DIR/mode-notice.txt`에 알림이 남습니다. `--live`는 상주 세션을 필수로 하며 결정된 벤더가 지원하지 않으면 즉시 실패합니다. `--single-shot`은 Claude나 Gemini에서도 일회성 실행을 강제합니다. `--idle-timeout SECONDS`는 유휴 상한을 설정하며 기본값은 900초이고 `0`이면 비활성화됩니다.
 
-유휴 상태에서는 API 호출이나 비용이 발생하지 않지만 전체 작업 시간 제한은 계속 소모됩니다. 대화가 끝나면 `close`하세요. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
+유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
 
 ## ❓ FAQ
 
@@ -516,6 +516,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.21.0 새 기능
+
+- **세션 모드를 명시적으로 선택.** `dispatch --live`로 상주 세션을 요구하거나 `--single-shot`으로 단발 작업을 강제할 수 있습니다. 라이브 세션을 지원하지 않는 벤더에서는 `--live`가 즉시 실패하고 지원 벤더를 표시합니다.
+- **Gemini가 라이브 메일함에 합류.** Gemini는 `agy` 스트림 프로토콜을 통해 Claude와 함께 상주 라이브 작업을 실행할 수 있습니다.
+- **라이브 작업의 유휴 제한.** `--idle-timeout N`은 방치된 라이브 세션을 자동으로 닫고 종료 사유와 제한 시간을 `meta.json`에 기록합니다.
 
 ## v0.20.0 새 기능
 

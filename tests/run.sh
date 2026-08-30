@@ -5,6 +5,7 @@ set -u
 # overrides must not turn a healthy suite into a host-dependent false failure.
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
 unset OMNILANE_JOB_TIMEOUT OMNILANE_JOB_SUPERVISED
+unset OMNILANE_IDLE_TIMEOUT OMNILANE_SESSION_MODE
 for inherited_timeout in "${!OMNILANE_TIMEOUT_@}"; do
   unset "$inherited_timeout"
 done
@@ -4118,6 +4119,21 @@ EOF
   pass "$name"
 }
 test_jobs_rm
+
+test_live_mailbox_case() {
+  local test_case="$1" name="$2" out rc=0
+  out="$(bash "$ROOT/tests/test_live_mailbox.sh" "$test_case" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+
+test_live_mailbox_case live-fail-fast "live mode rejects non-capable vendor"
+test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-shot"
+test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
+test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
 
 test_configure_model_catalogs() {
   local name="configure exposes expanded provider model catalogs"

@@ -10,6 +10,8 @@ set -euo pipefail
 # Runtime-relative shared library.
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# shellcheck disable=SC1091
+source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 JSON_MODE=0
@@ -145,15 +147,28 @@ read_job_pid() {
 }
 
 load_job_vendor() {
+  local session_mode_re='"session_mode":"(live|single-shot)"'
   if ! read_public_metadata "$JOB_DIR/meta.json" || ! parse_stats_metadata "$PUBLIC_METADATA"; then
     die 1 "job metadata is not safely readable"
   fi
   JOB_VENDOR="$STATS_VENDOR"
+  JOB_SESSION_MODE=""
+  if [[ "$PUBLIC_METADATA" =~ $session_mode_re ]]; then
+    JOB_SESSION_MODE="${BASH_REMATCH[1]}"
+  elif [[ "$JOB_VENDOR" == "claude" ]]; then
+    # Compatibility with live jobs created before session_mode metadata.
+    JOB_SESSION_MODE="live"
+  else
+    JOB_SESSION_MODE="single-shot"
+  fi
 }
 
 require_live_job() {
   load_job_vendor
-  [[ "$JOB_VENDOR" == "claude" ]] || die 1 "job vendor '$JOB_VENDOR' is not live-capable; it runs in single-shot mode"
+  live_vendor_capable "$JOB_VENDOR" ||
+    die 1 "job vendor '$JOB_VENDOR' is not live-capable (live vendors: $(live_capable_vendors)); it runs in single-shot mode"
+  [[ "$JOB_SESSION_MODE" == "live" ]] ||
+    die 1 "job vendor '$JOB_VENDOR' was dispatched in single-shot mode"
 }
 
 wait_for_live_ready() {
@@ -204,10 +219,11 @@ parse_stats_metadata() {
 }
 
 parse_audit_metadata() {
-  local value="$1" metadata_re
+  local value="$1" current_re legacy_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  metadata_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work)\",\"workdir\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
-  [[ "$value" =~ $metadata_re ]]
+  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  legacy_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",(\"foreman_session\":\"${json_string}\",)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  [[ "$value" =~ $current_re || "$value" =~ $legacy_re ]]
 }
 
 print_stat_counts() {
@@ -352,8 +368,7 @@ case "${1:-}" in
     else
       foreman_value="${foreman_session-}"
     fi
-    payload="$(printf '{"type":"user","omnilane_job_id":"%s","foreman_session":"%s","message":{"role":"user","content":[{"type":"text","text":"%s"}]}}' \
-      "$(json_escape "$2")" "$(json_escape "$foreman_value")" "$(json_escape "$3")")"
+    payload="$(live_encode_message "$JOB_VENDOR" "$2" "$foreman_value" "$3")"
     set +e
     write_fifo_with_timeout "$JOB_DIR/inbox.fifo" "$payload"
     send_rc=$?
@@ -404,11 +419,7 @@ case "${1:-}" in
     done
     read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
     events_path="$JOB_DIR/events.jsonl"
-    result_count=0
-    if [[ -f "$events_path" && ! -L "$events_path" ]]; then
-      result_count="$(grep -Ec '"type"[[:space:]]*:[[:space:]]*"result"' "$events_path" || true)"
-      [[ "$result_count" =~ ^[0-9]+$ ]] || result_count=0
-    fi
+    result_count="$(live_count_result_events "$JOB_VENDOR" "$events_path")"
     echo "closed $2 (result_events=$result_count exit=$RECORDED_EXIT)"
     exit "$RECORDED_EXIT"
     ;;
@@ -565,7 +576,8 @@ case "${1:-}" in
       elif [[ -d "$artifact" ]]; then
         audit_emit "$id" nested-directory
         findings=$((findings + 1)); job_failed=1
-      elif [[ -p "$artifact" && "${artifact##*/}" == "inbox.fifo" ]]; then
+        elif [[ -p "$artifact" && ( "${artifact##*/}" == "inbox.fifo" ||
+                                    "${artifact##*/}" == "runner-inbox.fifo" ) ]]; then
         mode="$(path_mode "$artifact" 2>/dev/null || true)"
         if [[ "$mode" != "600" ]]; then
           audit_emit "$id" unsafe-fifo-mode

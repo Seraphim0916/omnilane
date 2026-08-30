@@ -423,7 +423,7 @@ code passes through.
 
 ## 📬 Live mailbox
 
-A live mailbox is a resident Claude background dispatch, not a one-shot dispatch. The foreman opens it with `--background`, can send another instruction while it is still running, and is responsible for closing it with `jobs.sh close ID`. Leaving it unattended does not make it permanent: the configured whole-job timeout (`--job-timeout`) still ends it.
+A live mailbox is a resident Claude or Gemini background dispatch, not a one-shot dispatch. The foreman opens it with `--background`, can send another instruction while it is still running, and is responsible for closing it with `jobs.sh close ID`. Leaving it unattended does not make it permanent: the idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "Review the timeout failure"
@@ -435,9 +435,9 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support is Claude-only today. Any other vendor runs as a normal one-shot dispatch, with a degradation notice sent to stderr and stored in `$JOB_DIR/mode-notice.txt`; `jobs.sh status ID` prints that notice as well.
+`watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude and Gemini; other vendors run as normal one-shot dispatches, with a notice sent to stderr and stored in `$JOB_DIR/mode-notice.txt`. `--live` requires a resident session and fails fast when the resolved vendor is not capable. `--single-shot` forces one-shot execution even for Claude or Gemini. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
 
-An idle mailbox makes no API calls and incurs no API spend, but it keeps consuming its job-timeout window. Close it when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
+An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
 
 ## ❓ FAQ
 
@@ -595,6 +595,12 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.21.0
+
+- **Explicit session mode.** Use `dispatch --live` to require a resident session or `--single-shot` to force a one-shot job. `--live` fails immediately for incompatible vendors and lists the live-capable choices.
+- **Gemini joins the live mailbox.** Gemini can now run a resident live job through the `agy` stream protocol alongside Claude.
+- **Idle cap for live jobs.** `--idle-timeout N` automatically closes an untended live session and preserves the close reason and timeout in `meta.json`.
 
 ## What's new in v0.20.0
 

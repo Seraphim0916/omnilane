@@ -335,7 +335,7 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 
 ## 📬 实时邮箱
 
-实时邮箱是 Claude 专用的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：已配置的整个作业超时（`--job-timeout`）到期后仍会终止它。
+实时邮箱是 Claude 和 Gemini 可用的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：空闲上限或已配置的整个作业超时（`--job-timeout`）到期后都会终止它。
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "检查超时测试失败的原因"
@@ -347,9 +347,9 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch` 会跟随 `$JOB_DIR/events.jsonl`；`tail` 读取公开的 `out.txt`。目前只有 Claude 支持实时邮箱。其他供应商都会降级为普通的一次性派发，但不是静默发生：stderr 和 `$JOB_DIR/mode-notice.txt` 都会留下提示，`jobs.sh status ID` 也会显示该提示。
+`watch` 会跟随 `$JOB_DIR/events.jsonl`；`tail` 读取公开的 `out.txt`。目前 Claude 和 Gemini 支持实时邮箱；其他供应商会执行普通的一次性派发，并在 stderr 和 `$JOB_DIR/mode-notice.txt` 留下提示。`--live` 明确要求常驻会话，解析出的供应商不支持时立即失败。`--single-shot` 即使遇到 Claude 或 Gemini 也强制一次性派发。`--idle-timeout SECONDS` 设置空闲上限，默认 900 秒，设为 `0` 可禁用。
 
-空闲时不会发出 API 调用，也不会产生 API 费用，但整个作业超时的时间仍在流逝。处理结束就应执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
+空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
 
 ## ❓ 常见问题
 
@@ -490,6 +490,12 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.21.0 新功能
+
+- **显式选择会话模式。** 可使用 `dispatch --live` 要求常驻会话，或用 `--single-shot` 强制单次派发；对不支持实时会话的供应商，`--live` 会立即失败并列出可用供应商。
+- **Gemini 加入实时邮箱。** Gemini 通过 `agy` 流式协议加入常驻实时任务，与 Claude 并列支持。
+- **实时任务的空闲上限。** `--idle-timeout N` 会自动关闭无人处理的实时会话，并在关闭原因与 `meta.json` 中保留超时信息。
 
 ## v0.20.0 新功能
 

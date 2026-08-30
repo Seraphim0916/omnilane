@@ -3,9 +3,10 @@ set -euo pipefail
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
-#   dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
+#   dispatch.sh [--background] [--live|--single-shot] [--dry-run]
+#               [--mode advise|work|sysops] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
-#               [--job-timeout SECONDS] LANE "TASK TEXT"
+#               [--job-timeout SECONDS] [--idle-timeout SECONDS] LANE "TASK TEXT"
 #   dispatch.sh [--json] --list [--json]
 #   dispatch.sh [--json] --explain LANE [--json]
 #   dispatch.sh [--json] --validate [--json]
@@ -27,10 +28,12 @@ set -euo pipefail
 # A separate --job-timeout can cap lock wait plus all calls in this dispatch.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# shellcheck disable=SC1091
+source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
-OVERRIDE_JOB_TIMEOUT=""
+OVERRIDE_JOB_TIMEOUT=""; OVERRIDE_IDLE_TIMEOUT=""; SESSION_REQUEST="auto"
 
 usage_error() {
   echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
@@ -47,6 +50,9 @@ Dispatch one task to the first available vendor CLI in LANE's fallback chain.
 A TASK of "-" reads the task text from stdin.
 
 flags:
+  --live                    require a resident session (background only)
+  --single-shot             force one-shot dispatch (background only)
+  --idle-timeout SECONDS    close an idle live mailbox (default 900; 0 disables)
   --background           run in the background and print the JOB_ID
   --dry-run              print the fully resolved dispatch plan and stop
                          before any provider call or job state
@@ -139,6 +145,8 @@ print_dry_run_plan() {
   print_dry_run_value workdir "$WORKDIR"
   printf 'timeout=%s\n' "$TIMEOUT"
   printf 'job_timeout=%s\n' "$job_timeout"
+  printf 'idle_timeout=%s\n' "$IDLE_TIMEOUT"
+  print_dry_run_value session_mode "$SESSION_MODE"
   printf 'candidate=%s/%s\n' "$RESOLVED_IDX" "$RESOLVED_TOTAL"
   printf 'background=%s\n' "$background"
   printf 'task_source=%s\n' "$task_source"
@@ -461,8 +469,18 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --list|--explain|--validate|--json) usage_error ;;
     --background) BACKGROUND=1; shift ;;
+    --live)
+      [[ "$SESSION_REQUEST" != "single-shot" ]] || {
+        echo "omnilane: --live and --single-shot are mutually exclusive" >&2; exit 2
+      }
+      SESSION_REQUEST="live"; shift ;;
+    --single-shot)
+      [[ "$SESSION_REQUEST" != "live" ]] || {
+        echo "omnilane: --live and --single-shot are mutually exclusive" >&2; exit 2
+      }
+      SESSION_REQUEST="single-shot"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout)
+    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
       [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
@@ -474,6 +492,7 @@ while [[ $# -gt 0 ]]; do
         --effort) OVERRIDE_EFFORT="$2" ;;
         --timeout) OVERRIDE_TIMEOUT="$2" ;;
         --job-timeout) OVERRIDE_JOB_TIMEOUT="$2" ;;
+        --idle-timeout) OVERRIDE_IDLE_TIMEOUT="$2" ;;
       esac
       shift 2 ;;
     -*) echo "omnilane: unknown flag" >&2; exit 2 ;;
@@ -487,6 +506,11 @@ done
   echo 'omnilane: unexpected extra arguments; quote a multiword task' >&2
   exit 2
 }
+if [[ "$SESSION_REQUEST" != "auto" && "$BACKGROUND" -ne 1 ]]; then
+  echo "omnilane: --${SESSION_REQUEST} requires --background" >&2
+  exit 2
+fi
+
 LANE="$1"
 TASK="$2"
 [[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name" >&2; exit 2; }
@@ -541,6 +565,21 @@ fi
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
+SESSION_MODE="single-shot"
+if [[ "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR"; then
+  SESSION_MODE="live"
+fi
+if [[ "$SESSION_REQUEST" == "live" ]] && ! live_vendor_capable "$VENDOR"; then
+  echo "omnilane: vendor '$VENDOR' cannot run live; live-capable vendors: $(live_capable_vendors)" >&2
+  exit 2
+fi
+export OMNILANE_SESSION_MODE="$SESSION_MODE"
+if [[ "$SESSION_REQUEST" == "live" ]]; then
+  export OMNILANE_LIVE_REQUIRED=1
+else
+  export OMNILANE_LIVE_REQUIRED=0
+fi
+
 # Watchdog seconds: --timeout > per-lane OMNILANE_TIMEOUT_<LANE> > OMNILANE_TIMEOUT > 600.
 # Resolve here and export so every runner (and vote's sub-runners) inherits the
 # same value without a per-runner code change; they already read OMNILANE_TIMEOUT.
@@ -555,6 +594,14 @@ fi
   echo "omnilane: invalid timeout (want a positive integer of seconds)" >&2; exit 2
 }
 export OMNILANE_TIMEOUT="$TIMEOUT"
+
+IDLE_TIMEOUT="$OVERRIDE_IDLE_TIMEOUT"
+[[ -n "$IDLE_TIMEOUT" ]] || IDLE_TIMEOUT="${OMNILANE_IDLE_TIMEOUT:-900}"
+[[ "$IDLE_TIMEOUT" =~ ^(0|[1-9][0-9]*)$ ]] || {
+  echo "omnilane: invalid idle timeout (want a non-negative integer of seconds)" >&2
+  exit 2
+}
+export OMNILANE_IDLE_TIMEOUT="$IDLE_TIMEOUT"
 
 JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
 JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
@@ -649,9 +696,10 @@ else
 fi
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \
-  "$(json_escape "$EFFORT")" "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
+(umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
+  "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
+  "$IDLE_TIMEOUT" "$(json_escape "$MODEL")" "$(json_escape "$EFFORT")" \
+  "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
   "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
   "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
   "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
