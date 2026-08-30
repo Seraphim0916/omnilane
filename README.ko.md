@@ -351,6 +351,24 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
   `jobs.sh status` 가 `dead` 를 보고.
 - **페이로드 상한** — 과대한 태스크 텍스트는 머리/꼬리만 남기고 자동 절단.
 
+## 📬 라이브 메일함
+
+라이브 메일함은 일회성 dispatch와 다른 Claude 전용 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "시간 제한 테스트 실패를 확인해 주세요"
+# dispatch가 출력한 작업 ID를 $ID로 저장
+scripts/jobs.sh send "$ID" "재시도 경로도 확인해 주세요."
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+`watch`는 `$JOB_DIR/events.jsonl`을 따라가고, `tail`은 공개 `out.txt`를 읽습니다. 라이브 메일함은 현재 Claude만 지원합니다. 다른 벤더는 일반 일회성 dispatch로 내려가지만 조용히 처리되지는 않습니다. stderr와 `$JOB_DIR/mode-notice.txt`에 알림이 남고, `jobs.sh status ID`에도 표시됩니다.
+
+유휴 상태에서는 API 호출이나 비용이 발생하지 않지만 전체 작업 시간 제한은 계속 소모됩니다. 대화가 끝나면 `close`하세요. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
+
 ## ❓ FAQ
 
 <details>
@@ -498,6 +516,26 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.20.0 새 기능
+
+- **Foreman 완료 수신함.** 백그라운드 디스패치가 끝나면 비공개 완료 레코드를
+  쓰고, 함께 제공되는 Claude Code 플러그인이 일치하는 레코드를 Foreman의 다음
+  프롬프트에 전달합니다. 출력 꼬리에는 프롬프트 주입 방어가 적용되어 제어 문자와
+  `U+2028`／`U+2029`를 제거하고 작업자 출력을 들여쓴 데이터로 감쌉니다.
+- **설치 가능한 Claude Code 플러그인.** `.claude-plugin/marketplace.json`은
+  자기 참조 source를 사용하며, 배포 npm tarball에는 `hooks/`, `skills/`,
+  `.claude-plugin/`도 포함됩니다.
+- **Claude 라이브 메일함.** 상주 백그라운드 Claude 작업은 실행 중 메시지를
+  받을 수 있고 `events.jsonl`을 기록합니다. 사용법은
+  [📬 라이브 메일함](#-라이브-메일함)을 참조하세요. 다른 벤더는 `stderr`와
+  `mode-notice.txt` 알림을 남긴 채 명시적으로 단발 실행으로 폴백하며,
+  `jobs.sh wait`는 `done exit=N`으로 끝납니다.
+- **Foreman 세션 식별.** `SessionStart` hook은 Claude `session_id`를 PID와
+  시작 시각에 연결하여 PID 재사용에도 안전합니다. 디스패치는 부모 프로세스를
+  따라 `foreman_session`을 `meta.json`과 완료 레코드에 기록합니다. 수신함은
+  세션 일치를 우선하고 레거시 레코드에서만 `workdir`로 폴백하므로, 한 repository의
+  여러 Foreman이 서로의 알림을 가져가지 않습니다.
 
 ## v0.15.0 새 기능
 

@@ -1,0 +1,27 @@
+{
+  "name": "omnilane",
+  "owner": {
+    "name": "Vincent Wang",
+    "url": "https://github.com/Seraphim0916/omnilane"
+  },
+  "metadata": {
+    "description": "One routing table, cross-vendor dispatch, foreman completion inbox.",
+    "version": "0.20.0"
+  },
+  "plugins": [
+    {
+      "name": "omnilane",
+      "source": "./",
+      "description": "Route each subtask to the model that fits, dispatch it to any vendor CLI, and have finished dispatches report back into the foreman's next prompt.",
+      "version": "0.20.0",
+      "category": "development",
+      "keywords": [
+        "routing",
+        "dispatch",
+        "multi-model",
+        "codex",
+        "orchestration"
+      ]
+    }
+  ]
+}

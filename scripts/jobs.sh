@@ -4,14 +4,19 @@ set -euo pipefail
 # Usage: jobs.sh [--json] list | status JOB_ID | result JOB_ID | stats [--last N]
 #        jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
 #        jobs.sh wait JOB_ID [--timeout N]
+#        jobs.sh send JOB_ID TEXT | watch JOB_ID | close JOB_ID
 #        jobs.sh audit [--last N] [--json] | prune [--keep N] [--apply]
 
+# Runtime-relative shared library.
+# shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 JOBS="$OMNILANE_HOME/jobs"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 JSON_MODE=0
 COMMAND="unknown"
 
+# The backslash case pattern is intentional.
+# shellcheck disable=SC1003
 json_escape() {
   local s="$1" out="" ch escaped code i
   for ((i = 0; i < ${#s}; i++)); do
@@ -49,7 +54,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -108,6 +113,14 @@ read_public_metadata() {
   PUBLIC_METADATA="$value"
 }
 
+print_mode_notice() {
+  local path="$JOB_DIR/mode-notice.txt"
+  [[ -e "$path" || -L "$path" ]] || return 0
+  if read_public_metadata "$path"; then
+    printf '%s\n' "$PUBLIC_METADATA"
+  fi
+}
+
 valid_utf8() {
   command -v iconv >/dev/null 2>&1 || return 1
   printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1
@@ -129,6 +142,55 @@ read_job_pid() {
   [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
   [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
   RECORDED_PID="$value"
+}
+
+load_job_vendor() {
+  if ! read_public_metadata "$JOB_DIR/meta.json" || ! parse_stats_metadata "$PUBLIC_METADATA"; then
+    die 1 "job metadata is not safely readable"
+  fi
+  JOB_VENDOR="$STATS_VENDOR"
+}
+
+require_live_job() {
+  load_job_vendor
+  [[ "$JOB_VENDOR" == "claude" ]] || die 1 "job vendor '$JOB_VENDOR' is not live-capable; it runs in single-shot mode"
+}
+
+wait_for_live_ready() {
+  local deadline=$((SECONDS + 5))
+  while [[ ! -f "$JOB_DIR/inbox.ready" ]]; do
+    if [[ -e "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ]]; then
+      die 1 "job is no longer accepting live messages"
+    fi
+    if [[ "$SECONDS" -ge "$deadline" ]]; then
+      die 124 "live inbox did not become ready within 5s"
+    fi
+    sleep 0.1
+  done
+  [[ ! -L "$JOB_DIR/inbox.ready" ]] || die 1 "unsafe live inbox readiness path"
+  [[ -p "$JOB_DIR/inbox.fifo" && ! -L "$JOB_DIR/inbox.fifo" ]] || die 1 "live inbox FIFO is unavailable"
+}
+
+write_fifo_with_timeout() {
+  local fifo="$1" payload="$2" writer_pid deadline rc
+  (
+    printf '%s\n' "$payload" > "$fifo"
+  ) &
+  writer_pid=$!
+  deadline=$((SECONDS + 5))
+  while kill -0 "$writer_pid" 2>/dev/null; do
+    if [[ "$SECONDS" -ge "$deadline" ]]; then
+      kill -TERM "$writer_pid" 2>/dev/null || true
+      wait "$writer_pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 0.1
+  done
+  set +e
+  wait "$writer_pid"
+  rc=$?
+  set -e
+  return "$rc"
 }
 
 parse_stats_metadata() {
@@ -280,6 +342,76 @@ case "${1:-}" in
   help|--help|-h)
     [[ "$JSON_MODE" -eq 0 && $# -eq 1 ]] || usage
     echo "$USAGE_TEXT" ;;
+  send)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 3 ]] || usage
+    select_job "$2"
+    require_live_job
+    wait_for_live_ready
+    if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
+      foreman_value="$FOREMAN_SESSION"
+    else
+      foreman_value="${foreman_session-}"
+    fi
+    payload="$(printf '{"type":"user","omnilane_job_id":"%s","foreman_session":"%s","message":{"role":"user","content":[{"type":"text","text":"%s"}]}}' \
+      "$(json_escape "$2")" "$(json_escape "$foreman_value")" "$(json_escape "$3")")"
+    set +e
+    write_fifo_with_timeout "$JOB_DIR/inbox.fifo" "$payload"
+    send_rc=$?
+    set -e
+    [[ "$send_rc" -eq 0 ]] || die "$send_rc" "send timed out or failed; the live worker may be gone"
+    echo "sent $2"
+    ;;
+  watch)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    select_job "$2"
+    require_live_job
+    events_path="$JOB_DIR/events.jsonl"
+    watch_deadline=$((SECONDS + 5))
+    while [[ ! -f "$events_path" ]]; do
+      if [[ -e "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ]]; then
+        die 1 "job has no live event stream"
+      fi
+      [[ "$SECONDS" -lt "$watch_deadline" ]] || die 124 "live event stream did not appear within 5s"
+      sleep 0.1
+    done
+    [[ ! -L "$events_path" ]] || die 1 "unsafe live event path"
+    if [[ -e "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ]]; then
+      cat "$events_path"
+    else
+      tail -n +1 -f -- "$events_path"
+    fi
+    ;;
+  close)
+    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    select_job "$2"
+    require_live_job
+    if [[ -e "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ]]; then
+      read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
+      echo "already closed (exit $RECORDED_EXIT)"
+      exit "$RECORDED_EXIT"
+    fi
+    holder_path="$JOB_DIR/inbox.holder.pid"
+    read_job_pid "$holder_path" || die 1 "live inbox holder is unavailable"
+    holder_pid="$RECORDED_PID"
+    kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
+    kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
+    close_deadline=$((SECONDS + 10))
+    while [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; do
+      if [[ "$SECONDS" -ge "$close_deadline" ]]; then
+        die 124 "close signal sent, but the live worker did not terminate within 10s"
+      fi
+      sleep 0.1
+    done
+    read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
+    events_path="$JOB_DIR/events.jsonl"
+    result_count=0
+    if [[ -f "$events_path" && ! -L "$events_path" ]]; then
+      result_count="$(grep -Ec '"type"[[:space:]]*:[[:space:]]*"result"' "$events_path" || true)"
+      [[ "$result_count" =~ ^[0-9]+$ ]] || result_count=0
+    fi
+    echo "closed $2 (result_events=$result_count exit=$RECORDED_EXIT)"
+    exit "$RECORDED_EXIT"
+    ;;
   tail)
     # Peek at the live public output stream of one job (running or done)
     # without touching its exit contract. Only out.txt is shown; stderr and
@@ -427,13 +559,19 @@ case "${1:-}" in
         fi
         for artifact in "$job_dir"/*; do
           [[ -e "$artifact" || -L "$artifact" ]] || continue
-          if [[ -L "$artifact" ]]; then
-            audit_emit "$id" symlink-artifact
-            findings=$((findings + 1)); job_failed=1
-          elif [[ -d "$artifact" ]]; then
-            audit_emit "$id" nested-directory
-            findings=$((findings + 1)); job_failed=1
-          elif [[ -f "$artifact" ]]; then
+      if [[ -L "$artifact" ]]; then
+        audit_emit "$id" symlink-artifact
+        findings=$((findings + 1)); job_failed=1
+      elif [[ -d "$artifact" ]]; then
+        audit_emit "$id" nested-directory
+        findings=$((findings + 1)); job_failed=1
+      elif [[ -p "$artifact" && "${artifact##*/}" == "inbox.fifo" ]]; then
+        mode="$(path_mode "$artifact" 2>/dev/null || true)"
+        if [[ "$mode" != "600" ]]; then
+          audit_emit "$id" unsafe-fifo-mode
+          findings=$((findings + 1)); job_failed=1
+        fi
+      elif [[ -f "$artifact" ]]; then
             mode="$(path_mode "$artifact" 2>/dev/null || true)"
             if [[ "$mode" != "600" ]]; then
               audit_emit "$id" unsafe-file-mode
@@ -821,6 +959,9 @@ case "${1:-}" in
       else
         echo "running"
       fi
+    fi
+    if [[ "$JSON_MODE" -eq 0 ]]; then
+      print_mode_notice
     fi ;;
   wait)
     [[ "$JSON_MODE" -eq 0 && $# -ge 2 ]] || usage

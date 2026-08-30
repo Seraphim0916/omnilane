@@ -28,6 +28,14 @@ msg() { # key -> localized string ({} = placeholder, see msgf)
       case "$L" in zh-TW) echo "已偵測到——請自行執行:";; zh-CN) echo "已检测到——请自行执行:";; ja) echo "検出——次を手動で実行:";; ko) echo "감지됨——직접 실행하세요:";; *) echo "found — run this yourself:";; esac ;;
     plugin_hint)
       case "$L" in zh-TW) echo "(選配:把本 repo 裝成 Claude Code 外掛,可用 /route 指令)";; zh-CN) echo "(可选:把本仓库装成 Claude Code 插件,获得 /route 命令)";; ja) echo "(任意:このリポジトリを Claude Code プラグインとして追加すると /route コマンドが使えます)";; ko) echo "(선택: 이 저장소를 Claude Code 플러그인으로 추가하면 /route 명령 사용 가능)";; *) echo "(optional: add this repo as a Claude Code plugin for /route commands)";; esac ;;
+    completion_notice_active)
+      case "$L" in zh-TW) echo "Claude Code 完成通知：已啟用（omnilane@omnilane 外掛已啟用）。";; zh-CN) echo "Claude Code 完成通知：已启用（omnilane@omnilane 插件已启用）。";; ja) echo "Claude Code 完了通知: 有効です（omnilane@omnilane プラグインが有効）。";; ko) echo "Claude Code 완료 알림: 활성 상태입니다(omnilane@omnilane 플러그인 활성화됨).";; *) echo "Claude Code completion notice: active (omnilane@omnilane is enabled).";; esac ;;
+    completion_notice_unknown)
+      case "$L" in zh-TW) echo "Claude Code 完成通知：狀態未知（查不到外掛狀態）。";; zh-CN) echo "Claude Code 完成通知：状态未知（无法查询插件状态）。";; ja) echo "Claude Code 完了通知: 状態不明（プラグイン状態を確認できません）。";; ko) echo "Claude Code 완료 알림: 상태를 알 수 없습니다(플러그인 상태 조회 실패).";; *) echo "Claude Code completion notice: unknown (plugin state could not be queried).";; esac ;;
+    completion_notice_inactive)
+      case "$L" in zh-TW) echo "Claude Code 完成通知：未啟用。這項功能需要安裝外掛；只有 skill symlink 不會送達通知。";; zh-CN) echo "Claude Code 完成通知：未启用。此功能需要安装插件；只有 skill symlink 不会送达通知。";; ja) echo "Claude Code 完了通知: 無効です。この機能にはプラグインのインストールが必要で、skill symlink だけでは通知されません。";; ko) echo "Claude Code 완료 알림: 비활성 상태입니다. 이 기능은 플러그인 설치가 필요하며 skill symlink만으로는 알림이 전달되지 않습니다.";; *) echo "Claude Code completion notice: inactive. This feature requires the plugin install; the skill symlink alone does not deliver notices.";; esac ;;
+    completion_notice_install)
+      case "$L" in zh-TW) echo "請執行：";; zh-CN) echo "请执行：";; ja) echo "次を実行してください:";; ko) echo "다음을 실행하세요:";; *) echo "Run:";; esac ;;
     linked)
       case "$L" in zh-TW) echo "已連結";; zh-CN) echo "已链接";; ja) echo "リンクしました";; ko) echo "링크됨";; *) echo "linked";; esac ;;
     removed)

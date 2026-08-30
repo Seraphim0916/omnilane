@@ -207,7 +207,7 @@ Core routing does not need Python; only this UI requires Python 3.9 or newer.
 
 ### Foreman completion inbox
 
-Finished dispatches write a private completion record under `$OMNILANE_HOME/inbox/`. The bundled Claude Code `UserPromptSubmit` hook atomically delivers up to ten matching records on the foreman's next prompt, scoped by the dispatch `workdir`; claimed records move to `inbox/consumed/`. Set `OMNILANE_INBOX=0` on dispatch to disable record creation. The default is enabled.
+Finished dispatches write a private completion record under `$OMNILANE_HOME/inbox/`. A Claude Code `SessionStart` hook binds each foreman's hook-provided session ID to its live process ancestry, and the bundled `UserPromptSubmit` hook atomically delivers up to ten records owned by that session on the foreman's next prompt. Older records without a session ID still use the original dispatch `workdir` scope; claimed records move to `inbox/consumed/`. Set `OMNILANE_INBOX=0` on a dispatch to disable record creation; the default is enabled.
 
 ## 📦 Install
 
@@ -227,6 +227,15 @@ each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 `~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
 versions) so the main loop remembers to consult the table; non-interactive
 installs can pass `OMNILANE_HOOKS=all|none|claude,codex`.
+
+The foreman completion notice requires the Claude Code plugin install; the
+skill-only symlink path does not deliver completion notices. Install the plugin
+from this checkout with:
+
+```bash
+claude plugin marketplace add <path to this repo>
+claude plugin install omnilane@omnilane
+```
 
 Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
 install or `--uninstall` to preview every checkout-owned file action.
@@ -412,6 +421,24 @@ code passes through.
 - **Payload caps** — oversized task text is truncated head+tail before it can
   blow a worker's context.
 
+## 📬 Live mailbox
+
+A live mailbox is a resident Claude background dispatch, not a one-shot dispatch. The foreman opens it with `--background`, can send another instruction while it is still running, and is responsible for closing it with `jobs.sh close ID`. Leaving it unattended does not make it permanent: the configured whole-job timeout (`--job-timeout`) still ends it.
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "Review the timeout failure"
+# save the printed job ID as $ID
+scripts/jobs.sh send "$ID" "Also inspect the retry path."
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+`watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support is Claude-only today. Any other vendor runs as a normal one-shot dispatch, with a degradation notice sent to stderr and stored in `$JOB_DIR/mode-notice.txt`; `jobs.sh status ID` prints that notice as well.
+
+An idle mailbox makes no API calls and incurs no API spend, but it keeps consuming its job-timeout window. Close it when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
+
 ## ❓ FAQ
 
 <details>
@@ -568,6 +595,28 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.20.0
+
+- **Foreman completion inbox.** Finished background dispatches write a private
+  completion record, and the bundled Claude Code plugin delivers matching
+  records into the foreman's next prompt. The output tail is injection-hardened:
+  control characters and `U+2028`/`U+2029` are removed, and worker output is
+  framed as indented data.
+- **Installable Claude Code plugin.** `.claude-plugin/marketplace.json` uses a
+  self-referencing source, and the published npm tarball includes `hooks/`,
+  `skills/`, and `.claude-plugin/`.
+- **Claude live mailbox.** Resident background Claude jobs can receive messages
+  while they run and record `events.jsonl`. For operations, see
+  [📬 Live mailbox](#-live-mailbox); other vendors explicitly fall back to
+  single-shot mode with a `stderr` and `mode-notice.txt` notice, and
+  `jobs.sh wait` ends with `done exit=N`.
+- **Foreman session identity.** The `SessionStart` hook binds a Claude
+  `session_id` to a PID plus start time, making PID reuse safe. Dispatch walks
+  its ancestors to stamp `foreman_session` into `meta.json` and completion
+  records; the inbox prefers a session match and falls back to `workdir` for
+  legacy records, so two foremen in one repository do not take each other's
+  notices.
 
 ## What's new in v0.15.0
 

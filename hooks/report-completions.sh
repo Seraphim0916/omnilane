@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd -P)" || exit 0
 source "$ROOT/scripts/lib/common.sh" 2>/dev/null || exit 0
 
 report_completions() {
-  local inbox="$OMNILANE_HOME/inbox" consumed current_input current found=0 record
+  local inbox="$OMNILANE_HOME/inbox" consumed current_input current session_id found=0 record
 
   [[ -d "$inbox" && ! -L "$inbox" ]] || return 0
   for record in "$inbox"/*.json; do
@@ -21,12 +21,21 @@ report_completions() {
   consumed="$inbox/consumed"
   prepare_private_store "$consumed" "consumed inbox store" || return 0
 
+  session_id="$(perl -MJSON::PP -0777 -e '
+    use strict;
+    use warnings;
+    my $payload = eval { decode_json(<STDIN>) };
+    exit 1 unless ref($payload) eq "HASH";
+    my $id = $payload->{session_id};
+    exit 1 if ref($id) || !defined($id) || length($id) > 256;
+    print $id;
+  ' 2>/dev/null)" || session_id=""
   current_input="${CLAUDE_PROJECT_DIR:-$PWD}"
   current="$(cd "$current_input" 2>/dev/null && pwd -P)" || return 0
 
   perl -Mstrict -Mwarnings -MJSON::PP -MCwd=abs_path -e '
     sub collect_output {
-      my ($inbox, $consumed, $current) = @_;
+      my ($inbox, $consumed, $current, $session_id) = @_;
       opendir my $dh, $inbox or return "";
       my @names = sort grep {
         /\.json\z/ && -f "$inbox/$_" && !-l "$inbox/$_"
@@ -43,13 +52,19 @@ report_completions() {
         close $fh;
         my $record = eval { JSON::PP::decode_json($raw) };
         next unless ref($record) eq "HASH";
-        next unless defined $record->{workdir} && !ref($record->{workdir});
-        my $physical = abs_path($record->{workdir});
-        next unless defined $physical;
-        my $path_matches = $current eq "/"
-          ? substr($physical, 0, 1) eq "/"
-          : ($physical eq $current || index($physical, "$current/") == 0);
-        next unless $path_matches;
+        my $record_session = $record->{foreman_session};
+        if (defined($record_session) && !ref($record_session) && length($record_session)) {
+          next unless length($session_id) && $record_session eq $session_id;
+        } else {
+          next if ref($record_session);
+          next unless defined $record->{workdir} && !ref($record->{workdir});
+          my $physical = abs_path($record->{workdir});
+          next unless defined $physical;
+          my $path_matches = $current eq "/"
+            ? substr($physical, 0, 1) eq "/"
+            : ($physical eq $current || index($physical, "$current/") == 0);
+          next unless $path_matches;
+        }
         push @matches, [$name, $record];
       }
 
@@ -112,7 +127,7 @@ report_completions() {
 
     my $output = eval { collect_output(@ARGV) };
     print $output if defined($output) && !$@;
-  ' "$inbox" "$consumed" "$current"
+  ' "$inbox" "$consumed" "$current" "$session_id"
 }
 
 report_completions 2>/dev/null || true

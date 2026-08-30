@@ -6,6 +6,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/record-foreman-session.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "cat",
             "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/routing-instruction.md"],
             "timeout": 5

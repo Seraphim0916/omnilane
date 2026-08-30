@@ -360,6 +360,24 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
   而不是永遠顯示 `running`。
 - **任務酬載上限** — 過大的任務文字自動頭尾截斷,防止撐爆工作端脈絡。
 
+## 📬 即時信箱
+
+即時信箱是 Claude 專用的常駐背景派工，不是一次性派工。派工者以 `--background` 開啟後，執行中仍能補傳指示，並負責用 `jobs.sh close ID` 收尾。即使沒人處理，也不會永久存在：設定的整體工作逾時（`--job-timeout`）一到就會結束。
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "檢查逾時測試失敗的原因"
+# 將 dispatch 顯示的工作 ID 存成 $ID
+scripts/jobs.sh send "$ID" "再確認重試路徑。"
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+`watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。目前只有 Claude 支援即時信箱。其他供應商都會降級成一般的一次性派工，但通知不會被隱藏：stderr 與 `$JOB_DIR/mode-notice.txt` 都會留下提示，`jobs.sh status ID` 也會顯示它。
+
+閒置時不會發出 API 呼叫，也不會增加 API 費用，但仍會持續消耗整體工作逾時的時間。處理完成就應執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請改用新的派工，或在工作完成後使用 `retry`。
+
 ## ❓ 常見問題
 
 <details>
@@ -496,6 +514,23 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.20.0 新功能
+
+- **Foreman 完成收件匣。** 背景派工完成後會寫入私有完成紀錄，內建的 Claude
+  Code 外掛會在 Foreman 的下一個提示中遞交相符紀錄。輸出尾段已做提示注入防護：
+  移除控制字元與 `U+2028`／`U+2029`，並把工作者輸出框成縮排資料。
+- **可安裝的 Claude Code 外掛。** `.claude-plugin/marketplace.json` 使用自指
+  來源，已發布的 npm tarball 也會包含 `hooks/`、`skills/` 和
+  `.claude-plugin/`。
+- **Claude 即時信箱。** 常駐背景 Claude 工作可在執行時接收訊息，並寫入
+  `events.jsonl`。操作方式請見 [📬 即時信箱](#-即時信箱)；其他供應商會明確
+  退化成單次模式，留下 `stderr` 與 `mode-notice.txt` 通知；`jobs.sh wait`
+  最後會印出 `done exit=N`。
+- **Foreman 工作階段身分。** `SessionStart` hook 會把 Claude `session_id` 綁定
+  至 PID 與開始時間，避免 PID 重用誤判。派工會往上走訪父程序，將
+  `foreman_session` 寫入 `meta.json` 與完成紀錄；收件匣先比對工作階段，舊紀錄
+  才回退到 `workdir`，避免同一 repository 的兩個 Foreman 互拿通知。
 
 ## v0.15.0 新功能
 

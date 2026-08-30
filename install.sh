@@ -192,6 +192,64 @@ link_skill() { # $1 = target skills dir
   echo "$(msg linked) $dst -> $SKILL_SRC"
 }
 
+claude_completion_notice_state() {
+  local config_dir state
+  config_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+  state="$(perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($repo, @paths) = @ARGV;
+    my ($seen, $enabled, $source) = (0, undef, undef);
+    for my $path (@paths) {
+      next unless -e $path;
+      $seen = 1;
+      open my $fh, "<", $path or do { print "unknown"; exit 0 };
+      local $/;
+      my $settings = eval { decode_json(<$fh>) };
+      close $fh;
+      if ($@ || ref($settings) ne "HASH") { print "unknown"; exit 0 }
+      my $plugins = $settings->{enabledPlugins};
+      if (ref($plugins) eq "HASH" && exists $plugins->{"omnilane\@omnilane"}) {
+        $enabled = $plugins->{"omnilane\@omnilane"};
+      }
+      my $markets = $settings->{extraKnownMarketplaces};
+      if (ref($markets) eq "HASH" && exists $markets->{omnilane}) {
+        my $market = $markets->{omnilane};
+        $source = ref($market) eq "HASH" ? $market->{source} : undef;
+      }
+    }
+    if (!$seen) { print "unknown"; exit 0 }
+    my $enabled_ok = ref($enabled) &&
+      eval { $enabled->isa("JSON::PP::Boolean") } && $enabled;
+    my $source_ok = ref($source) eq "HASH" &&
+      defined($source->{source}) && !ref($source->{source}) &&
+      defined($source->{path}) && !ref($source->{path}) &&
+      $source->{source} eq "directory" && $source->{path} eq $repo;
+    print $enabled_ok && $source_ok ? "active" : "inactive";
+  ' "$REPO" "$config_dir/settings.json" "$config_dir/settings.local.json" 2>/dev/null)" || state=unknown
+  case "$state" in
+    active|inactive|unknown) printf '%s\n' "$state" ;;
+    *) printf '%s\n' unknown ;;
+  esac
+}
+
+report_claude_completion_notice() {
+  case "$(claude_completion_notice_state)" in
+    active)
+      echo "$(msg completion_notice_active)"
+      ;;
+    inactive)
+      echo "$(msg completion_notice_inactive)"
+      echo "$(msg completion_notice_install)"
+      printf '  claude plugin marketplace add "%s"\n' "$REPO"
+      echo "  claude plugin install omnilane@omnilane"
+      ;;
+    *)
+      echo "$(msg completion_notice_unknown)"
+      ;;
+  esac
+}
+
 CHECK_FAILURES=0
 check_link() { # label, path, target
   local label="$1" path="$2" target="$3"
@@ -253,6 +311,7 @@ if [[ "$CHECK" -eq 1 ]]; then
   fi
   if command -v grok >/dev/null 2>&1 && hook_selected grok; then check_hook grok; fi
   if command -v agy >/dev/null 2>&1 && hook_selected agy; then check_hook agy; fi
+  report_claude_completion_notice
   [[ "$CHECK_FAILURES" -eq 0 ]]
   exit $?
 fi
@@ -266,6 +325,9 @@ if command -v claude >/dev/null 2>&1; then
   found+=(claude); echo "[claude] $(msg found)"
   link_skill "$HOME/.claude/skills"
   echo "  $(msg plugin_hint)"
+  if [[ "$UNINSTALL" != "--uninstall" ]]; then
+    report_claude_completion_notice
+  fi
 fi
 if command -v codex >/dev/null 2>&1; then
   found+=(codex); echo "[codex] $(msg found)"

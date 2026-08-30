@@ -64,6 +64,94 @@ write_current_pid_file() {
   mv "$tmp" "$path"
 }
 
+process_start_time() { # pid -> stable ps(1) start timestamp
+  local pid="$1" value
+  [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  value="$(LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null)" || return 1
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
+process_parent_pid() {
+  local pid="$1" value
+  [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  value="$(LC_ALL=C ps -o ppid= -p "$pid" 2>/dev/null)" || return 1
+  value="${value//[[:space:]]/}"
+  [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  printf '%s\n' "$value"
+}
+
+read_session_entry() { # path -> SESSION_ENTRY_{PID,START,ID}
+  local path="$1" fields rest
+  SESSION_ENTRY_PID=""
+  SESSION_ENTRY_START=""
+  SESSION_ENTRY_ID=""
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  fields="$(perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($path) = @ARGV;
+    my $size = -s $path;
+    die "invalid size\n" unless defined($size) && $size <= 4096;
+    open my $fh, "<", $path or die $!;
+    local $/;
+    my $entry = decode_json(<$fh>);
+    close $fh or die $!;
+    die "invalid entry\n" unless ref($entry) eq "HASH";
+    my ($pid, $start, $id) = @{$entry}{qw(pid start_time session_id)};
+    die "invalid pid\n" if ref($pid) || !defined($pid) || $pid !~ /\A[1-9][0-9]{0,9}\z/;
+    die "invalid start\n" if ref($start) || !defined($start) ||
+      $start !~ /\A[ -~]{1,128}\z/;
+    die "invalid session\n" if ref($id) || !defined($id) ||
+      $id !~ /\A[A-Za-z0-9._:-]{1,256}\z/;
+    print "$pid\t$start\t$id";
+  ' "$path" 2>/dev/null)" || return 1
+  SESSION_ENTRY_PID="${fields%%$'\t'*}"
+  rest="${fields#*$'\t'}"
+  [[ "$rest" != "$fields" ]] || return 1
+  SESSION_ENTRY_START="${rest%%$'\t'*}"
+  SESSION_ENTRY_ID="${rest#*$'\t'}"
+  [[ "$SESSION_ENTRY_ID" != "$rest" ]] || return 1
+}
+
+prune_stale_session_entries() {
+  local sessions="$OMNILANE_HOME/sessions" entry live_start
+  [[ -d "$sessions" && ! -L "$sessions" ]] || return 0
+  for entry in "$sessions"/*.json; do
+    [[ -f "$entry" && ! -L "$entry" ]] || continue
+    read_session_entry "$entry" || continue
+    if ! live_start="$(process_start_time "$SESSION_ENTRY_PID")" ||
+       [[ "$live_start" != "$SESSION_ENTRY_START" ]]; then
+      rm "$entry" 2>/dev/null || true
+    fi
+  done
+}
+
+find_foreman_session() { # dispatch pid -> nearest live Claude foreman session
+  local pid="$1" sessions="$OMNILANE_HOME/sessions"
+  local parent start entry hops=0
+  [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  [[ -d "$sessions" && ! -L "$sessions" ]] || return 1
+  prune_stale_session_entries
+
+  while [[ "$hops" -lt 128 ]]; do
+    parent="$(process_parent_pid "$pid")" || return 1
+    [[ "$parent" =~ ^[1-9][0-9]{0,9}$ && "$parent" != "$pid" ]] || return 1
+    start="$(process_start_time "$parent")" || return 1
+    entry="$sessions/$parent.json"
+    if read_session_entry "$entry" &&
+       [[ "$SESSION_ENTRY_PID" == "$parent" && "$SESSION_ENTRY_START" == "$start" ]]; then
+      printf '%s\n' "$SESSION_ENTRY_ID"
+      return 0
+    fi
+    pid="$parent"
+    hops=$((hops + 1))
+  done
+  return 1
+}
+
 # ---- Vendor registry (single source of truth) ---------------------------
 # Two vendor kinds. CLI-agent vendors run a local binary (see vendor_bin).
 # Direct-API vendors are OpenAI-compatible /chat/completions endpoints driven

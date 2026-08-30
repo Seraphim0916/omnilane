@@ -55,6 +55,147 @@ record_json() {
   chmod 600 "$path"
 }
 
+test_completion_settings_detection() {
+  local home="$TEST_ROOT/completion-settings" repo bin config marker out rc
+  repo="$home/repo"
+  bin="$home/bin"
+  config="$home/claude-config"
+  marker="$home/claude-spawned"
+  mkdir -p "$repo/scripts" "$repo/hooks" "$bin" "$config" "$home/state/inbox"
+
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/bin/sh
+printf 'triage: exec /usr/bin/true\n'
+EOF
+  chmod +x "$repo/scripts/dispatch.sh"
+  printf 'triage: exec /usr/bin/true\n' > "$repo/routing.yaml"
+  printf '#!/bin/sh\nexit 0\n' > "$repo/hooks/report-completions.sh"
+  chmod +x "$repo/hooks/report-completions.sh"
+  cat > "$repo/hooks/hooks.json" <<'EOF'
+{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/report-completions.sh"}]}]}}
+EOF
+  cat > "$bin/claude" <<'EOF'
+#!/bin/sh
+printf 'spawned\n' > "${CLAUDE_MARKER:?}"
+mkdir -p "${CLAUDE_CONFIG_DIR:?}/written-by-claude"
+exit 99
+EOF
+  chmod +x "$bin/claude"
+  printf '{}\n' > "$home/state/inbox/one.json"
+  printf '{}\n' > "$home/state/inbox/two.json"
+  printf 'ignored\n' > "$home/state/inbox/not-a-record.txt"
+
+  cat > "$config/settings.json" <<'EOF'
+{"enabledPlugins":{"omnilane@omnilane":true}}
+EOF
+  cat > "$config/settings.local.json" <<EOF
+{"extraKnownMarketplaces":{"omnilane":{"source":{"source":"directory","path":"$repo"}}}}
+EOF
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
+    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+  [[ "$rc" -eq 0 && "$out" == *"PASS  completion-plugin"* &&
+     "$out" == *"PASS  completion-hook"* && "$out" == *"PASS  completion-manifest"* &&
+     "$out" == *"PASS  completion-inbox"* && "$out" == *"PASS  completion-notice"* &&
+     "$out" == *"2 pending records"* && "$out" == *"$repo/hooks/hooks.json"* &&
+     ! -e "$marker" ]] || fail "active settings fixture was not reported active/read-only: $out"
+
+  printf '{}\n' > "$config/settings.json"
+  printf '{}\n' > "$config/settings.local.json"
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
+    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+  [[ "$rc" -eq 0 && "$out" == *"WARN  completion-plugin"* &&
+     "$out" == *"WARN  completion-notice"* && "$out" == *inactive* &&
+     "$out" == *"claude plugin install omnilane@omnilane"* && ! -e "$marker" ]] ||
+    fail "valid inactive settings fixture lacked actionable state: $out"
+
+  cat > "$config/settings.json" <<'EOF'
+{"enabledPlugins":{"omnilane@omnilane":true}}
+EOF
+  printf '{broken json\n' > "$config/settings.local.json"
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
+    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+  [[ "$rc" -eq 0 && "$out" == *"WARN  completion-plugin"* &&
+     "$out" == *"Claude Code plugin state is unknown"* &&
+     "$out" != *"missing or disabled"* && ! -e "$marker" ]] ||
+    fail "unparseable settings were not reported unknown: $out"
+
+  cat > "$config/settings.local.json" <<EOF
+{"extraKnownMarketplaces":{"omnilane":{"source":{"source":"directory","path":"$repo"}}}}
+EOF
+  printf '{"hooks":{"SessionStart":[]}}\n' > "$repo/hooks/hooks.json"
+  chmod -x "$repo/hooks/report-completions.sh"
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
+    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+  [[ "$rc" -eq 0 && "$out" == *"WARN  completion-hook"* &&
+     "$out" == *"WARN  completion-manifest"* && "$out" == *"WARN  completion-notice"* &&
+     "$out" == *"$repo/hooks/hooks.json"* && ! -e "$marker" ]] ||
+    fail "broken current checkout was not reported inactive: $out"
+}
+
+test_install_check_read_only() {
+  local home="$TEST_ROOT/completion-installer" bin config marker before after out rc locale catalog
+  bin="$home/bin"
+  config="$home/isolated-claude"
+  marker="$home/claude-spawned"
+  mkdir -p "$bin"
+  cat > "$bin/claude" <<'EOF'
+#!/bin/sh
+printf 'spawned\n' > "${CLAUDE_MARKER:?}"
+mkdir -p "${CLAUDE_CONFIG_DIR:?}/written-by-claude"
+exit 99
+EOF
+  chmod +x "$bin/claude"
+
+  before="$(find "$home" -mindepth 1 -print | sort)"
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    PATH="$bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --check 2>&1)" || true
+  after="$(find "$home" -mindepth 1 -print | sort)"
+  [[ "$before" == "$after" && ! -e "$marker" && ! -e "$config" &&
+     "$out" == *"completion notice"* && "$out" == *unknown* ]] ||
+    fail "installer --check wrote state, spawned claude, or hid unknown state: $out"
+
+  before="$after"
+  out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
+    PATH="$bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    /bin/bash "$ROOT/install.sh" --dry-run 2>&1)"; rc=$?
+  after="$(find "$home" -mindepth 1 -print | sort)"
+  [[ "$rc" -eq 0 && "$before" == "$after" && ! -e "$marker" && ! -e "$config" &&
+     "$out" == *"completion notice"* ]] ||
+    fail "installer --dry-run wrote state or spawned claude: $out"
+
+  for locale in en zh-TW zh-CN ja ko; do
+    catalog="$(OMNILANE_LANG="$locale" /bin/bash -c '
+      . "$1"
+      msg completion_notice_active
+      msg completion_notice_unknown
+      msg completion_notice_inactive
+      msg completion_notice_install
+    ' _ "$ROOT/scripts/lib/i18n.sh")"
+    [[ "$(printf '%s\n' "$catalog" | awk 'NF { count++ } END { print count + 0 }')" -eq 4 ]] ||
+      fail "installer completion catalogue incomplete for $locale"
+  done
+}
+
+case "${1:-}" in
+  --doctor-settings)
+    test_completion_settings_detection
+    printf 'ok - completion settings detection\n'
+    exit 0
+    ;;
+  --install-readonly)
+    test_install_check_read_only
+    printf 'ok - installer check is read-only\n'
+    exit 0
+    ;;
+  "") ;;
+  *) fail "unknown test mode: $1" ;;
+esac
+
 [[ -x "$ROOT/hooks/report-completions.sh" ]] || fail "consumer is missing or not executable"
 grep -q '"UserPromptSubmit"' "$ROOT/hooks/hooks.json" || fail "UserPromptSubmit hook is not registered"
 
@@ -85,7 +226,7 @@ RECORD="$record" EXPECTED_ID="$job_id" EXPECTED_WORKDIR="$workdir" perl -MJSON::
   local $/; my $raw = <$fh>;
   die "record is not one line\n" unless $raw =~ /\A[^\n]*\n?\z/;
   my $r = decode_json($raw);
-  my @want = qw(job_id lane vendor model mode workdir exit finished tail);
+  my @want = qw(job_id lane vendor model mode workdir foreman_session exit finished tail);
   die "wrong keys\n" unless join(",", sort keys %$r) eq join(",", sort @want);
   die "wrong id\n" unless $r->{job_id} eq $ENV{EXPECTED_ID};
   die "wrong workdir\n" unless $r->{workdir} eq $ENV{EXPECTED_WORKDIR};
@@ -217,5 +358,156 @@ empty="$(OMNILANE_HOME="$empty_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/
 
 missing="$(OMNILANE_HOME="$TEST_ROOT/missing" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
 [[ -z "$missing" ]] || fail "missing inbox printed output"
+
+session_record_json() {
+  local path="$1" job_id="$2" record_workdir="$3" foreman_session="$4"
+  JOB_ID="$job_id" WORKDIR_VALUE="$record_workdir" FOREMAN_SESSION="$foreman_session" \
+    perl -MJSON::PP -e '
+      my $record = {
+        job_id => $ENV{JOB_ID}, lane => "triage", vendor => "exec",
+        model => "/tmp/gate", mode => "advise", workdir => $ENV{WORKDIR_VALUE},
+        exit => 0, finished => "2026-08-30T00:00:00Z", tail => "tail-$ENV{JOB_ID}"
+      };
+      $record->{foreman_session} = $ENV{FOREMAN_SESSION}
+        unless $ENV{FOREMAN_SESSION} eq "__MISSING__";
+      open my $fh, ">", $ARGV[0] or die $!;
+      print {$fh} JSON::PP->new->canonical->encode($record), "\n";
+      close $fh or die $!;
+    ' "$path"
+  chmod 600 "$path"
+}
+
+session_home="$TEST_ROOT/session-owned"
+session_workdir="$TEST_ROOT/session-project"
+session_gate="$session_home/gate.sh"
+session_bin="$session_home/bin"
+session_id="session-owned-$$"
+other_session_id="session-other-$$"
+mkdir -p "$session_home" "$session_workdir" "$session_bin"
+make_gate "$session_gate"
+printf 'session-lane: exec "%s" -\n' "$session_gate" > "$session_home/routing.local.yaml"
+cat > "$session_bin/ps" <<'EOF'
+#!/bin/sh
+if [ "$2" = "lstart=" ]; then
+  printf 'Mon Aug 30 12:00:00 2026\n'
+elif [ "$2" = "ppid=" ]; then
+  printf '%s\n' "${FAKE_FOREMAN_PID:?}"
+else
+  exit 1
+fi
+EOF
+chmod +x "$session_bin/ps"
+
+[[ -x "$ROOT/hooks/record-foreman-session.sh" ]] ||
+  fail "SessionStart recorder is missing or not executable"
+grep -q 'record-foreman-session\.sh' "$ROOT/hooks/hooks.json" ||
+  fail "SessionStart recorder is not registered"
+
+CLAUDE_CODE_HOST_SESSION_ID="wrong-parent-session" OMNILANE_HOME="$session_home" \
+  PATH="$session_bin:/usr/bin:/bin" FAKE_FOREMAN_PID="$$" \
+  "$ROOT/hooks/record-foreman-session.sh" \
+  <<< "{\"session_id\":\"$session_id\"}"
+session_entry="$session_home/sessions/$$.json"
+[[ -f "$session_entry" && ! -L "$session_entry" ]] ||
+  fail "SessionStart did not record the hook parent"
+SESSION_ENTRY="$session_entry" EXPECTED_PID="$$" EXPECTED_SESSION="$session_id" \
+  perl -MJSON::PP -e '
+    open my $fh, "<", $ENV{SESSION_ENTRY} or die $!;
+    local $/; my $entry = decode_json(<$fh>);
+    die "wrong pid\n" unless $entry->{pid} == $ENV{EXPECTED_PID};
+    die "missing start time\n" unless length($entry->{start_time} // "");
+    die "wrong session\n" unless $entry->{session_id} eq $ENV{EXPECTED_SESSION};
+  ' || fail "SessionStart entry content is wrong"
+
+session_job_id="$(CLAUDE_CODE_HOST_SESSION_ID="wrong-parent-session" \
+  OMNILANE_HOME="$session_home" GATE_EXIT=0 PATH="$session_bin:/usr/bin:/bin" \
+  FAKE_FOREMAN_PID="$$" \
+  "$ROOT/scripts/dispatch.sh" --background --workdir "$session_workdir" \
+  session-lane "session-owned task")"
+[[ "$session_job_id" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]] ||
+  fail "session-owned dispatch did not return a job id: $session_job_id"
+wait_for_file "$session_home/jobs/$session_job_id/exit" ||
+  fail "session-owned dispatch never completed"
+wait_for_file "$session_home/inbox/$session_job_id.json" ||
+  fail "session-owned dispatch did not write a completion record"
+META="$session_home/jobs/$session_job_id/meta.json" \
+RECORD="$session_home/inbox/$session_job_id.json" EXPECTED_SESSION="$session_id" \
+  perl -MJSON::PP -e '
+    sub load_json {
+      open my $fh, "<", $_[0] or die $!; local $/; return decode_json(<$fh>);
+    }
+    my $meta = load_json($ENV{META});
+    my $record = load_json($ENV{RECORD});
+    die "meta session missing\n"
+      unless ($meta->{foreman_session} // "") eq $ENV{EXPECTED_SESSION};
+    die "record session missing\n"
+      unless ($record->{foreman_session} // "") eq $ENV{EXPECTED_SESSION};
+  ' || fail "dispatch did not persist top-level foreman_session"
+
+session_delivery="$(CLAUDE_CODE_HOST_SESSION_ID="wrong-parent-session" \
+  OMNILANE_HOME="$session_home" CLAUDE_PROJECT_DIR="$session_workdir" \
+  "$ROOT/hooks/report-completions.sh" \
+  <<< "{\"session_id\":\"$session_id\"}")"
+[[ "$session_delivery" == *"$session_job_id"* ]] ||
+  fail "session-owned completion was not delivered"
+[[ -f "$session_home/inbox/consumed/$session_job_id.json" ]] ||
+  fail "session-owned completion was not claimed"
+
+matching_id="20260830-010001-1-1"
+different_id="20260830-010002-1-1"
+session_record_json "$session_home/inbox/$matching_id.json" "$matching_id" \
+  "$session_workdir" "$session_id"
+session_record_json "$session_home/inbox/$different_id.json" "$different_id" \
+  "$session_workdir" "$other_session_id"
+matched="$(OMNILANE_HOME="$session_home" CLAUDE_PROJECT_DIR="$session_workdir" \
+  "$ROOT/hooks/report-completions.sh" \
+  <<< "{\"session_id\":\"$session_id\"}")"
+[[ "$matched" == *"$matching_id"* && "$matched" != *"$different_id"* ]] ||
+  fail "consumer did not isolate matching foreman session: $matched"
+[[ -f "$session_home/inbox/consumed/$matching_id.json" &&
+   -f "$session_home/inbox/$different_id.json" ]] ||
+  fail "matching record claim moved the wrong file"
+
+legacy_missing_id="20260830-010003-1-1"
+legacy_empty_id="20260830-010004-1-1"
+session_record_json "$session_home/inbox/$legacy_missing_id.json" "$legacy_missing_id" \
+  "$session_workdir" "__MISSING__"
+session_record_json "$session_home/inbox/$legacy_empty_id.json" "$legacy_empty_id" \
+  "$session_workdir" ""
+legacy="$(OMNILANE_HOME="$session_home" CLAUDE_PROJECT_DIR="$session_workdir" \
+  "$ROOT/hooks/report-completions.sh" \
+  <<< "{\"session_id\":\"$session_id\"}")"
+[[ "$legacy" == *"$legacy_missing_id"* && "$legacy" == *"$legacy_empty_id"* ]] ||
+  fail "missing/empty foreman_session did not use workdir fallback: $legacy"
+[[ -f "$session_home/inbox/$different_id.json" ]] ||
+  fail "different foreman record was consumed by legacy fallback"
+
+stale_home="$TEST_ROOT/session-stale"
+stale_workdir="$TEST_ROOT/session-stale-project"
+stale_gate="$stale_home/gate.sh"
+mkdir -p "$stale_home/sessions" "$stale_workdir"
+chmod 700 "$stale_home/sessions"
+make_gate "$stale_gate"
+printf 'stale-lane: exec "%s" -\n' "$stale_gate" > "$stale_home/routing.local.yaml"
+STALE_ENTRY="$stale_home/sessions/$$.json" STALE_PID="$$" \
+  perl -MJSON::PP -e '
+    my $entry = { pid => 0 + $ENV{STALE_PID}, start_time => "stale-start-time",
+                  session_id => "stale-session" };
+    open my $fh, ">", $ENV{STALE_ENTRY} or die $!;
+    print {$fh} JSON::PP->new->canonical->encode($entry), "\n";
+    close $fh or die $!;
+  '
+chmod 600 "$stale_home/sessions/$$.json"
+stale_job_id="$(OMNILANE_HOME="$stale_home" PATH="$session_bin:/usr/bin:/bin" \
+  FAKE_FOREMAN_PID="$$" \
+  "$ROOT/scripts/dispatch.sh" --background --workdir "$stale_workdir" \
+  stale-lane "stale task")"
+wait_for_file "$stale_home/jobs/$stale_job_id/exit" ||
+  fail "stale-entry dispatch never completed"
+META="$stale_home/jobs/$stale_job_id/meta.json" perl -MJSON::PP -e '
+  open my $fh, "<", $ENV{META} or die $!; local $/; my $meta = decode_json(<$fh>);
+  die "stale session matched\n" if length($meta->{foreman_session} // "");
+' || fail "stale session entry was matched"
+[[ ! -e "$stale_home/sessions/$$.json" ]] || fail "stale session entry was not pruned"
 
 printf 'ok - foreman completion inbox\n'

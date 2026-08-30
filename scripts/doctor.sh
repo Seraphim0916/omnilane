@@ -123,6 +123,132 @@ else
   report PASS state "$OMNILANE_HOME is accessible"
 fi
 
+completion_plugin_state() {
+  local config_dir state
+  config_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+  state="$(perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($repo, @paths) = @ARGV;
+    my ($seen, $enabled, $source) = (0, undef, undef);
+    for my $path (@paths) {
+      next unless -e $path;
+      $seen = 1;
+      open my $fh, "<", $path or do { print "unknown"; exit 0 };
+      local $/;
+      my $settings = eval { decode_json(<$fh>) };
+      close $fh;
+      if ($@ || ref($settings) ne "HASH") { print "unknown"; exit 0 }
+      my $plugins = $settings->{enabledPlugins};
+      if (ref($plugins) eq "HASH" && exists $plugins->{"omnilane\@omnilane"}) {
+        $enabled = $plugins->{"omnilane\@omnilane"};
+      }
+      my $markets = $settings->{extraKnownMarketplaces};
+      if (ref($markets) eq "HASH" && exists $markets->{omnilane}) {
+        my $market = $markets->{omnilane};
+        $source = ref($market) eq "HASH" ? $market->{source} : undef;
+      }
+    }
+    if (!$seen) { print "unknown"; exit 0 }
+    my $enabled_ok = ref($enabled) &&
+      eval { $enabled->isa("JSON::PP::Boolean") } && $enabled;
+    my $source_ok = ref($source) eq "HASH" &&
+      defined($source->{source}) && !ref($source->{source}) &&
+      defined($source->{path}) && !ref($source->{path}) &&
+      $source->{source} eq "directory" && $source->{path} eq $repo;
+    print $enabled_ok && $source_ok ? "active" : "inactive";
+  ' "$REPO" "$config_dir/settings.json" "$config_dir/settings.local.json" 2>/dev/null)" || state=unknown
+  case "$state" in
+    active|inactive|unknown) printf '%s\n' "$state" ;;
+    *) printf '%s\n' unknown ;;
+  esac
+}
+
+completion_manifest_registers_hook() {
+  local manifest="$1"
+  [[ -r "$manifest" ]] || return 1
+  awk '
+    { content = content $0 }
+    END {
+      if (content ~ /"UserPromptSubmit"[[:space:]]*:[[:space:]]*\[/ &&
+          content ~ /"UserPromptSubmit".*report-completions\.sh/) exit 0
+      exit 1
+    }
+  ' "$manifest"
+}
+
+completion_plugin="$(completion_plugin_state)"
+completion_settings_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}"
+completion_script="$REPO/hooks/report-completions.sh"
+completion_manifest="$REPO/hooks/hooks.json"
+completion_inbox="$OMNILANE_HOME/inbox"
+completion_plugin_ok=0
+completion_script_ok=0
+completion_manifest_ok=0
+completion_inbox_ok=1
+completion_pending=0
+completion_reason=""
+
+case "$completion_plugin" in
+  active)
+    completion_plugin_ok=1
+    report PASS completion-plugin "omnilane@omnilane is enabled according to Claude Code settings"
+    ;;
+  inactive)
+    completion_reason="omnilane@omnilane is missing or disabled"
+    report WARN completion-plugin "$completion_reason according to Claude Code settings"
+    ;;
+  *)
+    completion_reason="Claude Code plugin state is unknown"
+    report WARN completion-plugin "$completion_reason; settings files were absent, unreadable, or invalid"
+    ;;
+esac
+
+if [[ -x "$completion_script" ]]; then
+  completion_script_ok=1
+  report PASS completion-hook "$completion_script exists and is executable"
+elif [[ -e "$completion_script" ]]; then
+  completion_reason="${completion_reason:+$completion_reason; }$completion_script is not executable"
+  report WARN completion-hook "$completion_script exists but is not executable"
+else
+  completion_reason="${completion_reason:+$completion_reason; }$completion_script is missing"
+  report WARN completion-hook "$completion_script is missing"
+fi
+
+if completion_manifest_registers_hook "$completion_manifest"; then
+  completion_manifest_ok=1
+  report PASS completion-manifest "$completion_manifest from the current checkout registers UserPromptSubmit"
+else
+  completion_reason="${completion_reason:+$completion_reason; }$completion_manifest does not register UserPromptSubmit"
+  report WARN completion-manifest "$completion_manifest from the current checkout does not register UserPromptSubmit for report-completions.sh"
+fi
+
+if [[ -L "$completion_inbox" || ( -e "$completion_inbox" && ! -d "$completion_inbox" ) ]]; then
+  completion_inbox_ok=0
+  completion_reason="${completion_reason:+$completion_reason; }$completion_inbox is not a real directory"
+  report WARN completion-inbox "$completion_inbox must be a real directory"
+elif [[ -d "$completion_inbox" ]]; then
+  for completion_record in "$completion_inbox"/*.json; do
+    [[ -f "$completion_record" && ! -L "$completion_record" ]] || continue
+    completion_pending=$((completion_pending + 1))
+  done
+  report PASS completion-inbox "$completion_pending pending records in $completion_inbox"
+else
+  report PASS completion-inbox "0 pending records; $completion_inbox does not exist yet"
+fi
+
+if [[ "$completion_plugin_ok" -eq 1 && "$completion_script_ok" -eq 1 &&
+      "$completion_manifest_ok" -eq 1 && "$completion_inbox_ok" -eq 1 ]]; then
+  report PASS completion-notice "active; $completion_pending pending records; manifest read from $completion_manifest"
+else
+  if [[ "$completion_plugin" == inactive ]]; then
+    completion_reason="$completion_reason; run: claude plugin marketplace add \"$REPO\"; claude plugin install omnilane@omnilane"
+  elif [[ "$completion_plugin" == unknown ]]; then
+    completion_reason="$completion_reason; inspect $completion_settings_dir/settings.json and settings.local.json"
+  fi
+  report WARN completion-notice "inactive: $completion_reason; manifest read from $completion_manifest"
+fi
+
 if [[ -f "$OMNILANE_HOME/local.sh" ]]; then
   if /bin/bash -n "$OMNILANE_HOME/local.sh" 2>/dev/null; then
     report PASS local-config "$OMNILANE_HOME/local.sh syntax is valid"

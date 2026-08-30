@@ -333,6 +333,24 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
   而不是永远显示 `running`。
 - **任务载荷上限** — 过大的任务文本自动头尾截断,防止撑爆工作端上下文。
 
+## 📬 实时邮箱
+
+实时邮箱是 Claude 专用的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：已配置的整个作业超时（`--job-timeout`）到期后仍会终止它。
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "检查超时测试失败的原因"
+# 将 dispatch 显示的作业 ID 保存为 $ID
+scripts/jobs.sh send "$ID" "再检查重试路径。"
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+`watch` 会跟随 `$JOB_DIR/events.jsonl`；`tail` 读取公开的 `out.txt`。目前只有 Claude 支持实时邮箱。其他供应商都会降级为普通的一次性派发，但不是静默发生：stderr 和 `$JOB_DIR/mode-notice.txt` 都会留下提示，`jobs.sh status ID` 也会显示该提示。
+
+空闲时不会发出 API 调用，也不会产生 API 费用，但整个作业超时的时间仍在流逝。处理结束就应执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
+
 ## ❓ 常见问题
 
 <details>
@@ -472,6 +490,23 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.20.0 新功能
+
+- **Foreman 完成收件箱。** 后台派发完成后会写入私有完成记录，内置 Claude
+  Code 插件会在 Foreman 的下一次提示中递交匹配记录。输出尾段已做提示注入防护：
+  移除控制字符及 `U+2028`／`U+2029`，并将工作器输出框为缩进数据。
+- **可安装的 Claude Code 插件。** `.claude-plugin/marketplace.json` 使用自指
+  来源，已发布的 npm tarball 也包含 `hooks/`、`skills/` 和
+  `.claude-plugin/`。
+- **Claude 实时邮箱。** 常驻后台 Claude 作业可在运行时接收消息，并写入
+  `events.jsonl`。操作方式请见 [📬 实时邮箱](#-实时邮箱)；其他供应商会明确
+  降级为单次模式，并留下 `stderr` 与 `mode-notice.txt` 通知；`jobs.sh wait`
+  最后会输出 `done exit=N`。
+- **Foreman 会话身份。** `SessionStart` hook 会将 Claude `session_id` 绑定到
+  PID 与启动时间，避免 PID 重用误判。派发会沿父进程向上查找，将
+  `foreman_session` 写入 `meta.json` 与完成记录；收件箱优先按会话匹配，旧记录
+  才回退至 `workdir`，避免同一 repository 的两个 Foreman 互取通知。
 
 ## v0.15.0 新功能
 

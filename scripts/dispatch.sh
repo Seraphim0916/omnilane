@@ -637,6 +637,10 @@ chmod 700 "$JOBS_ROOT"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
+FOREMAN_SESSION=""
+if resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
+  FOREMAN_SESSION="$resolved_foreman_session"
+fi
 
 if [[ "$TASK" == "-" ]]; then
   (umask 077; cat > "$JOB_DIR/task.txt")
@@ -645,10 +649,11 @@ else
 fi
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","candidate":"%s/%s","started":"%s"}\n' \
+(umask 077; printf '{"lane":"%s","vendor":"%s","model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
   "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$MODEL")" \
   "$(json_escape "$EFFORT")" "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
-  "$(json_escape "$WORKDIR")" "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
+  "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
+  "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
   "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
 
 secure_job_files() {
@@ -685,9 +690,10 @@ write_completion_record() {
   finished="$(date -u +%FT%TZ)" || return 1
   old_umask="$(umask)"
   umask 077
-  printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
+  printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
     "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
     "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
+    "$(json_escape "$FOREMAN_SESSION")" \
     "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" > "$tmp" || write_rc=$?
   if [[ "$write_rc" -eq 0 ]]; then
     chmod 600 "$tmp" || write_rc=$?

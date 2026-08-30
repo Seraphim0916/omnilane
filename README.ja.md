@@ -364,6 +364,24 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非�
   記録し、`jobs.sh status` が `dead` を報告。
 - **ペイロード上限** — 巨大なタスクテキストは自動で頭尾トランケート。
 
+## 📬 ライブメールボックス
+
+ライブメールボックスは、1 回で完結するディスパッチとは別の、Claude 専用の常駐バックグラウンド実行です。フォアマンが `--background` で開始し、実行中にも追加の指示を送れます。終わったらフォアマンが `jobs.sh close ID` で閉じます。放置しても常駐し続けるわけではなく、設定済みのジョブ全体タイムアウト（`--job-timeout`）に達すれば終了します。
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "タイムアウトしたテストを確認する"
+# dispatch が表示したジョブ ID を $ID として保存
+scripts/jobs.sh send "$ID" "リトライ経路も確認してください。"
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は公開出力の `out.txt` を読みます。ライブメールボックスを使えるのは現時点で Claude だけです。ほかのベンダーは通常の単発ディスパッチへフォールバックしますが、無通知ではありません。stderr と `$JOB_DIR/mode-notice.txt` に通知が残り、`jobs.sh status ID` にも表示されます。
+
+アイドル中は API 呼び出しも料金も発生しませんが、ジョブ全体タイムアウトの時間は進みます。やり取りが終わったら `close` してください。終了済み、またはライブでないジョブへの `jobs.sh send` は明確なエラーで失敗します。送った後に追跡しない作業、ライブ対応していないベンダー、クリーンな状態からの再実行が必要な場合には使わず、新しいディスパッチ（または完了後の `retry`）を使ってください。
+
 ## ❓ FAQ
 
 <details>
@@ -515,6 +533,28 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.20.0 の新機能
+
+- **フォアマン完了インボックス。** バックグラウンド dispatch の完了時に非公開の
+  完了レコードを書き込み、同梱の Claude Code プラグインが一致するレコードを
+  フォアマンの次のプロンプトへ届けます。出力末尾はプロンプト注入対策済みで、
+  制御文字と `U+2028`／`U+2029` を除去し、ワーカー出力をインデントしたデータ
+  として枠付けます。
+- **インストール可能な Claude Code プラグイン。**
+  `.claude-plugin/marketplace.json` は自己参照 source を使い、公開 npm tarball
+  には `hooks/`、`skills/`、`.claude-plugin/` も含まれます。
+- **Claude のライブメールボックス。** 常駐バックグラウンド Claude ジョブは
+  実行中にメッセージを受け取り、`events.jsonl` を記録します。操作は
+  [📬 ライブメールボックス](#-ライブメールボックス) を参照してください。
+  他ベンダーは `stderr` と `mode-notice.txt` の通知付きで明示的に単発実行へ
+  フォールバックし、`jobs.sh wait` は `done exit=N` で完了します。
+- **フォアマンのセッション識別。** `SessionStart` hook は Claude `session_id` を
+  PID と開始時刻へ結び付け、PID 再利用にも安全です。dispatch は親プロセスを
+  たどって `foreman_session` を `meta.json` と完了レコードへ記録します。
+  インボックスはセッション一致を優先し、旧レコードでは `workdir` に
+  フォールバックするため、同一リポジトリ内の複数フォアマンが互いの通知を
+  取得しません。
 
 ## v0.15.0 の新機能
 

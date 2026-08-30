@@ -24,6 +24,20 @@ trap cleanup_test_root EXIT
 pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 
+mode_notice_contract() {
+  local home="$1" vendor="$2" expected_count="$3" path count=0
+  shift 3
+  local expected="omnilane: vendor '$vendor' is not live-capable; ran in single-shot mode"
+  for path in "$@"; do
+    grep -Fxq "$expected" "$path" || return 1
+  done
+  while IFS= read -r path; do
+    grep -Fxq "$expected" "$path" || return 1
+    count=$((count + 1))
+  done < <(find "$home/jobs" -type f -name mode-notice.txt -print 2>/dev/null)
+  [[ "$count" -eq "$expected_count" ]]
+}
+
 file_mode() {
   if stat -c '%a' "$1" >/dev/null 2>&1; then
     stat -c '%a' "$1"
@@ -425,7 +439,7 @@ EOF
     /bin/bash "$ROOT/scripts/dispatch.sh" probe x > "$home/depth-nested.out" 2>&1
   rc_nested=$?
   out="$(OMNILANE_HOME="$home" OMNILANE_DEPTH=0 ENV_VALIDATION_MARKER="$marker" \
-    /bin/bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+    /bin/bash "$ROOT/scripts/dispatch.sh" probe x 2> "$home/depth-valid.stderr")"
   rc_valid=$?
 
   /bin/rm "$marker"
@@ -466,6 +480,8 @@ EOF
     fail "$name" "depth 1 should retain nested-dispatch exit 86, got $rc_nested"
   elif [[ "$rc_control" -ne 2 ]] || grep -q $'\033' "$home/grok-control.out"; then
     fail "$name" "invalid Grok retry value leaked terminal control bytes"
+  elif ! mode_notice_contract "$home" exec 1 "$home/depth-valid.stderr"; then
+    fail "$name" "single-shot degradation notice was not visible on stderr and in mode-notice.txt"
   elif [[ "$rc_valid" -ne 0 || "$out" != "gate" ]]; then
     fail "$name" "depth 0 no longer dispatched normally (rc=$rc_valid, out=$out)"
   elif [[ -e "$marker" ]]; then
@@ -494,7 +510,7 @@ printf 'codex selected\n' > "$out"
 EOF
   cat > "$bin/fake-claude" <<'EOF'
 #!/usr/bin/env bash
-printf 'claude selected %s\n' "$*"
+printf '{"type":"result","is_error":false,"result":"claude selected %s"}\n' "$*"
 EOF
   chmod +x "$bin/fake-codex" "$bin/fake-claude"
 
@@ -553,7 +569,8 @@ EOF
   printf 'probe: exec "%s" - | exec "%s" -\n' "$home/missing gate.sh" "$gate" \
     > "$home/routing.local.yaml"
 
-  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+  out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/dispatch.sh" probe x \
+    2> "$home/fallback.stderr")"
   rc=$?
   printf 'none: exec "%s" - | exec "%s" -\n' \
     "$home/missing-one.sh" "$home/missing-two.sh" > "$home/routing.local.yaml"
@@ -563,6 +580,8 @@ EOF
 
   if [[ "$rc" -ne 0 || "$out" != "fallback worked" ]]; then
     fail "$name" "working second gate was not selected (rc=$rc, out=$out)"
+  elif ! mode_notice_contract "$home" exec 1 "$home/fallback.stderr"; then
+    fail "$name" "single-shot degradation notice was not visible on stderr and in mode-notice.txt"
   elif [[ "$rc_missing" -ne 4 ]]; then
     fail "$name" "all-missing exec chain should be unavailable (4), got $rc_missing"
   else
@@ -595,15 +614,15 @@ EOF
   printf 'probe: exec "%s" - | exec "%s" -\n' "$directory" "$good" \
     > "$home/routing.local.yaml"
   out_directory="$(HOME="$user_home" OMNILANE_HOME="$home" \
-    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+    bash "$ROOT/scripts/dispatch.sh" probe x 2> "$home/directory.stderr")"
   printf 'probe: exec "~other/gate.sh" - | exec "%s" -\n' "$good" \
     > "$home/routing.local.yaml"
   out_named="$(HOME="$user_home" OMNILANE_HOME="$home" \
-    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+    bash "$ROOT/scripts/dispatch.sh" probe x 2> "$home/named.stderr")"
   printf 'probe: exec "~/home-gate.sh" - | exec "%s" -\n' "$good" \
     > "$home/routing.local.yaml"
   out_home="$(HOME="$user_home" OMNILANE_HOME="$home" \
-    bash "$ROOT/scripts/dispatch.sh" probe x 2>&1)"
+    bash "$ROOT/scripts/dispatch.sh" probe x 2> "$home/home.stderr")"
 
   if [[ "$out_directory" != "good gate" ]]; then
     fail "$name" "executable directory did not fall back: $out_directory"
@@ -611,6 +630,9 @@ EOF
     fail "$name" "named-user tilde was expanded as current HOME: $out_named"
   elif [[ "$out_home" != "home gate" ]]; then
     fail "$name" "home-relative gate did not resolve against HOME: $out_home"
+  elif ! mode_notice_contract "$home" exec 3 "$home/directory.stderr" \
+    "$home/named.stderr" "$home/home.stderr"; then
+    fail "$name" "single-shot degradation notices were not visible on stderr and in mode-notice.txt"
   else
     pass "$name"
   fi
@@ -2080,7 +2102,7 @@ EOF
     fail "$name" "recorded worker PID was not live"
   elif [[ "$running" != "running" ]]; then
     fail "$name" "live job status was not running: $running"
-  elif [[ "$finished" != "done exit=0" ]]; then
+  elif [[ "$finished" != "done exit=0"* ]]; then
     fail "$name" "finished job status was not done: $finished"
   else
     pass "$name"
@@ -2226,11 +2248,12 @@ EOF
 }
 test_doctor_gnu_stat_fallback() {
   local name="doctor falls back from GNU stat -f to stat -c"
-  local home repo fake json rc
+  local home repo fake config json rc
   home="$TEST_ROOT/doctor-gnu-stat-home"
   repo="$TEST_ROOT/doctor-gnu-stat-repo"
   fake="$TEST_ROOT/doctor-gnu-stat-bin"
-  mkdir -p "$home/jobs" "$repo/scripts" "$fake"
+  config="$TEST_ROOT/doctor-gnu-stat-config"
+  mkdir -p "$home/jobs" "$repo/scripts" "$repo/hooks" "$fake" "$config"
   chmod 700 "$home/jobs"
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -2248,10 +2271,28 @@ EOF
 #!/usr/bin/env bash
 exit 0
 EOF
-  chmod +x "$repo/scripts/dispatch.sh" "$fake/stat" "$fake/codex"
+  cat > "$fake/claude" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == plugin && "${2:-}" == list ]]; then
+  printf 'Installed plugins:\n  omnilane@omnilane\n    Status: enabled\n'
+fi
+EOF
+  printf '#!/bin/sh\nexit 0\n' > "$repo/hooks/report-completions.sh"
+  cat > "$repo/hooks/hooks.json" <<'EOF'
+{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/report-completions.sh"}]}]}}
+EOF
+  cat > "$config/settings.json" <<'EOF'
+{"enabledPlugins":{"omnilane@omnilane":true}}
+EOF
+  cat > "$config/settings.local.json" <<EOF
+{"extraKnownMarketplaces":{"omnilane":{"source":{"source":"directory","path":"$repo"}}}}
+EOF
+  chmod +x "$repo/scripts/dispatch.sh" "$repo/hooks/report-completions.sh" \
+    "$fake/stat" "$fake/codex" "$fake/claude"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
 
-  json="$(PATH="$fake:$PATH" OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
+  json="$(PATH="$fake:$PATH" CLAUDE_CONFIG_DIR="$config" \
+    OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor --strict --json 2>&1)"
   rc=$?
   if [[ "$rc" -ne 0 || "$json" != *'"ok":true'* ||
@@ -4155,6 +4196,28 @@ test_foreman_completion_inbox() {
   fi
 }
 test_foreman_completion_inbox
+
+test_completion_settings_detection() {
+  local name="completion settings detection" out rc=0
+  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --doctor-settings 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_completion_settings_detection
+
+test_install_check_read_only() {
+  local name="installer check is read-only" out rc=0
+  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --install-readonly 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_install_check_read_only
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

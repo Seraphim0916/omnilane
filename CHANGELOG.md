@@ -6,6 +6,50 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-30
+
+### Added
+
+- `docs/roadmap.md` plans threaded dispatch (continue a job instead of
+  restarting it) and a live mailbox (message a job while it runs), with a
+  per-vendor session capability matrix. `docs/experiments/live-inbox-probe.sh`
+  is the probe backing the mailbox claim.
+
+- Finished dispatches now report themselves to the foreman. Each completed job
+  writes a private record under `$OMNILANE_HOME/inbox/`, and the bundled Claude
+  Code `UserPromptSubmit` hook delivers matching records into the foreman's next
+  prompt, so a background dispatch no longer has to be polled. Records are
+  scoped by the dispatch `workdir` and, when available, its foreman session,
+  claimed at most once, and moved to `inbox/consumed/`. Worker-output tails are
+  framed as indented data and stripped of control characters and Unicode
+  `U+2028`/`U+2029` separators, so they cannot forge a header or issue
+  instructions. Set `OMNILANE_INBOX=0` to disable record creation.
+- `.claude-plugin/marketplace.json` makes the repository installable as a Claude
+  Code plugin, which is the install path the completion notice needs:
+  `claude plugin marketplace add <repo>` then `claude plugin install
+  omnilane@omnilane`.
+- The published package now ships `hooks/`, `skills/` and `.claude-plugin/`, so
+  an npm install carries the hook script instead of only the CLI.
+- `install.sh` reports whether the completion notice is active and, when it is
+  not, prints the exact commands that enable it; the skill symlink alone does
+  not deliver notices.
+- `doctor` answers whether the completion notice is live, reading the
+  `hooks/hooks.json` of the current checkout rather than the state recorded at
+  install time — checking out a branch without the hook silently disables the
+  notice while the plugin still reports itself as enabled.
+- Claude background dispatches can now stay resident as a live mailbox. A live
+  job accepts `jobs.sh send`, `watch`, `tail`, `close`, and `retry`, and records
+  lifecycle events in `events.jsonl`. Other vendors explicitly fall back to
+  single-shot mode with a `stderr` and `mode-notice.txt` notice; `jobs.sh wait`
+  now prints `done exit=N` when the job finishes.
+- Foreman completion records are now bound to the Claude session that launched
+  the dispatch. The `SessionStart` hook records the `session_id` against the
+  parent PID and its start time, making PID reuse safe; dispatch finds that
+  identity by walking its ancestors and stamps `foreman_session` into
+  `meta.json` and completion records. The inbox consumes a session match first
+  and falls back to `workdir` for legacy records, preventing two foremen in one
+  repository from taking each other's notices.
+
 ## [0.15.0] - 2026-08-28
 
 ### Added
@@ -616,7 +660,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.20.0...HEAD
+
+[0.20.0]: https://github.com/Seraphim0916/omnilane/compare/v0.15.0...v0.20.0
 
 [0.15.0]: https://github.com/Seraphim0916/omnilane/compare/v0.14.0...v0.15.0
 
