@@ -30,7 +30,8 @@ case "$cmd" in
     ;;
   list)      exec bash "$REPO/scripts/dispatch.sh" --list ;;
   route|dispatch) exec bash "$REPO/scripts/dispatch.sh" "$@" ;;
-  jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
+    jobs)      exec bash "$REPO/scripts/jobs.sh" "$@" ;;
+    goal)      exec bash "$REPO/scripts/lib/goal-loop.sh" "$@" ;;
   mcp)
     command -v node >/dev/null 2>&1 || {
       echo "omnilane: mcp requires Node.js on PATH" >&2
@@ -75,6 +76,9 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
+  omnilane goal "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]
+                                        run bounded sequential goal loop
+  omnilane goal status GOAL_ID           inspect goal budget and last action
   omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, recommend, wait, or audit
   omnilane mcp                          start the MCP stdio server
   omnilane completion bash|zsh|fish      print a shell completion script

@@ -4135,6 +4135,24 @@ test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-sh
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
 test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
 
+test_goal_loop_case() {
+  local test_case="$1" name="$2" out rc=0
+  out="$(bash "$ROOT/tests/test_goal_loop.sh" "$test_case" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+
+test_goal_loop_case dispatch-done "goal loop dispatches sequential worker and records summary"
+test_goal_loop_case multi "goal loop runs multi-job actions sequentially"
+test_goal_loop_case invalid "goal loop reprompts invalid JSON once then aborts"
+test_goal_loop_case budget-jobs "goal loop enforces budget-jobs cap and forces summary"
+test_goal_loop_case budget-seconds "goal loop enforces wall-clock budget and forces summary"
+test_goal_loop_case abort "goal loop honors planner abort action"
+test_goal_loop_case depth-guard "goal loop preserves planner depth guard exit 86"
+
 test_configure_model_catalogs() {
   local name="configure exposes expanded provider model catalogs"
   local vendor vendor_index model_index effort_index expected home input out
