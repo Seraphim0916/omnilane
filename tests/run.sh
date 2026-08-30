@@ -4146,7 +4146,16 @@ test_goal_loop_case() {
 }
 
 test_goal_loop_case dispatch-done "goal loop dispatches sequential worker and records summary"
-test_goal_loop_case multi "goal loop runs multi-job actions sequentially"
+test_goal_loop_case multi "goal loop runs multi-job actions"
+test_goal_loop_case worker-single-shot "goal loop dispatches workers single-shot"
+test_goal_loop_case parallel-two "goal loop reports parallel completions in finish order"
+test_goal_loop_case parallel-one "goal loop parallel one preserves sequential behavior"
+test_goal_loop_case fuse "goal loop refuses third unchanged failed job"
+test_goal_loop_case status-p2 "goal status reports parallel jobs and fuse trips"
+test_goal_loop_case invalid-lane "goal loop corrects invalid lane without budget burn"
+test_goal_loop_case launch-failure "goal loop does not charge launch failure to budget-jobs"
+test_goal_loop_case planner-timeout "goal loop derives planner timeout from goal budget"
+test_goal_loop_case planner-dies "goal loop records dead planner exit and job directory"
 test_goal_loop_case invalid "goal loop reprompts invalid JSON once then aborts"
 test_goal_loop_case budget-jobs "goal loop enforces budget-jobs cap and forces summary"
 test_goal_loop_case budget-seconds "goal loop enforces wall-clock budget and forces summary"

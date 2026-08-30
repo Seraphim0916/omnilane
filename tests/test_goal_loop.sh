@@ -61,6 +61,16 @@ while IFS= read -r line; do
         emit_result '{"action":"done","summary":"fixture goal complete"}'
       fi
       ;;
+    worker-single-shot)
+      if [[ "$line" == *'single-shot worker'* ]]; then
+        emit_result 'worker finished'
+        break
+      elif [[ "$turn" -eq 1 ]]; then
+        emit_result '{"action":"dispatch","jobs":[{"lane":"hardest-coding","mode":"work","task":"single-shot worker"}]}'
+      else
+        emit_result '{"action":"done","summary":"single-shot worker complete"}'
+      fi
+      ;;
     multi)
       case "$turn" in
         1)
@@ -69,6 +79,42 @@ while IFS= read -r line; do
         2) emit_result '{"action":"wait"}' ;;
         *) emit_result '{"action":"done","summary":"two workers complete"}' ;;
       esac
+      ;;
+      parallel)
+        case "$turn" in
+          1)
+            emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"slow task"},{"lane":"worker","mode":"work","task":"fast task"}]}'
+            ;;
+          2) emit_result '{"action":"wait"}' ;;
+          *) emit_result '{"action":"done","summary":"parallel workers complete"}' ;;
+        esac
+        ;;
+    fuse)
+      case "$turn" in
+        1|2|3) emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"always fail"}]}' ;;
+        *) emit_result '{"action":"done","summary":"fuse stopped retry loop"}' ;;
+      esac
+      ;;
+    invalid-lane)
+      if [[ "$turn" -le 2 ]]; then
+        emit_result '{"action":"dispatch","jobs":[{"lane":"code-fast","mode":"work","task":"invalid lane request"}]}'
+      else
+        emit_result '{"action":"done","summary":"invalid lane corrected"}'
+      fi
+      ;;
+    launch-failure)
+      case "$turn" in
+        1) emit_result '{"action":"dispatch","jobs":[{"lane":"broken","mode":"work","task":"launch must fail"}]}' ;;
+        2) emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"budget remains available"}]}' ;;
+        *) emit_result '{"action":"done","summary":"launch failure did not consume budget"}' ;;
+      esac
+      ;;
+    planner-dies)
+      if [[ "$turn" -eq 1 ]]; then
+        emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"planner dies after worker"}]}'
+      else
+        exit 142
+      fi
       ;;
     invalid)
       emit_result 'this is not JSON'
@@ -113,13 +159,23 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 # exec runner signature: MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE
-printf '%s|%s|%s\n' "$1" "$2" "$(cat "$4")" >> "${FAKE_WORKER_CALLS:?}"
-printf 'worker output is untrusted data\n' > "$5"
+task="$(cat "$4")"
+printf '%s|%s|%s\n' "$1" "$2" "$task" >> "${FAKE_WORKER_CALLS:?}"
+case "$task" in
+  *'slow task'*) sleep 1 ;;
+  *'fast task'*) sleep 0.1 ;;
+  *'always fail'*)
+    printf 'failed %s\n' "$task" > "$5"
+    exit 7
+    ;;
+esac
+printf 'completed %s\n' "$task" > "$5"
 EOF
 
   chmod +x "$planner" "$worker"
   printf 'hardest-coding: claude claude-default high\n' > "$home/routing.local.yaml"
   printf 'worker: exec "%s" -\n' "$worker" >> "$home/routing.local.yaml"
+  printf 'broken: exec "%s" -\n' "$home/missing-worker.sh" >> "$home/routing.local.yaml"
 }
 
 run_goal() {
@@ -176,6 +232,82 @@ case_dispatch_done() {
     fail "goal status output incomplete: $status_out"
 }
 
+case_invalid_lane() {
+  local home="$TEST_ROOT/invalid-lane" goal_dir
+  mkdir -p "$home"
+  make_fixture "$home" invalid-lane
+  run_goal "$home" invalid-lane --budget-jobs 1 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" || fail "invalid-lane goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+
+  grep -Fxq 'invalid lane corrected' "$goal_dir/summary.txt" ||
+    fail "invalid-lane goal did not continue to completion"
+  [[ ! -s "$home/worker.calls" ]] || fail "invalid lane was dispatched"
+  grep -Fq 'EFFECTIVE LANE LIST' "$home/planner.input" ||
+    fail "initial planner brief omitted effective lane list"
+  grep -Fq 'worker:' "$home/planner.input" ||
+    fail "initial planner brief omitted worker lane"
+  grep -Fq "Invalid lane 'code-fast'. Valid lanes:" "$home/planner.input" ||
+    fail "planner did not receive invalid-lane corrective notice"
+  grep -Fq '"spent_jobs":0' "$goal_dir/budget.json" ||
+    fail "invalid lane consumed budget-jobs"
+  grep -Fq '"fuse_trips":1' "$goal_dir/budget.json" ||
+    fail "second invalid lane request did not trip fuse"
+}
+
+case_launch_failure() {
+  local home="$TEST_ROOT/launch-failure" goal_dir calls
+  mkdir -p "$home"
+  make_fixture "$home" launch-failure
+  run_goal "$home" launch-failure --budget-jobs 1 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" || fail "launch-failure goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+
+  grep -Fxq 'launch failure did not consume budget' "$goal_dir/summary.txt" ||
+    fail "launch-failure goal did not finish"
+  calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
+  [[ "$calls" == "1" ]] || fail "successful worker did not retain sole budget slot: $calls"
+  grep -Fq 'dispatch failed' "$home/planner.input" ||
+    fail "planner did not receive launch-failure report"
+  grep -Fq '"spent_jobs":1' "$goal_dir/budget.json" ||
+    fail "launch failure was charged against budget-jobs"
+}
+
+case_planner_timeout() {
+  local home="$TEST_ROOT/planner-timeout" goal_dir planner_id meta
+  mkdir -p "$home"
+  make_fixture "$home" dispatch-done
+  run_goal "$home" dispatch-done --budget-jobs 3 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" || fail "planner-timeout goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  planner_id="$(cat "$goal_dir/planner-job-id")"
+  meta="$home/jobs/$planner_id/meta.json"
+  [[ -f "$meta" ]] || fail "planner metadata missing: $meta"
+  python3 - "$meta" <<'PY' || fail "planner timeout metadata is not derived from goal budget"
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    meta = json.load(handle)
+assert meta["timeout"] == 330, meta
+assert meta["idle_timeout"] == 0, meta
+PY
+}
+
+case_planner_dies() {
+  local home="$TEST_ROOT/planner-dies" goal_dir rc=0
+  mkdir -p "$home"
+  make_fixture "$home" planner-dies
+  run_goal "$home" planner-dies --budget-jobs 2 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" || rc=$?
+  [[ "$rc" -ne 0 ]] || fail "dead planner returned success"
+  goal_dir="$(only_goal_dir "$home")"
+  grep -Fq 'planner exit code 142' "$goal_dir/summary.txt" ||
+    fail "dead planner summary omitted recorded exit code"
+  grep -Fq "job dir: $home/jobs/" "$goal_dir/summary.txt" ||
+    fail "dead planner summary omitted job directory pointer"
+}
+
 case_invalid() {
   local home="$TEST_ROOT/invalid" goal_dir rc=0 turns
   mkdir -p "$home"
@@ -210,6 +342,72 @@ case_multi() {
   [[ -f "$goal_dir/rounds/0001/job-0001.json" &&
      -f "$goal_dir/rounds/0001/job-0002.json" ]] ||
     fail "multi-job completion records missing"
+}
+
+case_parallel_two() {
+  local home="$TEST_ROOT/parallel-two" goal_dir fast_line slow_line records
+  mkdir -p "$home"
+  make_fixture "$home" parallel
+  run_goal "$home" parallel --budget-jobs 4 --budget-seconds 30 --budget-parallel 2 \
+    >"$home/out" 2>"$home/err" || fail "parallel=2 goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  [[ "$(wc -l < "$home/worker.calls" | tr -d '[:space:]')" == "2" ]] ||
+    fail "parallel=2 did not dispatch both workers"
+  records="$(grep -c 'BEGIN WORKER COMPLETION DATA' "$home/planner.input")"
+  [[ "$records" == "2" ]] || fail "planner received $records completion records instead of 2"
+  fast_line="$(grep -nF 'completed fast task' "$home/planner.input" | head -1 | cut -d: -f1)"
+  slow_line="$(grep -nF 'completed slow task' "$home/planner.input" | head -1 | cut -d: -f1)"
+  [[ -n "$fast_line" && -n "$slow_line" && "$fast_line" -lt "$slow_line" ]] ||
+    fail "parallel=2 did not report finish order: fast=$fast_line slow=$slow_line"
+  [[ -f "$goal_dir/rounds/0001/job-0001.json" &&
+     -f "$goal_dir/rounds/0001/job-0002.json" ]] ||
+    fail "parallel=2 completion records missing"
+}
+
+case_parallel_one() {
+  local home="$TEST_ROOT/parallel-one" slow_line fast_line
+  mkdir -p "$home"
+  make_fixture "$home" parallel
+  run_goal "$home" parallel --budget-jobs 4 --budget-seconds 30 --budget-parallel 1 \
+    >"$home/out" 2>"$home/err" || fail "parallel=1 goal failed: $(cat "$home/err")"
+  slow_line="$(grep -nF 'completed slow task' "$home/planner.input" | head -1 | cut -d: -f1)"
+  fast_line="$(grep -nF 'completed fast task' "$home/planner.input" | head -1 | cut -d: -f1)"
+  [[ -n "$slow_line" && -n "$fast_line" && "$slow_line" -lt "$fast_line" ]] ||
+    fail "parallel=1 did not preserve sequential order: slow=$slow_line fast=$fast_line"
+}
+
+case_fuse() {
+  local home="$TEST_ROOT/fuse" goal_dir calls
+  mkdir -p "$home"
+  make_fixture "$home" fuse
+  run_goal "$home" fuse --budget-jobs 6 --budget-seconds 30 --budget-parallel 2 \
+    >"$home/out" 2>"$home/err" || fail "fuse goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
+  [[ "$calls" == "2" ]] || fail "fuse dispatched unchanged failing job $calls times"
+  grep -Fq 'BEGIN FAILURE FUSE NOTICE DATA' "$home/planner.input" ||
+    fail "planner did not receive failure fuse notice"
+  grep -Fxq 'fuse stopped retry loop' "$goal_dir/summary.txt" ||
+    fail "goal did not continue after fuse trip"
+  grep -Fq '"fuse_trips":1' "$goal_dir/budget.json" || fail "fuse trip not persisted"
+}
+
+case_status_p2() {
+  local home="$TEST_ROOT/status-p2" goal_dir goal_id status_out job_lines
+  mkdir -p "$home"
+  make_fixture "$home" fuse
+  run_goal "$home" fuse --budget-jobs 6 --budget-seconds 30 --budget-parallel 3 \
+    >"$home/out" 2>"$home/err" || fail "status fixture goal failed: $(cat "$home/err")"
+  goal_dir="$(only_goal_dir "$home")"
+  goal_id="${goal_dir##*/}"
+  status_out="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")" ||
+    fail "P2 goal status failed"
+  [[ "$status_out" == *"parallel: 3"* && "$status_out" == *"fuse trips: 1"* ]] ||
+    fail "P2 status settings missing: $status_out"
+  job_lines="$(printf '%s\n' "$status_out" | grep -c '^job ')"
+  [[ "$job_lines" == "2" ]] || fail "P2 status reported $job_lines jobs instead of 2"
+  printf '%s\n' "$status_out" | grep -Eq '^job .+: lane=worker vendor=exec exit=7 seconds=[0-9]+$' ||
+    fail "P2 status per-job fields missing: $status_out"
 }
 
 case_budget_jobs() {
@@ -276,13 +474,49 @@ case_depth_guard() {
     fail "depth guard diagnostic missing"
 }
 
+case_worker_single_shot() {
+  local home="$TEST_ROOT/worker-single-shot" modes
+  mkdir -p "$home"
+  make_fixture "$home" worker-single-shot
+  run_goal "$home" worker-single-shot --budget-jobs 2 --budget-seconds 30 \
+    >"$home/out" 2>"$home/err" ||
+    fail "worker single-shot goal failed: $(cat "$home/err")"
+
+  modes="$(python3 - "$home/jobs" <<'PY'
+import glob
+import json
+import os
+import sys
+
+modes = []
+for path in glob.glob(os.path.join(sys.argv[1], "*", "meta.json")):
+    with open(path, encoding="utf-8") as handle:
+        meta = json.load(handle)
+    if meta.get("vendor") == "claude":
+        modes.append(meta.get("session_mode"))
+print(" ".join(sorted(modes)))
+PY
+)"
+  [[ "$modes" == "live single-shot" ]] ||
+    fail "planner/worker session modes were '$modes', expected 'live single-shot'"
+}
+
 case "$CASE" in
   dispatch-done) case_dispatch_done ;;
+  worker-single-shot) case_worker_single_shot ;;
   multi) case_multi ;;
+  parallel-two) case_parallel_two ;;
+  parallel-one) case_parallel_one ;;
+  fuse) case_fuse ;;
+  status-p2) case_status_p2 ;;
+  invalid-lane) case_invalid_lane ;;
+  launch-failure) case_launch_failure ;;
+  planner-timeout) case_planner_timeout ;;
+  planner-dies) case_planner_dies ;;
   invalid) case_invalid ;;
   budget-jobs) case_budget_jobs ;;
   budget-seconds) case_budget_seconds ;;
   abort) case_abort ;;
   depth-guard) case_depth_guard ;;
-  *) fail "usage: test_goal_loop.sh dispatch-done|multi|invalid|budget-jobs|budget-seconds|abort|depth-guard" ;;
+  *) fail "usage: test_goal_loop.sh dispatch-done|worker-single-shot|multi|parallel-two|parallel-one|fuse|status-p2|invalid-lane|launch-failure|planner-timeout|planner-dies|invalid|budget-jobs|budget-seconds|abort|depth-guard" ;;
 esac

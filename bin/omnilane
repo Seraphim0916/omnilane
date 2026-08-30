@@ -76,8 +76,8 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
-  omnilane goal "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]
-                                        run bounded sequential goal loop
+  omnilane goal "TEXT" [--budget-jobs N] [--budget-seconds S] [--budget-parallel P] [--workdir DIR]
+                                        run bounded parallel goal loop
   omnilane goal status GOAL_ID           inspect goal budget and last action
   omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, recommend, wait, or audit
   omnilane mcp                          start the MCP stdio server
