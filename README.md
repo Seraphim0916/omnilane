@@ -441,17 +441,19 @@ An idle mailbox makes no API calls and incurs no API spend. By default it closes
 
 ## 🎯 Goal orchestration
 
-`omnilane goal` handles bounded, exploratory work: a resident planner thinks through the next step, while omnilane performs every dispatch. Job, wall-clock, and parallelism budgets keep the loop bounded. The planner vendor is Claude today; worker vendors still follow the effective routing table.
+`omnilane goal` is a foreman-driven ledger for bounded, exploratory work. The caller—an agent session or a human terminal—owns the loop: dispatch a job, receive its result through the completion inbox or `omnilane jobs wait`, decide the next job, and repeat. omnilane supplies bookkeeping only. It enforces job and elapsed-time budgets plus the repeated-failure fuse before each goal dispatch, then assembles the report when the foreman closes the goal.
 
 ```bash
-omnilane goal "Diagnose and fix the flaky integration" \
-  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
-  --workdir /path/to/repo
-
-omnilane goal status GOAL_ID
+GOAL_ID="$(omnilane goal open "Fix the flaky checkout integration" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "Reproduce the checkout failure and implement the smallest verified fix")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "Fix verified by the checkout integration test"
+omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
 ```
 
-Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Every terminal outcome writes `report.md` there, and the final output line prints its path. Use `goal status` to inspect current status, budget usage, rounds, fuse trips, and completed jobs.
+Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly; goal budgets are hard bounds, not completion promises.
 
 Do not use goal orchestration for a single obvious task; dispatch that task directly. Also do not start it when no budget is available for exploration—the budgets are hard bounds, not completion promises.
 

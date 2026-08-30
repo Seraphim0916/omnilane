@@ -76,9 +76,14 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
-  omnilane goal "TEXT" [--budget-jobs N] [--budget-seconds S] [--budget-parallel P] [--workdir DIR]
-                                        run bounded parallel goal loop
-  omnilane goal status GOAL_ID           inspect goal budget and last action
+ omnilane goal open "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]
+ open a foreman-driven goal ledger
+  omnilane goal dispatch GOAL_ID [dispatch.sh args...]
+                                         budget-gate and start one background job
+  omnilane goal note GOAL_ID "TEXT"       append a timestamped foreman note
+  omnilane goal status GOAL_ID           inspect budgets, fuse trips, and recorded jobs
+  omnilane goal close GOAL_ID [--summary "TEXT"]
+                                         write the final goal report
   omnilane jobs  [--json] COMMAND [ARGS]  list, status, result, stats, recommend, wait, or audit
   omnilane mcp                          start the MCP stdio server
   omnilane completion bash|zsh|fish      print a shell completion script

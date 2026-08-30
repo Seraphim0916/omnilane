@@ -353,19 +353,19 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 目标编排
 
-`omnilane goal` 适合有明确预算上限、但需要逐步探索的工作：常驻规划器负责思考下一步，所有派发都由 omnilane 执行。作业数、经过秒数和并行数预算会约束整个循环。目前规划器供应商是 Claude；执行作业的供应商仍由有效路由表决定。
+`omnilane goal` 是由领班驱动、带预算上限的工作台账。循环由调用方负责，也就是打开目标的代理会话或终端用户：派发一个作业，从完成收件箱或 `omnilane jobs wait` 取回结果，决定下一个作业，再重复执行。omnilane 只负责记账；每次 goal dispatch 前都会检查作业数、经过秒数和重复失败熔断，领班关闭目标时才汇总报告。
 
 ```bash
-omnilane goal "诊断并修复不稳定的集成问题" \
-  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
-  --workdir /path/to/repo
-
-omnilane goal status GOAL_ID
+GOAL_ID="$(omnilane goal open "修复不稳定的结账集成" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "重现结账失败，完成最小修复并验证")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "结账集成测试已通过"
+omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
 ```
 
-目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。每种终止结果都会在该目录写入 `report.md`，最后一行输出会显示报告路径。使用 `goal status` 可以查看当前状态、预算用量、轮次、熔断次数和已完成作业。
-
-单个且做法明确的任务不要使用目标编排，直接派发即可。如果没有可用于探索的预算，也不要启动；预算是硬上限，并不保证任务完成。
+目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；目标预算是硬上限，并不保证任务完成。
 
 ## ❓ 常见问题
 

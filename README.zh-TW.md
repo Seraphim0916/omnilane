@@ -380,19 +380,19 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 目標編排
 
-`omnilane goal` 適合有明確預算上限、但需要逐步探索的工作：常駐規劃器負責思考下一步，所有派工都由 omnilane 執行。工作數、經過秒數與平行數預算會限制整個循環。目前規劃器供應商是 Claude；執行工作的供應商仍依有效路由表決定。
+`omnilane goal` 是有預算上限的工頭式工作台帳。迴圈由呼叫端負責，也就是開啟目標的代理工作階段或終端機前的人：派出一份工作，從完成信箱或 `omnilane jobs wait` 收回結果，判斷下一份工作，再重複執行。omnilane 只負責記帳；每次 goal dispatch 前會檢查工作數、經過秒數與重複失敗熔斷，工頭關閉目標時才彙整報告。
 
 ```bash
-omnilane goal "找出並修正不穩定的整合問題" \
-  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
-  --workdir /path/to/repo
-
-omnilane goal status GOAL_ID
+GOAL_ID="$(omnilane goal open "修好不穩定的結帳整合" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "重現結帳失敗，完成最小修正並驗證")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "結帳整合測試已通過"
+omnilane goal close "$GOAL_ID" --summary "結帳整合已穩定"
 ```
 
-目標狀態存放在 `$OMNILANE_HOME/goals/<goal-id>/`。每種終止結果都會在該資料夾寫入 `report.md`，最後一行輸出會顯示報告路徑。用 `goal status` 可查看目前狀態、預算用量、輪次、熔斷次數與已完成工作。
-
-單一而且作法明確的工作不要使用目標編排，直接派工即可。若沒有可供探索的預算，也不要啟動；預算是硬上限，不是保證完成的額度。
+目標狀態存放在 `$OMNILANE_HOME/goals/<goal-id>/`。用 `goal status` 可查看預算用量、熔斷次數，以及每份工作陸續寫入的中繼資料與結束狀態。`goal close` 會寫入 `report.md` 並印出路徑。單一而且作法明確的工作直接派工即可；目標預算是硬上限，不代表保證完成。
 
 ## ❓ 常見問題
 

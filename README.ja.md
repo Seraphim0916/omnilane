@@ -384,19 +384,19 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 ゴールオーケストレーション
 
-`omnilane goal` は、予算上限を定めた探索的な作業に使います。常駐プランナーが次の手順を考え、すべてのディスパッチは omnilane が実行します。ジョブ数、経過秒数、並列数の予算がループを制限します。現在のプランナーのベンダーは Claude です。ワーカーのベンダーは引き続き有効なルーティング表に従います。
+`omnilane goal` は、フォアマンが進行する予算付きの作業台帳です。ループを担当するのは、ゴールを開いたエージェントセッションまたは端末の利用者です。ジョブをディスパッチし、完了受信箱または `omnilane jobs wait` で結果を受け取り、次のジョブを判断して繰り返します。omnilane は記録だけを担い、各 goal dispatch の前にジョブ数、経過秒数、同一失敗のヒューズを検査し、フォアマンがゴールを閉じるときにレポートをまとめます。
 
 ```bash
-omnilane goal "不安定な統合処理を診断して修正する" \
-  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
-  --workdir /path/to/repo
-
-omnilane goal status GOAL_ID
+GOAL_ID="$(omnilane goal open "不安定な決済統合を修正する" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "決済エラーを再現し、最小修正を実装して検証する")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "決済統合テストが成功した"
+omnilane goal close "$GOAL_ID" --summary "決済統合は安定した"
 ```
 
-ゴールの状態は `$OMNILANE_HOME/goals/<goal-id>/` に保存されます。どの終了結果でも同じディレクトリに `report.md` が書き込まれ、最後の出力行にそのパスが表示されます。`goal status` では、現在の状態、予算使用量、ラウンド数、ヒューズ作動回数、完了ジョブを確認できます。
-
-手順が明白な単一タスクには使わず、直接ディスパッチしてください。探索に割ける予算がない場合にも開始しないでください。予算は厳格な上限であり、完了を保証するものではありません。
+ゴールの状態は `$OMNILANE_HOME/goals/<goal-id>/` に保存されます。`goal status` では、予算使用量、ヒューズ作動回数、各ジョブから順次届くメタデータと終了状態を確認できます。`goal close` は `report.md` を書き、そのパスを表示します。手順が明白な単一タスクは直接ディスパッチしてください。ゴール予算は厳格な上限であり、完了を保証するものではありません。
 
 ## ❓ FAQ
 

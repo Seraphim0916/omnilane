@@ -4149,24 +4149,14 @@ test_goal_loop_case() {
   fi
 }
 
-test_goal_loop_case dispatch-done "goal loop dispatches sequential worker and records summary"
-test_goal_loop_case report-done "goal loop writes done report"
-test_goal_loop_case multi "goal loop runs multi-job actions"
-test_goal_loop_case worker-single-shot "goal loop dispatches workers single-shot"
-test_goal_loop_case parallel-two "goal loop reports parallel completions in finish order"
-test_goal_loop_case parallel-one "goal loop parallel one preserves sequential behavior"
-test_goal_loop_case fuse "goal loop refuses third unchanged failed job"
-test_goal_loop_case status-p2 "goal status reports parallel jobs and fuse trips"
-test_goal_loop_case invalid-lane "goal loop corrects invalid lane without budget burn"
-test_goal_loop_case launch-failure "goal loop does not charge launch failure to budget-jobs"
-test_goal_loop_case planner-timeout "goal loop derives planner timeout from goal budget"
-test_goal_loop_case planner-dies "goal loop records dead planner exit and job directory"
-test_goal_loop_case invalid "goal loop reprompts invalid JSON once then aborts"
-test_goal_loop_case budget-jobs "goal loop enforces budget-jobs cap and forces summary"
-test_goal_loop_case report-budget "goal loop writes budget report"
-test_goal_loop_case budget-seconds "goal loop enforces wall-clock budget and forces summary"
-test_goal_loop_case abort "goal loop honors planner abort action"
-test_goal_loop_case depth-guard "goal loop preserves planner depth guard exit 86"
+test_goal_loop_case open "goal ledger opens with budgets and workdir"
+test_goal_loop_case dispatch-allow "goal dispatch budget gate allows background job"
+test_goal_loop_case jobs-cap "goal dispatch refuses exhausted jobs budget"
+test_goal_loop_case seconds-cap "goal dispatch refuses exhausted seconds budget"
+test_goal_loop_case fuse "goal dispatch fuse refuses third identical failure"
+test_goal_loop_case note-status "goal note and status track jobs as they land"
+test_goal_loop_case close-report "goal close writes foreman report"
+test_goal_loop_case cli-surface "goal CLI removes one-shot and parallel budget"
 
 test_configure_model_catalogs() {
   local name="configure exposes expanded provider model catalogs"

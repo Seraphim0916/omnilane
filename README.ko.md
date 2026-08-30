@@ -371,19 +371,19 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 목표 오케스트레이션
 
-`omnilane goal`은 예산 상한이 정해진 탐색 작업에 사용합니다. 상주 플래너가 다음 단계를 판단하고 모든 디스패치는 omnilane이 실행합니다. 작업 수, 경과 시간, 병렬 처리 예산이 루프의 범위를 제한합니다. 현재 플래너 벤더는 Claude이며, 워커 벤더는 계속 유효한 라우팅 표를 따릅니다.
+`omnilane goal`은 포어맨이 진행하는 예산 기반 작업 원장입니다. 루프는 목표를 연 에이전트 세션이나 터미널 사용자가 담당합니다. 작업을 디스패치하고 완료 수신함 또는 `omnilane jobs wait`로 결과를 받은 뒤 다음 작업을 판단하여 반복합니다. omnilane은 기록만 담당하며, 각 goal dispatch 전에 작업 수와 경과 시간 예산 및 동일 실패 퓨즈를 검사하고 포어맨이 목표를 닫을 때 보고서를 작성합니다.
 
 ```bash
-omnilane goal "불안정한 통합 문제를 진단하고 수정하기" \
-  --budget-jobs 8 --budget-seconds 900 --budget-parallel 2 \
-  --workdir /path/to/repo
-
-omnilane goal status GOAL_ID
+GOAL_ID="$(omnilane goal open "불안정한 결제 통합 수정" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "결제 오류를 재현하고 최소 수정 후 검증")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "결제 통합 테스트 통과"
+omnilane goal close "$GOAL_ID" --summary "결제 통합이 안정화됨"
 ```
 
-목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. 어떤 종료 결과든 같은 디렉터리에 `report.md`를 기록하며 마지막 출력 줄에 해당 경로를 표시합니다. `goal status`로 현재 상태, 예산 사용량, 라운드 수, 퓨즈 작동 횟수, 완료된 작업을 확인할 수 있습니다.
-
-절차가 명확한 단일 작업에는 사용하지 말고 바로 디스패치하십시오. 탐색에 쓸 예산이 없을 때도 시작하지 마십시오. 예산은 엄격한 상한이며 완료를 보장하지 않습니다.
+목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. `goal status`로 예산 사용량, 퓨즈 작동 횟수, 각 작업에서 순차적으로 도착하는 메타데이터와 종료 상태를 확인할 수 있습니다. `goal close`는 `report.md`를 기록하고 경로를 출력합니다. 절차가 명확한 단일 작업은 바로 디스패치하십시오. 목표 예산은 엄격한 상한이며 완료를 보장하지 않습니다.
 
 ## ❓ FAQ
 

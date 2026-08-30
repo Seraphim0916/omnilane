@@ -1,5 +1,7 @@
 # Goal Orchestrator — bounded multi-agent dispatch on the live mailbox
 
+> **P4 owner ruling:** The resident planner shipped in P1–P3 was removed. The foreman—the agent session or human that opened the goal—is the planner; omnilane now provides only the goal ledger, budget/fuse gates, job records, and close report.
+
 Status: approved direction, phased plan. Nothing below is implemented.
 Prerequisite: resident-mode completion (explicit --live/--single-shot choice,
 idle cap, gemini live lane) must land and release first.

@@ -9,7 +9,7 @@ CASE="${1:-}"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-goal-tests.XXXXXX")"
 
 cleanup() {
-  /bin/rm -rf -- "$TEST_ROOT"
+  /bin/rm -r -- "$TEST_ROOT" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -18,150 +18,9 @@ fail() {
   exit 1
 }
 
-wait_for_file() {
-  local path="$1" tries=0
-  while [[ "$tries" -lt 100 ]]; do
-    [[ -f "$path" ]] && return 0
-    sleep 0.1
-    tries=$((tries + 1))
-  done
-  return 1
-}
-
 make_fixture() {
-  local home="$1" scenario="$2"
-  local bin planner worker
-  bin="$home/bin"
-  planner="$bin/claude"
-  worker="$home/worker.sh"
-  mkdir -p "$bin" "$home/work"
-
-  cat > "$planner" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-turn=0
-emit_result() {
-  RESULT_TEXT="$1" python3 - <<'PY'
-import json
-import os
-print(json.dumps({"type": "result", "is_error": False,
-                  "result": os.environ["RESULT_TEXT"]}, separators=(",", ":")))
-PY
-}
-
-while IFS= read -r line; do
-  printf '%s\n' "$line" >> "${FAKE_PLANNER_INPUT:?}"
-  turn=$((turn + 1))
-  case "${PLANNER_SCENARIO:?}" in
-      dispatch-done)
-        if [[ "$turn" -eq 1 ]]; then
-          emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"inspect fixture"}]}'
-        else
-          emit_result '{"action":"done","summary":"fixture goal complete"}'
-        fi
-        ;;
-      report-done)
-        if [[ "$turn" -eq 1 ]]; then
-          emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"inspect fixture"}]}'
-        else
-          emit_result '{"action":"done","summary":"fixture goal complete; artifact: /tmp/fixture-output.txt"}'
-        fi
-        ;;
-    worker-single-shot)
-      if [[ "$line" == *'single-shot worker'* ]]; then
-        emit_result 'worker finished'
-        break
-      elif [[ "$turn" -eq 1 ]]; then
-        emit_result '{"action":"dispatch","jobs":[{"lane":"hardest-coding","mode":"work","task":"single-shot worker"}]}'
-      else
-        emit_result '{"action":"done","summary":"single-shot worker complete"}'
-      fi
-      ;;
-    multi)
-      case "$turn" in
-        1)
-          emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"advise","task":"first task"},{"lane":"worker","mode":"work","task":"second task"}]}'
-          ;;
-        2) emit_result '{"action":"wait"}' ;;
-        *) emit_result '{"action":"done","summary":"two workers complete"}' ;;
-      esac
-      ;;
-      parallel)
-        case "$turn" in
-          1)
-            emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"slow task"},{"lane":"worker","mode":"work","task":"fast task"}]}'
-            ;;
-          2) emit_result '{"action":"wait"}' ;;
-          *) emit_result '{"action":"done","summary":"parallel workers complete"}' ;;
-        esac
-        ;;
-    fuse)
-      case "$turn" in
-        1|2|3) emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"always fail"}]}' ;;
-        *) emit_result '{"action":"done","summary":"fuse stopped retry loop"}' ;;
-      esac
-      ;;
-    invalid-lane)
-      if [[ "$turn" -le 2 ]]; then
-        emit_result '{"action":"dispatch","jobs":[{"lane":"code-fast","mode":"work","task":"invalid lane request"}]}'
-      else
-        emit_result '{"action":"done","summary":"invalid lane corrected"}'
-      fi
-      ;;
-    launch-failure)
-      case "$turn" in
-        1) emit_result '{"action":"dispatch","jobs":[{"lane":"broken","mode":"work","task":"launch must fail"}]}' ;;
-        2) emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"budget remains available"}]}' ;;
-        *) emit_result '{"action":"done","summary":"launch failure did not consume budget"}' ;;
-      esac
-      ;;
-    planner-dies)
-      if [[ "$turn" -eq 1 ]]; then
-        emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"planner dies after worker"}]}'
-      else
-        exit 142
-      fi
-      ;;
-    invalid)
-      emit_result 'this is not JSON'
-      ;;
-    budget)
-      if [[ "$line" == *"budget exhausted, summarize now"* ]]; then
-        emit_result '{"action":"done","summary":"budget summary"}'
-      else
-        emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"advise","task":"consume one slot"}]}'
-      fi
-      ;;
-    budget-seconds)
-      if [[ "$line" == *"budget exhausted, summarize now"* ]]; then
-        emit_result '{"action":"done","summary":"time budget summary"}'
-      else
-        sleep 2
-        emit_result '{"action":"dispatch","jobs":[{"lane":"worker","mode":"work","task":"too late"}]}'
-      fi
-      ;;
-    abort)
-      emit_result '{"action":"abort","reason":"planner stopped intentionally"}'
-      ;;
-    depth)
-      if [[ ! -e "${NESTED_RC_FILE:?}" ]]; then
-        set +e
-        "${NESTED_ROOT:?}/scripts/dispatch.sh" worker "nested attempt" \
-          >"$NESTED_RC_FILE.out" 2>&1
-        nested_rc=$?
-        set -e
-        printf '%s\n' "$nested_rc" > "$NESTED_RC_FILE"
-      fi
-      emit_result '{"action":"done","summary":"depth guard observed"}'
-      ;;
-    *)
-      exit 91
-      ;;
-  esac
-done
-EOF
-
+  local home="$1" worker="$1/worker.sh"
+  mkdir -p "$home/work"
   cat > "$worker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -169,401 +28,205 @@ set -euo pipefail
 task="$(cat "$4")"
 printf '%s|%s|%s\n' "$1" "$2" "$task" >> "${FAKE_WORKER_CALLS:?}"
 case "$task" in
-  *'slow task'*) sleep 1 ;;
-  *'fast task'*) sleep 0.1 ;;
-  *'always fail'*)
+  slow*) sleep 1 ;;
+  fail*)
     printf 'failed %s\n' "$task" > "$5"
-    exit 7
-    ;;
+    exit 9 ;;
 esac
 printf 'completed %s\n' "$task" > "$5"
 EOF
-
-  chmod +x "$planner" "$worker"
-  printf 'hardest-coding: claude claude-default high\n' > "$home/routing.local.yaml"
-  printf 'worker: exec "%s" -\n' "$worker" >> "$home/routing.local.yaml"
-  printf 'broken: exec "%s" -\n' "$home/missing-worker.sh" >> "$home/routing.local.yaml"
+  chmod +x "$worker"
+  printf 'probe: exec "%s" -\n' "$worker" > "$home/routing.local.yaml"
 }
 
-run_goal() {
-  local home="$1" scenario="$2"; shift 2
-  OMNILANE_HOME="$home" CLAUDE_BIN="$home/bin/claude" \
-    PLANNER_SCENARIO="$scenario" FAKE_PLANNER_INPUT="$home/planner.input" \
-    FAKE_WORKER_CALLS="$home/worker.calls" NESTED_RC_FILE="$home/nested.rc" \
-    NESTED_ROOT="$ROOT" \
-    "$ROOT/bin/omnilane" goal "fixture goal" --workdir "$home/work" "$@"
+open_goal() {
+  local home="$1" text="$2" jobs="$3" seconds="$4"
+  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal open "$text" \
+    --budget-jobs "$jobs" --budget-seconds "$seconds" --workdir "$home/work"
 }
 
-only_goal_dir() {
-  local home="$1" count
-  count="$(find "$home/goals" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d '[:space:]')"
-  [[ "$count" == "1" ]] || fail "expected one goal state directory, got $count"
-  find "$home/goals" -mindepth 1 -maxdepth 1 -type d -print
+dispatch_goal() {
+  local home="$1" goal_id="$2" task="$3"
+  OMNILANE_HOME="$home" FAKE_WORKER_CALLS="$home/worker.calls" \
+    "$ROOT/bin/omnilane" goal dispatch "$goal_id" --mode work probe "$task"
 }
 
-case_dispatch_done() {
-  local home="$TEST_ROOT/dispatch-done" goal_dir goal_id status_out state_before state_after
-  mkdir -p "$home"
-  make_fixture "$home" dispatch-done
-  run_goal "$home" dispatch-done --budget-jobs 3 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "goal dispatch/done failed: $(cat "$home/err")"
-
-  goal_dir="$(only_goal_dir "$home")"
-  goal_id="${goal_dir##*/}"
-  grep -Fxq 'fixture goal complete' "$goal_dir/summary.txt" ||
-    fail "final summary was not recorded"
-  [[ "$(wc -l < "$home/worker.calls" | tr -d '[:space:]')" == "1" ]] ||
-    fail "worker was not dispatched exactly once"
-  grep -Fq '"status":"done"' "$goal_dir/budget.json" ||
-    fail "done state missing from budget.json"
-  [[ -f "$goal_dir/rounds/0001/action.json" && -f "$goal_dir/rounds/0002/action.json" ]] ||
-    fail "per-round action records missing"
-  [[ -f "$goal_dir/rounds/0001/job-0001.json" ]] ||
-    fail "worker completion record missing"
-  [[ "$(stat -f '%Lp' "$goal_dir" 2>/dev/null || stat -c '%a' "$goal_dir")" == "700" ]] ||
-    fail "goal directory mode is not 0700"
-  [[ "$(stat -f '%Lp' "$goal_dir/goal.txt" 2>/dev/null || stat -c '%a' "$goal_dir/goal.txt")" == "600" ]] ||
-    fail "goal.txt mode is not 0600"
-  [[ -z "$(find "$goal_dir" -type d ! -perm 700 -print -quit)" ]] ||
-    fail "goal state contains a directory not mode 0700"
-  [[ -z "$(find "$goal_dir" -type f ! -perm 600 -print -quit)" ]] ||
-    fail "goal state contains a file not mode 0600"
-
-  state_before="$(cksum "$goal_dir/budget.json")"
-  status_out="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")" ||
-    fail "goal status command failed"
-  state_after="$(cksum "$goal_dir/budget.json")"
-  [[ "$state_before" == "$state_after" ]] || fail "goal status mutated budget state"
-  [[ "$status_out" == *"status: done"* && "$status_out" == *"jobs: 1/3"* &&
-     "$status_out" == *"last action: done"* ]] ||
-    fail "goal status output incomplete: $status_out"
+wait_for_job() {
+  local home="$1" job_id="$2" expected="$3" tries=0 actual
+  while [[ "$tries" -lt 100 && ! -f "$home/jobs/$job_id/exit" ]]; do
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  [[ -f "$home/jobs/$job_id/exit" ]] || fail "job did not finish: $job_id"
+  actual="$(tr -d '[:space:]' < "$home/jobs/$job_id/exit")"
+  [[ "$actual" == "$expected" ]] || fail "job exit mismatch: want=$expected got=$actual"
 }
 
-case_report_done() {
-  local home="$TEST_ROOT/report-done" goal_dir
-  mkdir -p "$home"
-  make_fixture "$home" report-done
-  run_goal "$home" report-done --budget-jobs 3 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" ||
-    fail "report done goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  [[ -f "$goal_dir/report.md" ]] || fail "done report.md was not written"
-  grep -Fq 'Rounds: 2' "$goal_dir/report.md" ||
-    fail "done report omitted round count"
-  grep -Fq 'fixture goal complete' "$goal_dir/report.md" ||
-    fail "done report omitted planner summary"
-  grep -Fq 'Action: dispatch' "$goal_dir/report.md" ||
-    fail "done report omitted round action"
-  grep -Eq 'lane=worker; vendor=[^;]+; exit=0; seconds=[0-9]+' "$goal_dir/report.md" ||
-    fail "done report omitted worker narrative"
-  grep -Fq '/tmp/fixture-output.txt' "$goal_dir/report.md" ||
-    fail "done report omitted planner-named artifact path"
-  [[ "$(tail -n 1 "$home/out")" == "report: $goal_dir/report.md" ]] ||
-    fail "report path was not the last goal output line"
-}
-
-case_invalid_lane() {
-  local home="$TEST_ROOT/invalid-lane" goal_dir
-  mkdir -p "$home"
-  make_fixture "$home" invalid-lane
-  run_goal "$home" invalid-lane --budget-jobs 1 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "invalid-lane goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-
-  grep -Fxq 'invalid lane corrected' "$goal_dir/summary.txt" ||
-    fail "invalid-lane goal did not continue to completion"
-  [[ ! -s "$home/worker.calls" ]] || fail "invalid lane was dispatched"
-  grep -Fq 'EFFECTIVE LANE LIST' "$home/planner.input" ||
-    fail "initial planner brief omitted effective lane list"
-  grep -Fq 'worker:' "$home/planner.input" ||
-    fail "initial planner brief omitted worker lane"
-  grep -Fq "Invalid lane 'code-fast'. Valid lanes:" "$home/planner.input" ||
-    fail "planner did not receive invalid-lane corrective notice"
-  grep -Fq '"spent_jobs":0' "$goal_dir/budget.json" ||
-    fail "invalid lane consumed budget-jobs"
-  grep -Fq '"fuse_trips":1' "$goal_dir/budget.json" ||
-    fail "second invalid lane request did not trip fuse"
-}
-
-case_launch_failure() {
-  local home="$TEST_ROOT/launch-failure" goal_dir calls
-  mkdir -p "$home"
-  make_fixture "$home" launch-failure
-  run_goal "$home" launch-failure --budget-jobs 1 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "launch-failure goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-
-  grep -Fxq 'launch failure did not consume budget' "$goal_dir/summary.txt" ||
-    fail "launch-failure goal did not finish"
-  calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
-  [[ "$calls" == "1" ]] || fail "successful worker did not retain sole budget slot: $calls"
-  grep -Fq 'dispatch failed' "$home/planner.input" ||
-    fail "planner did not receive launch-failure report"
-  grep -Fq '"spent_jobs":1' "$goal_dir/budget.json" ||
-    fail "launch failure was charged against budget-jobs"
-}
-
-case_planner_timeout() {
-  local home="$TEST_ROOT/planner-timeout" goal_dir planner_id meta
-  mkdir -p "$home"
-  make_fixture "$home" dispatch-done
-  run_goal "$home" dispatch-done --budget-jobs 3 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "planner-timeout goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  planner_id="$(cat "$goal_dir/planner-job-id")"
-  meta="$home/jobs/$planner_id/meta.json"
-  [[ -f "$meta" ]] || fail "planner metadata missing: $meta"
-  python3 - "$meta" <<'PY' || fail "planner timeout metadata is not derived from goal budget"
+case_open() {
+  local home="$TEST_ROOT/open" goal_id goal_dir physical_workdir
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "repair the checkout flow" 4 60)"
+  [[ "$goal_id" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]] ||
+    fail "open did not print a goal id: $goal_id"
+  goal_dir="$home/goals/$goal_id"
+  [[ -f "$goal_dir/goal.txt" && -f "$goal_dir/budget.json" ]] ||
+    fail "open did not create goal records"
+  [[ "$(cat "$goal_dir/goal.txt")" == "repair the checkout flow" ]] ||
+    fail "goal text was not preserved"
+  physical_workdir="$(cd "$home/work" && pwd -P)"
+  python3 - "$goal_dir/budget.json" "$physical_workdir" <<'PY' || fail "open budget record mismatch"
 import json
 import sys
-
 with open(sys.argv[1], encoding="utf-8") as handle:
-    meta = json.load(handle)
-assert meta["timeout"] == 330, meta
-assert meta["idle_timeout"] == 0, meta
+    budget = json.load(handle)
+assert budget["schema_version"] == 3
+assert budget["budget_jobs"] == 4 and budget["budget_seconds"] == 60
+assert budget["spent_jobs"] == 0 and budget["spent_seconds"] == 0
+assert budget["status"] == "open" and budget["workdir"] == sys.argv[2]
+assert "budget_parallel" not in budget
 PY
 }
 
-case_planner_dies() {
-  local home="$TEST_ROOT/planner-dies" goal_dir rc=0
-  mkdir -p "$home"
-  make_fixture "$home" planner-dies
-  run_goal "$home" planner-dies --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || rc=$?
-  [[ "$rc" -ne 0 ]] || fail "dead planner returned success"
-  goal_dir="$(only_goal_dir "$home")"
-  grep -Fq 'planner exit code 142' "$goal_dir/summary.txt" ||
-    fail "dead planner summary omitted recorded exit code"
-  grep -Fq "job dir: $home/jobs/" "$goal_dir/summary.txt" ||
-    fail "dead planner summary omitted job directory pointer"
+case_dispatch_allow() {
+  local home="$TEST_ROOT/dispatch-allow" goal_id job_id status physical_workdir
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "run one bounded job" 2 30)"
+  job_id="$(dispatch_goal "$home" "$goal_id" "succeed once")"
+  [[ "$job_id" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]] ||
+    fail "dispatch did not print a job id: $job_id"
+  wait_for_job "$home" "$job_id" 0
+  status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$status" == *"jobs: 1/2"* && "$status" == *"job $job_id:"* &&
+     "$status" == *"lane=probe vendor=exec exit=0"* ]] ||
+    fail "allowed dispatch was not recorded: $status"
+  physical_workdir="$(cd "$home/work" && pwd -P)"
+  [[ "$(cat "$home/worker.calls")" == "work|$physical_workdir|succeed once" ]] ||
+    fail "goal workdir or task did not reach dispatch"
 }
 
-case_invalid() {
-  local home="$TEST_ROOT/invalid" goal_dir rc=0 turns
-  mkdir -p "$home"
-  make_fixture "$home" invalid
-  run_goal "$home" invalid --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || rc=$?
-  [[ "$rc" -ne 0 ]] || fail "invalid planner reply did not abort"
-  turns="$(wc -l < "$home/planner.input" | tr -d '[:space:]')"
-  [[ "$turns" == "2" ]] || fail "invalid reply reprompt count wrong: $turns planner turns"
-  goal_dir="$(only_goal_dir "$home")"
-  grep -Fq '"status":"aborted"' "$goal_dir/budget.json" ||
-    fail "invalid reply did not persist aborted state"
-  grep -Fq 'validator error' "$goal_dir/summary.txt" ||
-    fail "invalid reply diagnostic missing"
+case_jobs_cap() {
+  local home="$TEST_ROOT/jobs-cap" goal_id first out rc calls
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "enforce job cap" 1 30)"
+  first="$(dispatch_goal "$home" "$goal_id" "first")"
+  wait_for_job "$home" "$first" 0
+  set +e
+  out="$(dispatch_goal "$home" "$goal_id" "second" 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 && "$out" == *"jobs budget exhausted: 1/1"* ]] ||
+    fail "jobs cap did not refuse before dispatch: rc=$rc out=$out"
+  calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
+  [[ "$calls" == "1" ]] || fail "over-budget job reached worker: calls=$calls"
 }
 
-case_multi() {
-  local home="$TEST_ROOT/multi" goal_dir first second
-  mkdir -p "$home"
-  make_fixture "$home" multi
-  run_goal "$home" multi --budget-jobs 4 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "multi-job goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  [[ "$(wc -l < "$home/worker.calls" | tr -d '[:space:]')" == "2" ]] ||
-    fail "multi-job action did not dispatch exactly two workers"
-  first="$(sed -n '1p' "$home/worker.calls")"
-  second="$(sed -n '2p' "$home/worker.calls")"
-  [[ "$first" == advise\|*\|first\ task && "$second" == work\|*\|second\ task ]] ||
-    fail "multi-job dispatch order or mode wrong: $first / $second"
-  grep -Fxq 'two workers complete' "$goal_dir/summary.txt" ||
-    fail "multi-job summary missing"
-  [[ -f "$goal_dir/rounds/0001/job-0001.json" &&
-     -f "$goal_dir/rounds/0001/job-0002.json" ]] ||
-    fail "multi-job completion records missing"
-}
-
-case_parallel_two() {
-  local home="$TEST_ROOT/parallel-two" goal_dir fast_line slow_line records
-  mkdir -p "$home"
-  make_fixture "$home" parallel
-  run_goal "$home" parallel --budget-jobs 4 --budget-seconds 30 --budget-parallel 2 \
-    >"$home/out" 2>"$home/err" || fail "parallel=2 goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  [[ "$(wc -l < "$home/worker.calls" | tr -d '[:space:]')" == "2" ]] ||
-    fail "parallel=2 did not dispatch both workers"
-  records="$(grep -c 'BEGIN WORKER COMPLETION DATA' "$home/planner.input")"
-  [[ "$records" == "2" ]] || fail "planner received $records completion records instead of 2"
-  fast_line="$(grep -nF 'completed fast task' "$home/planner.input" | head -1 | cut -d: -f1)"
-  slow_line="$(grep -nF 'completed slow task' "$home/planner.input" | head -1 | cut -d: -f1)"
-  [[ -n "$fast_line" && -n "$slow_line" && "$fast_line" -lt "$slow_line" ]] ||
-    fail "parallel=2 did not report finish order: fast=$fast_line slow=$slow_line"
-  [[ -f "$goal_dir/rounds/0001/job-0001.json" &&
-     -f "$goal_dir/rounds/0001/job-0002.json" ]] ||
-    fail "parallel=2 completion records missing"
-}
-
-case_parallel_one() {
-  local home="$TEST_ROOT/parallel-one" slow_line fast_line
-  mkdir -p "$home"
-  make_fixture "$home" parallel
-  run_goal "$home" parallel --budget-jobs 4 --budget-seconds 30 --budget-parallel 1 \
-    >"$home/out" 2>"$home/err" || fail "parallel=1 goal failed: $(cat "$home/err")"
-  slow_line="$(grep -nF 'completed slow task' "$home/planner.input" | head -1 | cut -d: -f1)"
-  fast_line="$(grep -nF 'completed fast task' "$home/planner.input" | head -1 | cut -d: -f1)"
-  [[ -n "$slow_line" && -n "$fast_line" && "$slow_line" -lt "$fast_line" ]] ||
-    fail "parallel=1 did not preserve sequential order: slow=$slow_line fast=$fast_line"
+case_seconds_cap() {
+  local home="$TEST_ROOT/seconds-cap" goal_id out rc
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "enforce seconds cap" 2 1)"
+  sleep 2
+  set +e
+  out="$(dispatch_goal "$home" "$goal_id" "too late" 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 && "$out" == *"seconds budget exhausted:"* ]] ||
+    fail "seconds cap did not refuse before dispatch: rc=$rc out=$out"
+  [[ ! -e "$home/worker.calls" ]] || fail "seconds-capped job reached worker"
 }
 
 case_fuse() {
-  local home="$TEST_ROOT/fuse" goal_dir calls
-  mkdir -p "$home"
-  make_fixture "$home" fuse
-  run_goal "$home" fuse --budget-jobs 6 --budget-seconds 30 --budget-parallel 2 \
-    >"$home/out" 2>"$home/err" || fail "fuse goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
+  local home="$TEST_ROOT/fuse" goal_id first second out rc status calls
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "stop repeated failures" 5 30)"
+  first="$(dispatch_goal "$home" "$goal_id" "fail identically")"
+  wait_for_job "$home" "$first" 9
+  second="$(dispatch_goal "$home" "$goal_id" "fail identically")"
+  wait_for_job "$home" "$second" 9
+  set +e
+  out="$(dispatch_goal "$home" "$goal_id" "fail identically" 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -ne 0 && "$out" == *"failure fuse tripped: lane=probe failures=2"* ]] ||
+    fail "fuse did not refuse the third identical failure: rc=$rc out=$out"
   calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
-  [[ "$calls" == "2" ]] || fail "fuse dispatched unchanged failing job $calls times"
-  grep -Fq 'BEGIN FAILURE FUSE NOTICE DATA' "$home/planner.input" ||
-    fail "planner did not receive failure fuse notice"
-  grep -Fxq 'fuse stopped retry loop' "$goal_dir/summary.txt" ||
-    fail "goal did not continue after fuse trip"
-  grep -Fq '"fuse_trips":1' "$goal_dir/budget.json" || fail "fuse trip not persisted"
+  [[ "$calls" == "2" ]] || fail "fused dispatch reached worker: calls=$calls"
+  status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$status" == *"jobs: 2/5"* && "$status" == *"fuse trips: 1"* ]] ||
+    fail "status did not report fuse accounting: $status"
 }
 
-case_status_p2() {
-  local home="$TEST_ROOT/status-p2" goal_dir goal_id status_out job_lines
-  mkdir -p "$home"
-  make_fixture "$home" fuse
-  run_goal "$home" fuse --budget-jobs 6 --budget-seconds 30 --budget-parallel 3 \
-    >"$home/out" 2>"$home/err" || fail "status fixture goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  goal_id="${goal_dir##*/}"
-  status_out="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")" ||
-    fail "P2 goal status failed"
-  [[ "$status_out" == *"parallel: 3"* && "$status_out" == *"fuse trips: 1"* ]] ||
-    fail "P2 status settings missing: $status_out"
-  job_lines="$(printf '%s\n' "$status_out" | grep -c '^job ')"
-  [[ "$job_lines" == "2" ]] || fail "P2 status reported $job_lines jobs instead of 2"
-  printf '%s\n' "$status_out" | grep -Eq '^job .+: lane=worker vendor=exec exit=7 seconds=[0-9]+$' ||
-    fail "P2 status per-job fields missing: $status_out"
+case_note_status() {
+  local home="$TEST_ROOT/note-status" goal_id slow failed running done_status
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "observe jobs as they land" 4 30)"
+  slow="$(dispatch_goal "$home" "$goal_id" "slow success")"
+  running="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$running" == *"job $slow:"* && "$running" == *"exit=running"* ]] ||
+    fail "status did not show running job: $running"
+  wait_for_job "$home" "$slow" 0
+  failed="$(dispatch_goal "$home" "$goal_id" "fail once")"
+  wait_for_job "$home" "$failed" 9
+  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal note "$goal_id" \
+    "reviewed results in /tmp/goal-result.txt"
+  done_status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$done_status" == *"jobs: 2/4"* && "$done_status" == *"job $slow:"* &&
+     "$done_status" == *"exit=0"* && "$done_status" == *"job $failed:"* &&
+     "$done_status" == *"exit=9"* ]] || fail "status per-job lines mismatch: $done_status"
+  grep -q 'reviewed results in /tmp/goal-result.txt' "$home/goals/$goal_id/notes.jsonl" ||
+    fail "foreman note was not recorded"
 }
 
-case_budget_jobs() {
-  local home="$TEST_ROOT/budget" goal_dir calls
-  mkdir -p "$home"
-  make_fixture "$home" budget
-  run_goal "$home" budget --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "budget goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
-  [[ "$calls" == "2" ]] || fail "budget-jobs cap dispatched $calls jobs instead of 2"
-  grep -Fxq 'budget summary' "$goal_dir/summary.txt" ||
-    fail "forced budget summary missing"
-  grep -Fq '"status":"budget_exhausted"' "$goal_dir/budget.json" ||
-    fail "budget exhaustion state missing"
-  grep -Fq 'budget exhausted, summarize now' "$home/planner.input" ||
-    fail "planner never received forced summarize turn"
-  grep -Fq '75%' "$home/planner.input" ||
-    fail "planner never received 75% budget warning"
+case_close_report() {
+  local home="$TEST_ROOT/close-report" goal_id job_id report summary_text
+  make_fixture "$home"
+  goal_id="$(open_goal "$home" "finish the payment audit" 3 30)"
+  job_id="$(dispatch_goal "$home" "$goal_id" "audit payment")"
+  wait_for_job "$home" "$job_id" 0
+  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal note "$goal_id" \
+    "worker result accepted"
+  summary_text="foreman completed \`/tmp/final.txt\`"
+  report="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal close "$goal_id" \
+    --summary "$summary_text")"
+  [[ "$report" == "$home/goals/$goal_id/report.md" && -f "$report" ]] ||
+    fail "close did not print or write report path: $report"
+  grep -q 'finish the payment audit' "$report" || fail "report omitted goal text"
+  grep -q "job $job_id:" "$report" || fail "report omitted recorded job"
+  grep -q -- '- Jobs: 1 / 3' "$report" || fail "report omitted job budget"
+  grep -q -- '- Seconds:' "$report" || fail "report omitted seconds budget"
+  grep -q '## Foreman summary (data)' "$report" || fail "report omitted foreman summary section"
+  grep -q "foreman completed \`/tmp/final.txt\`" "$report" || fail "report omitted close summary"
+  grep -q 'worker result accepted' "$report" || fail "report omitted foreman notes"
+  grep -q '/tmp/final.txt' "$report" || fail "report omitted named artifact"
+  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id" |
+    grep -q '^status: closed$' || fail "close did not seal goal state"
 }
 
-case_report_budget() {
-  local home="$TEST_ROOT/report-budget" goal_dir
-  mkdir -p "$home"
-  make_fixture "$home" budget
-  run_goal "$home" budget --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" ||
-    fail "report budget goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  [[ -f "$goal_dir/report.md" ]] || fail "budget report.md was not written"
-  grep -Fq 'Rounds:' "$goal_dir/report.md" ||
-    fail "budget report omitted round count"
-  grep -Fq 'budget summary' "$goal_dir/report.md" ||
-    fail "budget report omitted planner summary"
-}
-
-case_budget_seconds() {
-  local home="$TEST_ROOT/budget-seconds" goal_dir
-  mkdir -p "$home"
-  make_fixture "$home" budget-seconds
-  run_goal "$home" budget-seconds --budget-jobs 4 --budget-seconds 1 \
-    >"$home/out" 2>"$home/err" || fail "time-budget goal failed: $(cat "$home/err")"
-  goal_dir="$(only_goal_dir "$home")"
-  [[ ! -s "$home/worker.calls" ]] || fail "worker started after wall-clock budget expired"
-  grep -Fxq 'time budget summary' "$goal_dir/summary.txt" ||
-    fail "time-budget summary missing"
-  grep -Fq '"status":"budget_exhausted"' "$goal_dir/budget.json" ||
-    fail "time-budget exhaustion state missing"
-  grep -Fq 'budget exhausted, summarize now' "$home/planner.input" ||
-    fail "time-budget forced summarize turn missing"
-}
-
-case_abort() {
-  local home="$TEST_ROOT/abort" goal_dir rc=0
-  mkdir -p "$home"
-  make_fixture "$home" abort
-  run_goal "$home" abort --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || rc=$?
-  [[ "$rc" -ne 0 ]] || fail "planner abort action returned success"
-  goal_dir="$(only_goal_dir "$home")"
-  grep -Fxq 'planner stopped intentionally' "$goal_dir/summary.txt" ||
-    fail "abort reason missing from summary"
-  grep -Fq '"status":"aborted"' "$goal_dir/budget.json" ||
-    fail "abort state missing"
-  grep -Fq '"last_action":"abort"' "$goal_dir/budget.json" ||
-    fail "abort last action missing"
-}
-
-case_depth_guard() {
-  local home="$TEST_ROOT/depth"
-  mkdir -p "$home"
-  make_fixture "$home" depth
-  run_goal "$home" depth --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" || fail "depth goal failed: $(cat "$home/err")"
-  wait_for_file "$home/nested.rc" || fail "planner did not attempt nested dispatch"
-  [[ "$(cat "$home/nested.rc")" == "86" ]] ||
-    fail "nested planner dispatch did not preserve exit 86: $(cat "$home/nested.rc")"
-  grep -Fq 'refusing nested dispatch' "$home/nested.rc.out" ||
-    fail "depth guard diagnostic missing"
-}
-
-case_worker_single_shot() {
-  local home="$TEST_ROOT/worker-single-shot" modes
-  mkdir -p "$home"
-  make_fixture "$home" worker-single-shot
-  run_goal "$home" worker-single-shot --budget-jobs 2 --budget-seconds 30 \
-    >"$home/out" 2>"$home/err" ||
-    fail "worker single-shot goal failed: $(cat "$home/err")"
-
-  modes="$(python3 - "$home/jobs" <<'PY'
-import glob
-import json
-import os
-import sys
-
-modes = []
-for path in glob.glob(os.path.join(sys.argv[1], "*", "meta.json")):
-    with open(path, encoding="utf-8") as handle:
-        meta = json.load(handle)
-    if meta.get("vendor") == "claude":
-        modes.append(meta.get("session_mode"))
-print(" ".join(sorted(modes)))
-PY
-)"
-  [[ "$modes" == "live single-shot" ]] ||
-    fail "planner/worker session modes were '$modes', expected 'live single-shot'"
+case_cli_surface() {
+  local home="$TEST_ROOT/cli-surface" out rc
+  make_fixture "$home"
+  set +e
+  out="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal "old one-shot" 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 2 && "$out" == *"usage: omnilane goal open"* ]] ||
+    fail "deprecated one-shot goal form remained active: rc=$rc out=$out"
+  set +e
+  out="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal open "no parallel cap" \
+    --budget-parallel 2 2>&1)"
+  rc=$?
+  set -e
+  [[ "$rc" -eq 2 && "$out" == *"usage: omnilane goal open"* ]] ||
+    fail "removed --budget-parallel remained active: rc=$rc out=$out"
 }
 
 case "$CASE" in
-  dispatch-done) case_dispatch_done ;;
-  report-done) case_report_done ;;
-  worker-single-shot) case_worker_single_shot ;;
-  multi) case_multi ;;
-  parallel-two) case_parallel_two ;;
-  parallel-one) case_parallel_one ;;
+  open) case_open ;;
+  dispatch-allow) case_dispatch_allow ;;
+  jobs-cap) case_jobs_cap ;;
+  seconds-cap) case_seconds_cap ;;
   fuse) case_fuse ;;
-  status-p2) case_status_p2 ;;
-  invalid-lane) case_invalid_lane ;;
-  launch-failure) case_launch_failure ;;
-  planner-timeout) case_planner_timeout ;;
-  planner-dies) case_planner_dies ;;
-  invalid) case_invalid ;;
-  budget-jobs) case_budget_jobs ;;
-  report-budget) case_report_budget ;;
-  budget-seconds) case_budget_seconds ;;
-  abort) case_abort ;;
-  depth-guard) case_depth_guard ;;
-  *) fail "usage: test_goal_loop.sh dispatch-done|report-done|worker-single-shot|multi|parallel-two|parallel-one|fuse|status-p2|invalid-lane|launch-failure|planner-timeout|planner-dies|invalid|budget-jobs|report-budget|budget-seconds|abort|depth-guard" ;;
+  note-status) case_note_status ;;
+  close-report) case_close_report ;;
+  cli-surface) case_cli_surface ;;
+  *) fail "unknown case: $CASE" ;;
 esac
