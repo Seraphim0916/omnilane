@@ -507,6 +507,12 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## 📜 版本历程
 
+## v0.30.0 新功能
+
+- **目标台账。** `omnilane goal open` 创建有界的目标台账；`goal dispatch` 会在每个作业运行前检查作业数量上限、总耗时预算和重复失败熔断器。`goal note` 保留调用方叙事，`goal status` 显示预算和每个作业记录，`goal close` 会写入 `goals/<id>/report.md`。
+- **循环由调用方负责。** 打开目标的会话或用户负责选择、派发、审阅和收尾；omnilane 不会运行内置的规划模型。
+- **doctor 检查。** `omnilane doctor` 现在会检查目标编排功能。
+
 ## v0.21.0 新功能
 
 - **显式选择会话模式。** 可使用 `dispatch --live` 要求常驻会话，或用 `--single-shot` 强制单次派发；对不支持实时会话的供应商，`--live` 会立即失败并列出可用供应商。

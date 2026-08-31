@@ -531,6 +531,12 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
 
 ## 📜 版本歷程
 
+## v0.30.0 新功能
+
+- **目標台帳。** `omnilane goal open` 建立有界的目標台帳；`goal dispatch` 會在每份工作執行前檢查工作數上限、總經過時間預算與重複失敗熔斷器。`goal note` 保留呼叫端敘事，`goal status` 顯示預算與各工作紀錄，`goal close` 會寫入 `goals/<id>/report.md`。
+- **迴圈由呼叫端掌握。** 開啟目標的工作階段或使用者負責選擇、派工、檢視與收尾；omnilane 不會執行內建的規劃模型。
+- **doctor 檢查。** `omnilane doctor` 現在會檢查目標編排功能。
+
 ## v0.21.0 新功能
 
 - **明確選擇工作階段模式。** 可用 `dispatch --live` 要求常駐工作階段，或以 `--single-shot` 強制單次派工；對不支援即時工作階段的供應商，`--live` 會立即失敗並列出可用供應商。

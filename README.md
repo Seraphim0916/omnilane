@@ -614,6 +614,12 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.30.0
+
+- **Goal ledger.** `omnilane goal open` creates a bounded goal ledger; `goal dispatch` gates each job on the job cap, wall-clock budget, and repeat-failure fuse. `goal note` preserves the caller's narrative, `goal status` shows budgets and per-job records, and `goal close` writes `goals/<id>/report.md`.
+- **Caller owns the loop.** The session or person that opened the goal chooses, dispatches, reviews, and closes the work; omnilane does not run a built-in planning model.
+- **Doctor coverage.** `omnilane doctor` now checks the goal-orchestrator surface.
+
 ## What's new in v0.21.0
 
 - **Explicit session mode.** Use `dispatch --live` to require a resident session or `--single-shot` to force a one-shot job. `--live` fails immediately for incompatible vendors and lists the live-capable choices.

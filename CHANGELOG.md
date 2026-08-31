@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-08-31
+
+### Added
+
+- `omnilane goal` — a bounded ledger around dispatch. `goal open` holds job and wall-clock budgets; `goal dispatch` gates each job on the job cap, wall clock, and repeat-failure fuse before it runs. `goal note` records the caller's narrative, `goal status` shows budgets and per-job lines, and `goal close` writes `goals/<id>/report.md`.
+- `omnilane doctor` now includes a read-only goal-orchestrator check.
+
+### Changed
+
+- The goal loop lives in the caller. omnilane never runs a planner model; the agent session or human that opened a goal chooses, dispatches, reviews, and closes the work.
+
 ## [0.21.0] - 2026-08-30
 
 ### Added
@@ -669,7 +680,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.30.0...HEAD
+
+[0.30.0]: https://github.com/Seraphim0916/omnilane/compare/v0.21.0...v0.30.0
 
 [0.21.0]: https://github.com/Seraphim0916/omnilane/compare/v0.20.0...v0.21.0
 
