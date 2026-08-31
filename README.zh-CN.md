@@ -353,7 +353,7 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 目标编排
 
-`omnilane goal` 是由领班驱动、带预算上限的工作台账。循环由调用方负责，也就是打开目标的代理会话或终端用户：派发一个作业，从完成收件箱或 `omnilane jobs wait` 取回结果，决定下一个作业，再重复执行。omnilane 只负责记账；每次 goal dispatch 前都会检查作业数、经过秒数和重复失败熔断，领班关闭目标时才汇总报告。
+`omnilane goal` 是由领班驱动的工作台账。循环由调用方负责，也就是打开目标的代理会话或终端用户：派发一个作业，从完成收件箱或 `omnilane jobs wait` 取回结果，决定下一个作业，再重复执行。作业数量和秒数预算默认均不设上限；只有传入 `--budget-jobs N` 或 `--budget-seconds S` 时，才会启用对应的硬上限。omnilane 只负责记账；每次 goal dispatch 前都会检查调用方设置的上限和默认启用的重复失败熔断器，领班关闭目标时才汇总报告。
 
 ```bash
 GOAL_ID="$(omnilane goal open "修复不稳定的结账集成" \
@@ -365,7 +365,7 @@ omnilane goal note "$GOAL_ID" "结账集成测试已通过"
 omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
 ```
 
-目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；目标预算是硬上限，并不保证任务完成。
+目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；传入预算参数后，对应的上限是硬限制，并不保证任务完成。
 
 ## ❓ 常见问题
 
@@ -509,7 +509,7 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## v0.30.0 新功能
 
-- **目标台账。** `omnilane goal open` 创建有界的目标台账；`goal dispatch` 会在每个作业运行前检查作业数量上限、总耗时预算和重复失败熔断器。`goal note` 保留调用方叙事，`goal status` 显示预算和每个作业记录，`goal close` 会写入 `goals/<id>/report.md`。
+- **目标台账。** `omnilane goal open` 创建默认不限制作业数量和秒数的目标台账；`goal dispatch` 会在每个作业运行前检查调用方设置的作业数量或总耗时上限，以及默认启用的重复失败熔断器。`goal note` 保留调用方叙事，`goal status` 显示预算和每个作业记录，`goal close` 会写入 `goals/<id>/report.md`。
 - **循环由调用方负责。** 打开目标的会话或用户负责选择、派发、审阅和收尾；omnilane 不会运行内置的规划模型。
 - **doctor 检查。** `omnilane doctor` 现在会检查目标编排功能。
 

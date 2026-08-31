@@ -371,7 +371,7 @@ scripts/jobs.sh retry "$ID" --background
 
 ## 🎯 목표 오케스트레이션
 
-`omnilane goal`은 포어맨이 진행하는 예산 기반 작업 원장입니다. 루프는 목표를 연 에이전트 세션이나 터미널 사용자가 담당합니다. 작업을 디스패치하고 완료 수신함 또는 `omnilane jobs wait`로 결과를 받은 뒤 다음 작업을 판단하여 반복합니다. omnilane은 기록만 담당하며, 각 goal dispatch 전에 작업 수와 경과 시간 예산 및 동일 실패 퓨즈를 검사하고 포어맨이 목표를 닫을 때 보고서를 작성합니다.
+`omnilane goal`은 포어맨이 진행하는 작업 원장입니다. 루프는 목표를 연 에이전트 세션이나 터미널 사용자가 담당합니다. 작업을 디스패치하고 완료 수신함 또는 `omnilane jobs wait`로 결과를 받은 뒤 다음 작업을 판단하여 반복합니다. 작업 수와 경과 시간 예산은 기본적으로 무제한입니다. `--budget-jobs N` 또는 `--budget-seconds S`를 지정한 경우에만 해당 상한이 활성화됩니다. omnilane은 기록만 담당하며, 각 goal dispatch 전에 호출자가 지정한 상한과 기본적으로 활성화된 동일 실패 퓨즈를 검사하고 포어맨이 목표를 닫을 때 보고서를 작성합니다.
 
 ```bash
 GOAL_ID="$(omnilane goal open "불안정한 결제 통합 수정" \
@@ -383,7 +383,7 @@ omnilane goal note "$GOAL_ID" "결제 통합 테스트 통과"
 omnilane goal close "$GOAL_ID" --summary "결제 통합이 안정화됨"
 ```
 
-목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. `goal status`로 예산 사용량, 퓨즈 작동 횟수, 각 작업에서 순차적으로 도착하는 메타데이터와 종료 상태를 확인할 수 있습니다. `goal close`는 `report.md`를 기록하고 경로를 출력합니다. 절차가 명확한 단일 작업은 바로 디스패치하십시오. 목표 예산은 엄격한 상한이며 완료를 보장하지 않습니다.
+목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. `goal status`로 예산 사용량, 퓨즈 작동 횟수, 각 작업에서 순차적으로 도착하는 메타데이터와 종료 상태를 확인할 수 있습니다. `goal close`는 `report.md`를 기록하고 경로를 출력합니다. 절차가 명확한 단일 작업은 바로 디스패치하십시오. 예산 플래그를 지정한 경우 해당 상한은 엄격한 제한이며 완료를 보장하지 않습니다.
 
 ## ❓ FAQ
 
@@ -535,7 +535,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 ## v0.30.0 새 기능
 
-- **목표 원장.** `omnilane goal open`은 경계가 있는 목표 원장을 만듭니다. `goal dispatch`는 각 작업을 실행하기 전에 작업 수 상한, 경과 시간 예산, 반복 실패 퓨즈를 검사합니다. `goal note`는 호출자의 기록을 남기고, `goal status`는 예산과 작업별 기록을 표시하며, `goal close`는 `goals/<id>/report.md`를 작성합니다.
+- **목표 원장.** `omnilane goal open`은 작업 수와 경과 시간이 기본적으로 무제한인 목표 원장을 만듭니다. `goal dispatch`는 각 작업을 실행하기 전에 호출자가 지정한 상한과 기본적으로 활성화된 반복 실패 퓨즈를 검사합니다. `goal note`는 호출자의 기록을 남기고, `goal status`는 예산과 작업별 기록을 표시하며, `goal close`는 `goals/<id>/report.md`를 작성합니다.
 - **루프는 호출자가 담당합니다.** 목표를 연 세션이나 사용자가 선택, 디스패치, 검토, 종료를 수행합니다. omnilane은 내장 계획 모델을 실행하지 않습니다.
 - **doctor 검사.** `omnilane doctor`가 이제 목표 오케스트레이션 기능을 검사합니다.
 

@@ -441,7 +441,7 @@ An idle mailbox makes no API calls and incurs no API spend. By default it closes
 
 ## 🎯 Goal orchestration
 
-`omnilane goal` is a foreman-driven ledger for bounded, exploratory work. The caller—an agent session or a human terminal—owns the loop: dispatch a job, receive its result through the completion inbox or `omnilane jobs wait`, decide the next job, and repeat. omnilane supplies bookkeeping only. It enforces job and elapsed-time budgets plus the repeated-failure fuse before each goal dispatch, then assembles the report when the foreman closes the goal.
+`omnilane goal` is a foreman-driven ledger for exploratory work. The caller—an agent session or a human terminal—owns the loop: dispatch a job, receive its result through the completion inbox or `omnilane jobs wait`, decide the next job, and repeat. Job and elapsed-time budgets are unlimited by default; `--budget-jobs N` and `--budget-seconds S` opt in to each hard cap. omnilane supplies bookkeeping only, enforces any caller-supplied caps plus the always-on repeated-failure fuse before each goal dispatch, then assembles the report when the foreman closes the goal.
 
 ```bash
 GOAL_ID="$(omnilane goal open "Fix the flaky checkout integration" \
@@ -453,9 +453,9 @@ omnilane goal note "$GOAL_ID" "Fix verified by the checkout integration test"
 omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
 ```
 
-Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly; goal budgets are hard bounds, not completion promises.
+Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly. When budget flags are supplied, those caps are hard bounds, not completion promises.
 
-Do not use goal orchestration for a single obvious task; dispatch that task directly. Also do not start it when no budget is available for exploration—the budgets are hard bounds, not completion promises.
+Do not use goal orchestration for a single obvious task; dispatch that task directly. The default unlimited budgets let the caller keep exploring without omnilane imposing a cap; pass either budget flag only when that limit is wanted.
 
 ## ❓ FAQ
 
@@ -616,7 +616,7 @@ working notes, including per-benchmark caveats, live in
 
 ## What's new in v0.30.0
 
-- **Goal ledger.** `omnilane goal open` creates a bounded goal ledger; `goal dispatch` gates each job on the job cap, wall-clock budget, and repeat-failure fuse. `goal note` preserves the caller's narrative, `goal status` shows budgets and per-job records, and `goal close` writes `goals/<id>/report.md`.
+- **Goal ledger.** `omnilane goal open` creates a goal ledger with unlimited default budgets; `goal dispatch` gates each job on caller-supplied job or wall-clock caps and the always-on repeat-failure fuse. `goal note` preserves the caller's narrative, `goal status` shows budgets and per-job records, and `goal close` writes `goals/<id>/report.md`.
 - **Caller owns the loop.** The session or person that opened the goal chooses, dispatches, reviews, and closes the work; omnilane does not run a built-in planning model.
 - **Doctor coverage.** `omnilane doctor` now checks the goal-orchestrator surface.
 

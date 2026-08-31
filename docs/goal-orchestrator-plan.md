@@ -1,8 +1,8 @@
-# Goal Orchestrator — caller-owned bounded dispatch ledger
+# Goal Orchestrator — caller-owned dispatch ledger
 
 ## 摘要（繁中）
 
-`omnilane goal` 是有預算上限的目標台帳。開啟目標的代理工作階段或使用者自己維持迴圈：決定下一步、派工、讀取結果、記錄敘事並收尾。omnilane 只守住工作數、時間與重複失敗上限，並把每份工作與結案報告存到同一個目標底下。
+`omnilane goal` 是目標台帳。開啟目標的代理工作階段或使用者自己維持迴圈：決定下一步、派工、讀取結果、記錄敘事並收尾。工作數與秒數預算預設都不設上限；只有呼叫端傳入 `--budget-jobs N` 或 `--budget-seconds S` 時，omnilane 才守住對應上限。重複失敗熔斷器不是預算，仍預設啟用。每份工作與結案報告都存到同一個目標底下。
 
 ## Problem
 
@@ -10,10 +10,10 @@
 
 ## What shipped
 
-`omnilane goal` is a bounded ledger around normal dispatch:
+`omnilane goal` is a ledger around normal dispatch. Job-count and wall-clock budgets default to unlimited; each budget flag opts in to that cap:
 
-- `omnilane goal open "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]` creates a goal and holds its job-count and wall-clock budgets.
-- `omnilane goal dispatch GOAL_ID [dispatch.sh args...]` checks the job cap, wall clock, and repeat-failure fuse before it runs the requested dispatch, then records that job.
+- `omnilane goal open "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]` creates a goal. Omitted budget flags remain unlimited; supplied flags set hard caps.
+- `omnilane goal dispatch GOAL_ID [dispatch.sh args...]` checks any caller-supplied job or wall-clock cap plus the always-on repeat-failure fuse before it runs the requested dispatch, then records that job.
 - `omnilane goal note GOAL_ID "TEXT"` records the caller's narrative for the close report.
 - `omnilane goal status GOAL_ID` shows the budget state and per-job lines, including recorded outcomes and fuse state.
 - `omnilane goal close GOAL_ID [--summary "TEXT"]` writes `goals/<id>/report.md` with the goal, budget usage, jobs, notes, and closing summary.

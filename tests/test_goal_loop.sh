@@ -45,6 +45,12 @@ open_goal() {
     --budget-jobs "$jobs" --budget-seconds "$seconds" --workdir "$home/work"
 }
 
+open_goal_unlimited() {
+  local home="$1" text="$2"
+  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal open "$text" \
+    --workdir "$home/work"
+}
+
 dispatch_goal() {
   local home="$1" goal_id="$2" task="$3"
   OMNILANE_HOME="$home" FAKE_WORKER_CALLS="$home/worker.calls" \
@@ -87,6 +93,38 @@ assert "budget_parallel" not in budget
 PY
 }
 
+case_default_unlimited() {
+  local home="$TEST_ROOT/default-unlimited" goal_id goal_dir job_id status count report n
+  make_fixture "$home"
+  goal_id="$(open_goal_unlimited "$home" "keep dispatching without caller caps")"
+  goal_dir="$home/goals/$goal_id"
+  python3 - "$goal_dir/budget.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    budget = json.load(handle)
+assert budget["budget_jobs"] is None
+assert budget["budget_seconds"] is None
+PY
+  for n in $(seq 1 10); do
+    job_id="$(dispatch_goal "$home" "$goal_id" "unlimited dispatch $n")"
+    wait_for_job "$home" "$job_id" 0
+  done
+  status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$status" == *"jobs: 10 / unlimited"* ]] ||
+    fail "default job budget was not unlimited: $status"
+  grep -Eq '^seconds: [0-9]+ / unlimited$' <<<"$status" ||
+    fail "default seconds budget was not unlimited: $status"
+  count="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
+  [[ "$count" == "10" ]] || fail "unlimited goal dispatched $count/10 jobs"
+  report="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal close "$goal_id")"
+  grep -q -- '- Jobs: 10 / unlimited' "$report" ||
+    fail "report did not render unlimited job budget"
+  grep -Eq '^- Seconds: [0-9]+ / unlimited$' "$report" ||
+    fail "report did not render unlimited seconds budget"
+}
+
 case_dispatch_allow() {
   local home="$TEST_ROOT/dispatch-allow" goal_id job_id status physical_workdir
   make_fixture "$home"
@@ -96,7 +134,7 @@ case_dispatch_allow() {
     fail "dispatch did not print a job id: $job_id"
   wait_for_job "$home" "$job_id" 0
   status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
-  [[ "$status" == *"jobs: 1/2"* && "$status" == *"job $job_id:"* &&
+  [[ "$status" == *"jobs: 1 / 2"* && "$status" == *"job $job_id:"* &&
      "$status" == *"lane=probe vendor=exec exit=0"* ]] ||
     fail "allowed dispatch was not recorded: $status"
   physical_workdir="$(cd "$home/work" && pwd -P)"
@@ -151,7 +189,7 @@ case_fuse() {
   calls="$(wc -l < "$home/worker.calls" | tr -d '[:space:]')"
   [[ "$calls" == "2" ]] || fail "fused dispatch reached worker: calls=$calls"
   status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
-  [[ "$status" == *"jobs: 2/5"* && "$status" == *"fuse trips: 1"* ]] ||
+  [[ "$status" == *"jobs: 2 / 5"* && "$status" == *"fuse trips: 1"* ]] ||
     fail "status did not report fuse accounting: $status"
 }
 
@@ -169,7 +207,7 @@ case_note_status() {
   OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal note "$goal_id" \
     "reviewed results in /tmp/goal-result.txt"
   done_status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
-  [[ "$done_status" == *"jobs: 2/4"* && "$done_status" == *"job $slow:"* &&
+  [[ "$done_status" == *"jobs: 2 / 4"* && "$done_status" == *"job $slow:"* &&
      "$done_status" == *"exit=0"* && "$done_status" == *"job $failed:"* &&
      "$done_status" == *"exit=9"* ]] || fail "status per-job lines mismatch: $done_status"
   grep -q 'reviewed results in /tmp/goal-result.txt' "$home/goals/$goal_id/notes.jsonl" ||
@@ -177,7 +215,7 @@ case_note_status() {
 }
 
 case_close_report() {
-  local home="$TEST_ROOT/close-report" goal_id job_id report summary_text
+  local home="$TEST_ROOT/close-report" goal_id job_id report summary_text status
   make_fixture "$home"
   goal_id="$(open_goal "$home" "finish the payment audit" 3 30)"
   job_id="$(dispatch_goal "$home" "$goal_id" "audit payment")"
@@ -197,8 +235,8 @@ case_close_report() {
   grep -q "foreman completed \`/tmp/final.txt\`" "$report" || fail "report omitted close summary"
   grep -q 'worker result accepted' "$report" || fail "report omitted foreman notes"
   grep -q '/tmp/final.txt' "$report" || fail "report omitted named artifact"
-  OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id" |
-    grep -q '^status: closed$' || fail "close did not seal goal state"
+  status="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
+  [[ "$status" == "status: closed"$'\n'* ]] || fail "close did not seal goal state"
 }
 
 case_cli_surface() {
@@ -221,6 +259,7 @@ case_cli_surface() {
 
 case "$CASE" in
   open) case_open ;;
+  default-unlimited) case_default_unlimited ;;
   dispatch-allow) case_dispatch_allow ;;
   jobs-cap) case_jobs_cap ;;
   seconds-cap) case_seconds_cap ;;

@@ -4150,6 +4150,7 @@ test_goal_loop_case() {
 }
 
 test_goal_loop_case open "goal ledger opens with budgets and workdir"
+test_goal_loop_case default-unlimited "goal ledger defaults to unlimited budgets"
 test_goal_loop_case dispatch-allow "goal dispatch budget gate allows background job"
 test_goal_loop_case jobs-cap "goal dispatch refuses exhausted jobs budget"
 test_goal_loop_case seconds-cap "goal dispatch refuses exhausted seconds budget"

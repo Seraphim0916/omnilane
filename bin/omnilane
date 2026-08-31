@@ -76,8 +76,8 @@ omnilane — one routing table, every harness
   omnilane list                         effective routing table
   omnilane route [--vendor V] [flags] LANE "TASK"
                                         dispatch or consult a model
- omnilane goal open "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]
- open a foreman-driven goal ledger
+  omnilane goal open "TEXT" [--budget-jobs N] [--budget-seconds S] [--workdir DIR]
+                                        open a goal; budgets default to unlimited
   omnilane goal dispatch GOAL_ID [dispatch.sh args...]
                                          budget-gate and start one background job
   omnilane goal note GOAL_ID "TEXT"       append a timestamped foreman note

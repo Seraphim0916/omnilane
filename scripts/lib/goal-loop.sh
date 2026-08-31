@@ -9,8 +9,8 @@ REPO="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 source "$SCRIPT_DIR/common.sh"
 
 DISPATCH="$REPO/scripts/dispatch.sh"
-DEFAULT_BUDGET_JOBS=8
-DEFAULT_BUDGET_SECONDS=900
+DEFAULT_BUDGET_JOBS=""
+DEFAULT_BUDGET_SECONDS=""
 GOAL_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 LOCK_HELD=0
 GOAL_DIR=""
@@ -190,7 +190,13 @@ required = {
 }
 if not isinstance(state, dict) or not required.issubset(state):
     raise SystemExit("invalid goal budget")
-print("\t".join(str(state[key]) for key in (
+def field_value(key):
+    value = state[key]
+    if key in {"budget_jobs", "budget_seconds"} and value is None:
+        return "unlimited"
+    return str(value)
+
+print("\t".join(field_value(key) for key in (
     "status", "spent_jobs", "budget_jobs", "spent_seconds",
     "budget_seconds", "fuse_trips", "workdir",
 )))
@@ -328,8 +334,8 @@ open_goal() {
       *) usage ;;
     esac
   done
-  validate_positive_integer "--budget-jobs" "$budget_jobs"
-  validate_positive_integer "--budget-seconds" "$budget_seconds"
+  [[ -z "$budget_jobs" ]] || validate_positive_integer "--budget-jobs" "$budget_jobs"
+  [[ -z "$budget_seconds" ]] || validate_positive_integer "--budget-seconds" "$budget_seconds"
   [[ -d "$workdir" ]] || die 2 "workdir is not a directory: $workdir"
   workdir="$(cd "$workdir" && pwd -P)"
   [[ -x "$DISPATCH" ]] || die 1 "dispatch helper unavailable"
@@ -353,8 +359,8 @@ import sys
 path, jobs, seconds, started = sys.argv[1:]
 state = {
     "schema_version": 3,
-    "budget_jobs": int(jobs),
-    "budget_seconds": int(seconds),
+    "budget_jobs": None if jobs == "" else int(jobs),
+    "budget_seconds": None if seconds == "" else int(seconds),
     "spent_jobs": 0,
     "spent_seconds": 0,
     "fuse_trips": 0,
@@ -382,10 +388,12 @@ dispatch_goal() {
   IFS=$'\t' read -r status spent_jobs budget_jobs spent_seconds budget_seconds \
     _ workdir < <(state_fields)
   [[ "$status" == "open" ]] || die 75 "goal is closed: $goal_id"
-  [[ "$spent_jobs" -lt "$budget_jobs" ]] ||
+  if [[ "$budget_jobs" != "unlimited" && "$spent_jobs" -ge "$budget_jobs" ]]; then
     die 75 "jobs budget exhausted: $spent_jobs/$budget_jobs"
-  [[ "$spent_seconds" -lt "$budget_seconds" ]] ||
+  fi
+  if [[ "$budget_seconds" != "unlimited" && "$spent_seconds" -ge "$budget_seconds" ]]; then
     die 75 "seconds budget exhausted: ${spent_seconds}s/${budget_seconds}s"
+  fi
 
   lane_index=$(($# - 1))
   lane="${!lane_index}"
@@ -471,23 +479,34 @@ import json
 import os
 import sys
 
-goal_dir = sys.argv[1]
-with open(os.path.join(goal_dir, "budget.json"), encoding="utf-8") as handle:
-    budget = json.load(handle)
-print(f"status: {budget['status']}")
-print(f"jobs: {budget['spent_jobs']}/{budget['budget_jobs']}")
-print(f"seconds: {budget['spent_seconds']}/{budget['budget_seconds']}")
-print(f"fuse trips: {budget.get('fuse_trips', 0)}")
-for path in sorted(glob.glob(os.path.join(goal_dir, "jobs", "job-*.json"))):
-    with open(path, encoding="utf-8") as handle:
-        record = json.load(handle)
-    exit_value = record.get("exit")
-    exit_text = "running" if exit_value is None else str(exit_value)
-    print(
-        f"job {record['job_id']}: lane={record.get('lane', 'unknown')} "
-        f"vendor={record.get('vendor', 'unknown')} exit={exit_text} "
-        f"seconds={record.get('seconds', 0)}"
-    )
+try:
+    goal_dir = sys.argv[1]
+    with open(os.path.join(goal_dir, "budget.json"), encoding="utf-8") as handle:
+        budget = json.load(handle)
+
+    def budget_limit(value):
+        return "unlimited" if value is None else str(value)
+
+    print(f"status: {budget['status']}")
+    print(f"jobs: {budget['spent_jobs']} / {budget_limit(budget['budget_jobs'])}")
+    print(f"seconds: {budget['spent_seconds']} / {budget_limit(budget['budget_seconds'])}")
+    print(f"fuse trips: {budget.get('fuse_trips', 0)}")
+    for path in sorted(glob.glob(os.path.join(goal_dir, "jobs", "job-*.json"))):
+        with open(path, encoding="utf-8") as handle:
+            record = json.load(handle)
+        exit_value = record.get("exit")
+        exit_text = "running" if exit_value is None else str(exit_value)
+        print(
+            f"job {record['job_id']}: lane={record.get('lane', 'unknown')} "
+            f"vendor={record.get('vendor', 'unknown')} exit={exit_text} "
+            f"seconds={record.get('seconds', 0)}"
+        )
+    sys.stdout.flush()
+except BrokenPipeError:
+    # Prevent Python's shutdown flush from reporting the same closed pipe again.
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
+        os.dup2(devnull.fileno(), sys.stdout.fileno())
+    sys.exit(0)
 PY
   release_lock
   trap - EXIT
@@ -530,6 +549,9 @@ def data_block(value):
     fence = "`" * max(3, longest + 1)
     suffix = "" if value.endswith("\n") else "\n"
     return f"{fence}text\n{value}{suffix}{fence}"
+
+def budget_limit(value):
+    return "unlimited" if value is None else str(value)
 
 budget_path = os.path.join(goal_dir, "budget.json")
 with open(budget_path, encoding="utf-8") as handle:
@@ -601,8 +623,8 @@ lines = [
     "",
     "## Budget",
     "",
-    f"- Jobs: {budget['spent_jobs']} / {budget['budget_jobs']}",
-    f"- Seconds: {budget['spent_seconds']} / {budget['budget_seconds']}",
+    f"- Jobs: {budget['spent_jobs']} / {budget_limit(budget['budget_jobs'])}",
+    f"- Seconds: {budget['spent_seconds']} / {budget_limit(budget['budget_seconds'])}",
     f"- Fuse trips: {budget.get('fuse_trips', 0)}",
     "",
     "## Jobs",
