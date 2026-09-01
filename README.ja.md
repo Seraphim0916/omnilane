@@ -550,6 +550,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 
 ## 📜 リリース履歴
 
+## v0.31.0 の新機能
+
+- **ゴール予算はデフォルトで無制限。** `budget_jobs` と `budget_seconds` は JSON `null` として保存され、`unlimited` と表示されるようになりました。従来の暗黙的な 8 ジョブと 900 秒の上限は廃止され、`--budget-jobs N` または `--budget-seconds S` を指定した場合にのみ厳格な上限が有効になります。同一失敗のヒューズは予算ではなく、デフォルトで引き続き有効です。
+- **パイプ経由のゴール状態表示を修正。** `omnilane goal status` は、出力先がパイプを早期に閉じた場合でも `BrokenPipeError` を発生させず、終了コード 0 で終了します。これにより、`pipefail` の環境でも `| head` と `| grep -q` が正常に動作します。
+
 ## v0.30.0 の新機能
 
 - **ゴール台帳。** `omnilane goal open` はジョブ数と経過秒数がデフォルトで無制限のゴール台帳を作成します。`goal dispatch` は各ジョブの実行前に呼び出し元が指定した上限と、デフォルトで有効な繰り返し失敗のヒューズを確認します。`goal note` は呼び出し元の記録を残し、`goal status` は予算とジョブごとの記録を表示し、`goal close` は `goals/<id>/report.md` を書き込みます。

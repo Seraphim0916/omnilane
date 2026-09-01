@@ -507,6 +507,11 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## 📜 版本历程
 
+## v0.31.0 新功能
+
+- **目标预算默认不设上限。** `budget_jobs` 和 `budget_seconds` 现在以 JSON `null` 保存并显示为 `unlimited`；此前隐含的 8 个任务和 900 秒上限已移除。只有使用 `--budget-jobs N` 或 `--budget-seconds S` 才会启用硬性上限；重复失败保险丝不是预算，默认仍然启用。
+- **管道中的目标状态不再误报失败。** `omnilane goal status` 的消费端提前关闭管道时，现在会以状态码 0 退出，而不是触发 `BrokenPipeError`，因此 `| head` 和 `| grep -q` 可在 `pipefail` 下正常工作。
+
 ## v0.30.0 新功能
 
 - **目标台账。** `omnilane goal open` 创建默认不限制作业数量和秒数的目标台账；`goal dispatch` 会在每个作业运行前检查调用方设置的作业数量或总耗时上限，以及默认启用的重复失败熔断器。`goal note` 保留调用方叙事，`goal status` 显示预算和每个作业记录，`goal close` 会写入 `goals/<id>/report.md`。

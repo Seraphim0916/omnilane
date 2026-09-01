@@ -533,6 +533,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 ## 📜 릴리스 기록
 
+## v0.31.0 새 기능
+
+- **목표 예산은 기본적으로 무제한입니다.** `budget_jobs`와 `budget_seconds`는 이제 JSON `null`로 저장되고 `unlimited`로 표시됩니다. 이전의 암묵적인 8개 작업 및 900초 상한은 제거되었으며, `--budget-jobs N` 또는 `--budget-seconds S`를 지정할 때만 엄격한 상한이 활성화됩니다. 반복 실패 퓨즈는 예산이 아니며 기본적으로 계속 활성화됩니다.
+- **파이프를 통한 목표 상태 출력을 수정했습니다.** `omnilane goal status`는 출력 소비자가 파이프를 일찍 닫아도 `BrokenPipeError`를 발생시키지 않고 종료 코드 0으로 끝납니다. 따라서 `pipefail` 환경에서도 `| head`와 `| grep -q`가 정상적으로 작동합니다.
+
 ## v0.30.0 새 기능
 
 - **목표 원장.** `omnilane goal open`은 작업 수와 경과 시간이 기본적으로 무제한인 목표 원장을 만듭니다. `goal dispatch`는 각 작업을 실행하기 전에 호출자가 지정한 상한과 기본적으로 활성화된 반복 실패 퓨즈를 검사합니다. `goal note`는 호출자의 기록을 남기고, `goal status`는 예산과 작업별 기록을 표시하며, `goal close`는 `goals/<id>/report.md`를 작성합니다.

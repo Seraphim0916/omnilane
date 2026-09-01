@@ -614,6 +614,11 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.31.0
+
+- **Unlimited goal budgets by default.** `budget_jobs` and `budget_seconds` now persist as JSON `null` and render as `unlimited`; the previous implicit 8-job and 900-second caps are gone. Use `--budget-jobs N` or `--budget-seconds S` to opt in to a hard cap. The repeat-failure fuse remains enabled by default.
+- **Pipe-safe goal status.** `omnilane goal status` now exits 0 when its consumer closes the pipe early instead of raising `BrokenPipeError`, so `| head` and `| grep -q` work under `pipefail`.
+
 ## What's new in v0.30.0
 
 - **Goal ledger.** `omnilane goal open` creates a goal ledger with unlimited default budgets; `goal dispatch` gates each job on caller-supplied job or wall-clock caps and the always-on repeat-failure fuse. `goal note` preserves the caller's narrative, `goal status` shows budgets and per-job records, and `goal close` writes `goals/<id>/report.md`.

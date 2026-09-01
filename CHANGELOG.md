@@ -6,6 +6,16 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-01
+
+### Changed
+
+- Goal budgets now default to unlimited. `--budget-jobs N` and `--budget-seconds S` opt in to hard caps; the previous implicit 8-job and 900-second caps are gone. The repeat-failure fuse is not a budget and remains enabled by default.
+
+### Fixed
+
+- `omnilane goal status` no longer fails when its consumer closes the pipe early. It exits 0 instead of raising `BrokenPipeError`, so `| head` and `| grep -q` work under `pipefail`.
+
 ## [0.30.0] - 2026-08-31
 
 ### Added
@@ -680,7 +690,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...HEAD
+
+[0.31.0]: https://github.com/Seraphim0916/omnilane/compare/v0.30.0...v0.31.0
 
 [0.30.0]: https://github.com/Seraphim0916/omnilane/compare/v0.21.0...v0.30.0
 
