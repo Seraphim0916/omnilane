@@ -6,6 +6,10 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Routing and the vote runner no longer pin `grok-4.5`, a model id xAI has retired. The `consult`, `live-search`, and `coding-overflow` lanes and the arbitrate grok voter now target `grok-4.6`. A dead model id severs a lane instead of falling through it, because the fallback chain tests whether a vendor CLI is installed and not whether the call succeeded.
+
 ## [0.31.0] - 2026-09-01
 
 ### Changed

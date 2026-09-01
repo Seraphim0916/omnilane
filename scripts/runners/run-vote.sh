@@ -33,7 +33,7 @@ voter_spec() { # vendor -> "model<TAB>effort"
     codex)  printf 'gpt-5.6-sol\thigh' ;;
     claude) printf 'claude-opus-5\thigh' ;;
     gemini) printf 'Gemini 3.1 Pro (High)\t-' ;;
-    grok)   printf 'grok-4.5\t-' ;;
+    grok)   printf 'grok-4.6\t-' ;;
     *)      return 1 ;;
   esac
 }

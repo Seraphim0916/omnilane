@@ -154,7 +154,7 @@ CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
 CLAUDE_MODELS=("default" "best" "fable" "opus" "sonnet" "haiku" "opus[1m]" "sonnet[1m]" "opusplan" "claude-fable-5" "claude-opus-5" "claude-sonnet-5" "claude-opus-4-8" "claude-opus-4-7" "claude-opus-4-6" "claude-opus-4-5-20251101" "claude-sonnet-4-6" "claude-sonnet-4-5-20250929" "claude-haiku-4-5" "claude-haiku-4-5-20251001")
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
 GEMINI_MODELS=("gemini-3.6-flash-high" "gemini-3.6-flash-medium" "gemini-3.6-flash-low" "gemini-3.5-flash-high" "gemini-3.5-flash-medium" "gemini-3.5-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low" "claude-sonnet-4-6" "claude-opus-4-6-thinking" "gpt-oss-120b-medium")
-GROK_MODELS=("grok-4.5" "headroom-grok-build" "grok-4.3-official")
+GROK_MODELS=("grok-4.6" "headroom-grok-build" "grok-4.3-official")
 KIMI_MODELS=("kimi-k3" "kimi-k2.7-code" "kimi-k2.5")
 QWEN_MODELS=("qwen3.7-max" "qwen3.7-plus" "qwen3.6-plus" "qwen3.5-plus" "qwen3-max-2026-01-23" "qwen3-coder-next" "qwen3-coder-plus" "qwen3-coder-flash")
 # OpenCode models use provider/model form; OpenRouter models use catalog slugs.

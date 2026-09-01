@@ -97,7 +97,7 @@ Users may speak normally; they do not need lane names.
 | Sol | codex | gpt-5.6-sol | max |
 | Terra | codex | gpt-5.6-terra | max |
 | Luna | codex | gpt-5.6-luna | medium |
-| Grok 4.5 | grok | grok-4.5 | - |
+| Grok 4.6 | grok | grok-4.6 | - |
 | Gemini Pro | gemini | Gemini 3.1 Pro (High) | - |
 | Gemini Flash | gemini | Gemini 3.6 Flash (High) | - |
 | Kimi | kimi | kimi-k3 | - |
