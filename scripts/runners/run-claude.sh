@@ -14,6 +14,21 @@ RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
 truncate_payload "$PROMPT_FILE" 102400
 
+THREAD_MODE="${OMNILANE_THREAD_MODE:-}"
+THREAD_ID="${OMNILANE_THREAD_ID:-}"
+THREAD_ARGS=()
+if [[ -n "$THREAD_MODE" || -n "$THREAD_ID" ]]; then
+  [[ "$THREAD_ID" =~ ^[A-Za-z0-9._:-]+$ && "${#THREAD_ID}" -le 256 ]] || {
+    echo "omnilane: invalid Claude thread session id" >&2
+    exit 2
+  }
+  case "$THREAD_MODE" in
+    new) THREAD_ARGS=(--session-id "$THREAD_ID") ;;
+    resume) THREAD_ARGS=(--resume "$THREAD_ID") ;;
+    *) echo "omnilane: invalid Claude thread mode" >&2; exit 2 ;;
+  esac
+fi
+
 LIVE_INBOX="${OMNILANE_INBOX:-}"
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
   EVENTS_FILE="${OUTPUT_FILE}.events.jsonl"
@@ -118,7 +133,7 @@ PY
   exit "$RC"
 fi
 
-ARGS=(--disable-slash-commands --model "$MODEL" --output-format text)
+ARGS=(--disable-slash-commands --model "$MODEL")
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(--effort "$EFFORT")
 if [[ "$MODE" == "advise" ]]; then
   # Read-only surface: the worker can inspect the repo but not change or run anything.
@@ -126,18 +141,62 @@ if [[ "$MODE" == "advise" ]]; then
 else
   ARGS+=(--permission-mode acceptEdits)
 fi
+if [[ -n "$THREAD_MODE" ]]; then
+  ARGS+=(--verbose --output-format stream-json)
+  ARGS+=("${THREAD_ARGS[@]}")
+else
+  ARGS+=(--output-format text)
+fi
 ARGS+=(-p "$(cat "$PROMPT_FILE")")
 
 set +e
 (
   cd "$WORKDIR" || exit 127
-  run_with_timeout "$RUN_TIMEOUT" env \
-    OMNILANE_DEPTH=1 \
-    "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
+  if [[ -n "$THREAD_MODE" ]]; then
+    run_with_timeout "$RUN_TIMEOUT" env \
+      OMNILANE_DEPTH=1 \
+      "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.events.jsonl" 2> "${OUTPUT_FILE}.stderr.log"
+  else
+    run_with_timeout "$RUN_TIMEOUT" env \
+      OMNILANE_DEPTH=1 \
+      "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
+  fi
 )
 RC=$?
 set -e
 
+if [[ -n "$THREAD_MODE" ]]; then
+  if [[ "$RC" -eq 0 ]]; then
+    if ! python3 - "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp" <<'PY'
+import json
+import pathlib
+import sys
+
+events_path = pathlib.Path(sys.argv[1])
+output_path = pathlib.Path(sys.argv[2])
+last_result = None
+with events_path.open(encoding="utf-8") as events:
+    for raw_line in events:
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "result" and isinstance(event.get("result"), str):
+            last_result = event["result"]
+if last_result is None:
+    raise SystemExit(1)
+output_path.write_text(last_result.rstrip("\n") + "\n", encoding="utf-8")
+PY
+    then
+      echo "omnilane: Claude thread stream ended without readable result event" >> "${OUTPUT_FILE}.stderr.log"
+      RC=1
+    fi
+  fi
+  if [[ "$RC" -ne 0 && -s "${OUTPUT_FILE}.stderr.log" ]]; then
+    cat "${OUTPUT_FILE}.stderr.log" >&2
+    cat "${OUTPUT_FILE}.stderr.log" > "${OUTPUT_FILE}.tmp"
+  fi
+fi
 [[ -f "${OUTPUT_FILE}.tmp" ]] && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
 exit "$RC"

@@ -4249,6 +4249,17 @@ test_completion_settings_detection() {
 }
 test_completion_settings_detection
 
+test_thread_dispatch() {
+  local name="threaded dispatch" out rc=0
+  out="$(bash "$ROOT/tests/test_thread_dispatch.sh" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_thread_dispatch
+
 test_install_check_read_only() {
   local name="installer check is read-only" out rc=0
   out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --install-readonly 2>&1)" || rc=$?

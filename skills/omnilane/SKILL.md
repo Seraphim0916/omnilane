@@ -1,6 +1,6 @@
 ---
 name: omnilane
-description: 'Universal model-routing table + cross-vendor dispatch for ANY harness (Claude Code, Codex, Grok Build, Antigravity). Use when delegating subtasks, choosing a model for work, planning multi-part tasks, or when asked about model routing, delegate, dispatch, which model, tier selection, escalate, 派工, 模型路由. One routing table; implementation work dispatches by default via dispatch.sh — the main loop self-executes only reserved commander items.'
+description: 'Universal model-routing table + cross-vendor dispatch for ANY harness (Claude Code, Codex, Grok Build, Antigravity). Use when delegating subtasks, choosing a model for work, planning multi-part tasks, or when asked about model routing, delegate, dispatch, which model, tier selection, escalate, 派工, 模型路由. One routing table; every task dispatches by default via dispatch.sh — the main loop self-executes only reserved commander items.'
 ---
 
 # omnilane — one routing table, every harness
@@ -9,13 +9,26 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 
 1. **Identify your main model.** You know which model you are running as.
 2. **Split the work into subtasks and classify each into a lane** (table below).
-3. **Dispatch implementation work by default — even when the lane's model is
-   you.** Self-execute only reserved commander items: planning and
-   decomposition, writing task briefs, reviewing reports, acceptance checks,
-   replies to the operator, git commit/push, read-only verification, and
-   fixes of one line or less. Dispatch:
+3. **Dispatch every task by default — even when the lane's model is you:**
+   implementation, search, investigation, file reads, verification, tests,
+   builds, deploys. The commander self-executes only: planning and
+   decomposition, writing task briefs, reading worker reports and job files
+   (`out.txt`, `events.jsonl`, inbox records), acceptance judgment, replies to
+   the operator, git commit/push, and edits to governance files. Read-only
+   work goes out in advise mode: `triage` for high-volume scans, `long-context`
+   for large documents, `live-search` for web or X, `hard-judgment` for second
+   opinions. Editing work uses `--mode work --workdir <repo> --timeout 3600`
+   or more. Re-verify a worker's claim by reading its attached evidence or by
+   dispatching a second worker (change `--vendor`); the commander runs no
+   commands itself. Invalid reasons to skip dispatch: "this lane is mine",
+   "I am not dispatching so the rule does not apply", "it is only a file
+   read", "dispatch is slower", "it is one line". Dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
+   Use `--thread NAME` when later Claude dispatches must retain earlier context.
+   Threads are Claude-only in 0.33.0 and pin vendor, model, effort, and physical
+   workdir; inspect or remove local state with `scripts/jobs.sh threads`,
+   `threads show NAME`, and `threads rm NAME` (removal leaves Claude's session).
    Implementation dispatches (code edits, new files, tests, builds, deploys)
    must carry `--mode work --workdir <repo>` and a `--timeout` of at least
    3600 seconds. The advise default is a read-only worker under a 600 s
@@ -183,7 +196,7 @@ dispatch stay in this skill and the CLI. Manage the local board with
 - **Claude Fable 5.1 main**: hard judgment, taste finalization, and the hardest
   coding are yours. Dispatch bulk work to Sol high and long-context or fast
   loops to Gemini 3.7 Flash.
-- **Claude Opus 5 main**: judgment and taste remain strong self-execute lanes;
+- **Claude Opus 5 main**: judgment and taste remain its strongest lanes, but the commander still dispatches them;
   use local overrides when its lower hallucination rate or price is preferred.
 - **Claude Sonnet main**: coordination/tools/mid-tier coding only; never
   self-assign top judgment or hardest implementation.

@@ -13,6 +13,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 JOBS="$OMNILANE_HOME/jobs"
+THREADS="$OMNILANE_HOME/threads"
 JOB_ID_PATTERN='^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$'
 JSON_MODE=0
 COMMAND="unknown"
@@ -56,7 +57,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -347,7 +348,7 @@ set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
-    list|status|result|stats|recommend|audit) ;;
+    list|status|result|stats|recommend|audit|threads) ;;
     *) usage ;;
   esac
 fi
@@ -358,6 +359,77 @@ case "${1:-}" in
   help|--help|-h)
     [[ "$JSON_MODE" -eq 0 && $# -eq 1 ]] || usage
     echo "$USAGE_TEXT" ;;
+  threads)
+    thread_action="${2:-list}"
+    case "$thread_action" in
+      list)
+        [[ $# -eq 1 || ( $# -eq 2 && "$2" == "list" ) ]] || usage
+        if [[ -L "$THREADS" || ( -e "$THREADS" && ! -d "$THREADS" ) ]]; then
+          die 1 "unsafe thread store path"
+        fi
+        thread_names=()
+        if [[ -d "$THREADS" ]]; then
+          for thread_path in "$THREADS"/*.json; do
+            [[ -e "$thread_path" || -L "$thread_path" ]] || continue
+            thread_name="${thread_path##*/}"
+            thread_name="${thread_name%.json}"
+            omnilane_valid_thread_name "$thread_name" || die 1 "invalid thread state filename"
+            read_thread_state "$thread_path" "$thread_name" || die 1 "thread $thread_name state is not safely readable"
+            thread_names+=("$thread_name")
+          done
+        fi
+        if [[ "$JSON_MODE" -eq 1 ]]; then
+          printf '{"schema_version":1,"command":"threads","ok":true,"threads":['
+          thread_first=1
+          if [[ "${#thread_names[@]}" -gt 0 ]]; then
+            while IFS= read -r thread_name; do
+              read_thread_state "$THREADS/$thread_name.json" "$thread_name" \
+                || die 1 "thread $thread_name state is not safely readable"
+              [[ "$thread_first" -eq 1 ]] || printf ','
+              thread_first=0
+              cat "$THREADS/$thread_name.json"
+            done < <(printf '%s\n' "${thread_names[@]}" | LC_ALL=C sort)
+          fi
+          printf ']}\n'
+        else
+          printf 'name\tvendor\tmodel\tturns\tupdated\tlast_job\n'
+          if [[ "${#thread_names[@]}" -gt 0 ]]; then
+            while IFS= read -r thread_name; do
+              read_thread_state "$THREADS/$thread_name.json" "$thread_name" \
+                || die 1 "thread $thread_name state is not safely readable"
+              printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "$THREAD_STATE_NAME" "$THREAD_STATE_VENDOR" "$THREAD_STATE_MODEL" \
+                "$THREAD_STATE_TURNS" "$THREAD_STATE_UPDATED" "$THREAD_STATE_LAST_JOB_ID"
+            done < <(printf '%s\n' "${thread_names[@]}" | LC_ALL=C sort)
+          fi
+        fi
+        ;;
+      show)
+        [[ $# -eq 3 ]] || usage
+        thread_name="$3"
+        omnilane_valid_thread_name "$thread_name" || die 2 "invalid thread name"
+        thread_path="$THREADS/$thread_name.json"
+        read_thread_state "$thread_path" "$thread_name" || die 1 "no safely readable thread '$thread_name'"
+        if [[ "$JSON_MODE" -eq 1 ]]; then
+          printf '{"schema_version":1,"command":"threads show","ok":true,"thread":'
+          cat "$thread_path"
+          printf '}\n'
+        else
+          cat "$thread_path"
+        fi
+        ;;
+      rm)
+        [[ "$JSON_MODE" -eq 0 && $# -eq 3 ]] || usage
+        thread_name="$3"
+        omnilane_valid_thread_name "$thread_name" || die 2 "invalid thread name"
+        thread_path="$THREADS/$thread_name.json"
+        read_thread_state "$thread_path" "$thread_name" || die 1 "no safely readable thread '$thread_name'"
+        rm "$thread_path"
+        echo "removed thread $thread_name (vendor session preserved)"
+        ;;
+      *) usage ;;
+    esac
+    ;;
   send)
     [[ "$JSON_MODE" -eq 0 && $# -eq 3 ]] || usage
     select_job "$2"

@@ -1,20 +1,27 @@
 <!-- omnilane-routing:start -->
 ## omnilane — model routing (persistent reminder)
 
-Implementation work — code edits, new files, tests, builds, deploys — is
-dispatched by default, even when the lane's first available model is the one
-you are running as. Consult the routing table with `omnilane list` (or
-`scripts/dispatch.sh --list` inside the omnilane repo), classify the subtask
-into a lane, then dispatch it headlessly:
+Every task — not only implementation — is dispatched by default, even when
+the lane's first available model is the one you are running as: code edits,
+search, investigation, file reads, verification, tests, builds, deploys.
+Consult the routing table with `omnilane list` (or `scripts/dispatch.sh --list`
+inside the omnilane repo), classify the subtask into a lane, then dispatch it
+headlessly:
 
     omnilane route [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"
 
 Advise mode is the default; pass `--mode work` only with an explicit
-`--workdir`. The commander self-executes only reserved items: planning and
-decomposition, writing task briefs, reviewing reports, acceptance checks,
-replies to the operator, git commit/push, read-only verification, and fixes
-of one line or less. "This lane is mine, so I'll do it myself" is not a
-valid reason to skip dispatch.
+`--workdir`. The commander self-executes only the reserved list: planning and
+decomposition, writing task briefs, reading worker output (`out.txt`,
+`events.jsonl`, inbox records), acceptance judgment, replies to the operator,
+git commit/push, and governance-file edits. The commander never runs commands
+itself: re-verify a worker's claim by reading its attached evidence or by
+dispatching a second worker with a different `--vendor`. Read-only work goes
+out in advise mode through named lanes — `triage` for high-volume scans,
+`long-context` for large documents, `live-search` for web or X,
+`hard-judgment` for second opinions. Invalid reasons to skip dispatch: "this
+lane is mine", "I am not dispatching so the rule does not apply", "it is only
+a file read", "dispatch is slower", "it is one line".
 
 Implementation dispatches carry `--mode work --workdir DIR --timeout 3600` or
 more; the advise default is read-only under a 600 s watchdog and yields no

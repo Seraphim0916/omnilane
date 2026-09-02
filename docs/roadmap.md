@@ -1,6 +1,6 @@
 # Omnilane Roadmap — Conversational Dispatch
 
-Status: planning. Nothing in this document is implemented yet.
+Status: R1 implemented for claude in 0.33.0; codex, grok and gemini refuse `--thread` pending verification of their resume primitives. R2 shipped in 0.20.0/0.21.0.
 
 ## 摘要（繁中）
 
@@ -51,6 +51,14 @@ Continuation across two separate processes: `claude -p --session-id <uuid>` was
 told a passphrase; a second process with `claude -p --resume <same-uuid>`
 recalled it.
 
+2026-09-02 two-directory re-probes: the required turn 1 in directory A reached
+the real Claude CLI but first failed with `FailedToOpenSocket`; an artifacted
+repeat hit its 180-second watchdog (rc 142). The directory B and directory A
+resume attempts then returned `No conversation found` in both runs. These runs
+did not establish whether `--resume` is directory-scoped. R1 pins the physical
+workdir regardless, and the failed probe output remains acceptance evidence
+rather than being reported as a pass.
+
 Mid-run injection, one process, second message written **after** turn 1 had
 already been answered: `docs/experiments/live-inbox-probe.sh` printed
 `after-turn-1 results: 1` before writing the second message into the FIFO, and
@@ -72,15 +80,17 @@ Design constraints:
   through environment variables (`OMNILANE_THREAD_ID`,
   `OMNILANE_THREAD_MODE=new|resume`) rather than positional arguments, so runners
   that ignore threading keep working unchanged.
-- Thread metadata lives in a `thread.json` beside the job directory: vendor,
-  model, vendor-native session id, turn count, last job id.
+- Thread metadata lives in `$OMNILANE_HOME/threads/NAME.json`: name, vendor,
+  model, effort, physical workdir, vendor-native session id, turn count, last
+  job id, and UTC created/updated timestamps. The private store is mode 0700,
+  state files are mode 0600, and updates use temporary-file plus rename.
 - Re-read the session id out of each run's own result event and write it back to
   `thread.json`. Do not assume the id supplied at creation survives — a vendor
   that forks a new id per resume would otherwise silently strand the thread after
   turn two.
-- A thread is pinned to one vendor. Falling back to another vendor breaks the
-  thread; the fallback must start a fresh thread and say so, never silently lose
-  history.
+- A thread is pinned to vendor, model, effort, and physical workdir. Any
+  mismatch is an exit-2 refusal naming the pinned and resolved values; no
+  fallback starts a fresh thread silently.
 - Stateless vendors (the six openai-compat ones) either refuse `--thread` or
   replay stored turns. Refusing is the honest default for the first cut.
 - **Never degrade silently.** Whenever a thread cannot actually be continued —
@@ -89,9 +99,9 @@ Design constraints:
   continuing a conversation while every turn restarts from zero burns tokens and
   cannot tell why the correction had no effect.
 
-Phasing: claude first (verified), codex second (`exec resume` plus the existing
-`thread_id` extraction), then grok/gemini once their help-only claims are
-actually exercised.
+Release 0.33.0 supports claude only. Codex, grok, gemini, and direct-API
+vendors return visible exit-2 refusals; later vendors wait for exercised resume
+primitives rather than help-only claims.
 
 ## R2 — Live mailbox
 

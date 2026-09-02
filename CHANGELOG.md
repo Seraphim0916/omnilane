@@ -6,6 +6,31 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+
+- The skill routing reminder and the persistent hook text now dispatch every task by default, withdrawing the read-only-verification and one-line-fix self-execute exceptions and naming the reserved commander actions (planning, task briefs, reading worker output, acceptance, replies to the operator, git commit/push, governance-file edits).
+
+## [0.33.0] - 2026-09-02
+
+### Added
+
+- `dispatch.sh --thread NAME` continues a named Claude conversation with
+  vendor-native `--session-id` on turn one and `--resume` afterward. Thread
+  state is written atomically under the private `$OMNILANE_HOME/threads/`
+  store and pins vendor, model, effort, and physical workdir.
+- `jobs.sh threads`, `threads show NAME`, and `threads rm NAME` list, inspect,
+  and remove local thread state without deleting the vendor session.
+- Threaded jobs record `thread` and `thread_turn` in `meta.json` and completion
+  inbox records; completion notices include `thread=NAME turn=N`.
+- Threading is Claude-only in this release. Codex, grok, gemini, direct-API
+  vendors, `--live`, and pinned-value mismatches stop with visible exit-2
+  notices rather than silently starting a fresh conversation.
+- The required 2026-09-02 two-directory Claude `--resume` re-probes reached the
+  real CLI, but turn one first failed with `FailedToOpenSocket` and an
+  artifacted repeat hit its 180-second watchdog (rc 142); directory B and A
+  then returned `No conversation found`. Directory scope was not proven, so
+  workdir remains pinned and the runtime acceptance is partial.
+
 ## [0.32.1] - 2026-09-02
 
 ### Fixed
@@ -725,7 +750,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...v0.32.0
 

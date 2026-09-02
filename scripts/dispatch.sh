@@ -3,7 +3,7 @@ set -euo pipefail
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
-#   dispatch.sh [--background] [--live|--single-shot] [--dry-run]
+#   dispatch.sh [--background] [--live|--single-shot] [--dry-run] [--thread NAME]
 #               [--mode advise|work|sysops] [--workdir DIR]
 #               [--vendor V] [--model M] [--effort E] [--timeout SECONDS]
 #               [--job-timeout SECONDS] [--idle-timeout SECONDS] LANE "TASK TEXT"
@@ -34,9 +34,10 @@ source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""; OVERRIDE_IDLE_TIMEOUT=""; SESSION_REQUEST="auto"
+THREAD_NAME=""; THREAD_MODE=""; THREAD_ID=""; THREAD_TURN=""; THREAD_CREATED=""
 
 usage_error() {
-  echo 'usage: dispatch.sh [--background] [--dry-run] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
+  echo 'usage: dispatch.sh [--background] [--dry-run] [--thread NAME] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
   exit 2
 }
 
@@ -50,6 +51,7 @@ Dispatch one task to the first available vendor CLI in LANE's fallback chain.
 A TASK of "-" reads the task text from stdin.
 
 flags:
+  --thread NAME          continue a named Claude thread (single-shot)
   --live                    require a resident session (background only)
   --single-shot             force one-shot dispatch (background only)
   --idle-timeout SECONDS    close an idle live mailbox (default 900; 0 disables)
@@ -125,6 +127,97 @@ emit_json_inspection() {
   exit "$rc"
 }
 
+thread_refuse() {
+  local notice="$1"
+  printf '%s\n' "$notice"
+  printf '%s\n' "$notice" >&2
+  exit 2
+}
+
+generate_thread_id() {
+  local value=""
+  if command -v uuidgen >/dev/null 2>&1; then
+    value="$(uuidgen)" || return 1
+  elif command -v python3 >/dev/null 2>&1; then
+    value="$(python3 -c 'import uuid; print(uuid.uuid4())')" || return 1
+  else
+    return 1
+  fi
+  [[ "$value" =~ ^[A-Za-z0-9._:-]+$ && "${#value}" -le 256 ]] || return 1
+  printf '%s\n' "$value"
+}
+
+extract_claude_result_session_id() {
+  local events_path="$1"
+  [[ -f "$events_path" && ! -L "$events_path" ]] || return 1
+  perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($path) = @ARGV;
+    open my $fh, "<", $path or die $!;
+    my $last = "";
+    while (my $line = <$fh>) {
+      my $event = eval { decode_json($line) };
+      next unless ref($event) eq "HASH" && ($event->{type} // "") eq "result";
+      my $id = $event->{session_id};
+      next if !defined($id) || ref($id) || $id !~ /\A[A-Za-z0-9._:-]{1,256}\z/;
+      $last = $id;
+    }
+    exit 1 unless length($last);
+    print $last;
+  ' "$events_path" 2>/dev/null
+}
+
+append_thread_notice() {
+  local notice="$1"
+  printf '%s\n' "$notice" >&2
+  printf '\n%s\n' "$notice" >> "$JOB_DIR/out.txt"
+}
+
+write_thread_state() {
+  local returned_id="$1" final="$OMNILANE_HOME/threads/$THREAD_NAME.json"
+  local tmp="$OMNILANE_HOME/threads/.$THREAD_NAME.tmp.$$-$RANDOM"
+  local updated old_umask write_rc=0
+  prepare_threads_store || return 1
+  updated="$(date -u +%FT%TZ)" || return 1
+  [[ -n "$THREAD_CREATED" ]] || THREAD_CREATED="$updated"
+  old_umask="$(umask)"
+  umask 077
+  printf '{"name":"%s","vendor":"%s","model":"%s","effort":"%s","workdir":"%s","session_id":"%s","turns":%s,"last_job_id":"%s","created":"%s","updated":"%s"}\n' \
+    "$(json_escape "$THREAD_NAME")" "$(json_escape "$VENDOR")" \
+    "$(json_escape "$MODEL")" "$(json_escape "$EFFORT")" \
+    "$(json_escape "$WORKDIR")" "$(json_escape "$returned_id")" \
+    "$THREAD_TURN" "$(json_escape "$JOB_ID")" \
+    "$(json_escape "$THREAD_CREATED")" "$(json_escape "$updated")" \
+    > "$tmp" || write_rc=$?
+  if [[ "$write_rc" -eq 0 ]]; then
+    chmod 600 "$tmp" || write_rc=$?
+  fi
+  if [[ "$write_rc" -eq 0 ]]; then
+    mv "$tmp" "$final" || write_rc=$?
+  fi
+  umask "$old_umask"
+  rm "$tmp" 2>/dev/null || true
+  return "$write_rc"
+}
+
+update_thread_state() {
+  local returned_id notice
+  returned_id="$(extract_claude_result_session_id "$JOB_DIR/out.txt.events.jsonl")" || {
+    append_thread_notice "omnilane: thread $THREAD_NAME did not return a resumable Claude session id"
+    return 1
+  }
+  if [[ "$returned_id" != "$THREAD_ID" ]]; then
+    notice="omnilane: thread $THREAD_NAME: claude returned a different session id ($THREAD_ID -> $returned_id)"
+    append_thread_notice "$notice"
+  fi
+  write_thread_state "$returned_id" || {
+    append_thread_notice "omnilane: thread $THREAD_NAME state could not be written"
+    return 1
+  }
+  THREAD_ID="$returned_id"
+}
+
 print_dry_run_value() {
   printf '%s=' "$1"
   printf '%q\n' "$2"
@@ -148,6 +241,12 @@ print_dry_run_plan() {
   printf 'idle_timeout=%s\n' "$IDLE_TIMEOUT"
   print_dry_run_value session_mode "$SESSION_MODE"
   printf 'candidate=%s/%s\n' "$RESOLVED_IDX" "$RESOLVED_TOTAL"
+  if [[ -n "$THREAD_NAME" ]]; then
+    print_dry_run_value thread "$THREAD_NAME"
+    print_dry_run_value thread_mode "$THREAD_MODE"
+    print_dry_run_value thread_session "$THREAD_ID"
+    print_dry_run_value thread_turn "$THREAD_TURN"
+  fi
   printf 'background=%s\n' "$background"
   printf 'task_source=%s\n' "$task_source"
   printf 'provider_invoked=no\n'
@@ -480,7 +579,7 @@ while [[ $# -gt 0 ]]; do
       }
       SESSION_REQUEST="single-shot"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout)
+    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout|--thread)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
       [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
@@ -493,6 +592,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) OVERRIDE_TIMEOUT="$2" ;;
         --job-timeout) OVERRIDE_JOB_TIMEOUT="$2" ;;
         --idle-timeout) OVERRIDE_IDLE_TIMEOUT="$2" ;;
+        --thread) THREAD_NAME="$2" ;;
       esac
       shift 2 ;;
     -*) echo "omnilane: unknown flag" >&2; exit 2 ;;
@@ -506,7 +606,14 @@ done
   echo 'omnilane: unexpected extra arguments; quote a multiword task' >&2
   exit 2
 }
-if [[ "$SESSION_REQUEST" != "auto" && "$BACKGROUND" -ne 1 ]]; then
+if [[ -n "$THREAD_NAME" ]] && ! omnilane_valid_thread_name "$THREAD_NAME"; then
+  thread_refuse "omnilane: invalid --thread name '$THREAD_NAME' (want 1-64 characters: A-Z, a-z, 0-9, dot, underscore, hyphen)"
+fi
+if [[ -n "$THREAD_NAME" && "$SESSION_REQUEST" == "live" ]]; then
+  thread_refuse "omnilane: --thread cannot be combined with --live; threads run single-shot and a live session is already a conversation"
+fi
+if [[ "$SESSION_REQUEST" != "auto" && "$BACKGROUND" -ne 1 &&
+      ! ( -n "$THREAD_NAME" && "$SESSION_REQUEST" == "single-shot" ) ]]; then
   echo "omnilane: --${SESSION_REQUEST} requires --background" >&2
   exit 2
 fi
@@ -559,6 +666,55 @@ VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_MODEL" ]] && MODEL="$OVERRIDE_MODEL"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"
 
+if [[ -n "$THREAD_NAME" ]]; then
+  if [[ "$VENDOR" != "claude" ]]; then
+    thread_refuse "omnilane: --thread is claude-only in this release; resolved vendor '$VENDOR' cannot continue a thread"
+  fi
+  THREAD_WORKDIR="$(cd -- "$WORKDIR" 2>/dev/null && pwd -P)" || {
+    thread_refuse "omnilane: thread $THREAD_NAME workdir is not accessible: $WORKDIR"
+  }
+  WORKDIR="$THREAD_WORKDIR"
+  THREADS_ROOT="$OMNILANE_HOME/threads"
+  if [[ -L "$THREADS_ROOT" || ( -e "$THREADS_ROOT" && ! -d "$THREADS_ROOT" ) ]]; then
+    thread_refuse "omnilane: unsafe thread store path (want real directory): $THREADS_ROOT"
+  fi
+  if [[ "$DRY_RUN" -ne 1 ]]; then
+    prepare_threads_store || thread_refuse "omnilane: thread store could not be prepared"
+  fi
+  THREAD_STATE_FILE="$THREADS_ROOT/$THREAD_NAME.json"
+  if [[ -e "$THREAD_STATE_FILE" || -L "$THREAD_STATE_FILE" ]]; then
+    read_thread_state "$THREAD_STATE_FILE" "$THREAD_NAME" || {
+      thread_refuse "omnilane: thread $THREAD_NAME state is not safely readable"
+    }
+    if [[ "$THREAD_STATE_VENDOR" != "$VENDOR" ]]; then
+      thread_refuse "omnilane: thread $THREAD_NAME pinned vendor '$THREAD_STATE_VENDOR' but resolved vendor is '$VENDOR'"
+    fi
+    if [[ "$THREAD_STATE_MODEL" != "$MODEL" ]]; then
+      thread_refuse "omnilane: thread $THREAD_NAME pinned model '$THREAD_STATE_MODEL' but resolved model is '$MODEL'"
+    fi
+    if [[ "$THREAD_STATE_EFFORT" != "$EFFORT" ]]; then
+      thread_refuse "omnilane: thread $THREAD_NAME pinned effort '$THREAD_STATE_EFFORT' but resolved effort is '$EFFORT'"
+    fi
+    if [[ "$THREAD_STATE_WORKDIR" != "$WORKDIR" ]]; then
+      thread_refuse "omnilane: thread $THREAD_NAME pinned workdir '$THREAD_STATE_WORKDIR' but effective workdir is '$WORKDIR'"
+    fi
+    THREAD_MODE="resume"
+    THREAD_ID="$THREAD_STATE_SESSION_ID"
+    THREAD_TURN=$((THREAD_STATE_TURNS + 1))
+    THREAD_CREATED="$THREAD_STATE_CREATED"
+  else
+    THREAD_MODE="new"
+    THREAD_ID="$(generate_thread_id)" || {
+      thread_refuse "omnilane: thread $THREAD_NAME could not generate a session id"
+    }
+    THREAD_TURN=1
+    THREAD_CREATED=""
+  fi
+  export OMNILANE_THREAD_MODE="$THREAD_MODE"
+  export OMNILANE_THREAD_ID="$THREAD_ID"
+  export OMNILANE_THREAD_NAME="$THREAD_NAME"
+fi
+
 if [[ "$VENDOR" == "off" ]]; then
   echo "omnilane: lane '$LANE' is disabled in routing config" >&2; exit 3
 fi
@@ -566,7 +722,7 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
 SESSION_MODE="single-shot"
-if [[ "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR"; then
+if [[ -z "$THREAD_NAME" && "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR"; then
   SESSION_MODE="live"
 fi
 if [[ "$SESSION_REQUEST" == "live" ]] && ! live_vendor_capable "$VENDOR"; then
@@ -701,13 +857,30 @@ else
 fi
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-(umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
-  "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
-  "$IDLE_TIMEOUT" "$(json_escape "$MODEL")" "$(json_escape "$EFFORT")" \
-  "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
-  "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
-  "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
-  "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+THREAD_TURN_JSON="${THREAD_TURN:-null}"
+if [[ -n "$THREAD_NAME" ]]; then
+  (umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","thread":"%s","thread_turn":%s,"candidate":"%s/%s","started":"%s"}\n' \
+    "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
+    "$IDLE_TIMEOUT" "$(json_escape "$MODEL")" "$(json_escape "$EFFORT")" \
+    "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
+    "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
+    "$(json_escape "$THREAD_NAME")" "$THREAD_TURN_JSON" \
+    "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
+    "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+else
+  (umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
+    "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
+    "$IDLE_TIMEOUT" "$(json_escape "$MODEL")" "$(json_escape "$EFFORT")" \
+    "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
+    "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
+    "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
+    "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+fi
+
+if [[ -n "$THREAD_NAME" ]]; then
+  printf 'omnilane: thread %s turn %s (claude session %s, %s)\n' \
+    "$THREAD_NAME" "$THREAD_TURN" "$THREAD_ID" "$THREAD_MODE"
+fi
 
 secure_job_files() {
   find "$JOB_DIR" -type f -exec chmod 600 {} +
@@ -771,11 +944,21 @@ write_completion_record() {
   finished="$(date -u +%FT%TZ)" || return 1
   old_umask="$(umask)"
   umask 077
-  printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
-    "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
-    "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
-    "$(json_escape "$FOREMAN_SESSION")" \
-    "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" > "$tmp" || write_rc=$?
+  if [[ -n "$THREAD_NAME" ]]; then
+    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","thread":"%s","thread_turn":%s,"exit":%s,"finished":"%s","tail":"%s"}\n' \
+      "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
+      "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
+      "$(json_escape "$FOREMAN_SESSION")" "$(json_escape "$THREAD_NAME")" \
+      "$THREAD_TURN_JSON" "$rc" "$(json_escape "$finished")" \
+      "$(json_escape "$tail_value")" > "$tmp" || write_rc=$?
+  else
+    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
+      "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
+      "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
+      "$(json_escape "$FOREMAN_SESSION")" \
+      "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" \
+      > "$tmp" || write_rc=$?
+  fi
   if [[ "$write_rc" -eq 0 ]]; then
     chmod 600 "$tmp" || write_rc=$?
   fi
@@ -790,11 +973,19 @@ write_completion_record() {
 
 finish_job() {
   local rc="$1"
+  if [[ -n "$THREAD_NAME" ]]; then
+    if [[ "$rc" -eq 0 ]]; then
+      update_thread_state || rc=1
+    elif [[ "$THREAD_MODE" == "resume" ]]; then
+      append_thread_notice "omnilane: thread $THREAD_NAME could not be continued; stored Claude session $THREAD_ID was preserved"
+    fi
+  fi
   secure_job_files
   (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
   if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
     write_completion_record "$rc" >/dev/null 2>&1 || true
   fi
+  FINISHED_RC="$rc"
 }
 
 run_job() {
@@ -820,7 +1011,7 @@ run_job() {
     rc=124
   fi
   finish_job "$rc"
-  return "$rc"
+  return "$FINISHED_RC"
 }
 
 if [[ "$BACKGROUND" == "1" ]]; then

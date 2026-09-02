@@ -28,6 +28,8 @@ complete -c omnilane -n '__fish_seen_subcommand_from route dispatch' -l job-time
 complete -c omnilane -n '__fish_seen_subcommand_from route dispatch' -l background                                                                                                  -d 'run as a background job'
 complete -c omnilane -n '__fish_seen_subcommand_from route dispatch' -l dry-run                                                                                                     -d 'resolve the plan and stop'
 
+complete -c omnilane -n '__fish_seen_subcommand_from route dispatch' -l thread -x -d 'continue named Claude thread'
+
 # jobs subcommands (only before a jobs subcommand is chosen).
 complete -c omnilane -f \
   -n '__fish_seen_subcommand_from jobs; and not __fish_seen_subcommand_from list status result tail retry stats recommend wait audit prune cancel rm help' \

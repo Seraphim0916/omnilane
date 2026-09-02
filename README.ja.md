@@ -290,7 +290,7 @@ omnilane ui status                             # Live UI の稼働状態を表�
 omnilane ui url                                # 現在の認証済みローカル URL を表示
 omnilane ui stop                               # Live UI を停止
 omnilane doctor [--json]                       # ルーティングとローカル実行環境を読み取り専用で診断
-dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" で stdin から読む
 dispatch.sh [--json] --list [--json]
@@ -307,6 +307,11 @@ jobs.sh prune [--keep N] [--apply]                # 既定はプレビューの�
 configure.sh                                        # 対話式レーンメニュー
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非対話で編集/確認
 ```
+
+`--thread NAME` は単発ディスパッチ間で名前付き Claude 会話を継続します。
+0.33.0 では Claude のみをサポートし、ベンダー、モデル、effort、物理 workdir
+を固定します。ローカル状態は `jobs.sh threads`、`threads show NAME`、
+`threads rm NAME` で管理でき、削除しても Claude セッションは残ります。
 
 終了コード:`2` 使い方エラー(無効なベンダー、または指定ベンダーがレーンに
 ない場合を含む)、`3` レーン無効(off)、`4` チェーン内に利用可能な CLI がない、
@@ -529,6 +534,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.33.0 の新機能
+
+- **Claude スレッドディスパッチ。** `--thread NAME` はベンダー、モデル、effort、
+  workdir を固定し、フォアグラウンドまたはバックグラウンドの単発ジョブ間で会話を
+  継続します。非対応ベンダー、ライブモード、固定値の不一致は終了コード 2 で停止します。
+- **スレッド状態の管理。** `jobs.sh threads`、`threads show NAME`、
+  `threads rm NAME` でローカル状態を一覧、表示、削除できます。
 
 ## v0.32.0 の新機能
 

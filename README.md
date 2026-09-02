@@ -321,7 +321,7 @@ omnilane ui url                                # print the current authenticated
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
-dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh [--json] --list [--json]
@@ -339,6 +339,11 @@ jobs.sh prune [--keep N] [--apply]                # preview by default; complete
 configure.sh                                        # interactive lane menu
 configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```
+
+`--thread NAME` continues a named Claude conversation across single-shot
+dispatches. In 0.33.0 it is Claude-only and pins vendor, model, effort, and
+physical workdir; use `jobs.sh threads`, `threads show NAME`, or
+`threads rm NAME` to manage local state without deleting the Claude session.
 
 `jobs recommend` reads only validated public metadata and exit codes. It ranks
 eligible vendors by success rate, sample count, then name; the default minimum
@@ -593,6 +598,14 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.33.0
+
+- **Claude threaded dispatch.** `--thread NAME` continues a pinned Claude
+  conversation across foreground or background single-shot jobs; unsupported
+  vendors, live mode, and pin mismatches stop with visible exit-2 notices.
+- **Thread inspection.** `jobs.sh threads`, `threads show NAME`, and
+  `threads rm NAME` list, inspect, or remove local thread state.
 
 ## What's new in v0.32.0
 

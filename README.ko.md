@@ -282,7 +282,7 @@ omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
 omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
-dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
 dispatch.sh [--json] --list [--json]
@@ -299,6 +299,11 @@ jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며
 configure.sh                                        # 대화형 레인 메뉴
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml 비대화식 편집/확인
 ```
+
+`--thread NAME`은 단발 디스패치 사이에서 이름이 있는 Claude 대화를 이어갑니다.
+0.33.0에서는 Claude만 지원하며 벤더, 모델, effort, 실제 workdir를 고정합니다.
+로컬 상태는 `jobs.sh threads`, `threads show NAME`, `threads rm NAME`으로 관리하며,
+상태를 삭제해도 Claude 세션은 남습니다.
 
 종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
 `3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
@@ -513,6 +518,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.33.0 새 기능
+
+- **Claude 스레드 디스패치.** `--thread NAME`은 벤더, 모델, effort, workdir를
+  고정하고 포그라운드 또는 백그라운드 단발 작업 사이에서 대화를 이어갑니다. 미지원
+  벤더, 라이브 모드, 고정값 불일치는 종료 코드 2 안내와 함께 중단됩니다.
+- **스레드 상태 관리.** `jobs.sh threads`, `threads show NAME`, `threads rm NAME`으로
+  로컬 상태를 나열하거나 확인하고 삭제할 수 있습니다.
 
 ## v0.32.0 새 기능
 

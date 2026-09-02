@@ -284,6 +284,66 @@ prepare_private_store() { # path, diagnostic label
   chmod 700 "$store_root" || return 1
 }
 
+OMNILANE_THREAD_NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+
+omnilane_valid_thread_name() {
+  [[ "${1:-}" =~ $OMNILANE_THREAD_NAME_PATTERN ]]
+}
+
+prepare_threads_store() {
+  prepare_private_store "$OMNILANE_HOME/threads" "thread store"
+}
+
+read_thread_state() { # path, expected name; populates THREAD_STATE_*
+  local path="$1" expected_name="$2" fields separator=$'\034'
+  THREAD_STATE_NAME=""
+  THREAD_STATE_VENDOR=""
+  THREAD_STATE_MODEL=""
+  THREAD_STATE_EFFORT=""
+  THREAD_STATE_WORKDIR=""
+  THREAD_STATE_SESSION_ID=""
+  THREAD_STATE_TURNS=""
+  THREAD_STATE_LAST_JOB_ID=""
+  THREAD_STATE_CREATED=""
+  THREAD_STATE_UPDATED=""
+
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  fields="$(perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($path, $expected) = @ARGV;
+    my $size = -s $path;
+    die "invalid size\n" unless defined($size) && $size > 0 && $size <= 16384;
+    open my $fh, "<", $path or die $!;
+    local $/;
+    my $state = decode_json(<$fh>);
+    die "invalid state\n" unless ref($state) eq "HASH";
+    my @string_keys = qw(name vendor model effort workdir session_id last_job_id created updated);
+    for my $key (@string_keys) {
+      my $value = $state->{$key};
+      die "invalid $key\n" if !defined($value) || ref($value) || $value =~ /[\x00-\x1f\x7f]/;
+    }
+    die "wrong name\n" unless $state->{name} eq $expected;
+    die "invalid name\n" unless $state->{name} =~ /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/;
+    die "invalid vendor\n" unless $state->{vendor} =~ /\A[a-z][a-z0-9-]*\z/;
+    die "invalid session\n" unless $state->{session_id} =~ /\A[A-Za-z0-9._:-]{1,256}\z/;
+    die "invalid turns\n" if ref($state->{turns}) || ($state->{turns} // "") !~ /\A[1-9][0-9]{0,8}\z/;
+    die "invalid job id\n" unless $state->{last_job_id} =~ /\A[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+\z/;
+    for my $key (qw(created updated)) {
+      die "invalid timestamp\n" unless $state->{$key} =~ /\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z/;
+    }
+    die "field too long\n" if length($state->{model}) > 512 || length($state->{effort}) > 128 || length($state->{workdir}) > 4096;
+    print join(chr(28), map { $state->{$_} } qw(name vendor model effort workdir session_id turns last_job_id created updated));
+  ' "$path" "$expected_name" 2>/dev/null)" || return 1
+
+  # shellcheck disable=SC2034 # globals consumed by dispatch.sh and jobs.sh
+  IFS="$separator" read -r THREAD_STATE_NAME THREAD_STATE_VENDOR \
+    THREAD_STATE_MODEL THREAD_STATE_EFFORT THREAD_STATE_WORKDIR \
+    THREAD_STATE_SESSION_ID THREAD_STATE_TURNS THREAD_STATE_LAST_JOB_ID \
+    THREAD_STATE_CREATED THREAD_STATE_UPDATED <<< "$fields"
+  [[ -n "$THREAD_STATE_UPDATED" ]]
+}
+
 prepare_inbox_store() {
   prepare_private_store "$OMNILANE_HOME/inbox" "inbox store"
 }

@@ -265,7 +265,7 @@ omnilane ui status                             # 查看 Live UI 是否正在运�
 omnilane ui url                                # 输出当前通过认证的本地链接
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 只读检查路由与本地运行环境
-dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir 目录]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目录]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任务"                              # "-" 表示从 stdin 读任务
 dispatch.sh [--json] --list [--json]
@@ -282,6 +282,11 @@ jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理�
 configure.sh                                        # 交互通道菜单
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 routing.local.yaml
 ```
+
+`--thread NAME` 可在多次单次派发间延续命名的 Claude 对话。0.33.0 仅支持
+Claude，并固定厂商、模型、effort 与实际工作目录；使用 `jobs.sh threads`、
+`threads show NAME`、`threads rm NAME` 管理本地状态，删除状态不会删除 Claude
+会话。
 
 退出码:`2` 用法错误(包括厂商值无效,或指定厂商不在该通道)、`3` 通道已关闭、
 `4` 候选链没有可用 CLI,或指定厂商已配置但其 CLI 不可用、
@@ -489,6 +494,14 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.33.0 新功能
+
+- **Claude 线程派发。** `--thread NAME` 可让固定厂商、模型、effort 与工作目录的
+  Claude 对话跨前台或后台单次作业延续；不支持的厂商、实时模式与固定值冲突都会
+  以清晰的退出码 2 提示停止。
+- **线程状态管理。** `jobs.sh threads`、`threads show NAME`、`threads rm NAME`
+  可列出、查看或删除本地线程状态。
 
 ## v0.32.0 新功能
 

@@ -72,8 +72,8 @@ _omnilane() {
               COMPREPLY+=("$reply_line")
             done < <(compgen -d -- "$cur")
             return ;;
-          --model|--timeout|--job-timeout) return ;;
-          *) words="--background --dry-run --help --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
+      --model|--timeout|--job-timeout|--thread) return ;;
+      *) words="--background --dry-run --thread --help --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
         esac
         ;;
       jobs)

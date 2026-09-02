@@ -270,7 +270,7 @@ omnilane ui url                                # 印出目前通過驗證的本�
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # 實際探測必須明確選用
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # 預設只乾跑
-dispatch.sh [--background] [--dry-run] [--mode advise|work|sysops] [--workdir 目錄]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             通道 "任務"                              # "-" 表示從 stdin 讀任務
 dispatch.sh [--json] --list [--json]
@@ -290,6 +290,11 @@ omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布
 configure.sh                                        # 互動通道選單
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非互動編輯/檢視 routing.local.yaml
 ```
+
+`--thread NAME` 會在多次單次派工間延續命名的 Claude 對話。0.33.0 僅支援
+Claude，並固定供應商、模型、effort 與實體工作目錄；可用 `jobs.sh threads`、
+`threads show NAME`、`threads rm NAME` 管理本機狀態，移除狀態不會刪除 Claude
+工作階段。
 
 `jobs recommend` 只讀取通過驗證的公開中繼資料與退出碼。候選達到最低樣本數後，
 依成功率、樣本數、廠商名稱排序；預設至少三筆已完成工作。它不讀任務／結果本文，
@@ -513,6 +518,14 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.33.0
+
+- **Claude 續談派工。** `--thread NAME` 可讓固定供應商、模型、effort 與工作目錄
+  的 Claude 對話跨前景或背景單次工作延續；不支援的供應商、即時模式與釘選衝突
+  都會以清楚的退出碼 2 提示停止。
+- **續談狀態管理。** `jobs.sh threads`、`threads show NAME`、`threads rm NAME`
+  可列出、查看或移除本機續談狀態。
 
 ## v0.32.0
 
