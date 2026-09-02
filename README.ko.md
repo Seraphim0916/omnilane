@@ -77,11 +77,11 @@ API 키 하나로 직접 연결):
 ```mermaid
 flowchart LR
     M["메인 루프<br/><i>아무 CLI</i>"] --> T{{"routing.yaml<br/>공유 테이블 하나"}}
-    T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
-    T -->|taste-final| C3["Claude — Opus 5"]
-    T -->|long-context| C4["Gemini — 3.1 Pro"]
-    T -->|live-search| C5["Grok — 4.5"]
+    T -->|hardest-coding| C1["Claude — Fable 5.1"]
+    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
+    T -->|taste-final| C3["Claude — Fable 5.1"]
+    T -->|long-context| C4["Gemini — 3.7 Flash"]
+    T -->|live-search| C5["Grok — 4.6"]
     T -->|"arbitrate(옵트인)"| C6["vote — 1-4 모델 패널"]
 ```
 
@@ -110,25 +110,24 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕 |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 대량 1차 선별 |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | 아키텍처 중재, 깊은 추론, 세컨드 오피니언 |
-| ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 대외 문장, prompt/문서 다듬기, 스타일 최종심 |
-| 💬 consult | 명시적으로 지정한 벤더/모델 | —(폴백 없음) | 자연어 직접 상담. `--vendor` 를 반드시 유지 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 디자인 시스템/참고 이미지가 있을 때의 UI 초안 |
-| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 100만 토큰급 훑기·검색과 긴 문서를 잇는 통합. 빠른 반복 루프는 Flash 우선 |
-| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.5 | —(off) | 실시간 X/웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
-| 🗳️ arbitrate | off(옵트인) | — | 내장 의견 패널(중대한 결정용)——기본 비활성. `routing.local.yaml` 에서 활성화;투표자×라운드마다 1콜 소모 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.6 | — (`off`) | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🗳️ arbitrate | `off`(옵트인) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
 디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
 설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
 
-> **Claude Fable 5 는 어디에?** 의도적으로 기본 테이블에 넣지 않았습니다——
-> 이유와 실측 데이터는 [FAQ](#-faq) 에 정리했습니다.
+> **Fable 5.1 은 기본값에 포함됩니다——그리고 Opus 5 가 여전히 맞는 자리.** 세 모델 비교와 Opus override 는 [FAQ](#-faq) 에 있습니다.
 
 ### 자연어 상담
 
@@ -154,12 +153,12 @@ flowchart LR
 추가 호출 없음)와 **디스패치**하는지입니다. CLI 의 `omnilane` 스킬이 해당
 행을 자동 적용하며, 이것은 사람이 보는 버전입니다.
 
-- **Claude Code · Fable 5** — 직접 실행: hard-judgment, taste-final, 정확성이 최우선인 난이도 높은 수정. 디스패치: 기계적 코딩 물량 → Codex, 장문 → Gemini, 실시간 검색 → Grok.
-- **Claude Code · Opus 5** 직접 실행: hard-judgment, taste-final. 대량 코딩은 Codex 레인, 장문 → Gemini, 실시간 검색 → Grok.
-- **Codex · Sol** — 직접 실행: hardest-coding, hard-judgment, ui-draft. 디스패치: taste-final → Claude, 장문 → Gemini, 실시간 검색 → Grok, 대량 작업 → Codex Terra.
-- **Codex · Terra** — 직접 실행: bulk-mechanical. 정말 가장 어려운 부분은 Sol 로 에스컬레이션; taste → Claude, 장문 → Gemini, 실시간 검색 → Grok.
-- **Grok Build · Grok 4.5** — 직접 실행: live-search, coding-overflow(중급 코딩). 어려운 작업은 모두 Codex/Claude/Gemini 로——먼저 모든 API 시그니처와 인용 사실을 검증.
-- **Antigravity · Gemini** — 직접 실행: 3.1 Pro 로 장문과 무거운 컨텍스트의 agentic 작업, Flash 로 빠른 반복 루프. 가장 어려운 코딩/판단/문장은 Codex/Claude 로; 실시간 검색 → Grok.
+- **Claude Code · Fable 5.1**——직접 실행: hard-judgment, taste-final, hardest-coding. 디스패치: bulk → Codex Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Claude Code · Opus 5**——더 낮은 환각률이나 가격이 중요할 때 hard-judgment 와 taste-final 을 직접 실행. 최고난도 코딩 → Fable 5.1 또는 Sol, bulk → Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Codex · Sol**——직접 실행: hardest-coding, bulk-mechanical, hard-judgment, ui-draft. 디스패치: taste-final → Claude, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Codex · Terra**——long-context 의 Codex 폴백을 직접 실행. bulk-mechanical 기본값은 Sol high 로 이동했습니다. 최고난도는 Sol xhigh, taste → Claude, 빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Grok Build · Grok 4.6**——live-search 와 coding-overflow 를 직접 실행. 어려운 코딩／판단／문장은 Codex, Claude, Gemini 로 보내고 API 시그니처와 인용 사실을 검증합니다.
+- **Antigravity · Gemini 3.7 Flash**——Medium 의 long-context／빠른 루프, High 의 bulk／overflow, Low 의 triage 를 직접 실행. 최고난도 코딩／판단／문장은 Codex, Claude 로, live-search 는 Grok 으로 보냅니다.
 
 </details>
 
@@ -415,48 +414,30 @@ Codex 중심, Codex 없음)이 들어 있습니다.
 </details>
 
 <details>
-<summary><b>Claude Fable 5 는 어디에? 왜 기본 테이블에 없나요?</b></summary>
+<summary><b>Fable 5.1 은 기본값에 포함됩니다——그리고 Opus 5 가 여전히 맞는 자리</b></summary>
 
 <br/>
 
-**Claude 최상위 티어는 보통 메인 루프 자신이지 디스패치되는 워커가 아니기
-때문입니다.** 레인은 "지금 당신이 몰고 있는 모델 이외"에 작업을 보내려고 존재합니다.
-Fable 5 가 메인 루프라면 판단과 문장을 다시 Fable 5 로 라우팅하는 것은 호출만 한 번
-늘 뿐 얻는 것이 없습니다——그래서 위의 "메인 모델 고르기" 목록에서 Fable 5 는
-**드라이버**로 독립된 줄을 가지며, hard-judgment, taste-final, 정확성이 핵심인
-가장 어려운 수정을 직접 처리합니다.
+Fable 5.1 은 이제 `hardest-coding`, `hard-judgment`, `taste-final`의
+1순위입니다. 같은 xhigh 에서 지능, agentic 작업, 코딩 모두 Opus 5 를
+앞섭니다. Sol max 는 훨씬 저렴한 타 벤더 판단 폴백으로 남습니다.
 
-**측정 데이터도 워커로 쓰는 쪽을 지지하지 않습니다.** Artificial Analysis
-Intelligence Index(2026-07-24)에서 Opus 5(max)는 61점, Fable 5(max)는 60점 ——
-AA 자신이 "사실상 동점"이라 표현했고, Epoch AI 의 Capability Index 는 순위가
-반대입니다(Fable 5 161, Opus 5 159). 종합 지능은 무승부로 보면 됩니다. 실제로
-벌어지는 곳은 에이전트형 전문 산출물이며, 그 격차는 작지 않습니다:
+| 평가(AA, 2026-09-02 수집) | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
+|---|---:|---:|---:|
+| Intelligence | 64.8 | 62.5 | 60.9 |
+| Agentic | 59.8 | 58.4 | 57.8 |
+| Coding | 80.7 | 77.0 | 77.4 |
+| 환각률(낮을수록 좋음) | .71 | **.60** | .92 |
+| AA $/task | $2.65 | $1.80 | **$0.95** |
 
-| 벤치마크 | Claude Opus 5 (max) | Claude Fable 5 | |
-|---|---:|---:|---|
-| AA-Briefcase(에이전트형 지식 노동, Elo) | 1720 | 1574 | **+146** |
-| GDPval-AA v2(Elo) | 1861 | 1747 | **+114** |
-| AA-Briefcase 작업당 비용 | $17.79 | $22.30 | **-20%** |
-| API 가격, 입력/출력 1M 당 | $5 / $25 | $10 / $50 | **절반** |
-
-Opus 5 의 max, xhigh, high 세 티어가 AA-Briefcase 상위 세 자리를 차지하며,
-`high` 티어조차 작업당 비용 절반 이하로 Fable 5 를 이깁니다. 즉 Fable 5 는 가격이
-두 배이면서 레인이 중시하는 어떤 축에서도 우위를 사지 못합니다.
-
-**Fable 5 가 실제로 더 나은 지점**: 사실 지식의 폭입니다. AA-Omniscience 에서는
-여전히 Opus 5 를 앞서며(두 모델의 규모 차이를 감안하면 당연), 반대로 Opus 5 는
-확신이 없을 때도 답하는 경향이 있어 환각률이 50%(Opus 4.8 대비 +14 포인트)입니다.
-실행보다 회상이 중심인 작업이라면 명시적으로 지목하세요:
-
-```bash
-dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
-```
-
-**이는 비용과 메인 루프 정책의 선택이지 능력 평가가 아닙니다.** Fable 5 는 설정
-메뉴의 모델 목록에 있으며, `routing.local.yaml` 한 줄로 기본값을 덮어쓸 수 있습니다:
+Fable 5.1 은 bulk 나 triage 기본값이 아닙니다. 토큰 가격이 Opus 5 의
+2배이고 Claude Code 구독 쿼터도 턴당 가장 많이 소비하기 때문입니다.
+Opus 5 는 더 낮은 환각률과 가격의 Claude 선택지로 medium
+`long-context`에 남으며, 다음 `~/.omnilane/routing.local.yaml` 설정으로
+어느 레인에든 다시 넣을 수 있습니다.
 
 ```yaml
-taste-final: claude claude-fable-5 high
+hard-judgment: claude claude-opus-5 xhigh
 ```
 
 </details>
@@ -518,7 +499,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 각사 공식 가격 페이지로 교차 검증)과 공개 비교 리뷰에 근거합니다.
 이는 의견이지 법칙이 아닙니다——설정 메뉴와 `routing.local.yaml` 이
 그래서 존재합니다. 벤치마크별 단서를 포함한 작업 노트는
-[`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) 에 있습니다.
+[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) 에 있습니다.
 
 ## ⚠️ 알려진 제한
 
@@ -532,6 +513,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.32.0 새 기능
+
+- **AA 2026-09 스냅샷으로 전체 라우팅을 재평가했습니다.** Fable 5.1 과 Gemini 3.7 Flash 가 기본값에 들어가고 수치는 새 날짜별 문서에 모았습니다.
+- **모델 카탈로그를 현재 CLI 표면과 동기화했습니다.** Fable 5.1 을 추가하고 agy 에서 사라진 Gemini 3.5 Flash 를 제거했으며 투표 러너도 갱신했습니다.
+- **Opus 5 는 계속 사용할 수 있습니다.** `long-context`에 남고 `routing.local.yaml`로 어느 레인이든 덮어쓸 수 있습니다.
 
 ## v0.31.0 새 기능
 
@@ -615,7 +602,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   극히 낮다. Flash에 남은 우위는 처리량뿐 — 레이턴시가 병목인 루프라면 로컬 설정에서
   다시 앞에 두면 된다.
 - **레인 주석에서 수치 제거.** `routing.yaml`은 각 순서가 성립하는 "이유"만 서술하고,
-  점수·가격·처리량은 조회 날짜와 함께 `docs/model-capabilities-2026-07.md`에만 둔다.
+  점수·가격·처리량은 조회 날짜와 함께 `docs/model-capabilities-2026-09.md`에만 둔다.
   수치가 낡아도 라우팅 표를 고칠 필요가 없다.
 - **value 프로파일** 추가(`routing.local.yaml.example`) — Intelligence Index 약 1점을
   내주고 태스크당 비용을 30~40% 절감.
@@ -668,7 +655,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   `claude-opus-4-8` 을 모두 `claude-opus-5`(레인에 맞는 노력 수준 포함)로,
   Gemini 3.5 Flash 후보를 3.6 Flash 로 바꿔 0.10.0 이후 기본값과 맞췄습니다.
 - **Intelligence Index 수치를 원본과 대조해 정정**
-  (`docs/model-capabilities-2026-07.md`): 퍼센트가 아니라 지수 점수입니다.
+  (`docs/model-capabilities-2026-09.md`): 퍼센트가 아니라 지수 점수입니다.
   AA-Briefcase / GDPval-AA v2 비교를 추가하고, 기본값과 반대 방향인 두 결과도
   기록했습니다: 사실 지식은 Fable 5 가, 표현 품질은 GPT-5.6 Sol 이 앞섭니다.
 
@@ -713,7 +700,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 - **OpenAI 호환 direct-API 벤더 5개 추가** — `deepseek`, `zai` (GLM), `mistral`,
   `groq`, `cerebras` 가 `openrouter` 처럼 CLI 없는 레인으로 추가(curl 과
   `<VENDOR>_API_KEY` 만 필요). `lib/common.sh` 레지스트리에 한 줄로 추가되며,
-  모델 능력 비교는 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) 참고.
+  모델 능력 비교는 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) 참고.
 - **Fish 셸 자동완성** — `omnilane completion fish | source`.
 
 ## v0.8.3 새 기능

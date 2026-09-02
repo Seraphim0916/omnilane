@@ -78,11 +78,11 @@ omnilane は、**どの** agentic CLI のメインループでも、サブタス
 ```mermaid
 flowchart LR
     M["メインループ<br/><i>任意の CLI</i>"] --> T{{"routing.yaml<br/>一枚の共有テーブル"}}
-    T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
-    T -->|taste-final| C3["Claude — Opus 5"]
-    T -->|long-context| C4["Gemini — 3.1 Pro"]
-    T -->|live-search| C5["Grok — 4.5"]
+    T -->|hardest-coding| C1["Claude — Fable 5.1"]
+    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
+    T -->|taste-final| C3["Claude — Fable 5.1"]
+    T -->|long-context| C4["Gemini — 3.7 Flash"]
+    T -->|live-search| C5["Grok — 4.6"]
     T -->|"arbitrate(オプトイン)"| C6["vote — 1-4 モデルパネル"]
 ```
 
@@ -112,25 +112,24 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 最難関の実装、根本原因デバッグ、正確性が要の変更 |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | リファクタ、移行、テスト、大規模スイープ |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 大量の一次スクリーニング |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | アーキテクチャ裁定、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 対外文章、prompt/ドキュメント推敲、スタイル最終審 |
-| 💬 consult | 明示指定したベンダー/モデル | —(フォールバックなし) | 自然言語で直接相談。`--vendor` を必ず維持 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | デザインシステム/参考画像がある場合の UI ドラフト |
-| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 100 万トークン級の走査・検索と、長文をまたぐ統合。高速反復ループは Flash を優先 |
-| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.5 | —(off) | リアルタイム X/ウェブ検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ逼迫時の中級コーディング逃し弁 |
-| 🗳️ arbitrate | off(オプトイン) | — | 内蔵オピニオンパネル(重大な判断用)——デフォルト無効。`routing.local.yaml` で有効化;投票者×ラウンドごとに 1 コール消費 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| 📡 live-search | Grok 4.6 | — (`off`) | リアルタイム X／Web 検索とソーシャル文脈 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
+| 🗳️ arbitrate | `off`（オプトイン） | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
 **バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
 ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
 何もインストールされていなければレーンは `off` に降格します。
 
-> **Claude Fable 5 はどこ?** 意図的にデフォルト表に入れていません——理由と
-> 実測データは [FAQ](#-faq) にまとめてあります。
+> **Fable 5.1 はデフォルトに入りました——Opus 5 が今も適する場所。** 3 者比較と Opus の override は [FAQ](#-faq) を参照してください。
 
 ### 自然言語コンサルテーション
 
@@ -156,12 +155,12 @@ flowchart LR
 なので追加コールなし)、どれを**ディスパッチ**するか。CLI の `omnilane` スキルが
 該当行を自動適用します。これはその人間向けビューです。
 
-- **Claude Code · Fable 5** — 自分で実行:hard-judgment、taste-final、正確性が最重要の難修正。ディスパッチ:機械的コーディング量 → Codex、長文 → Gemini、リアルタイム検索 → Grok。
-- **Claude Code · Opus 5** — 自分で実行：hard-judgment、taste-final。大量のコーディングは Codex レーン、長文 → Gemini、リアルタイム検索 → Grok。
-- **Codex · Sol** — 自分で実行:hardest-coding、hard-judgment、ui-draft。ディスパッチ:taste-final → Claude、長文 → Gemini、リアルタイム検索 → Grok、大量作業 → Codex Terra。
-- **Codex · Terra** — 自分で実行:bulk-mechanical。本当に最難関の部分は Sol へエスカレーション;taste → Claude、長文 → Gemini、リアルタイム検索 → Grok。
-- **Grok Build · Grok 4.5** — 自分で実行:live-search、coding-overflow(中級コーディング)。難しい作業は全て Codex/Claude/Gemini へ——先に全 API シグネチャと引用事実を検証。
-- **Antigravity · Gemini** — 自分で実行:3.1 Pro で長文と重いコンテキストの agentic 作業、Flash で高速反復ループ。最難関のコーディング/判断/文章は Codex/Claude へ;リアルタイム検索 → Grok。
+- **Claude Code · Fable 5.1**——自分で実行：hard-judgment、taste-final、hardest-coding。ディスパッチ：bulk → Codex Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Claude Code · Opus 5**——低いハルシネーション率や価格を優先するときは hard-judgment と taste-final を自分で実行。最難関コーディング → Fable 5.1 または Sol、bulk → Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Codex · Sol**——自分で実行：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。ディスパッチ：taste-final → Claude、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Codex · Terra**——long-context の Codex フォールバックを自分で実行。bulk-mechanical のデフォルトは Sol high に移動。最難関は Sol xhigh、taste → Claude、高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Grok Build · Grok 4.6**——live-search と coding-overflow を自分で実行。難しいコーディング／判断／文章は Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
+- **Antigravity · Gemini 3.7 Flash**——Medium の long-context／高速ループ、High の bulk／overflow、Low の triage を自分で実行。最難関のコーディング／判断／文章は Codex、Claude、live-search は Grok へ。
 
 </details>
 
@@ -429,49 +428,30 @@ advise 専用で、ファイルを編集しません。
 </details>
 
 <details>
-<summary><b>Claude Fable 5 はどこ?なぜデフォルト表に無いのですか?</b></summary>
+<summary><b>Fable 5.1 はデフォルトに入りました——Opus 5 が今も適する場所</b></summary>
 
 <br/>
 
-**Claude の最上位ティアは通常メインループ自身であり、ディスパッチされるワーカー
-ではないからです。** レーンは「今あなたが動かしているモデル以外」に作業を送るために
-あります。Fable 5 がメインループなら、判断や文章を Fable 5 に戻すのは呼び出しが
-一回増えるだけで得るものがありません——だからこそ上の「メインモデルを選ぶ」一覧では
-Fable 5 に**ドライバー**として独立した行があり、hard-judgment、taste-final、
-正確性が要の最難関修正を自分で処理します。
+Fable 5.1 は現在 `hardest-coding`、`hard-judgment`、`taste-final` の
+第一候補です。同じ xhigh では知能、agentic 作業、コーディングで Opus 5 を
+上回ります。Sol max は、はるかに安価な別ベンダーの判断用フォールバックです。
 
-**計測データもワーカーとしての採用を支持しません。** Artificial Analysis の
-Intelligence Index(2026-07-24)では Opus 5(max)が 61、Fable 5(max)が 60 —— AA 自身が
-「実質的に同点」と表現し、Epoch AI の Capability Index は順位が逆です
-(Fable 5 161、Opus 5 159)。総合的な知能は引き分けと見てよいでしょう。差が付くのは
-エージェント的な専門アウトプットで、その差は小さくありません:
+| 評価（AA、2026-09-02 取得） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
+|---|---:|---:|---:|
+| Intelligence | 64.8 | 62.5 | 60.9 |
+| Agentic | 59.8 | 58.4 | 57.8 |
+| Coding | 80.7 | 77.0 | 77.4 |
+| ハルシネーション率（低いほど良い） | .71 | **.60** | .92 |
+| AA $/task | $2.65 | $1.80 | **$0.95** |
 
-| ベンチマーク | Claude Opus 5 (max) | Claude Fable 5 | |
-|---|---:|---:|---|
-| AA-Briefcase(エージェント的知識労働、Elo) | 1720 | 1574 | **+146** |
-| GDPval-AA v2(Elo) | 1861 | 1747 | **+114** |
-| AA-Briefcase の 1 タスク単価 | $17.79 | $22.30 | **-20%** |
-| API 価格、入力/出力 1M あたり | $5 / $25 | $10 / $50 | **半額** |
-
-Opus 5 の max・xhigh・high の三ティアが AA-Briefcase の上位三席を占め、`high`
-ティアですら 1 タスク単価が半分以下で Fable 5 を上回ります。つまり Fable 5 は
-価格が二倍でありながら、レーンが重視するどの軸でも優位を買えていません。
-
-**Fable 5 が実際に優れている点**:知識の広さです。AA-Omniscience では今も Opus 5 を
-上回っており(モデルのサイズクラスから見て妥当)、一方の Opus 5 は不確かなときでも
-答えがちで、ハルシネーション率は 50%(Opus 4.8 比 +14 ポイント)です。実行より
-想起が中心のタスクなら、明示的に指名してください:
-
-```bash
-dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
-```
-
-**これはコストとメインループの方針上の選択であり、能力評価ではありません。**
-Fable 5 は設定メニューのモデル一覧に載っており、`routing.local.yaml` の 1 行で
-デフォルトを上書きできます:
+Fable 5.1 は bulk と triage のデフォルトではありません。トークン単価が
+Opus 5 の 2 倍で、Claude Code のサブスクリプションクォータも 1 ターン当たり
+最も多く消費するためです。Opus 5 は低ハルシネーション・低価格の Claude
+選択肢として medium で `long-context` に残り、次の
+`~/.omnilane/routing.local.yaml` で任意のレーンへ戻せます。
 
 ```yaml
-taste-final: claude claude-fable-5 high
+hard-judgment: claude claude-opus-5 xhigh
 ```
 
 </details>
@@ -534,7 +514,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 (AA サイトの生レコードと各社公式価格ページで照合済み)と公開の比較レビューに
 基づきます。これは意見であって法則ではありません——設定メニューと
 `routing.local.yaml` はそのためにあります。ベンチマークごとの但し書きを含む
-作業ノートは [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) にあります。
+作業ノートは [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) にあります。
 
 ## ⚠️ 既知の制限
 
@@ -549,6 +529,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.32.0 の新機能
+
+- **AA 2026-09 スナップショットで全ルーティングを再評価。** Fable 5.1 と Gemini 3.7 Flash がデフォルトに入り、数値は新しい日付付き文書に集約しました。
+- **モデルカタログを現在の CLI に同期。** Fable 5.1 を追加し、agy から消えた Gemini 3.5 Flash を削除し、投票ランナーも更新しました。
+- **Opus 5 は引き続き利用可能。** `long-context` に残り、`routing.local.yaml` で任意のレーンを上書きできます。
 
 ## v0.31.0 の新機能
 
@@ -634,7 +620,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   タスクあたりコストがごく僅か。Flash に残る優位はスループットのみ — レイテンシ律速の
   ループならローカル設定で先頭に戻すこと。
 - **レーンのコメントから数値を排除。** `routing.yaml` は各順序の「理由」だけを述べ、
-  スコア・価格・スループットは取得日とともに `docs/model-capabilities-2026-07.md` に
+  スコア・価格・スループットは取得日とともに `docs/model-capabilities-2026-09.md` に
   集約。数値が古くなってもルーティング表の編集は不要になった。
 - **value プロファイル**を `routing.local.yaml.example` に追加 — Intelligence Index
   約 1 ポイントと引き換えに、タスクあたりコストを 30〜40% 削減。
@@ -688,7 +674,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
   ファイル内の `claude-opus-4-8` をすべて `claude-opus-5`(レーンに応じた努力度付き)
   に、Gemini 3.5 Flash 候補を 3.6 Flash に更新し、0.10.0 以降のデフォルトと揃えました。
 - **Intelligence Index の数値を出典に照合して訂正**
-  (`docs/model-capabilities-2026-07.md`):パーセントではなく指数ポイントです。
+  (`docs/model-capabilities-2026-09.md`):パーセントではなく指数ポイントです。
   AA-Briefcase / GDPval-AA v2 の比較を追加し、デフォルトと逆向きの二つの結果も
   記録しました:事実知識では Fable 5 が、プレゼン品質では GPT-5.6 Sol が上回ります。
 
@@ -733,7 +719,7 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 - **OpenAI 互換の direct-API ベンダーを 5 つ追加** — `deepseek`、`zai`(GLM)、
   `mistral`、`groq`、`cerebras` が `openrouter` と同じく CLI 不要のレーンに
   (curl と `<VENDOR>_API_KEY` だけ)。`lib/common.sh` のレジストリに 1 行で
-  追加でき、モデル能力の比較は [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md) を参照。
+  追加でき、モデル能力の比較は [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) を参照。
 - **Fish シェル補完** — `omnilane completion fish | source`。
 
 ## v0.8.3 の新機能

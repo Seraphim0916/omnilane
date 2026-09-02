@@ -6,9 +6,28 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-02
+
+### Changed
+
+- Re-evaluated the full routing table against the Artificial Analysis 2026-09 snapshot; the dated figures and method now live in `docs/model-capabilities-2026-09.md`.
+- `hardest-coding`: Claude Fable 5.1 xhigh now leads GPT-5.6 Sol xhigh on coding capability.
+- `bulk-mechanical`: GPT-5.6 Sol high replaces Terra max, followed by Gemini 3.7 Flash High and Claude Sonnet 5 high.
+- `triage`: GPT-5.6 Luna moves from medium to high; Gemini 3.7 Flash Low replaces 3.6 Flash Low.
+- `hard-judgment`: Claude Fable 5.1 xhigh replaces Opus 5 xhigh; GPT-5.6 Sol max remains second and Grok 4.6 joins third.
+- `taste-final`: Claude Fable 5.1 high replaces Opus 5 high ahead of GPT-5.6 Sol max.
+- `consult`: the Claude slot moves to Fable 5.1 high and the Gemini slot to 3.7 Flash High.
+- `ui-draft`: Claude Fable 5.1 high replaces Opus 5 high behind GPT-5.6 Sol xhigh.
+- `long-context`: Gemini 3.7 Flash Medium replaces 3.1 Pro, GPT-5.6 Terra max replaces Sol high, and Claude Opus 5 moves to medium.
+- `fast-agentic`: Gemini 3.7 Flash Medium takes the lead; GPT-5.6 Luna high becomes the fallback.
+- `coding-overflow`: Gemini 3.7 Flash High joins behind Grok 4.6 and ahead of Kimi, Qwen, OpenCode, and off.
+- Synced configurator catalogs with current CLI surfaces: added `claude-fable-5-1` and Gemini 3.7 Flash effort rows, and removed Gemini 3.5 Flash rows.
+- Synced the vote runner's Claude voter to Fable 5.1 high and Gemini voter to 3.7 Flash High.
+
 ### Fixed
 
-- Routing and the vote runner no longer pin `grok-4.5`, a model id xAI has retired. The `consult`, `live-search`, and `coding-overflow` lanes and the arbitrate grok voter now target `grok-4.6`. A dead model id severs a lane instead of falling through it, because the fallback chain tests whether a vendor CLI is installed and not whether the call succeeded.
+- Routing and the vote runner no longer pin `grok-4.5`, a model id xAI retired. The `consult`, `live-search`, and `coding-overflow` lanes and the arbitrate grok voter now target `grok-4.6`. A dead model id severs the lane instead of falling through it, because the fallback chain tests whether a vendor CLI is installed, not whether the call succeeded.
+- Corrected the `coding-overflow` comment: Artificial Analysis measures Grok 4.6 at the lowest hallucination rate among the frontier rows, the inverse of the previous claim.
 
 ## [0.31.0] - 2026-09-01
 
@@ -694,7 +713,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...v0.32.0
 
 [0.31.0]: https://github.com/Seraphim0916/omnilane/compare/v0.30.0...v0.31.0
 

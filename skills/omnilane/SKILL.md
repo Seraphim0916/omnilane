@@ -50,28 +50,26 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
-| consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
-| ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
-| long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 1M-token synthesis; Pro is agentic-capable, while fast repeated loops prefer Flash on speed/cost |
-| fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | Fast multi-step agentic loops, multimodal checks |
-| live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
-| coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
+| hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | Direct named-model consultation; always keep `--vendor` |
+| ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
+| long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-context synthesis ordered on AA-LCR, then cost and throughput |
+| fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| live-search | Grok 4.6 | — (off) | Realtime X/web search and social context |
+| coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
 
-Claude Fable 5 (`claude-fable-5`) is absent from the defaults on purpose: the
-top Claude tier is usually the main loop itself, not a dispatched worker, and
-it prices at twice Opus 5. This is a cost / guardrail / main-loop policy choice,
-not a capability verdict — Artificial Analysis calls Opus 5 (61) and Fable 5 (60)
-"effectively tied" on the Intelligence Index, but Opus 5 leads AA-Briefcase by
-146 Elo at 20% lower cost per task. Fable 5 keeps the lead on factual breadth
-(AA-Omniscience), so name it explicitly for recall-heavy consults. To route to
-it anyway, select it in the configurator or override a lane in
-`~/.omnilane/routing.local.yaml` (e.g. `taste-final: claude claude-fable-5 high`).
+Claude Fable 5.1 (`claude-fable-5-1`) is in the judgment, taste, and
+hardest-coding defaults because it leads Opus 5 on every Artificial Analysis
+axis at the same effort. It is not in bulk or triage because it prices at twice
+Opus 5 per token and consumes the most subscription quota per turn. Opus 5
+remains the lower-hallucination, lower-price Claude choice and can return to any
+lane via `~/.omnilane/routing.local.yaml`, for example:
+`hard-judgment: claude claude-opus-5 xhigh`.
 
 ## Natural-language consultation
 
@@ -91,15 +89,15 @@ Users may speak normally; they do not need lane names.
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
 | Opus | claude | claude-opus-5 | high |
-| Fable | claude | claude-fable-5 | high |
+| Fable 5.1 | claude | claude-fable-5-1 | high |
 | Sonnet | claude | claude-sonnet-5 | high |
 | Haiku | claude | claude-haiku-4-5 | - |
 | Sol | codex | gpt-5.6-sol | max |
 | Terra | codex | gpt-5.6-terra | max |
-| Luna | codex | gpt-5.6-luna | medium |
+| Luna | codex | gpt-5.6-luna | high |
 | Grok 4.6 | grok | grok-4.6 | - |
-| Gemini Pro | gemini | Gemini 3.1 Pro (High) | - |
-| Gemini Flash | gemini | Gemini 3.6 Flash (High) | - |
+| Gemini 3.1 Pro | gemini | Gemini 3.1 Pro (High) | - |
+| Gemini 3.7 Flash | gemini | Gemini 3.7 Flash (High) | - |
 | Kimi | kimi | kimi-k3 | - |
 | Qwen | qwen | qwen3-coder-plus | - |
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
@@ -159,19 +157,24 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 ## Per-model notes (apply the row matching YOUR main model)
 
-- **Claude (Fable/Opus main)**: top judgment and taste are yours, but
-  implementation still dispatches by default — self-execute only reserved
-  commander items; push all coding volume out to the lanes.
+- **Claude Fable 5.1 main**: hard judgment, taste finalization, and the hardest
+  coding are yours. Dispatch bulk work to Sol high and long-context or fast
+  loops to Gemini 3.7 Flash.
+- **Claude Opus 5 main**: judgment and taste remain strong self-execute lanes;
+  use local overrides when its lower hallucination rate or price is preferred.
 - **Claude Sonnet main**: coordination/tools/mid-tier coding only; never
   self-assign top judgment or hardest implementation.
 - **GPT Sol main**: hardest coding + hard judgment are yours (use max for
   judgment turns, xhigh for coding); cross to taste-final for style calls.
-- **GPT Terra main**: bulk work is yours at max; escalate the genuinely hardest
-  pieces to Sol instead of grinding.
-- **Grok 4.5 main**: mid-tier coding + live-search are yours; verify every API
-  signature and cited fact before shipping (measured high hallucination rate).
-- **Gemini Flash main**: fast agentic/multimodal loops are yours; never
-  self-assign top judgment.
-- **Gemini 3.1 Pro main**: 1M-context synthesis and context-heavy agentic work
-  are yours. Prefer Gemini Flash for fast repeated tool loops on speed/cost;
-  route hardest coding and judgment to the stronger codex lanes.
+- **GPT Terra main**: long-context Codex fallback work is yours at max;
+  bulk-mechanical now defaults to Sol high, and genuinely hardest pieces
+  escalate to Sol xhigh.
+- **Grok 4.6 main**: live-search and coding overflow are yours; its measured
+  hallucination rate is the lowest among the frontier rows, but still verify
+  every API signature and cited fact before shipping.
+- **Gemini 3.7 Flash main**: long-context and fast agentic/multimodal loops
+  are yours at the lane's configured effort; bulk and overflow use the high row.
+  Never self-assign top judgment.
+- **Gemini 3.1 Pro main**: it remains directly selectable, but the default
+  long-context lane now prefers Gemini 3.7 Flash on LCR, cost, and throughput;
+  route hardest coding and judgment to the stronger Codex and Claude lanes.

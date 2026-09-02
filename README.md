@@ -78,11 +78,11 @@ key with no extra CLI at all):
 ```mermaid
 flowchart LR
     M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
-    T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
-  T -->|taste-final| C3["Claude — Opus 5"]
-    T -->|long-context| C4["Gemini — 3.1 Pro"]
-    T -->|live-search| C5["Grok — 4.5"]
+    T -->|hardest-coding| C1["Claude — Fable 5.1"]
+    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
+    T -->|taste-final| C3["Claude — Fable 5.1"]
+    T -->|long-context| C4["Gemini — 3.7 Flash"]
+    T -->|live-search| C5["Grok — 4.6"]
     T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
 ```
 
@@ -115,22 +115,24 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
-| 💬 consult | Explicit named vendor/model | — (no fallback) | Direct natural-language consultation; always keep `--vendor` |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | UI drafts only WITH a design system / reference images |
-| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 1M-token sweeps, retrieval, and synthesis across long documents; Flash for fast repeated loops |
-| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | Fast multi-step agentic loops, multimodal checks |
-| 📡 live-search | Grok 4.5 | — (off) | Realtime X/web search and social context |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | User-facing prose, prompt/doc polish, style arbitration |
+| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | UI drafts only WITH a design system / reference images |
+| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-document retrieval and synthesis, ordered on AA-LCR, cost, and throughput |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | Fast multi-step agentic loops, multimodal checks |
+| 📡 live-search | Grok 4.6 | — (off) | Realtime X/web search and social context |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
 dispatch falls back to when the first-choice vendor CLI is not installed. Every
 lane is such a chain; when nothing in it is installed the lane degrades to `off`.
+
+> **Fable 5.1 is in the defaults — and where Opus 5 still fits.** See the current three-way evidence and Opus override in the [FAQ](#-faq).
 
 ### Natural-language consultation
 
@@ -155,12 +157,12 @@ with who is driving. What changes is which lanes you **self-execute** (you
 already are that model, so no second call) versus **dispatch**. Your harness's
 `omnilane` skill applies the right row automatically; this is the human view.
 
-- **Claude Code · Fable 5** — self-execute: hard-judgment, taste-final, the hardest correctness-critical fixes. Dispatch mechanical coding volume → Codex, long-context → Gemini, live-search → Grok.
-- **Claude Code · Opus 5** — self-execute: hard-judgment and taste-final. Dispatch bulk coding to Codex lanes, long-context → Gemini, live-search → Grok.
-- **Codex · Sol** — self-execute: hardest-coding, hard-judgment, ui-draft. Dispatch taste-final → Claude, long-context → Gemini, live-search → Grok, bulk → Codex Terra.
-- **Codex · Terra** — self-execute: bulk-mechanical. Escalate the genuinely hardest pieces to Sol; dispatch taste → Claude, long-context → Gemini, live-search → Grok.
-- **Grok Build · Grok 4.5** — self-execute: live-search, coding-overflow (mid-tier coding). Dispatch everything hard to Codex/Claude/Gemini — and verify every API signature and cited fact first.
-- **Antigravity · Gemini** — self-execute: long-context and context-heavy agentic work on 3.1 Pro, fast repeated loops on Flash. Dispatch hardest coding/judgment/taste to Codex/Claude; live-search → Grok.
+- **Claude Code · Fable 5.1** — self-execute: hard-judgment, taste-final, hardest-coding. Dispatch bulk → Codex Sol high; long-context and fast loops → Gemini 3.7 Flash; live-search → Grok.
+- **Claude Code · Opus 5** — self-execute: hard-judgment and taste-final when its lower hallucination rate or price is preferred. Dispatch hardest coding → Fable 5.1 or Sol, bulk → Sol high, long-context and fast loops → Gemini 3.7 Flash, live-search → Grok.
+- **Codex · Sol** — self-execute: hardest-coding, bulk-mechanical, hard-judgment, ui-draft. Dispatch taste-final → Claude, long-context and fast loops → Gemini 3.7 Flash, live-search → Grok.
+- **Codex · Terra** — self-execute: long-context as the Codex fallback. Bulk-mechanical now defaults to Sol high; escalate hardest pieces to Sol xhigh, taste → Claude, fast loops → Gemini 3.7 Flash, live-search → Grok.
+- **Grok Build · Grok 4.6** — self-execute: live-search and coding-overflow. Dispatch hard coding/judgment/taste to Codex/Claude/Gemini; verify API signatures and cited facts.
+- **Antigravity · Gemini 3.7 Flash** — self-execute: long-context and fast loops at Medium, bulk/overflow at High, triage at Low. Dispatch hardest coding/judgment/taste to Codex/Claude; live-search → Grok.
 
 </details>
 
@@ -489,52 +491,30 @@ with the key you set — those are advise-only and never edit files.
 </details>
 
 <details>
-<summary><b>Where is Claude Fable 5? Why is it not in the default table?</b></summary>
+<summary><b>Fable 5.1 is in the defaults — and where Opus 5 still fits</b></summary>
 
 <br/>
 
-**Because the top Claude tier is usually the main loop itself, not a dispatched
-worker.** Lanes exist to send work to a model *other than* the one you are
-driving. If Fable 5 is your main loop, routing judgment and taste back to Fable 5
-just adds a second call for no gain — which is why the "pick your main model"
-list above gives Fable 5 its own row as a **driver**, self-executing
-hard-judgment, taste-final, and the hardest correctness-critical fixes.
+Fable 5.1 now leads `hardest-coding`, `hard-judgment`, and `taste-final`.
+At matched xhigh effort it leads Opus 5 on intelligence, agentic work, and
+coding. Sol max remains the far cheaper cross-vendor judgment fallback.
 
-**The measurements do not argue for it as a worker either.** On the Artificial
-Analysis Intelligence Index (2026-07-24) Opus 5 (max) scores 61 and Fable 5 (max)
-scores 60 — Artificial Analysis calls them "effectively tied", and Epoch AI's
-Capability Index ranks them the other way (Fable 5 161, Opus 5 159). Call it a
-draw on general intelligence. Where they are not tied is agentic professional
-output, and Opus 5 leads by a wide margin:
+| Benchmark (AA, retrieved 2026-09-02) | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
+|---|---:|---:|---:|
+| Intelligence | 64.8 | 62.5 | 60.9 |
+| Agentic | 59.8 | 58.4 | 57.8 |
+| Coding | 80.7 | 77.0 | 77.4 |
+| Hallucination rate (lower is better) | .71 | **.60** | .92 |
+| AA $/task | $2.65 | $1.80 | **$0.95** |
 
-| Benchmark | Claude Opus 5 (max) | Claude Fable 5 | |
-|---|---:|---:|---|
-| AA-Briefcase (agentic knowledge work, Elo) | 1720 | 1574 | **+146** |
-| GDPval-AA v2 (Elo) | 1861 | 1747 | **+114** |
-| Cost per AA-Briefcase task | $17.79 | $22.30 | **-20%** |
-| API price, input / output per 1M | $5 / $25 | $10 / $50 | **half** |
-
-Opus 5's max, xhigh and high tiers sweep the top three AA-Briefcase places, and
-its `high` tier still beats Fable 5 at under half the cost per task. So Fable 5
-costs twice as much without buying an advantage on any axis a lane is defined
-around.
-
-**What Fable 5 is genuinely better at**: factual breadth. It stays ahead of
-Opus 5 on AA-Omniscience, as its size class suggests, and Opus 5 answers more
-readily when uncertain — its hallucination rate is 50%, up 14 points from
-Opus 4.8. If your task is recall-heavy rather than execution-heavy, name
-Fable 5 explicitly:
-
-```bash
-dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
-```
-
-**This is a cost / main-loop policy choice, not a capability verdict.** Fable 5
-is in the configurator's model menu, and one line in `routing.local.yaml`
-overrides the default if you disagree:
+Fable 5.1 is not a bulk or triage default: it costs twice Opus 5 per token and
+consumes the most Claude Code subscription quota per turn. Opus 5 remains the
+lower-hallucination, lower-price Claude option, stays in `long-context` at
+medium, and remains selectable everywhere through
+`~/.omnilane/routing.local.yaml`:
 
 ```yaml
-taste-final: claude claude-fable-5 high
+hard-judgment: claude claude-opus-5 xhigh
 ```
 
 </details>
@@ -598,7 +578,7 @@ Default lane assignments follow Artificial Analysis coding/intelligence data
 pages) plus published head-to-head reviews; they are opinions, not laws — the
 configurator and `routing.local.yaml` exist so you can disagree. The full
 working notes, including per-benchmark caveats, live in
-[`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
 
 ## ⚠️ Known limitations
 
@@ -613,6 +593,12 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.32.0
+
+- **Full 2026-09 routing re-evaluation.** Fable 5.1 and Gemini 3.7 Flash enter the defaults, backed by the dated Artificial Analysis snapshot.
+- **Catalogs match live CLI surfaces.** Fable 5.1 is added and retired Gemini 3.5 Flash rows are removed.
+- **Opus 5 remains available.** It stays in `long-context` and can override any lane through `routing.local.yaml`.
 
 ## What's new in v0.31.0
 
@@ -715,7 +701,7 @@ working notes, including per-benchmark caveats, live in
   latency-bound.
 - **Lane comments no longer carry numbers.** `routing.yaml` now states why each
   ordering holds; every score, price and throughput figure lives in
-  `docs/model-capabilities-2026-07.md` with its retrieval date, so a stale
+  `docs/model-capabilities-2026-09.md` with its retrieval date, so a stale
   figure never requires a routing-table edit.
 - **A value profile** in `routing.local.yaml.example` trades about one
   Intelligence Index point for 30-40% off the cost per task.
@@ -774,7 +760,7 @@ working notes, including per-benchmark caveats, live in
   profiles still pointed at `claude-opus-4-8` and Gemini 3.5 Flash; they now use
   Claude Opus 5 (with lane-appropriate effort) and Gemini 3.6 Flash.
 - **Corrected the Intelligence Index figures** in
-  `docs/model-capabilities-2026-07.md` against the Artificial Analysis source
+  `docs/model-capabilities-2026-09.md` against the Artificial Analysis source
   (index points, not percentages), added the AA-Briefcase / GDPval-AA v2
   comparison, and recorded the two results that cut against the defaults:
   Fable 5's lead on factual knowledge and Sol's lead on presentation quality.
@@ -822,7 +808,7 @@ working notes, including per-benchmark caveats, live in
 - **Five OpenAI-compatible direct-API vendors** — `deepseek`, `zai` (GLM),
   `mistral`, `groq`, and `cerebras` join `openrouter` as CLI-free lanes (curl +
   a `<VENDOR>_API_KEY`). A one-line `lib/common.sh` registry entry adds each;
-  see [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+  see [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
 - **Fish shell completion** — `omnilane completion fish | source`.
 
 ## What's new in v0.8.3
@@ -846,7 +832,7 @@ working notes, including per-benchmark caveats, live in
   DeepSeek, Z.ai GLM, Mistral, Groq, and Cerebras. Each needs only `curl` and
   its `<VENDOR>_API_KEY`; advise/consult only. A one-line `lib/common.sh`
   registry entry defines each endpoint, key env, and default model. See
-  [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md).
+  [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
 - **`opencode` vendor** — headless dispatch through the OpenCode
   multi-provider aggregator CLI (`opencode run`). Advise mode pins OpenCode's
   built-in read-only `plan` agent; work mode uses `--auto`. Joins the default

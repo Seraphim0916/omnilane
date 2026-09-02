@@ -4182,7 +4182,7 @@ test_configure_model_catalogs() {
     fi
   done <<'EOF'
 codex|1|8|1|gpt-5.3-codex-spark
-claude|2|20|1|claude-haiku-4-5-20251001
+claude|2|21|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official
 gemini|4|11||gpt-oss-120b-medium
 kimi|5|3||kimi-k2.5

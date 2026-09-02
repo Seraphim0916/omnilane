@@ -72,11 +72,11 @@ omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道
 ```mermaid
 flowchart LR
     M["主循环<br/><i>你在用的任一 CLI</i>"] --> T{{"routing.yaml<br/>一张共用路由表"}}
-    T -->|hardest-coding| C1["Codex — GPT-5.6 Sol"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Terra"]
-    T -->|taste-final| C3["Claude — Opus 5"]
-    T -->|long-context| C4["Gemini — 3.1 Pro"]
-    T -->|live-search| C5["Grok — 4.5"]
+    T -->|hardest-coding| C1["Claude — Fable 5.1"]
+    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
+    T -->|taste-final| C3["Claude — Fable 5.1"]
+    T -->|long-context| C4["Gemini — 3.7 Flash"]
+    T -->|live-search| C5["Grok — 4.6"]
     T -->|"arbitrate(可选)"| C6["vote — 1-4 模型评审团"]
 ```
 
@@ -103,24 +103,23 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-5.6 Sol (xhigh) | Claude Opus 5 (xhigh) | 最难的实现、深度调试、正确性攸关的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Terra (max) | Claude Sonnet 5 (high) | 重构、迁移、测试、大面积扫描——机械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (medium) | Gemini 3.6 Flash (Low) | 高量初筛、第一轮过滤 |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) | 架构仲裁、深度推理、第二意见 |
-| ✒️ taste-final | Claude Opus 5 (high) | GPT-5.6 Sol (max) | 对外文字、prompt 与文档打磨、风格终审 |
-| 💬 consult | 明确指定的厂商/模型 | —(不降级) | 自然语言直接咨询;必须保留 `--vendor` |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Opus 5 (high) | 有设计规范/参考图时的 UI 出稿;开放式视觉品味交给 taste-final |
-| 📚 long-context | Gemini 3.1 Pro (High) | GPT-5.6 Sol (high) | 百万 token 扫读、检索与长文跨段整合;高速重复循环仍优先 Flash |
-| ⚡ fast-agentic | GPT-5.6 Luna (max) | Gemini 3.6 Flash (High) | 快速多步骤 agentic 循环、多模态检查 |
-| 📡 live-search | Grok 4.5 | —(off) | 实时 X/网络搜索与社群脉络 |
-| 🚰 coding-overflow | Grok 4.5 | Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 额度吃紧时的中量级编码溢流道;事实性声明须另行查证 |
-| 🗳️ arbitrate | off(可选评审团) | — | 内置意见评审团,重大决定用——默认关闭,要用在 `routing.local.yaml` 打开;每评审每轮烧一次额度 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 最难的实现、深度调试、正确性关键的修改 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 架构裁决、深度推理、第二意见 |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | 对外文字、提示词／文档润色、风格裁决 |
+| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | 仅在提供设计系统／参考图时生成 UI 草稿 |
+| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 高速多步骤工具循环、多模态检查 |
+| 📡 live-search | Grok 4.6 | — (`off`) | 实时 X／网页搜索与社交上下文 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 配额耗尽时的中量级编码安全阀 |
+| 🗳️ arbitrate | `off`（可选模型评审团） | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
 通道都是这样一条链;整条都没装时,通道自动降为 `off`。
 
-> **Claude Fable 5 去哪了?** 默认表刻意不放——理由与完整数据见
-> [常见问题](#-常见问题)。
+> **Fable 5.1 已进入默认表——以及 Opus 5 仍适合放在哪里。** 三方数据与 Opus override 见[常见问题](#-常见问题)。
 
 ### 自然语言咨询
 
@@ -141,12 +140,12 @@ flowchart LR
 你哪些通道**自己做**(你本来就是那个模型,省一次调用)、哪些**派出去**。你 CLI 里
 的 `omnilane` 技能会自动套对的那一行,这里是给人看的版本。
 
-- **Claude Code · Fable 5** — 自己做:hard-judgment、taste-final、最吃正确性的硬修。派出去:机械编码量 → Codex、长文 → Gemini、实时搜索 → Grok。
-- **Claude Code · Opus 5** — 自己做：hard-judgment、taste-final。大量编码走 Codex 通道、长文 → Gemini、实时搜索 → Grok。
-- **Codex · Sol** — 自己做:hardest-coding、hard-judgment、ui-draft。派出去:taste-final → Claude、长文 → Gemini、实时搜索 → Grok、粗活 → Codex Terra。
-- **Codex · Terra** — 自己做:bulk-mechanical。真正最硬的往上升给 Sol;taste → Claude、长文 → Gemini、实时搜索 → Grok。
-- **Grok Build · Grok 4.5** — 自己做:live-search、coding-overflow(中量级编码)。所有硬活派给 Codex/Claude/Gemini——先验每个 API 签名与引用事实。
-- **Antigravity · Gemini** — 自己做:3.1 Pro 的长文与重上下文 agentic 工作、Flash 的高速重复循环。最难的编码/判断/文字派给 Codex/Claude;实时搜索 → Grok。
+- **Claude Code · Fable 5.1**——自己执行：hard-judgment、taste-final、hardest-coding。派发：bulk → Codex Sol high；long-context／高速循环 → Gemini 3.7 Flash；实时搜索 → Grok。
+- **Claude Code · Opus 5**——需要更低幻觉率或价格时，自己执行 hard-judgment、taste-final。最难编码 → Fable 5.1 或 Sol；bulk → Sol high；long-context／高速循环 → Gemini 3.7 Flash；实时搜索 → Grok。
+- **Codex · Sol**——自己执行：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。派发：taste-final → Claude；long-context／高速循环 → Gemini 3.7 Flash；实时搜索 → Grok。
+- **Codex · Terra**——自己执行 long-context 的 Codex 备用任务；bulk-mechanical 现在默认由 Sol high 处理。最难部分升级到 Sol xhigh，taste → Claude，高速循环 → Gemini 3.7 Flash，实时搜索 → Grok。
+- **Grok Build · Grok 4.6**——自己执行 live-search、coding-overflow。最难的编码／判断／文字交给 Codex、Claude、Gemini；仍需验证 API 签名和引用事实。
+- **Antigravity · Gemini 3.7 Flash**——自己执行：Medium 的 long-context／高速循环、High 的 bulk／overflow、Low 的 triage。最难编码／判断／文字交给 Codex、Claude；实时搜索 → Grok。
 
 </details>
 
@@ -395,45 +394,29 @@ omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
 </details>
 
 <details>
-<summary><b>Claude Fable 5 去哪了?为什么默认表不放它?</b></summary>
+<summary><b>Fable 5.1 已进入默认表——以及 Opus 5 仍适合放在哪里</b></summary>
 
 <br/>
 
-**因为 Claude 顶级档通常就是主循环本人,不是被派发的工人。** 通道存在的意义,
-是把工作送给「你正在开的那个模型以外」的模型。如果 Fable 5 就是你的主循环,把
-判断和文字再路由回 Fable 5 只是多一次调用、毫无增益——所以上面那份「选你的主控
-模型」清单里,Fable 5 有自己独立的一行,身份是**主控**:自己做 hard-judgment、
-taste-final、最吃正确性的硬修。
+Fable 5.1 现在领跑 `hardest-coding`、`hard-judgment`、`taste-final`。
+同为 xhigh 时，它在智能、代理式工作和编码上都领先 Opus 5；Sol max 则保留为
+便宜得多的跨厂商判断备用项。
 
-**测量数据也不支持把它当工人。** Artificial Analysis 智能指数(2026-07-24)
-Opus 5(max)61 分、Fable 5(max)60 分——AA 自己的用词是「实质打平」,而 Epoch AI
-的能力指数排序还是反过来的(Fable 5 161、Opus 5 159)。综合智力就当它平手。真正
-拉开差距的是 agentic 专业产出,而且差很多:
+| 评测（AA，抓取于 2026-09-02） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
+|---|---:|---:|---:|
+| 智能 | 64.8 | 62.5 | 60.9 |
+| 代理式 | 59.8 | 58.4 | 57.8 |
+| 编码 | 80.7 | 77.0 | 77.4 |
+| 幻觉率（越低越好） | .71 | **.60** | .92 |
+| AA 每任务成本 | $2.65 | $1.80 | **$0.95** |
 
-| 评测 | Claude Opus 5 (max) | Claude Fable 5 | |
-|---|---:|---:|---|
-| AA-Briefcase(agentic 知识工作,Elo) | 1720 | 1574 | **+146** |
-| GDPval-AA v2(Elo) | 1861 | 1747 | **+114** |
-| AA-Briefcase 每任务成本 | $17.79 | $22.30 | **-20%** |
-| API 单价,输入/输出 每 1M | $5 / $25 | $10 / $50 | **一半** |
-
-Opus 5 的 max、xhigh、high 三个档位包揽 AA-Briefcase 前三名,连 `high` 档都在
-不到一半的每任务成本下赢过 Fable 5。也就是说,Fable 5 贵一倍,却换不到任何一条
-通道所在意的优势。
-
-**Fable 5 真正更强的地方**:事实广度。它在 AA-Omniscience 上仍领先 Opus 5
-(符合两者的规模差),而 Opus 5 在没把握时更倾向直接作答——幻觉率 50%,比
-Opus 4.8 高 14 个百分点。任务偏「回想」而非「执行」时,直接点名它:
-
-```bash
-dispatch.sh --vendor claude --model claude-fable-5 --effort high consult "…"
-```
-
-**这是成本与主循环策略的选择,不是能力判决。** 设置菜单的模型清单里有 Fable 5,
-在 `routing.local.yaml` 写一行就能覆盖默认:
+Fable 5.1 没进入 bulk 或 triage：每 token 价格是 Opus 5 的两倍，而且每轮
+消耗最多 Claude Code 订阅配额。Opus 5 仍是幻觉率更低、价格更低的 Claude
+选项，并以 medium 保留在 `long-context`；也能通过
+`~/.omnilane/routing.local.yaml` 放回任意通道：
 
 ```yaml
-taste-final: claude claude-fable-5 high
+hard-judgment: claude claude-opus-5 xhigh
 ```
 
 </details>
@@ -493,7 +476,7 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 默认关闭;要用就在 `routing.local.yaml` 写
 `arbitrate: vote codex,claude,grok -`(从四家里任选 1-4 个评审),
 或改用 `exec` 厂商指向你自己的多模型审查闸脚本。完整工作笔记(含各评测的
-但书)见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
+但书)见 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)。
 
 ## ⚠️ 已知限制
 
@@ -506,6 +489,12 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.32.0 新功能
+
+- **基于 AA 2026-09 快照全面重评路由。** Fable 5.1 和 Gemini 3.7 Flash 进入默认表，数据集中在新的日期化文档。
+- **模型目录同步当前 CLI 接口。** 加入 Fable 5.1，移除 agy 已下架的 Gemini 3.5 Flash 项，并同步投票器。
+- **Opus 5 仍可使用。** 它保留在 `long-context`，也能通过 `routing.local.yaml` 覆盖任意通道。
 
 ## v0.31.0 新功能
 
@@ -582,7 +571,7 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   的 Agentic Index 上大幅领先 Flash,而且 2026-07-30 降价后每任务成本只剩零头。
   Flash 只剩吞吐量优势——若你的循环受延迟限制,可在本机覆写把它调回第一。
 - **lane 注释不再放数字。**`routing.yaml` 只说明每条排序「为什么」成立;所有分数、
-  价格与吞吐量连同取数日期,一律放在 `docs/model-capabilities-2026-07.md`。数字过期
+  价格与吞吐量连同取数日期,一律放在 `docs/model-capabilities-2026-09.md`。数字过期
   不再需要动路由表。
 - **新增 value profile**(在 `routing.local.yaml.example`):用约一个 Intelligence
   Index 分数,换每任务成本降三到四成。
@@ -628,7 +617,7 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 - **修复:`routing.local.yaml.example` 还指着已退场的模型**——起手配置里的
   `claude-opus-4-8` 全数改为 `claude-opus-5`(并按通道给对应档位),Gemini 3.5
   Flash 候选改为 3.6 Flash,与 0.10.0 以来的默认值一致。
-- **对照原始资料修正智能指数数字**(`docs/model-capabilities-2026-07.md`):
+- **对照原始资料修正智能指数数字**(`docs/model-capabilities-2026-09.md`):
   那是指数点数不是百分比;补上 AA-Briefcase / GDPval-AA v2 对照,并记下两项与
   默认值相反的结果:Fable 5 在事实知识领先、GPT-5.6 Sol 在呈现质量领先。
 
@@ -665,7 +654,7 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## v0.9.0 新功能
 
-- **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-07.md`](docs/model-capabilities-2026-07.md)。
+- **新增 5 个 OpenAI-compatible direct-API vendor** — `deepseek`、`zai`(GLM)、`mistral`、`groq`、`cerebras`,与 `openrouter` 同为免 CLI 通道(curl 加一把 `<VENDOR>_API_KEY`);`lib/common.sh` registry 一行即加一个。详见 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)。
 - **fish shell 补全** — `omnilane completion fish | source`。
 
 ## v0.8.3 新功能
