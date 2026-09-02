@@ -33,7 +33,7 @@ report_completions() {
   current_input="${CLAUDE_PROJECT_DIR:-$PWD}"
   current="$(cd "$current_input" 2>/dev/null && pwd -P)" || return 0
 
-  perl -Mstrict -Mwarnings -MJSON::PP -MCwd=abs_path -e '
+  perl -Mstrict -Mwarnings -MEncode -MJSON::PP -MCwd=abs_path -e '
     sub collect_output {
       my ($inbox, $consumed, $current, $session_id) = @_;
       opendir my $dh, $inbox or return "";
@@ -42,16 +42,38 @@ report_completions() {
       } readdir $dh;
       closedir $dh;
 
-      my @matches;
+      my (@matches, @unreadable);
       for my $name (@names) {
         my $source = "$inbox/$name";
-        next if -s $source > 65536;
+        if (-s $source > 65536) {
+          (my $job = $name) =~ s/\.json\z//;
+          push @unreadable, [$name, {
+            job_id => $job, lane => "unknown", vendor => "unknown",
+            exit => 1, tail => "record was unreadable",
+          }];
+          next;
+        }
         open my $fh, "<", $source or next;
+        binmode $fh, ":raw";
         local $/;
         my $raw = <$fh>;
+        $raw = "" unless defined $raw;
         close $fh;
         my $record = eval { JSON::PP::decode_json($raw) };
-        next unless ref($record) eq "HASH";
+        unless (ref($record) eq "HASH") {
+          my $sanitized = Encode::encode(
+            "UTF-8", Encode::decode("UTF-8", $raw, Encode::FB_DEFAULT)
+          );
+          $record = eval { JSON::PP::decode_json($sanitized) };
+        }
+        unless (ref($record) eq "HASH") {
+          (my $job = $name) =~ s/\.json\z//;
+          push @unreadable, [$name, {
+            job_id => $job, lane => "unknown", vendor => "unknown",
+            exit => 1, tail => "record was unreadable",
+          }];
+          next;
+        }
         my $record_session = $record->{foreman_session};
         if (defined($record_session) && !ref($record_session) && length($record_session)) {
           next unless length($session_id) && $record_session eq $session_id;
@@ -70,6 +92,7 @@ report_completions() {
 
       my $withheld = @matches > 10 ? @matches - 10 : 0;
       splice @matches, 10 if @matches > 10;
+      unshift @matches, @unreadable;
       my @claimed;
       for my $item (@matches) {
         my ($name, $record) = @$item;

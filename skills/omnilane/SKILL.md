@@ -16,6 +16,11 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    fixes of one line or less. Dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
+   Implementation dispatches (code edits, new files, tests, builds, deploys)
+   must carry `--mode work --workdir <repo>` and a `--timeout` of at least
+   3600 seconds. The advise default is a read-only worker under a 600 s
+   per-call watchdog, and on an implementation task it yields zero output.
+   Advise stays the default for reviews, questions, and second opinions.
    Before changing lane order from anecdotal outcomes, run
    `scripts/jobs.sh recommend [--last N] [--lane L] [--min-samples N]` and report
    its evidence threshold. The command is read-only and never changes routing.
@@ -131,6 +136,24 @@ it cannot interpret natural language, choose routes, dispatch, retry, cancel,
 delete jobs, or edit configuration. Natural-language interpretation and
 dispatch stay in this skill and the CLI. Manage the local board with
 `omnilane ui start|status|url|stop`, and stop it when monitoring is finished.
+
+## Job lifecycle defaults
+
+- **Completion inbox**: with the Claude Code plugin's hooks installed, a
+  finished `--background` job is delivered into the foreman's next prompt by
+  the bundled `UserPromptSubmit` hook, so do not poll for it. Outside Claude
+  Code, block on `scripts/jobs.sh wait <id> [--timeout N]` instead.
+- **Live mailbox**: a `--background` dispatch to Claude or Gemini is a
+  resident worker. Send follow-up instructions with `scripts/jobs.sh send <id>
+  "<text>"` and end it with `scripts/jobs.sh close <id>`; other vendors (and
+  `--single-shot`) run one-shot. Do not use a mailbox for fire-and-forget work.
+- **Goal orchestration**: when the next step depends on the previous result,
+  wrap the dispatches in `omnilane goal open "<objective>" --workdir DIR`, then
+  `goal dispatch <goal-id> ...`, `goal note`, `goal status`, `goal close --summary`.
+  Budgets are unlimited unless `--budget-jobs` / `--budget-seconds` is passed.
+  A single obvious task is dispatched directly, never through a goal.
+- **Job hygiene**: `scripts/jobs.sh cancel <id>` stops a runaway job.
+  `stats`, `recommend`, and `audit` are read-only and never change routing.
 
 ## Rules
 

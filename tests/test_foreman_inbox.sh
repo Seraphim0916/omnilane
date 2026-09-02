@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 unset OMNILANE_DEPTH
+unset CLAUDE_CODE_SESSION_ID
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-inbox-tests.XXXXXX")"
@@ -511,3 +512,128 @@ META="$stale_home/jobs/$stale_job_id/meta.json" perl -MJSON::PP -e '
 [[ ! -e "$stale_home/sessions/$$.json" ]] || fail "stale session entry was not pruned"
 
 printf 'ok - foreman completion inbox\n'
+
+test_writer_utf8_tail_boundary() {
+  local home="$TEST_ROOT/writer-utf8" workdir="$TEST_ROOT/writer-utf8-project"
+  local gate="$TEST_ROOT/writer-utf8-gate.sh" job_id record
+
+  mkdir -p "$home" "$workdir"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+output_file="$5"
+perl -Mutf8 -e 'binmode STDOUT, ":raw"; print "\x{6e2c}" x 1000' > "$output_file"
+EOF
+  chmod +x "$gate"
+  printf 'utf8-lane: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  job_id="$(OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" --background --workdir "$workdir" \
+    utf8-lane 'utf8 boundary')"
+  record="$home/inbox/$job_id.json"
+  wait_for_file "$record" || fail "UTF-8 writer did not create completion record"
+  perl -MJSON::PP -0777 -e 'decode_json(<STDIN>)' < "$record" \
+    || fail "UTF-8 writer produced an undecodable completion record"
+  printf 'ok - writer sanitises UTF-8 tail boundary\n'
+}
+
+test_reader_repairs_invalid_utf8() {
+  local home="$TEST_ROOT/reader-invalid-utf8" workdir="$TEST_ROOT/reader-invalid-project"
+  local job_id="20260902-130001-1-1" record output
+
+  mkdir -p "$home/inbox" "$workdir"
+  chmod 700 "$home/inbox"
+  record="$home/inbox/$job_id.json"
+  WORKDIR_VALUE="$workdir" perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    binmode STDOUT, ":raw";
+    my $record = {
+      job_id => "20260902-130001-1-1", lane => "triage", vendor => "exec",
+      model => "/tmp/gate", mode => "advise", workdir => $ENV{WORKDIR_VALUE},
+      foreman_session => "", exit => 0, finished => "2026-09-02T05:00:01Z",
+      tail => "__INVALID_UTF8__",
+    };
+    my $raw = JSON::PP->new->canonical->encode($record);
+    $raw =~ s/__INVALID_UTF8__/\x90\x8c/;
+    print $raw, "\n";
+  ' > "$record"
+  chmod 600 "$record"
+
+  output="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
+    "$ROOT/hooks/report-completions.sh")"
+  [[ "$output" == *"Omnilane completion: job=$job_id"* ]] \
+    || fail "invalid UTF-8 record was not delivered: $output"
+  [[ -f "$home/inbox/consumed/$job_id.json" ]] \
+    || fail "invalid UTF-8 record was not moved to consumed"
+  printf 'ok - reader repairs invalid UTF-8 record\n'
+}
+
+test_reader_consumes_unparseable_record() {
+  local home="$TEST_ROOT/reader-unparseable" workdir="$TEST_ROOT/reader-unparseable-project"
+  local job_id="20260902-130002-1-1" record output expected
+
+  mkdir -p "$home/inbox" "$workdir"
+  chmod 700 "$home/inbox"
+  record="$home/inbox/$job_id.json"
+  printf 'not JSON at all \220\214\n' > "$record"
+  chmod 600 "$record"
+
+  output="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
+    "$ROOT/hooks/report-completions.sh")"
+  expected="Omnilane completion: FAILED job=$job_id lane=unknown vendor=unknown exit=1"
+  [[ "$output" == *"$expected"* && "$output" == *"record was unreadable"* ]] \
+    || fail "unparseable record did not produce fallback notice: $output"
+  [[ -f "$home/inbox/consumed/$job_id.json" ]] \
+    || fail "unparseable record was not moved to consumed"
+  printf 'ok - reader consumes unparseable record\n'
+}
+
+test_desktop_session_binding() {
+  local home="$TEST_ROOT/desktop-session" workdir="$TEST_ROOT/desktop-session-project"
+  local gate="$TEST_ROOT/desktop-session-gate.sh" session_id="test-session-abc"
+  local job_id record other output
+
+  mkdir -p "$home" "$workdir"
+  make_gate "$gate"
+  printf 'desktop-lane: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+  job_id="$(CLAUDE_CODE_SESSION_ID="$session_id" OMNILANE_HOME="$home" GATE_EXIT=0 \
+    bash "$ROOT/scripts/dispatch.sh" --background --workdir "$workdir" \
+    desktop-lane 'desktop session binding')"
+  record="$home/inbox/$job_id.json"
+  wait_for_file "$record" || fail "Desktop-session dispatch did not create completion record"
+
+  META="$home/jobs/$job_id/meta.json" RECORD="$record" EXPECTED_SESSION="$session_id" \
+    perl -MJSON::PP -e '
+      use strict;
+      use warnings;
+      sub load_json {
+        open my $fh, "<", $_[0] or die $!;
+        local $/;
+        return decode_json(<$fh>);
+      }
+      my $meta = load_json($ENV{META});
+      my $record = load_json($ENV{RECORD});
+      die "meta session missing: " . ($meta->{foreman_session} // "<missing>") . "\n"
+        unless ($meta->{foreman_session} // "") eq $ENV{EXPECTED_SESSION};
+      die "record session missing: " . ($record->{foreman_session} // "<missing>") . "\n"
+        unless ($record->{foreman_session} // "") eq $ENV{EXPECTED_SESSION};
+    ' || fail "Desktop session was not persisted in meta and inbox record"
+
+  other="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
+    "$ROOT/hooks/report-completions.sh" <<< '{"session_id":"other"}')"
+  [[ -z "$other" && -f "$record" ]] \
+    || fail "other session claimed Desktop completion: $other"
+  output="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
+    "$ROOT/hooks/report-completions.sh" <<< '{"session_id":"test-session-abc"}')"
+  [[ "$output" == *"Omnilane completion: job=$job_id"* ]] \
+    || fail "bound Desktop session did not receive completion: $output"
+  [[ -f "$home/inbox/consumed/$job_id.json" ]] \
+    || fail "bound Desktop completion was not moved to consumed"
+  printf 'ok - Desktop session ID binds completion delivery\n'
+}
+
+test_writer_utf8_tail_boundary
+test_reader_repairs_invalid_utf8
+test_reader_consumes_unparseable_record
+test_desktop_session_binding

@@ -685,7 +685,12 @@ JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
 FOREMAN_SESSION=""
-if resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
+if [[ -n "${CLAUDE_CODE_SESSION_ID+x}" ]]; then
+  if [[ "$CLAUDE_CODE_SESSION_ID" =~ ^[A-Za-z0-9._:-]+$ &&
+    "${#CLAUDE_CODE_SESSION_ID}" -le 256 ]]; then
+    FOREMAN_SESSION="$CLAUDE_CODE_SESSION_ID"
+  fi
+elif resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
   FOREMAN_SESSION="$resolved_foreman_session"
 fi
 
@@ -708,6 +713,27 @@ secure_job_files() {
   find "$JOB_DIR" -type f -exec chmod 600 {} +
 }
 
+sanitize_utf8() {
+  local max="$1" drop_leading="${2:-0}"
+  perl -MEncode -e '
+    use strict;
+    use warnings;
+    binmode STDIN, ":raw";
+    binmode STDOUT, ":raw";
+    local $/;
+    my $bytes = <STDIN> // "";
+    my ($max, $drop_leading) = @ARGV;
+    $bytes =~ s/\A[\x80-\xBF]+// if $drop_leading;
+    my $text = Encode::decode("UTF-8", $bytes, Encode::FB_DEFAULT);
+    my $encoded = Encode::encode("UTF-8", $text);
+    while (length($encoded) > $max && length($text)) {
+      $text =~ s/\A.//s;
+      $encoded = Encode::encode("UTF-8", $text);
+    }
+    print $encoded;
+  ' "$max" "$drop_leading"
+}
+
 completion_tail() {
   local path="$1" size=0 keep value="" sentinel=$'\001'
   local note=$'[truncated: leading output omitted]\n'
@@ -718,9 +744,16 @@ completion_tail() {
     [[ "$size" =~ ^[0-9]+$ ]] || return 1
     if [[ "$size" -gt 2000 ]]; then
       keep=$((2000 - ${#note}))
-      value="$(printf '%s' "$note"; tail -c "$keep" "$path"; printf '%s' "$sentinel")" || return 1
+      value="$({
+        printf '%s' "$note"
+        tail -c "$keep" "$path" | sanitize_utf8 "$keep" 1
+        printf '%s' "$sentinel"
+      })" || return 1
     else
-      value="$(cat "$path"; printf '%s' "$sentinel")" || return 1
+      value="$({
+        sanitize_utf8 2000 0 < "$path"
+        printf '%s' "$sentinel"
+      })" || return 1
     fi
     value="${value%"$sentinel"}"
   fi

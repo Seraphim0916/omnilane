@@ -6,6 +6,18 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-09-02
+
+### Fixed
+
+- Foremen could miss a completion forever when byte-based tail truncation split a UTF-8 character and the hook silently skipped the undecodable inbox record; writers now sanitise truncated tails, readers retry after repairing invalid bytes, and irrecoverable records are consumed with a FAILED unreadable-record notice.
+- Claude Code Desktop foremen were never bound to their session because dispatch only searched process-tree records created for headless workers; dispatch now prefers a valid `CLAUDE_CODE_SESSION_ID`, preventing sessions that share a working directory, or use `/`, from taking each other's notices.
+
+### Changed
+
+- The skill and the routing reminder now state the implementation dispatch parameters (`--mode work --workdir DIR --timeout 3600` or more) and record that the advise default is a read-only worker under a 600 s per-call watchdog that yields no output on implementation tasks.
+- The skill gains a `Job lifecycle defaults` section covering the foreman completion inbox, the live mailbox (`jobs.sh send` / `jobs.sh close`), goal orchestration defaults (`omnilane goal`, unlimited budgets unless opted in), and read-only job hygiene commands.
+
 ## [0.32.0] - 2026-09-02
 
 ### Changed
@@ -713,7 +725,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...v0.32.0
 
 [0.31.0]: https://github.com/Seraphim0916/omnilane/compare/v0.30.0...v0.31.0
