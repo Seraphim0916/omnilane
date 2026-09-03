@@ -822,12 +822,17 @@ IDLE_TIMEOUT="$OVERRIDE_IDLE_TIMEOUT"
   exit 2
 }
 export OMNILANE_IDLE_TIMEOUT="$IDLE_TIMEOUT"
-if [[ "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDLE_TIMEOUT" ]]; then
+# The idle cap only exists inside a live mailbox, so a single-shot dispatch
+# would be told about a limit that never applies to it.
+if [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDLE_TIMEOUT" ]]; then
   echo "omnilane: --timeout is ${TIMEOUT}s, but the independent live mailbox idle cap remains ${IDLE_TIMEOUT}s; adjust it with --idle-timeout SECONDS" >&2
 fi
 
 JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
 JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
+# Pinned deliberately: /bin/bash is 3.2 on macOS while a PATH bash is typically
+# 5.x, so the worker and every library it sources must stay bash-3.2 compatible.
+# No declare -A, mapfile, ${v,,}, [[ -v ]], ;;&, EPOCHSECONDS or coproc.
 JOB_WORKER_BASH="/bin/bash"
 [[ -x "$JOB_WORKER_BASH" ]] || { echo "omnilane: fixed worker interpreter is unavailable: $JOB_WORKER_BASH" >&2; exit 2; }
 JOB_WORKER_BASH_VERSION="$($JOB_WORKER_BASH -c 'printf %s "$BASH_VERSION"')"

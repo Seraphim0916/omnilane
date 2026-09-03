@@ -29,14 +29,21 @@ live_encode_message() {
   esac
 }
 
+# Cheap structural check, not a parse. Two properties matter more here than
+# precision. It must not fork: the drain loop runs one call per stream event
+# between inbox reads, so a per-event process would leave an operator's
+# `jobs.sh send` waiting behind a busy stream. And it must not be able to fail
+# because a parser is missing: a validator that cannot run would judge every
+# event invalid, activity would never refresh, and the idle cap would kill
+# healthy jobs. Strict parsing still guards the places where correctness
+# depends on it (json_file_round_trip_valid).
 live_event_is_valid() {
-  local event="$1"
-  printf '%s' "$event" | perl -MJSON::PP -0777 -e '
-    use strict;
-    use warnings;
-    my $value = decode_json(<STDIN>);
-    exit(ref($value) eq "HASH" ? 0 : 1);
-  ' >/dev/null 2>&1
+  local event="$1" lead trail
+  lead="${event%%[![:space:]]*}"
+  event="${event#"$lead"}"
+  trail="${event##*[![:space:]]}"
+  event="${event%"$trail"}"
+  [[ "$event" == "{"*"}" ]]
 }
 
 live_event_is_result() {

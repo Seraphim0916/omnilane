@@ -65,34 +65,6 @@ finalize_live_output() {
       echo "omnilane: cannot extract Claude live result: python3 not found" >> "$STDERR_FILE"
       return 1
     fi
-    if ! python3 - "$EVENTS_FILE" "$tmp" <<'PY'
-import json
-import pathlib
-import sys
-
-events_path = pathlib.Path(sys.argv[1])
-output_path = pathlib.Path(sys.argv[2])
-last_result = None
-
-with events_path.open(encoding="utf-8") as events:
-    for raw_line in events:
-        try:
-            event = json.loads(raw_line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "result" and isinstance(event.get("result"), str):
-            last_result = event["result"]
-
-if last_result is None:
-    raise SystemExit(1)
-
-output_path.write_text(last_result.rstrip("\n") + "\n", encoding="utf-8")
-PY
-    then
-      echo "omnilane: Claude live stream ended without a readable result event" >> "$STDERR_FILE"
-      return 1
-    fi
-    mv "$tmp" "$OUTPUT_FILE"
   }
 
   # Invoked by signal traps below.
@@ -112,7 +84,10 @@ PY
       fi
       wait "$LIVE_CHILD_PID" 2>/dev/null
     fi
-  finalize_live_output --existing-only || true
+    # Recover the transcript unconditionally so an aborted turn still leaves
+    # its work in out.txt; whether that recovery counts as success is decided
+    # by the job worker, which alone knows why the session was closed.
+    finalize_live_output || true
     [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
     exit "$signal_rc"
   }
@@ -135,7 +110,7 @@ PY
   RC=$?
   set -e
   trap - TERM HUP INT
-  if [[ "$RC" -eq 0 ]] && ! finalize_live_output; then
+  if ! finalize_live_output && [[ "$RC" -eq 0 ]]; then
     RC=1
   fi
   [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
