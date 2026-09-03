@@ -29,6 +29,16 @@ live_encode_message() {
   esac
 }
 
+live_event_is_valid() {
+  local event="$1"
+  printf '%s' "$event" | perl -MJSON::PP -0777 -e '
+    use strict;
+    use warnings;
+    my $value = decode_json(<STDIN>);
+    exit(ref($value) eq "HASH" ? 0 : 1);
+  ' >/dev/null 2>&1
+}
+
 live_event_is_result() {
   local vendor="$1" event="$2" pattern
   case "$vendor" in

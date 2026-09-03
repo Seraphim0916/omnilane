@@ -4298,5 +4298,16 @@ EOF
 }
 test_doctor_goal_orchestrator_check
 
+test_completion_idle_fixes() {
+  local name="completion idle structural regressions" out rc=0
+  out="$(/bin/bash "$ROOT/tests/test_completion_idle_fixes.sh" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_completion_idle_fixes
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

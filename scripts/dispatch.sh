@@ -822,9 +822,16 @@ IDLE_TIMEOUT="$OVERRIDE_IDLE_TIMEOUT"
   exit 2
 }
 export OMNILANE_IDLE_TIMEOUT="$IDLE_TIMEOUT"
+if [[ "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDLE_TIMEOUT" ]]; then
+  echo "omnilane: --timeout is ${TIMEOUT}s, but the independent live mailbox idle cap remains ${IDLE_TIMEOUT}s; adjust it with --idle-timeout SECONDS" >&2
+fi
 
 JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
 JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
+JOB_WORKER_BASH="/bin/bash"
+[[ -x "$JOB_WORKER_BASH" ]] || { echo "omnilane: fixed worker interpreter is unavailable: $JOB_WORKER_BASH" >&2; exit 2; }
+JOB_WORKER_BASH_VERSION="$($JOB_WORKER_BASH -c 'printf %s "$BASH_VERSION"')"
+JOB_WORKER_SHA256="$(file_sha256 "$JOB_WORKER")" || exit 2
 
 # Optional whole-job seconds: flag > per-lane env > global env > automatic
 # non-Git Codex work guard > disabled.
@@ -941,6 +948,22 @@ else
     "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
 fi
 
+META_TMP="$JOB_DIR/.meta.tmp.$$-$RANDOM"
+META_BASE="$(cat "$JOB_DIR/meta.json")"
+if [[ "$META_BASE" != *'}' ]]; then
+  rm "$META_TMP" 2>/dev/null || true
+  echo "omnilane: cannot add worker provenance to malformed meta.json" >&2
+  exit 1
+fi
+META_BASE="${META_BASE%\}}"
+printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_sha256":"%s"}\n' \
+  "$META_BASE" "$(json_escape "$JOB_WORKER_BASH")" \
+  "$(json_escape "$JOB_WORKER_BASH_VERSION")" "$(json_escape "$JOB_WORKER_SHA256")" \
+  > "$META_TMP"
+json_file_round_trip_valid "$META_TMP" || exit 1
+chmod 600 "$META_TMP"
+mv "$META_TMP" "$JOB_DIR/meta.json"
+
 if [[ -n "$THREAD_NAME" ]]; then
   printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
     "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
@@ -1023,6 +1046,9 @@ write_completion_record() {
       "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" \
       > "$tmp" || write_rc=$?
   fi
+  if [[ "$write_rc" -eq 0 ]] && ! json_file_round_trip_valid "$tmp"; then
+    write_rc=1
+  fi
   if [[ "$write_rc" -eq 0 ]]; then
     chmod 600 "$tmp" || write_rc=$?
   fi
@@ -1047,7 +1073,7 @@ finish_job() {
   secure_job_files
   (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
   if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
-    write_completion_record "$rc" >/dev/null 2>&1 || true
+    write_completion_record "$rc" >/dev/null || true
   fi
   FINISHED_RC="$rc"
 }
@@ -1058,10 +1084,10 @@ run_job() {
   set +e
   if [[ -n "$JOB_TIMEOUT" ]]; then
     OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
-      "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+      "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   else
-    "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+    "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   fi
   rc=$?

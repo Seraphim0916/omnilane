@@ -175,6 +175,7 @@ if ! printf '%s\n' "$initial_payload" >&3; then close_requested=1; fi
 (umask 077; : > "$READY_FILE")
 
 last_activity=$SECONDS
+last_result_event=""
 while kill -0 "$runner_pid" 2>/dev/null; do
   [[ "$close_requested" -eq 0 ]] || break
   incoming=""
@@ -183,8 +184,11 @@ while kill -0 "$runner_pid" 2>/dev/null; do
     last_activity=$SECONDS
   fi
   while IFS= read -r event <&5; do
-    if live_event_is_result "$VENDOR" "$event"; then
+    if live_event_is_valid "$event"; then
       last_activity=$SECONDS
+      if live_event_is_result "$VENDOR" "$event"; then
+        last_result_event="$event"
+      fi
     fi
   done
   if [[ "$IDLE_TIMEOUT" -gt 0 && $((SECONDS - last_activity)) -ge "$IDLE_TIMEOUT" ]]; then
@@ -199,7 +203,14 @@ if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 
 set +e
 if [[ "$close_requested" -eq 1 ]]; then
-  kill -TERM "$runner_pid" 2>/dev/null || true
+  graceful_wait=0
+  while kill -0 "$runner_pid" 2>/dev/null && [[ "$graceful_wait" -lt 50 ]]; do
+    sleep 0.1
+    graceful_wait=$((graceful_wait + 1))
+  done
+  if kill -0 "$runner_pid" 2>/dev/null; then
+    kill -TERM "$runner_pid" 2>/dev/null || true
+  fi
 fi
 wait "$runner_pid" 2>/dev/null
 runner_rc=$?
@@ -211,7 +222,8 @@ if [[ -n "$close_reason" ]]; then
 fi
 
 if [[ "$close_requested" -eq 1 ]]; then
-  if last_result_status; then
+  if { [[ -n "$last_result_event" ]] && live_event_is_success "$VENDOR" "$last_result_event"; } \
+    || last_result_status; then
     rc=0
   else
     rc=1

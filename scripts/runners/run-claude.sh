@@ -50,9 +50,18 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
   fi
   LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
 
-  finalize_live_output() {
-    local tmp="${OUTPUT_FILE}.tmp"
-    if ! command -v python3 >/dev/null 2>&1; then
+finalize_live_output() {
+  local tmp="${OUTPUT_FILE}.tmp"
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
+      "$EVENTS_FILE" "$tmp" ${1:+"$1"}; then
+      mv "$tmp" "$OUTPUT_FILE"
+      return 0
+    fi
+    echo "omnilane: Claude live stream ended without readable successful result or top-level assistant text" >> "$STDERR_FILE"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
       echo "omnilane: cannot extract Claude live result: python3 not found" >> "$STDERR_FILE"
       return 1
     fi
@@ -103,7 +112,7 @@ PY
       fi
       wait "$LIVE_CHILD_PID" 2>/dev/null
     fi
-    finalize_live_output || true
+  finalize_live_output --existing-only || true
     [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
     exit "$signal_rc"
   }
@@ -126,7 +135,7 @@ PY
   RC=$?
   set -e
   trap - TERM HUP INT
-  if ! finalize_live_output && [[ "$RC" -eq 0 ]]; then
+  if [[ "$RC" -eq 0 ]] && ! finalize_live_output; then
     RC=1
   fi
   [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
@@ -166,6 +175,11 @@ RC=$?
 set -e
 
 if [[ -n "$THREAD_MODE" ]]; then
+  if [[ "$RC" -eq 0 ]] && ! python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
+    "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp"; then
+    echo "omnilane: Claude thread stream without successful result or top-level assistant text" >> "${OUTPUT_FILE}.stderr.log"
+    RC=1
+  fi
   if [[ "$RC" -eq 0 ]]; then
     if ! python3 - "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp" <<'PY'
 import json
