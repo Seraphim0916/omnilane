@@ -6,6 +6,21 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-09-03
+
+### Changed
+
+- `hard-judgment`'s Claude slot swaps from Fable 5.1 (xhigh) to Opus 5
+  (xhigh): Opus returns 97.7% of Fable's agentic score (58.4 vs 59.8) at 68%
+  of the cost ($1.801 vs $2.651/task) with a lower hallucination rate (.60 vs
+  .71).
+- A fallback-depth pass gives every active lane (`arbitrate` intentionally
+  excluded) at least three vendor candidates: `hardest-coding`,
+  `taste-final`, `ui-draft`, `fast-agentic`, and `live-search` each gain new
+  fallbacks; `live-search`'s added Gemini and Claude candidates use their own
+  web-search tools, not Grok's native X/web surface, so treat them as
+  best-effort only when Grok's CLI is unavailable.
+
 ## [0.33.0] - 2026-09-03
 
 ### Added
@@ -756,7 +771,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/Seraphim0916/omnilane/compare/v0.31.0...v0.32.0

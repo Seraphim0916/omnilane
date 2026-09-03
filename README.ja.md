@@ -112,16 +112,16 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
 | 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
 | 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.6 | — (`off`) | リアルタイム X／Web 検索とソーシャル文脈 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | リアルタイム X／Web 検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | `off`（オプトイン） | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
@@ -155,12 +155,12 @@ flowchart LR
 なので追加コールなし)、どれを**ディスパッチ**するか。CLI の `omnilane` スキルが
 該当行を自動適用します。これはその人間向けビューです。
 
-- **Claude Code · Fable 5.1**——自分で実行：hard-judgment、taste-final、hardest-coding。ディスパッチ：bulk → Codex Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Claude Code · Opus 5**——低いハルシネーション率や価格を優先するときは hard-judgment と taste-final を自分で実行。最難関コーディング → Fable 5.1 または Sol、bulk → Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Claude Code · Fable 5.1**——自分で実行：taste-final、hardest-coding。ディスパッチ：hard-judgment → Opus 5、bulk → Codex Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
+- **Claude Code · Opus 5**——自分で実行：hard-judgment(これがデフォルトのレーン)。低いハルシネーション率や価格を優先するときはローカル override で taste-final も担当。最難関コーディング → Fable 5.1 または Sol、bulk → Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
 - **Codex · Sol**——自分で実行：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。ディスパッチ：taste-final → Claude、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
 - **Codex · Terra**——long-context の Codex フォールバックを自分で実行。bulk-mechanical のデフォルトは Sol high に移動。最難関は Sol xhigh、taste → Claude、高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Grok Build · Grok 4.6**——live-search と coding-overflow を自分で実行。難しいコーディング／判断／文章は Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
-- **Antigravity · Gemini 3.7 Flash**——Medium の long-context／高速ループ、High の bulk／overflow、Low の triage を自分で実行。最難関のコーディング／判断／文章は Codex、Claude、live-search は Grok へ。
+- **Grok Build · Grok 4.6**——live-search と coding-overflow を自分で実行し、hardest-coding・hard-judgment・taste-final のフォールバックも兼任。第一候補が使えるときは難しいコーディング／判断／文章を Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
+- **Antigravity · Gemini 3.7 Flash**——Medium の long-context／高速ループ、High の bulk／overflow、Low の triage を自分で実行し、High で hardest-coding・taste-final・ui-draft・live-search のフォールバックも兼任。第一候補が使えるときは最難関のコーディング／判断／文章を Codex、Claude へ。
 
 </details>
 
@@ -437,9 +437,12 @@ advise 専用で、ファイルを編集しません。
 
 <br/>
 
-Fable 5.1 は現在 `hardest-coding`、`hard-judgment`、`taste-final` の
-第一候補です。同じ xhigh では知能、agentic 作業、コーディングで Opus 5 を
-上回ります。Sol max は、はるかに安価な別ベンダーの判断用フォールバックです。
+Fable 5.1 は現在 `hardest-coding`、`taste-final` の第一候補です。同じ xhigh
+では知能、agentic 作業、コーディングで Opus 5 を上回ります。Sol max は、
+はるかに安価な別ベンダーの判断用フォールバックです。`hard-judgment` 自体は
+現在 Opus 5 xhigh がデフォルトです:Fable の agentic スコアの 97.7% を
+コスト 68% で達成し、ハルシネーション率も低いため、このレーン自身の
+コスト基準では安い方が勝ちます。
 
 | 評価（AA、2026-09-02 取得） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
 |---|---:|---:|---:|
@@ -451,12 +454,12 @@ Fable 5.1 は現在 `hardest-coding`、`hard-judgment`、`taste-final` の
 
 Fable 5.1 は bulk と triage のデフォルトではありません。トークン単価が
 Opus 5 の 2 倍で、Claude Code のサブスクリプションクォータも 1 ターン当たり
-最も多く消費するためです。Opus 5 は低ハルシネーション・低価格の Claude
-選択肢として medium で `long-context` に残り、次の
-`~/.omnilane/routing.local.yaml` で任意のレーンへ戻せます。
+最も多く消費するためです。Opus 5 は現在 `hard-judgment` のデフォルトを担い、
+medium で `long-context` にも残り、`~/.omnilane/routing.local.yaml` で
+任意のレーンへいつでも戻せます——例えば Fable を呼び戻すには:
 
 ```yaml
-hard-judgment: claude claude-opus-5 xhigh
+hard-judgment: claude claude-fable-5-1 xhigh
 ```
 
 </details>

@@ -110,16 +110,16 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
 | 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
 | 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.6 | — (`off`) | 실시간 X／웹 검색과 소셜 맥락 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 실시간 X／웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | `off`(옵트인) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
@@ -153,12 +153,12 @@ flowchart LR
 추가 호출 없음)와 **디스패치**하는지입니다. CLI 의 `omnilane` 스킬이 해당
 행을 자동 적용하며, 이것은 사람이 보는 버전입니다.
 
-- **Claude Code · Fable 5.1**——직접 실행: hard-judgment, taste-final, hardest-coding. 디스패치: bulk → Codex Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
-- **Claude Code · Opus 5**——더 낮은 환각률이나 가격이 중요할 때 hard-judgment 와 taste-final 을 직접 실행. 최고난도 코딩 → Fable 5.1 또는 Sol, bulk → Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Claude Code · Fable 5.1**——직접 실행: taste-final, hardest-coding. 디스패치: hard-judgment → Opus 5, bulk → Codex Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
+- **Claude Code · Opus 5**——직접 실행: hard-judgment(기본 레인). 더 낮은 환각률이나 가격이 중요할 때는 로컬 오버라이드로 taste-final 도 맡을 수 있습니다. 최고난도 코딩 → Fable 5.1 또는 Sol, bulk → Sol high, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
 - **Codex · Sol**——직접 실행: hardest-coding, bulk-mechanical, hard-judgment, ui-draft. 디스패치: taste-final → Claude, long-context／빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
 - **Codex · Terra**——long-context 의 Codex 폴백을 직접 실행. bulk-mechanical 기본값은 Sol high 로 이동했습니다. 최고난도는 Sol xhigh, taste → Claude, 빠른 루프 → Gemini 3.7 Flash, live-search → Grok.
-- **Grok Build · Grok 4.6**——live-search 와 coding-overflow 를 직접 실행. 어려운 코딩／판단／문장은 Codex, Claude, Gemini 로 보내고 API 시그니처와 인용 사실을 검증합니다.
-- **Antigravity · Gemini 3.7 Flash**——Medium 의 long-context／빠른 루프, High 의 bulk／overflow, Low 의 triage 를 직접 실행. 최고난도 코딩／판단／문장은 Codex, Claude 로, live-search 는 Grok 으로 보냅니다.
+- **Grok Build · Grok 4.6**——live-search 와 coding-overflow 를 직접 실행하며, hardest-coding, hard-judgment, taste-final 의 폴백도 겸합니다. 1순위 후보를 쓸 수 있으면 어려운 코딩／판단／문장은 Codex, Claude, Gemini 로 보내고 API 시그니처와 인용 사실을 검증합니다.
+- **Antigravity · Gemini 3.7 Flash**——Medium 의 long-context／빠른 루프, High 의 bulk／overflow, Low 의 triage 를 직접 실행하며, High 로 hardest-coding, taste-final, ui-draft, live-search 의 폴백도 겸합니다. 1순위 후보를 쓸 수 있으면 최고난도 코딩／판단／문장은 Codex, Claude 로 보냅니다.
 
 </details>
 
@@ -423,9 +423,12 @@ Codex 중심, Codex 없음)이 들어 있습니다.
 
 <br/>
 
-Fable 5.1 은 이제 `hardest-coding`, `hard-judgment`, `taste-final`의
-1순위입니다. 같은 xhigh 에서 지능, agentic 작업, 코딩 모두 Opus 5 를
-앞섭니다. Sol max 는 훨씬 저렴한 타 벤더 판단 폴백으로 남습니다.
+Fable 5.1 은 이제 `hardest-coding`, `taste-final`의 1순위입니다. 같은
+xhigh 에서 지능, agentic 작업, 코딩 모두 Opus 5 를 앞섭니다. Sol max 는
+훨씬 저렴한 타 벤더 판단 폴백으로 남습니다. `hard-judgment` 자체는 이제
+Opus 5 xhigh 가 기본값입니다: Fable 의 agentic 점수 97.7%를 비용 68%에
+얻으면서 환각률도 더 낮아, 이 레인 고유의 비용 기준으로는 더 저렴한
+구성이 승리합니다.
 
 | 평가(AA, 2026-09-02 수집) | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
 |---|---:|---:|---:|
@@ -437,12 +440,12 @@ Fable 5.1 은 이제 `hardest-coding`, `hard-judgment`, `taste-final`의
 
 Fable 5.1 은 bulk 나 triage 기본값이 아닙니다. 토큰 가격이 Opus 5 의
 2배이고 Claude Code 구독 쿼터도 턴당 가장 많이 소비하기 때문입니다.
-Opus 5 는 더 낮은 환각률과 가격의 Claude 선택지로 medium
-`long-context`에 남으며, 다음 `~/.omnilane/routing.local.yaml` 설정으로
-어느 레인에든 다시 넣을 수 있습니다.
+Opus 5 는 이제 `hard-judgment`의 기본값이며 medium 으로 `long-context`에도
+남아 있고, `~/.omnilane/routing.local.yaml` 설정으로 어느 레인에든
+언제든 다시 넣을 수 있습니다 — 예를 들어 Fable 을 되돌리려면:
 
 ```yaml
-hard-judgment: claude claude-opus-5 xhigh
+hard-judgment: claude claude-fable-5-1 xhigh
 ```
 
 </details>

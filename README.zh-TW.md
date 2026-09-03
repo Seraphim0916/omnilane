@@ -103,16 +103,16 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 最難的實作、深度除錯、正確性攸關的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 重構、搬遷、測試、大面積掃描——機械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) | 對外文字、提示詞／文件潤飾、風格裁決 |
+| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 架構裁決、深度推理、第二意見 |
+| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | 對外文字、提示詞／文件潤飾、風格裁決 |
 | 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) | 只有在附設計系統／參考圖時才做 UI 草稿 |
+| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | 只有在附設計系統／參考圖時才做 UI 草稿 |
 | 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文件擷取與整合，依 AA-LCR、成本與吞吐排序 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) | 高速多步驟工具迴圈、多模態檢查 |
-| 📡 live-search | Grok 4.6 | — (`off`) | 即時 X／網頁搜尋與社群脈絡 |
+| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速多步驟工具迴圈、多模態檢查 |
+| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 即時 X／網頁搜尋與社群脈絡 |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 額度用完時的中量級編碼安全閥 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 
@@ -140,12 +140,12 @@ flowchart LR
 你哪些通道**自己做**(你本來就是那個模型,省一次呼叫)、哪些**派出去**。你 CLI 裡
 的 `omnilane` 技能會自動套對的那一列,這裡是給人看的版本。
 
-- **Claude Code · Fable 5.1**——自己做：hard-judgment、taste-final、hardest-coding。派出去：bulk → Codex Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
-- **Claude Code · Opus 5**——需要較低幻覺率或價格時，自己做 hard-judgment、taste-final。最難編碼 → Fable 5.1 或 Sol；bulk → Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
+- **Claude Code · Fable 5.1**——自己做：taste-final、hardest-coding。派出去：hard-judgment → Opus 5；bulk → Codex Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
+- **Claude Code · Opus 5**——自己做：hard-judgment,這是它的預設車道。需要較低幻覺率或價格時,用本機覆寫讓它接手 taste-final。最難編碼 → Fable 5.1 或 Sol；bulk → Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
 - **Codex · Sol**——自己做：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。派出去：taste-final → Claude；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
 - **Codex · Terra**——自己做 long-context 的 Codex 備援；bulk-mechanical 已改由 Sol high 預設處理。最難處升級 Sol xhigh，taste → Claude，高速迴圈 → Gemini 3.7 Flash，即時搜尋 → Grok。
-- **Grok Build · Grok 4.6**——自己做 live-search、coding-overflow。最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
-- **Antigravity · Gemini 3.7 Flash**——自己做：Medium 的 long-context／高速迴圈、High 的 bulk／overflow、Low 的 triage。最難編碼／判斷／文字交給 Codex、Claude；即時搜尋 → Grok。
+- **Grok Build · Grok 4.6**——自己做 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
+- **Antigravity · Gemini 3.7 Flash**——自己做：Medium 的 long-context／高速迴圈、High 的 bulk／overflow、Low 的 triage，並以 High 兼任 hardest-coding、taste-final、ui-draft、live-search 的備援。首選人手在的話，最難編碼／判斷／文字交給 Codex、Claude。
 
 </details>
 
@@ -430,9 +430,11 @@ omnilane goal close "$GOAL_ID" --summary "結帳整合已穩定"
 
 <br/>
 
-Fable 5.1 現在領頭 `hardest-coding`、`hard-judgment`、`taste-final`。
-同為 xhigh 時，它在智慧、代理式工作與編碼都領先 Opus 5；Sol max 則保留為
-便宜許多的跨廠商判斷備援。
+Fable 5.1 現在領頭 `hardest-coding`、`taste-final`。同為 xhigh 時，它在智慧、
+代理式工作與編碼都領先 Opus 5；Sol max 則保留為便宜許多的跨廠商判斷備援。
+`hard-judgment` 本身現在改以 Opus 5 xhigh 為預設：它能拿到 Fable 代理式分數
+的 97.7%，成本卻只要 68%，幻覺率也更低——依這條車道自己的每成本準則，較
+便宜的組態勝出。
 
 | 評測（AA，擷取於 2026-09-02） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
 |---|---:|---:|---:|
@@ -443,12 +445,12 @@ Fable 5.1 現在領頭 `hardest-coding`、`hard-judgment`、`taste-final`。
 | AA 每任務成本 | $2.65 | $1.80 | **$0.95** |
 
 Fable 5.1 沒進 bulk 或 triage：每 token 價格是 Opus 5 的兩倍，而且每回合
-消耗最多 Claude Code 訂閱額度。Opus 5 仍是較低幻覺率、較低價格的 Claude
-選項，並以 medium 留在 `long-context`；也能透過
-`~/.omnilane/routing.local.yaml` 放回任何通道：
+消耗最多 Claude Code 訂閱額度。Opus 5 現在預設領頭 `hard-judgment`，並以
+medium 留在 `long-context`；也能透過 `~/.omnilane/routing.local.yaml`
+放回任何通道——例如把 Fable 換回來：
 
 ```yaml
-hard-judgment: claude claude-opus-5 xhigh
+hard-judgment: claude claude-fable-5-1 xhigh
 ```
 
 </details>
