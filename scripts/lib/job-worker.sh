@@ -57,12 +57,28 @@ LIVE_REQUIRED="${OMNILANE_LIVE_REQUIRED:-0}"
   echo "omnilane: invalid worker live requirement" >&2; exit 2
 }
 if [[ "$SESSION_MODE" == "auto" ]]; then
-  if live_vendor_capable "$VENDOR"; then SESSION_MODE="live"; else SESSION_MODE="single-shot"; fi
+  if [[ "$VENDOR" == "codex" ]]; then
+    SESSION_MODE="single-shot"
+  elif live_vendor_capable "$VENDOR"; then
+    SESSION_MODE="live"
+  else
+    SESSION_MODE="single-shot"
+  fi
+fi
+
+CODEX_LIVE_FALLBACK=0
+if [[ "$VENDOR" == "codex" && "$SESSION_MODE" != "single-shot" ]]; then
+  if ! codex_live_surface_available "${CODEX_BIN:-codex}"; then
+    SESSION_MODE="single-shot"
+    CODEX_LIVE_FALLBACK=1
+  fi
 fi
 
 if [[ "$SESSION_MODE" == "single-shot" ]]; then
   set +e
-  if live_vendor_capable "$VENDOR"; then
+  if [[ "$CODEX_LIVE_FALLBACK" -eq 1 ]]; then
+    run_single_shot "omnilane: codex live surface unavailable; ran in single-shot mode"
+  elif live_vendor_capable "$VENDOR"; then
     run_single_shot "omnilane: vendor '$VENDOR' was resolved to single-shot mode"
   else
     run_single_shot "omnilane: vendor '$VENDOR' is not live-capable; ran in single-shot mode"
@@ -176,7 +192,15 @@ if ! printf '%s\n' "$initial_payload" >&3; then close_requested=1; fi
 
 last_activity=$SECONDS
 while kill -0 "$runner_pid" 2>/dev/null; do
-  [[ "$close_requested" -eq 0 ]] || break
+  if [[ "$close_requested" -ne 0 ]]; then
+    if [[ "$VENDOR" == "codex" ]]; then
+      while IFS= read -r -t 0.1 incoming <&4; do
+        if ! printf '%s\n' "$incoming" >&3; then break; fi
+        last_activity=$SECONDS
+      done
+    fi
+    break
+  fi
   incoming=""
   if IFS= read -r -t 1 incoming <&4; then
     if ! printf '%s\n' "$incoming" >&3; then close_requested=1; fi
@@ -198,7 +222,7 @@ if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
 if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 
 set +e
-if [[ "$close_requested" -eq 1 ]]; then
+if [[ "$close_requested" -eq 1 && "$VENDOR" != "codex" ]]; then
   kill -TERM "$runner_pid" 2>/dev/null || true
 fi
 wait "$runner_pid" 2>/dev/null

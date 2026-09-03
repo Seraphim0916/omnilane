@@ -6,10 +6,13 @@ unset OMNILANE_JOB_SUPERVISED OMNILANE_IDLE_TIMEOUT
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CASE="${1:-}"
-TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-live-tests.XXXXXX")"
+TEST_BASE="$ROOT/.test-scratch"
+mkdir -p "$TEST_BASE"
+TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-tests.XXXXXX")"
 
 cleanup() {
   /bin/rm -rf -- "$TEST_ROOT"
+  rmdir "$TEST_BASE" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -62,19 +65,192 @@ EOF
 case_live_fail_fast() {
   local home="$TEST_ROOT/fail-fast" bin="$TEST_ROOT/fail-fast/bin" out rc=0
   mkdir -p "$home" "$bin"
-  cat > "$bin/codex" <<'EOF'
+  cat > "$bin/grok" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
-  chmod +x "$bin/codex"
-  printf 'triage: codex codex-default low\n' > "$home/routing.local.yaml"
-  out="$(OMNILANE_HOME="$home" CODEX_BIN="$bin/codex" \
-    "$ROOT/scripts/dispatch.sh" --dry-run --live --background --vendor codex \
+  chmod +x "$bin/grok"
+  printf 'triage: grok grok-default low\n' > "$home/routing.local.yaml"
+  out="$(OMNILANE_HOME="$home" GROK_BIN="$bin/grok" \
+    "$ROOT/scripts/dispatch.sh" --dry-run --live --background --vendor grok \
       triage x 2>&1)" || rc=$?
   [[ "$rc" -ne 0 ]] || fail "--live silently accepted non-capable vendor"
-  [[ "$out" == *"claude"* && "$out" == *"gemini"* ]] ||
+  [[ "$out" == *"claude"* && "$out" == *"gemini"* && "$out" == *"codex"* ]] ||
     fail "--live error did not name live-capable vendors: $out"
   [[ ! -e "$home/jobs" ]] || fail "fail-fast created job state"
+}
+
+make_codex() {
+  local path="$1"
+  cat > "$path" <<'PY'
+#!/usr/bin/env python3
+import json
+import os
+import pathlib
+import sys
+
+
+def emit(value):
+    print(json.dumps(value, ensure_ascii=False, separators=(",", ":")), flush=True)
+
+
+if len(sys.argv) >= 2 and sys.argv[1] == "app-server":
+    counter_path = pathlib.Path(os.environ["FAKE_CODEX_COUNTER"])
+    try:
+        invocation = int(counter_path.read_text(encoding="utf-8")) + 1
+    except (FileNotFoundError, ValueError):
+        invocation = 1
+    counter_path.write_text(str(invocation), encoding="utf-8")
+    input_path = pathlib.Path(os.environ["FAKE_CODEX_INPUT"])
+    if invocation == 1:
+        input_path = input_path.with_name(input_path.name + ".probe")
+
+    thread_id = "thread-live-1"
+    turn_id = "turn-live-1"
+    for raw in sys.stdin:
+        with input_path.open("a", encoding="utf-8") as captured:
+            captured.write(raw)
+        request = json.loads(raw)
+        method = request.get("method")
+        request_id = request.get("id")
+        if method == "initialize":
+            emit({"id": request_id, "result": {"userAgent": "fake", "codexHome": "/fake"}})
+        elif method == "thread/start":
+            emit({"id": request_id, "result": {"thread": {
+                "id": thread_id,
+                "sessionId": "session-live-1",
+                "model": request["params"]["model"],
+                "status": {"type": "idle"},
+            }}})
+        elif method == "turn/start":
+            emit({"id": request_id, "result": {"turn": {"id": turn_id, "status": "inProgress"}}})
+            prompt = request["params"]["input"][0]["text"]
+            emit({"method": "item/completed", "params": {
+                "item": {"type": "userMessage", "content": [{"type": "text", "text": prompt}]},
+                "threadId": thread_id,
+                "turnId": turn_id,
+            }})
+            emit({"method": "item/completed", "params": {
+                "item": {"type": "agentMessage", "text": "initial agent text"},
+                "threadId": thread_id,
+                "turnId": turn_id,
+            }})
+        elif method == "turn/steer":
+            emit({"id": request_id, "result": {"turnId": turn_id}})
+            emit({"method": "item/completed", "params": {
+                "item": {"type": "agentMessage", "text": os.environ["FAKE_CODEX_REPLY"]},
+                "threadId": thread_id,
+                "turnId": turn_id,
+            }})
+            emit({"method": "turn/completed", "params": {
+                "threadId": thread_id,
+                "turn": {"id": turn_id, "status": "completed", "error": None},
+            }})
+    raise SystemExit(0)
+
+if len(sys.argv) >= 2 and sys.argv[1] == "exec":
+    output_path = pathlib.Path(sys.argv[sys.argv.index("-o") + 1])
+    output_path.write_text("codex single-shot fallback\n", encoding="utf-8")
+    print('{"type":"thread.started","thread_id":"fallback-thread"}')
+    raise SystemExit(0)
+
+raise SystemExit(2)
+PY
+  chmod +x "$path"
+}
+
+case_codex_live_rpc() {
+  local home="$TEST_ROOT/codex-live" bin="$TEST_ROOT/codex-live/bin"
+  local fake="$bin/codex" input="$home/codex.input" counter="$home/codex.counter"
+  local reply job job_dir close_out
+  mkdir -p "$home" "$bin"
+  make_codex "$fake"
+  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  printf -v reply 'path\to "x" 測試'
+
+  job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
+    FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$counter" FAKE_CODEX_REPLY="$reply" \
+    "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
+    --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    triage 'initial prompt echo marker')"
+  job_dir="$home/jobs/$job"
+  wait_for_file "$job_dir/inbox.ready" || fail "Codex live mailbox did not become ready"
+  wait_for_lines "$job_dir/out.txt" 1 || fail "Codex agentMessage was not written incrementally"
+  grep -Fxq 'initial agent text' "$job_dir/out.txt" || fail "Codex initial agentMessage missing"
+  ! grep -Fq 'initial prompt echo marker' "$job_dir/out.txt" || fail "Codex userMessage echo leaked into output"
+
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "$reply" >/dev/null
+  wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered agentMessage did not reach output"
+  grep -Fxq "$reply" "$job_dir/out.txt" || fail "Codex steered reply was not preserved verbatim"
+
+  INPUT="$input" ROOT="$ROOT" REPLY="$reply" python3 - <<'PY' || fail "Codex JSON-RPC request sequence mismatch"
+import json
+import os
+import pathlib
+
+requests = [
+    json.loads(line)
+    for line in pathlib.Path(os.environ["INPUT"]).read_text(encoding="utf-8").splitlines()
+]
+assert [item["method"] for item in requests[:4]] == [
+    "initialize", "thread/start", "turn/start", "turn/steer",
+]
+thread = requests[1]["params"]
+assert thread["cwd"] == os.environ["ROOT"]
+assert thread["model"] == "gpt-5.6-luna"
+assert thread["sandbox"] == "read-only"
+turn = requests[2]["params"]
+assert turn["threadId"] == "thread-live-1"
+assert turn["effort"] == "medium"
+assert turn["input"] == [{"type": "text", "text": "initial prompt echo marker"}]
+steer = requests[3]["params"]
+assert steer["threadId"] == "thread-live-1"
+assert steer["expectedTurnId"] == "turn-live-1"
+assert steer["input"] == [{"type": "text", "text": os.environ["REPLY"]}]
+PY
+  grep -Fxq 'thread-live-1' "$job_dir/out.txt.session-id" || fail "Codex thread id was not recorded"
+
+  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+    fail "Codex live close failed: $close_out"
+  [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex live job did not exit zero"
+}
+
+case_codex_live_fallback() {
+  local home="$TEST_ROOT/codex-fallback" bin="$TEST_ROOT/codex-fallback/bin"
+  local fake="$bin/codex" job job_dir doctor_out
+  mkdir -p "$home" "$bin"
+  cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "app-server" ]]; then
+  IFS= read -r _ || true
+  printf '{"id":1,"error":{"message":"app-server unavailable"}}\n'
+  exit 1
+fi
+output=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "-o" ]]; then output="$2"; shift 2; else shift; fi
+done
+printf 'codex single-shot fallback\n' > "$output"
+printf '{"type":"thread.started","thread_id":"fallback-thread"}\n'
+EOF
+  chmod +x "$fake"
+  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+
+  job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
+    "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
+    --workdir "$ROOT" --vendor codex triage fallback)"
+  job_dir="$home/jobs/$job"
+  wait_for_file "$job_dir/exit" || fail "Codex live fallback job did not finish"
+  [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex live fallback failed"
+  grep -Fxq 'codex single-shot fallback' "$job_dir/out.txt" || fail "Codex fallback did not run single-shot"
+  grep -Fq 'live surface unavailable' "$job_dir/mode-notice.txt" || fail "Codex fallback notice missing"
+
+  doctor_out="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" "$ROOT/scripts/doctor.sh" 2>&1 || true)"
+  [[ "$doctor_out" == *"codex-live"* && "$doctor_out" == *"upgrade codex"* ]] ||
+    fail "doctor did not explain failed Codex live handshake: $doctor_out"
+  [[ "$doctor_out" == *"live-unavailable"*"codex"* ]] ||
+    fail "doctor did not classify Codex live surface unavailable: $doctor_out"
 }
 
 case_single_shot_claude() {
@@ -258,8 +434,12 @@ case "$CASE" in
     printf 'ok - Gemini live mailbox uses agy schema\n'
     bash "$0" json-escape
     printf 'ok - live prompt JSON escaping round-trips exact text\n'
-    bash "$0" jobs-send-json-escape
-    printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
+  bash "$0" jobs-send-json-escape
+  printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
+  bash "$0" codex-live-rpc
+  printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
+  bash "$0" codex-live-fallback
+  printf 'ok - Codex failed handshake degrades to single-shot\n'
     ;;
   live-fail-fast) case_live_fail_fast ;;
   single-shot-claude) case_single_shot_claude ;;
@@ -267,5 +447,7 @@ case "$CASE" in
   gemini-schema) case_gemini_schema ;;
   json-escape) case_json_escape_round_trip ;;
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
+  codex-live-rpc) case_codex_live_rpc ;;
+  codex-live-fallback) case_codex_live_fallback ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac

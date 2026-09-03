@@ -15,11 +15,35 @@ done
 unset inherited_timeout inherited_job_timeout
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-tests.XXXXXX")"
+TEST_BASE="$ROOT/.test-scratch"
+mkdir -p "$TEST_BASE"
+TEST_EXCLUDES="$TEST_BASE/git-excludes"
+printf '/.test-scratch/\n' > "$TEST_EXCLUDES"
+TEST_BIN="$TEST_BASE/bin"
+REAL_GIT="$(command -v git)"
+mkdir -p "$TEST_BIN"
+cat > "$TEST_BIN/git" <<EOF
+#!/bin/sh
+export GIT_CEILING_DIRECTORIES='$TEST_BASE'
+exec '$REAL_GIT' "\$@"
+EOF
+chmod +x "$TEST_BIN/git"
+export PATH="$TEST_BIN:$PATH"
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=core.excludesFile
+export GIT_CONFIG_VALUE_0="$TEST_EXCLUDES"
+export GIT_CEILING_DIRECTORIES="$TEST_BASE${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
+TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-tests.XXXXXX")"
 PASS=0
 FAIL=0
 
-cleanup_test_root() { /bin/rm -rf -- "$TEST_ROOT"; }
+cleanup_test_root() {
+  /bin/rm -rf -- "$TEST_ROOT"
+  rm "$TEST_BIN/git" 2>/dev/null || true
+  rmdir "$TEST_BIN" 2>/dev/null || true
+  rm "$TEST_EXCLUDES" 2>/dev/null || true
+  rmdir "$TEST_BASE" 2>/dev/null || true
+}
 trap cleanup_test_root EXIT
 
 pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
@@ -4138,6 +4162,8 @@ test_live_mailbox_case live-fail-fast "live mode rejects non-capable vendor"
 test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-shot"
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
 test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
+test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
+test_live_mailbox_case codex-live-fallback "Codex failed handshake degrades to single-shot"
 
 test_goal_loop_case() {
   local test_case="$1" name="$2" out rc=0
