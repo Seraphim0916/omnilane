@@ -61,7 +61,7 @@ _omnilane() {
       lanes=("${(@f)$(_omnilane_lanes)}")
       _arguments \
          '--background[run in background]' \
-         '--thread[continue named Claude thread]:name:' \
+         '--thread[continue named claude/codex/grok/gemini thread]:name:' \
         '--dry-run[resolve and print the plan without side effects]' \
         '--mode[execution mode]:mode:(advise work)' \
         '--workdir[target directory]:directory:_directories' \

@@ -6,30 +6,36 @@ semantic version tags.
 
 ## [Unreleased]
 
-### Changed
-
-- The skill routing reminder and the persistent hook text now dispatch every task by default, withdrawing the read-only-verification and one-line-fix self-execute exceptions and naming the reserved commander actions (planning, task briefs, reading worker output, acceptance, replies to the operator, git commit/push, governance-file edits).
-
-## [0.33.0] - 2026-09-02
+## [0.33.0] - 2026-09-03
 
 ### Added
 
-- `dispatch.sh --thread NAME` continues a named Claude conversation with
-  vendor-native `--session-id` on turn one and `--resume` afterward. Thread
+- `dispatch.sh --thread NAME` continues named Claude, Codex, Grok, and Gemini
+  conversations through each vendor's native session/resume primitive. Thread
   state is written atomically under the private `$OMNILANE_HOME/threads/`
-  store and pins vendor, model, effort, and physical workdir.
+  store and pins vendor, model, effort, and physical workdir; direct-API
+  vendors and `exec` refuse threading visibly.
 - `jobs.sh threads`, `threads show NAME`, and `threads rm NAME` list, inspect,
   and remove local thread state without deleting the vendor session.
 - Threaded jobs record `thread` and `thread_turn` in `meta.json` and completion
   inbox records; completion notices include `thread=NAME turn=N`.
-- Threading is Claude-only in this release. Codex, grok, gemini, direct-API
-  vendors, `--live`, and pinned-value mismatches stop with visible exit-2
-  notices rather than silently starting a fresh conversation.
-- The required 2026-09-02 two-directory Claude `--resume` re-probes reached the
-  real CLI, but turn one first failed with `FailedToOpenSocket` and an
-  artifacted repeat hit its 180-second watchdog (rc 142); directory B and A
-  then returned `No conversation found`. Directory scope was not proven, so
-  workdir remains pinned and the runtime acceptance is partial.
+- Three-turn live probes verified memory continuity for all four vendors and
+  verified cross-directory resume: Claude (`--session-id`/`--resume`), Codex
+  (`thread_id`/`exec resume`), Grok (`--session-id`/`--resume`), and Gemini
+  (`conversation_id`/`--conversation`). Workdir remains pinned because changing
+  trees mid-conversation is still an operator error worth catching.
+
+### Changed
+
+- The skill routing reminder and the persistent hook text now dispatch every task by default, withdrawing the read-only-verification and one-line-fix self-execute exceptions and naming the reserved commander actions (planning, task briefs, reading worker output, acceptance, replies to the operator, git commit/push, governance-file edits).
+
+### Fixed
+
+- A shared JSON escaper now fixes backslash handling for live prompts,
+  `jobs.sh send`, and completion inbox records; the standalone doctor,
+  provider-probe, and release-audit output paths use the same corrected behavior.
+  Backslashes, quotes, control characters, and multibyte text round-trip as valid
+  JSON everywhere.
 
 ## [0.32.1] - 2026-09-02
 

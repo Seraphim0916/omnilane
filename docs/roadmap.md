@@ -1,13 +1,13 @@
 # Omnilane Roadmap — Conversational Dispatch
 
-Status: R1 implemented for claude in 0.33.0; codex, grok and gemini refuse `--thread` pending verification of their resume primitives. R2 shipped in 0.20.0/0.21.0.
+Status: R1 implemented for claude, codex, grok and gemini in 0.33.0; direct-API vendors refuse `--thread`. R2 shipped in 0.20.0/0.21.0.
 
 ## 摘要（繁中）
 
 - **R1 續談派工**：同一個 thread 可以續談，第二次派工只送新提示，不重送整份脈絡。
 - **R2 活體信箱**：job 執行中可以收控制端訊息、同時把進度串流出來，不必砍掉重跑。這是省 token 的那一項——中途修正只花一句話。
-- **證據狀態**：claude 兩項都已在本機實測通過；codex / grok / gemini 只查了 `--help`，行為未實測；kimi / qwen / opencode 本機未安裝，完全未驗；六家 openai-compat 走無狀態 HTTP，結構上沒有 session。
-- **下一步**：先寫 R2（claude）任務書派工，R1 claude 段同批；codex / grok / gemini 要先補實測才排。
+- **證據狀態**：claude、codex、grok、gemini 都已完成三輪續談與跨目錄恢復實測；六家 openai-compat 維持無狀態 HTTP，不支援 thread。
+- **目前狀態**：R1 與 R2 均已交付；thread 仍固定實體工作目錄，避免續談時誤切到不同工作樹。
 
 ---
 
@@ -31,9 +31,9 @@ checked.
 | Vendor | Continuation primitives | Mid-run input | Evidence |
 |---|---|---|---|
 | claude | `--session-id <uuid>`, `-r/--resume`, `--fork-session`, `--no-session-persistence` | stdin NDJSON via `-p --input-format stream-json --output-format stream-json --verbose` | **VERIFIED** (below) |
-| codex | `exec resume <id>` / `exec resume --last`, `exec fork`, interactive `-c/--continue`, `-s/--session-id`, `--restore-code`; servers: `mcp-server`, `app-server`, `exec-server`, `agents`, `remote-control` | unknown; `app-server`/`exec-server` are the candidate surface | HELP-ONLY |
-| grok | session `list`/`search`/`delete`; `agent leader` shares one backend across multiple clients; `stdio`/`headless`/`serve` | unknown; `leader` is the candidate surface | HELP-ONLY |
-| gemini (agy) | `-c/--continue`, `--conversation <id>`, `--prompt-interactive` | unknown | HELP-ONLY |
+| codex | first JSON event `thread_id`; `exec resume <id>` | unknown; `app-server`/`exec-server` are the candidate surface | **VERIFIED**: three turns and cross-directory resume |
+| grok | `--session-id <uuid>`, `--resume <uuid>` | unknown; `leader` is the candidate surface | **VERIFIED**: three turns and cross-directory resume |
+| gemini (agy) | JSON `conversation_id`; `--conversation <id>` | unknown | **VERIFIED**: three turns and cross-directory resume |
 | kimi / qwen / opencode | — | — | UNVERIFIED: CLI not installed on this host |
 | cerebras / deepseek / groq / mistral / openrouter / zai | none — stateless HTTP | none | **VERIFIED**: `run-openai-compat.sh:58` posts a single `{"role":"user"}` message per call; continuation can only be client-side replay |
 | exec | caller-defined | caller-defined | N/A |
@@ -45,19 +45,19 @@ Two facts worth carrying forward:
 - `run-codex.sh` already extracts `thread_id` from the first progress event and
   locates `rollout-*-<thread_id>.jsonl`. Half of R1's codex plumbing exists.
 
-### Verified claude evidence
+### Verified continuation evidence
 
 Continuation across two separate processes: `claude -p --session-id <uuid>` was
 told a passphrase; a second process with `claude -p --resume <same-uuid>`
 recalled it.
 
-2026-09-02 two-directory re-probes: the required turn 1 in directory A reached
-the real Claude CLI but first failed with `FailedToOpenSocket`; an artifacted
-repeat hit its 180-second watchdog (rc 142). The directory B and directory A
-resume attempts then returned `No conversation found` in both runs. These runs
-did not establish whether `--resume` is directory-scoped. R1 pins the physical
-workdir regardless, and the failed probe output remains acceptance evidence
-rather than being reported as a pass.
+2026-09-03 three-turn probes verified native resume and turn-1 fact recall for
+all four vendors, including resume from a different directory: Claude session
+`06be0d24-d35e-47da-927c-74ff326f6bee` resumed from `probe-claude-a` in
+`probe-claude-b`; Codex used `thread_id`/`exec resume`; Grok used
+`--session-id`/`--resume`; Gemini used `conversation_id`/`--conversation`.
+None of the four scoped the session to the working directory. R1 still pins the
+physical workdir to catch accidental edits in a different tree.
 
 Mid-run injection, one process, second message written **after** turn 1 had
 already been answered: `docs/experiments/live-inbox-probe.sh` printed
@@ -99,9 +99,9 @@ Design constraints:
   continuing a conversation while every turn restarts from zero burns tokens and
   cannot tell why the correction had no effect.
 
-Release 0.33.0 supports claude only. Codex, grok, gemini, and direct-API
-vendors return visible exit-2 refusals; later vendors wait for exercised resume
-primitives rather than help-only claims.
+Release 0.33.0 supports claude, codex, grok and gemini. Direct-API vendors
+and `exec` return visible exit-2 refusals; `--live` plus `--thread` remains
+refused because vendor-native thread continuation is a single-shot flow.
 
 ## R2 — Live mailbox
 

@@ -175,10 +175,97 @@ PY
     fail "Gemini live mode missing from metadata"
 }
 
+case_json_escape_round_trip() {
+  local home="$TEST_ROOT/json-escape" bin="$TEST_ROOT/json-escape/bin"
+  local fake="$bin/claude" args="$home/claude.args" input="$home/claude.input"
+  local expected="$home/expected" decoded="$home/decoded"
+  local job job_dir close_out prompt
+
+  mkdir -p "$home" "$bin"
+  make_claude "$fake"
+  printf 'triage: claude claude-default high\n' > "$home/routing.local.yaml"
+  printf -v prompt 'lone \\ quote " tab\t control \001 multibyte 測試—…→'
+  printf '%s' "$prompt" > "$expected"
+
+  job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" FAKE_CLAUDE_ARGS="$args" \
+    FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
+    --idle-timeout 0 --vendor claude triage "$prompt")"
+  job_dir="$home/jobs/$job"
+  wait_for_file "$job_dir/inbox.ready" || fail "JSON escape live mailbox did not become ready"
+  wait_for_lines "$input" 1 || fail "JSON escape prompt did not reach Claude input"
+  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+    fail "JSON escape live close failed: $close_out"
+  wait_for_file "$job_dir/exit" || fail "JSON escape live job did not finish"
+
+  perl -MJSON::PP -e '
+    local $/;
+    my $event = decode_json(<STDIN>);
+    my $text = $event->{message}{content}[0]{text};
+    utf8::encode($text);
+    print $text;
+  ' < "$input" > "$decoded" || fail "live prompt was not valid JSON"
+  cmp -s "$expected" "$decoded" || fail "live prompt did not round-trip exactly"
+}
+
+case_jobs_send_json_escape_round_trip() {
+  local home="$TEST_ROOT/jobs-send-json-escape" bin="$TEST_ROOT/jobs-send-json-escape/bin"
+  local fake="$bin/claude" args="$home/claude.args" input="$home/claude.input"
+  local expected="$home/expected" job job_dir close_out follow_up
+
+  mkdir -p "$home" "$bin"
+  make_claude "$fake"
+  printf 'triage: claude claude-default high\n' > "$home/routing.local.yaml"
+  printf -v follow_up 'lone \\ quote " multibyte 測試—…→'
+  printf '%s' "$follow_up" > "$expected"
+
+  job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" FAKE_CLAUDE_ARGS="$args" \
+    FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
+    --idle-timeout 0 --vendor claude triage initial)"
+  job_dir="$home/jobs/$job"
+  wait_for_file "$job_dir/inbox.ready" || fail "jobs.sh send JSON escape mailbox did not become ready"
+  wait_for_lines "$input" 1 || fail "jobs.sh send JSON escape initial prompt did not arrive"
+
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "$follow_up" >/dev/null
+  wait_for_lines "$input" 2 || fail "jobs.sh send JSON escape follow-up did not arrive"
+
+  INPUT="$input" EXPECTED="$expected" perl -MJSON::PP -e '
+    open my $input, "<", $ENV{INPUT} or die $!;
+    scalar <$input>;
+    my $line = <$input>;
+    my $event = decode_json($line);
+    my $text = $event->{message}{content}[0]{text};
+    utf8::encode($text);
+    open my $expected_fh, "<", $ENV{EXPECTED} or die $!;
+    local $/;
+    my $expected = <$expected_fh>;
+    die "jobs.sh send text mismatch\n" unless $text eq $expected;
+  ' || fail "jobs.sh send line did not decode to exact input"
+
+  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+    fail "jobs.sh send JSON escape close failed: $close_out"
+  wait_for_file "$job_dir/exit" || fail "jobs.sh send JSON escape job did not finish"
+}
+
 case "$CASE" in
+  "")
+    bash "$0" live-fail-fast
+    printf 'ok - live mode rejects non-capable vendor\n'
+    bash "$0" single-shot-claude
+    printf 'ok - single-shot mode forces Claude one-shot\n'
+    bash "$0" idle-cap
+    printf 'ok - live mailbox idle cap closes session\n'
+    bash "$0" gemini-schema
+    printf 'ok - Gemini live mailbox uses agy schema\n'
+    bash "$0" json-escape
+    printf 'ok - live prompt JSON escaping round-trips exact text\n'
+    bash "$0" jobs-send-json-escape
+    printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
+    ;;
   live-fail-fast) case_live_fail_fast ;;
   single-shot-claude) case_single_shot_claude ;;
   idle-cap) case_idle_cap ;;
   gemini-schema) case_gemini_schema ;;
+  json-escape) case_json_escape_round_trip ;;
+  jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac

@@ -14,6 +14,21 @@ AGY_BIN="${AGY_BIN:-agy}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 CAPACITY_PATTERN='MODEL_CAPACITY_EXHAUSTED|No capacity available for model|rateLimitExceeded|RESOURCE_EXHAUSTED'
 
+THREAD_MODE="${OMNILANE_THREAD_MODE:-}"
+THREAD_ID="${OMNILANE_THREAD_ID:-}"
+THREAD_ARGS=()
+if [[ -n "$THREAD_MODE" || -n "$THREAD_ID" ]]; then
+  [[ "$THREAD_ID" =~ ^[A-Za-z0-9._:-]+$ && "${#THREAD_ID}" -le 256 ]] || {
+    echo "omnilane: invalid Gemini thread session id" >&2
+    exit 2
+  }
+  case "$THREAD_MODE" in
+    new) ;;
+    resume) THREAD_ARGS=(--conversation "$THREAD_ID") ;;
+    *) echo "omnilane: invalid Gemini thread mode" >&2; exit 2 ;;
+  esac
+fi
+
 truncate_payload "$PROMPT_FILE" 140000
 
 # Both modes run inside the target WORKDIR so the worker can actually see the
@@ -142,6 +157,38 @@ PY
   exit "$RC"
 fi
 
+if [[ -n "$THREAD_MODE" ]]; then
+  set +e
+  (
+    cd "$RUN_DIR" || exit 127
+    env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
+      NO_BROWSER=1 OMNILANE_DEPTH=1 \
+      "$AGY_BIN" --dangerously-skip-permissions --add-dir "$RUN_DIR" \
+      "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
+      --print-timeout "${RUN_TIMEOUT}s" --output-format json \
+      "${THREAD_ARGS[@]}" -p "$(cat "$PROMPT_FILE")" \
+      > "${OUTPUT_FILE}.result.json" 2> "${OUTPUT_FILE}.stderr.log"
+  )
+  RC=$?
+  set -e
+  if [[ "$RC" -eq 0 ]]; then
+    if ! python3 - "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.tmp" <<'PY'
+import json
+import pathlib
+import sys
+
+result = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+response = result.get("response")
+if result.get("status") != "SUCCESS" or not isinstance(response, str):
+    raise SystemExit(1)
+pathlib.Path(sys.argv[2]).write_text(response.rstrip("\n") + "\n", encoding="utf-8")
+PY
+    then
+      echo "omnilane: Gemini thread result was not readable SUCCESS JSON" >> "${OUTPUT_FILE}.stderr.log"
+      RC=1
+    fi
+  fi
+else
 set +e
 (
   cd "$RUN_DIR" || exit 127
@@ -158,8 +205,9 @@ set +e
 )
 RC=$?
 set -e
+fi
 
-if grep -Eiq "$CAPACITY_PATTERN" "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log" 2>/dev/null; then
+if grep -Eiq "$CAPACITY_PATTERN" "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.stderr.log" 2>/dev/null; then
   echo "omnilane: gemini capacity exhausted" >> "${OUTPUT_FILE}.stderr.log"
   RC=126
 fi

@@ -537,6 +537,42 @@ EOF
   printf 'ok - writer sanitises UTF-8 tail boundary\n'
 }
 
+test_writer_json_escape_round_trip() {
+  local home="$TEST_ROOT/writer-json-escape" workdir="$TEST_ROOT/writer-json-escape-project"
+  local gate="$TEST_ROOT/writer-json-escape-gate.sh" job_id record
+  local expected="$home/expected-tail" tail_value
+
+  mkdir -p "$home" "$workdir"
+  printf -v tail_value 'lone \\ quote " multibyte 測試—…→'
+  printf '%s' "$tail_value" > "$expected"
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s' "${EXPECTED_TAIL:?}" > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'json-escape-lane: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  job_id="$(EXPECTED_TAIL="$tail_value" OMNILANE_HOME="$home" \
+    bash "$ROOT/scripts/dispatch.sh" --background --workdir "$workdir" \
+    json-escape-lane 'completion tail JSON escape')"
+  record="$home/inbox/$job_id.json"
+  wait_for_file "$record" || fail "JSON escape writer did not create completion record"
+
+  RECORD="$record" EXPECTED="$expected" perl -MJSON::PP -e '
+    open my $record_fh, "<", $ENV{RECORD} or die $!;
+    local $/;
+    my $record = decode_json(<$record_fh>);
+    my $tail = $record->{tail};
+    utf8::encode($tail);
+    open my $expected_fh, "<", $ENV{EXPECTED} or die $!;
+    my $expected = <$expected_fh>;
+    die "completion tail mismatch\n" unless $tail eq $expected;
+  ' || fail "completion record did not decode to exact tail"
+
+  printf 'ok - completion record JSON escaping round-trips exact tail\n'
+}
+
 test_reader_repairs_invalid_utf8() {
   local home="$TEST_ROOT/reader-invalid-utf8" workdir="$TEST_ROOT/reader-invalid-project"
   local job_id="20260902-130001-1-1" record output
@@ -634,6 +670,7 @@ test_desktop_session_binding() {
 }
 
 test_writer_utf8_tail_boundary
+test_writer_json_escape_round_trip
 test_reader_repairs_invalid_utf8
 test_reader_consumes_unparseable_record
 test_desktop_session_binding

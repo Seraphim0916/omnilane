@@ -9,6 +9,34 @@ export OMNILANE_REPO
 # Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
 [[ -f "$OMNILANE_HOME/local.sh" ]] && source "$OMNILANE_HOME/local.sh"
 
+# The unquoted backslash case pattern intentionally matches one backslash.
+# shellcheck disable=SC1003
+json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      \\) out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 resolve_timeout_cmd() {
   if command -v timeout &>/dev/null; then echo "timeout";
   elif command -v gtimeout &>/dev/null; then echo "gtimeout";

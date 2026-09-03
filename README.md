@@ -340,10 +340,10 @@ configure.sh                                        # interactive lane menu
 configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```
 
-`--thread NAME` continues a named Claude conversation across single-shot
-dispatches. In 0.33.0 it is Claude-only and pins vendor, model, effort, and
-physical workdir; use `jobs.sh threads`, `threads show NAME`, or
-`threads rm NAME` to manage local state without deleting the Claude session.
+`--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
+single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
+workdir; use `jobs.sh threads`, `threads show NAME`, or `threads rm NAME` to
+manage local state without deleting the vendor session.
 
 `jobs recommend` reads only validated public metadata and exit codes. It ranks
 eligible vendors by success rate, sample count, then name; the default minimum
@@ -476,7 +476,7 @@ whose CLI is actually installed. With one subscription the whole table collapses
 onto that vendor; lanes with nothing available turn off rather than failing.
 `omnilane doctor` shows exactly what your machine can reach today, and
 `routing.local.yaml.example` ships starter profiles for common situations
-(Claude-only, Codex-heavy, no-Codex).
+(Claude-focused, Codex-heavy, no-Codex).
 
 </details>
 
@@ -601,9 +601,10 @@ working notes, including per-benchmark caveats, live in
 
 ## What's new in v0.33.0
 
-- **Claude threaded dispatch.** `--thread NAME` continues a pinned Claude
-  conversation across foreground or background single-shot jobs; unsupported
-  vendors, live mode, and pin mismatches stop with visible exit-2 notices.
+- **Four-vendor threaded dispatch.** `--thread NAME` continues pinned Claude,
+  Codex, Grok, or Gemini conversations across foreground or background
+  single-shot jobs; direct-API vendors, `exec`, live mode, and pin mismatches
+  stop with visible exit-2 notices.
 - **Thread inspection.** `jobs.sh threads`, `threads show NAME`, and
   `threads rm NAME` list, inspect, or remove local thread state.
 

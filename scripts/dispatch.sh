@@ -51,7 +51,7 @@ Dispatch one task to the first available vendor CLI in LANE's fallback chain.
 A TASK of "-" reads the task text from stdin.
 
 flags:
-  --thread NAME          continue a named Claude thread (single-shot)
+  --thread NAME          continue a named thread (claude/codex/grok/gemini; single-shot)
   --live                    require a resident session (background only)
   --single-shot             force one-shot dispatch (background only)
   --idle-timeout SECONDS    close an idle live mailbox (default 900; 0 disables)
@@ -78,33 +78,6 @@ read-only queries (no provider call, no job state; --json for one envelope):
 EOF
 }
 
-json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      '\\') out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        # Bash 3.2 on macOS reports UTF-8 bytes above 0x7f as signed values.
-        # Only non-negative C0 bytes are JSON control characters.
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
-}
 
 # Run one read-only inspection command once, preserving its human output and
 # exit status inside a stable JSON envelope. This avoids a second routing
@@ -168,6 +141,59 @@ extract_claude_result_session_id() {
   ' "$events_path" 2>/dev/null
 }
 
+extract_codex_result_session_id() {
+  local events_path="$1"
+  [[ -f "$events_path" && ! -L "$events_path" ]] || return 1
+  perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($path) = @ARGV;
+    open my $fh, "<", $path or die $!;
+    my $last = "";
+    while (my $line = <$fh>) {
+      my $event = eval { decode_json($line) };
+      next unless ref($event) eq "HASH";
+      my $id = $event->{thread_id};
+      next if !defined($id) || ref($id) || $id !~ /\A[A-Za-z0-9._:-]{1,256}\z/;
+      $last = $id;
+    }
+    exit 1 unless length($last);
+    print $last;
+  ' "$events_path" 2>/dev/null
+}
+
+extract_grok_result_session_id() {
+  local stderr_path="$1" fallback="$2" forked_id=""
+  if [[ -f "$stderr_path" && ! -L "$stderr_path" ]] && grep -Eiq 'fork' "$stderr_path"; then
+    forked_id="$(perl -ne '
+      while (/([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})/g) {
+        $last = $1;
+      }
+      END { exit 1 unless defined($last); print $last }
+    ' "$stderr_path" 2>/dev/null)" || return 1
+    printf '%s\n' "$forked_id"
+    return 0
+  fi
+  [[ "$fallback" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || return 1
+  printf '%s\n' "$fallback"
+}
+
+extract_gemini_result_session_id() {
+  local result_path="$1"
+  [[ -f "$result_path" && ! -L "$result_path" ]] || return 1
+  perl -MJSON::PP -e '
+    use strict;
+    use warnings;
+    my ($path) = @ARGV;
+    open my $fh, "<", $path or die $!;
+    local $/;
+    my $result = decode_json(<$fh>);
+    my $id = ref($result) eq "HASH" ? $result->{conversation_id} : undef;
+    exit 1 if !defined($id) || ref($id) || $id !~ /\A[A-Za-z0-9._:-]{1,256}\z/;
+    print $id;
+  ' "$result_path" 2>/dev/null
+}
+
 append_thread_notice() {
   local notice="$1"
   printf '%s\n' "$notice" >&2
@@ -202,13 +228,29 @@ write_thread_state() {
 }
 
 update_thread_state() {
-  local returned_id notice
-  returned_id="$(extract_claude_result_session_id "$JOB_DIR/out.txt.events.jsonl")" || {
-    append_thread_notice "omnilane: thread $THREAD_NAME did not return a resumable Claude session id"
+  local returned_id notice original_id="$THREAD_ID"
+  case "$VENDOR" in
+    claude)
+      returned_id="$(extract_claude_result_session_id "$JOB_DIR/out.txt.events.jsonl")"
+      ;;
+    codex)
+      returned_id="$(extract_codex_result_session_id "$JOB_DIR/out.txt.progress.log")"
+      ;;
+    grok)
+      returned_id="$(extract_grok_result_session_id "$JOB_DIR/out.txt.stderr.log" "$THREAD_ID")"
+      ;;
+    gemini)
+      returned_id="$(extract_gemini_result_session_id "$JOB_DIR/out.txt.result.json")"
+      ;;
+    *)
+      return 1
+      ;;
+  esac || {
+    append_thread_notice "omnilane: thread $THREAD_NAME did not return a resumable $VENDOR session id"
     return 1
   }
-  if [[ "$returned_id" != "$THREAD_ID" ]]; then
-    notice="omnilane: thread $THREAD_NAME: claude returned a different session id ($THREAD_ID -> $returned_id)"
+  if [[ "$returned_id" != "$THREAD_ID" && "$THREAD_ID" != "pending" ]]; then
+    notice="omnilane: thread $THREAD_NAME: $VENDOR returned a different session id ($THREAD_ID -> $returned_id)"
     append_thread_notice "$notice"
   fi
   write_thread_state "$returned_id" || {
@@ -216,6 +258,12 @@ update_thread_state() {
     return 1
   }
   THREAD_ID="$returned_id"
+  # Completes the pre-run "session pending" line on stdout; it is visibility,
+  # not a notice, so it stays out of out.txt (which foreground mode cats).
+  if [[ "$original_id" == "pending" ]]; then
+    printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+      "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
+  fi
 }
 
 print_dry_run_value() {
@@ -612,6 +660,14 @@ fi
 if [[ -n "$THREAD_NAME" && "$SESSION_REQUEST" == "live" ]]; then
   thread_refuse "omnilane: --thread cannot be combined with --live; threads run single-shot and a live session is already a conversation"
 fi
+if [[ -n "$THREAD_NAME" && -n "$OVERRIDE_VENDOR" ]]; then
+  case "$OVERRIDE_VENDOR" in
+    claude|codex|grok|gemini) ;;
+    *)
+      thread_refuse "omnilane: --thread is supported for claude, codex, grok and gemini only; resolved vendor '$OVERRIDE_VENDOR' cannot continue a thread"
+      ;;
+  esac
+fi
 if [[ "$SESSION_REQUEST" != "auto" && "$BACKGROUND" -ne 1 &&
       ! ( -n "$THREAD_NAME" && "$SESSION_REQUEST" == "single-shot" ) ]]; then
   echo "omnilane: --${SESSION_REQUEST} requires --background" >&2
@@ -667,9 +723,12 @@ VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"
 
 if [[ -n "$THREAD_NAME" ]]; then
-  if [[ "$VENDOR" != "claude" ]]; then
-    thread_refuse "omnilane: --thread is claude-only in this release; resolved vendor '$VENDOR' cannot continue a thread"
-  fi
+  case "$VENDOR" in
+    claude|codex|grok|gemini) ;;
+    *)
+      thread_refuse "omnilane: --thread is supported for claude, codex, grok and gemini only; resolved vendor '$VENDOR' cannot continue a thread"
+      ;;
+  esac
   THREAD_WORKDIR="$(cd -- "$WORKDIR" 2>/dev/null && pwd -P)" || {
     thread_refuse "omnilane: thread $THREAD_NAME workdir is not accessible: $WORKDIR"
   }
@@ -704,9 +763,14 @@ if [[ -n "$THREAD_NAME" ]]; then
     THREAD_CREATED="$THREAD_STATE_CREATED"
   else
     THREAD_MODE="new"
-    THREAD_ID="$(generate_thread_id)" || {
-      thread_refuse "omnilane: thread $THREAD_NAME could not generate a session id"
-    }
+    case "$VENDOR" in
+      codex|gemini) THREAD_ID="pending" ;;
+      *)
+        THREAD_ID="$(generate_thread_id)" || {
+          thread_refuse "omnilane: thread $THREAD_NAME could not generate a session id"
+        }
+        ;;
+    esac
     THREAD_TURN=1
     THREAD_CREATED=""
   fi
@@ -878,8 +942,8 @@ else
 fi
 
 if [[ -n "$THREAD_NAME" ]]; then
-  printf 'omnilane: thread %s turn %s (claude session %s, %s)\n' \
-    "$THREAD_NAME" "$THREAD_TURN" "$THREAD_ID" "$THREAD_MODE"
+  printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+    "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
 fi
 
 secure_job_files() {
@@ -977,7 +1041,7 @@ finish_job() {
     if [[ "$rc" -eq 0 ]]; then
       update_thread_state || rc=1
     elif [[ "$THREAD_MODE" == "resume" ]]; then
-      append_thread_notice "omnilane: thread $THREAD_NAME could not be continued; stored Claude session $THREAD_ID was preserved"
+      append_thread_notice "omnilane: thread $THREAD_NAME could not be continued; stored $VENDOR session $THREAD_ID was preserved"
     fi
   fi
   secure_job_files

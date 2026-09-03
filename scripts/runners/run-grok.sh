@@ -17,14 +17,30 @@ MAX_ATTEMPTS="${OMNILANE_GROK_MAX_ATTEMPTS:-5}"
   exit 2
 }
 
+THREAD_MODE="${OMNILANE_THREAD_MODE:-}"
+THREAD_ID="${OMNILANE_THREAD_ID:-}"
+THREAD_ARGS=()
+if [[ -n "$THREAD_MODE" || -n "$THREAD_ID" ]]; then
+  [[ "$THREAD_ID" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || {
+    echo "omnilane: invalid Grok thread session id" >&2
+    exit 2
+  }
+  case "$THREAD_MODE" in
+    new) THREAD_ARGS=(--session-id "$THREAD_ID") ;;
+    resume) THREAD_ARGS=(--resume "$THREAD_ID") ;;
+    *) echo "omnilane: invalid Grok thread mode" >&2; exit 2 ;;
+  esac
+fi
+
 # Subscription OAuth path: an exhausted API key in env causes 403s.
 unset XAI_API_KEY 2>/dev/null || true
 
 truncate_payload "$PROMPT_FILE" 140000
 
 ARGS=(--cwd "$WORKDIR" --model "$MODEL"
-      --no-memory --no-subagents --no-plan --no-alt-screen
-      --output-format plain --verbatim --prompt-file "$PROMPT_FILE")
+  --no-memory --no-subagents --no-plan --no-alt-screen
+  --output-format plain --verbatim --prompt-file "$PROMPT_FILE")
+ARGS+=("${THREAD_ARGS[@]}")
 [[ "$MODE" == "advise" ]] && ARGS+=(--permission-mode plan)
 # Web/X search stays ON by default — it is this vendor's signature lane.
 [[ "${OMNILANE_GROK_NO_WEB:-0}" == "1" ]] && ARGS+=(--disable-web-search)

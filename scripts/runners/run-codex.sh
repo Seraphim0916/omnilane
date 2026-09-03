@@ -14,19 +14,46 @@ MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE=
 CODEX_BIN="${CODEX_BIN:-codex}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
+THREAD_MODE="${OMNILANE_THREAD_MODE:-}"
+THREAD_ID="${OMNILANE_THREAD_ID:-}"
+if [[ -n "$THREAD_MODE" || -n "$THREAD_ID" ]]; then
+  [[ "$THREAD_ID" =~ ^[A-Za-z0-9._:-]+$ && "${#THREAD_ID}" -le 256 ]] || {
+    echo "omnilane: invalid Codex thread session id" >&2
+    exit 2
+  }
+  case "$THREAD_MODE" in
+    new) ;;
+    resume) ;;
+    *) echo "omnilane: invalid Codex thread mode" >&2; exit 2 ;;
+  esac
+fi
+
 # --skip-git-repo-check: the operator chose WORKDIR explicitly; codex would
 # otherwise refuse any directory that is not a trusted git repo.
 # --json: without it codex writes nothing until it exits, so a watchdog kill
 # leaves an empty progress log that looks identical to a run that never started.
-ARGS=(exec --json -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
+if [[ "$THREAD_MODE" == "resume" ]]; then
+  ARGS=(exec resume --json -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
+else
+  ARGS=(exec --json -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
+fi
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 if [[ "$MODE" == "advise" ]]; then
-  ARGS+=(--ephemeral -s read-only)
+  [[ -z "$THREAD_MODE" ]] && ARGS+=(--ephemeral)
+  SANDBOX=read-only
 elif [[ "$MODE" == "sysops" ]]; then
-  ARGS+=(-s danger-full-access)
+  SANDBOX=danger-full-access
 else
-  ARGS+=(-s workspace-write)
+  SANDBOX=workspace-write
 fi
+# `codex exec resume` has no -s/--sandbox flag (rejects it with exit 2); the
+# same policy is only reachable there through the sandbox_mode config override.
+if [[ "$THREAD_MODE" == "resume" ]]; then
+  ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
+else
+  ARGS+=(-s "$SANDBOX")
+fi
+[[ "$THREAD_MODE" == "resume" ]] && ARGS+=("$THREAD_ID" -)
 
 truncate_payload "$PROMPT_FILE" 140000
 

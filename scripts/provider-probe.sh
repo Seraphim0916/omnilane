@@ -23,7 +23,7 @@ json_escape() {
     ch="${s:i:1}"
     case "$ch" in
       '"') out="$out\\\"" ;;
-      '\\') out="$out\\\\" ;;
+      \\) out="$out\\\\" ;;
       $'\b') out="$out\\b" ;;
       $'\f') out="$out\\f" ;;
       $'\n') out="$out\\n" ;;

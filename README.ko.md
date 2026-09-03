@@ -300,10 +300,10 @@ configure.sh                                        # 대화형 레인 메뉴
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml 비대화식 편집/확인
 ```
 
-`--thread NAME`은 단발 디스패치 사이에서 이름이 있는 Claude 대화를 이어갑니다.
-0.33.0에서는 Claude만 지원하며 벤더, 모델, effort, 실제 workdir를 고정합니다.
-로컬 상태는 `jobs.sh threads`, `threads show NAME`, `threads rm NAME`으로 관리하며,
-상태를 삭제해도 Claude 세션은 남습니다.
+`--thread NAME`은 단발 디스패치 사이에서 이름이 있는 Claude, Codex, Grok,
+Gemini 대화를 이어갑니다. 0.33.0에서는 벤더, 모델, effort, 실제 workdir를
+고정합니다. 로컬 상태는 `jobs.sh threads`, `threads show NAME`,
+`threads rm NAME`으로 관리하며, 상태를 삭제해도 벤더 세션은 남습니다.
 
 종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
 `3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
@@ -521,9 +521,10 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 
 ## v0.33.0 새 기능
 
-- **Claude 스레드 디스패치.** `--thread NAME`은 벤더, 모델, effort, workdir를
-  고정하고 포그라운드 또는 백그라운드 단발 작업 사이에서 대화를 이어갑니다. 미지원
-  벤더, 라이브 모드, 고정값 불일치는 종료 코드 2 안내와 함께 중단됩니다.
+- **4개 벤더 스레드 디스패치.** `--thread NAME`은 벤더, 모델, effort,
+  workdir를 고정하고 Claude, Codex, Grok, Gemini 대화를 포그라운드 또는
+  백그라운드 단발 작업 사이에서 이어갑니다. direct-API 벤더, `exec`, 라이브
+  모드, 고정값 불일치는 종료 코드 2로 중단됩니다.
 - **스레드 상태 관리.** `jobs.sh threads`, `threads show NAME`, `threads rm NAME`으로
   로컬 상태를 나열하거나 확인하고 삭제할 수 있습니다.
 

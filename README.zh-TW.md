@@ -291,10 +291,10 @@ configure.sh                                        # 互動通道選單
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非互動編輯/檢視 routing.local.yaml
 ```
 
-`--thread NAME` 會在多次單次派工間延續命名的 Claude 對話。0.33.0 僅支援
-Claude，並固定供應商、模型、effort 與實體工作目錄；可用 `jobs.sh threads`、
-`threads show NAME`、`threads rm NAME` 管理本機狀態，移除狀態不會刪除 Claude
-工作階段。
+`--thread NAME` 會在多次單次派工間延續命名的 Claude、Codex、Grok 或 Gemini
+對話。0.33.0 會固定供應商、模型、effort 與實體工作目錄；可用
+`jobs.sh threads`、`threads show NAME`、`threads rm NAME` 管理本機狀態，
+移除狀態不會刪除供應商端工作階段。
 
 `jobs recommend` 只讀取通過驗證的公開中繼資料與退出碼。候選達到最低樣本數後，
 依成功率、樣本數、廠商名稱排序；預設至少三筆已完成工作。它不讀任務／結果本文，
@@ -521,9 +521,9 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
 
 ## v0.33.0
 
-- **Claude 續談派工。** `--thread NAME` 可讓固定供應商、模型、effort 與工作目錄
-  的 Claude 對話跨前景或背景單次工作延續；不支援的供應商、即時模式與釘選衝突
-  都會以清楚的退出碼 2 提示停止。
+- **四供應商續談派工。** `--thread NAME` 可讓固定供應商、模型、effort 與
+  工作目錄的 Claude、Codex、Grok 或 Gemini 對話跨前景或背景單次工作延續；
+  direct-API 供應商、`exec`、即時模式與釘選衝突都會以清楚的退出碼 2 提示停止。
 - **續談狀態管理。** `jobs.sh threads`、`threads show NAME`、`threads rm NAME`
   可列出、查看或移除本機續談狀態。
 

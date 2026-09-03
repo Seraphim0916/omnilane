@@ -308,10 +308,10 @@ configure.sh                                        # 対話式レーンメニ�
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非対話で編集/確認
 ```
 
-`--thread NAME` は単発ディスパッチ間で名前付き Claude 会話を継続します。
-0.33.0 では Claude のみをサポートし、ベンダー、モデル、effort、物理 workdir
+`--thread NAME` は単発ディスパッチ間で名前付きの Claude、Codex、Grok、
+Gemini 会話を継続します。0.33.0 ではベンダー、モデル、effort、物理 workdir
 を固定します。ローカル状態は `jobs.sh threads`、`threads show NAME`、
-`threads rm NAME` で管理でき、削除しても Claude セッションは残ります。
+`threads rm NAME` で管理でき、削除してもベンダー側のセッションは残ります。
 
 終了コード:`2` 使い方エラー(無効なベンダー、または指定ベンダーがレーンに
 ない場合を含む)、`3` レーン無効(off)、`4` チェーン内に利用可能な CLI がない、
@@ -537,9 +537,10 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、�
 
 ## v0.33.0 の新機能
 
-- **Claude スレッドディスパッチ。** `--thread NAME` はベンダー、モデル、effort、
-  workdir を固定し、フォアグラウンドまたはバックグラウンドの単発ジョブ間で会話を
-  継続します。非対応ベンダー、ライブモード、固定値の不一致は終了コード 2 で停止します。
+- **4 ベンダー対応スレッドディスパッチ。** `--thread NAME` はベンダー、
+  モデル、effort、workdir を固定し、Claude、Codex、Grok、Gemini の会話を
+  フォアグラウンドまたはバックグラウンドの単発ジョブ間で継続します。
+  direct-API ベンダー、`exec`、ライブモード、固定値の不一致は終了コード 2 で停止します。
 - **スレッド状態の管理。** `jobs.sh threads`、`threads show NAME`、
   `threads rm NAME` でローカル状態を一覧、表示、削除できます。
 

@@ -21,34 +21,6 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # Two concurrent codex execs in one target dir corrupt its job index — serialize.
 [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
 
-# The backslash case pattern is intentional.
-# shellcheck disable=SC1003
-json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      '\\') out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
-}
-
 emit_mode_notice() {
   local notice="$1" notice_file="${OUTPUT_FILE%/*}/mode-notice.txt"
   printf '%s\n' "$notice" >&2

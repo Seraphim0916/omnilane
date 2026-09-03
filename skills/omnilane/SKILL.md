@@ -25,10 +25,10 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    read", "dispatch is slower", "it is one line". Dispatch:
    `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
-   Use `--thread NAME` when later Claude dispatches must retain earlier context.
-   Threads are Claude-only in 0.33.0 and pin vendor, model, effort, and physical
-   workdir; inspect or remove local state with `scripts/jobs.sh threads`,
-   `threads show NAME`, and `threads rm NAME` (removal leaves Claude's session).
+   Use `--thread NAME` when later claude, codex, grok or gemini dispatches
+   must retain earlier context. Threads in 0.33.0 pin vendor, model, effort and
+   physical workdir; inspect or remove local state with `scripts/jobs.sh threads`,
+   `threads show NAME`, and `threads rm NAME` (removal leaves the vendor session).
    Implementation dispatches (code edits, new files, tests, builds, deploys)
    must carry `--mode work --workdir <repo>` and a `--timeout` of at least
    3600 seconds. The advise default is a read-only worker under a 600 s

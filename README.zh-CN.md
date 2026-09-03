@@ -283,10 +283,10 @@ configure.sh                                        # 交互通道菜单
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 routing.local.yaml
 ```
 
-`--thread NAME` 可在多次单次派发间延续命名的 Claude 对话。0.33.0 仅支持
-Claude，并固定厂商、模型、effort 与实际工作目录；使用 `jobs.sh threads`、
-`threads show NAME`、`threads rm NAME` 管理本地状态，删除状态不会删除 Claude
-会话。
+`--thread NAME` 可在多次单次派发间延续命名的 Claude、Codex、Grok 或 Gemini
+对话。0.33.0 会固定厂商、模型、effort 与实际工作目录；使用
+`jobs.sh threads`、`threads show NAME`、`threads rm NAME` 管理本地状态，
+删除状态不会删除厂商端会话。
 
 退出码:`2` 用法错误(包括厂商值无效,或指定厂商不在该通道)、`3` 通道已关闭、
 `4` 候选链没有可用 CLI,或指定厂商已配置但其 CLI 不可用、
@@ -497,9 +497,9 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
 
 ## v0.33.0 新功能
 
-- **Claude 线程派发。** `--thread NAME` 可让固定厂商、模型、effort 与工作目录的
-  Claude 对话跨前台或后台单次作业延续；不支持的厂商、实时模式与固定值冲突都会
-  以清晰的退出码 2 提示停止。
+- **四厂商线程派发。** `--thread NAME` 可让固定厂商、模型、effort 与工作
+  目录的 Claude、Codex、Grok 或 Gemini 对话跨前台或后台单次作业延续；
+  direct-API 厂商、`exec`、实时模式与固定值冲突都会以清晰的退出码 2 提示停止。
 - **线程状态管理。** `jobs.sh threads`、`threads show NAME`、`threads rm NAME`
   可列出、查看或删除本地线程状态。
 
