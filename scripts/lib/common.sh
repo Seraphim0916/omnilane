@@ -37,6 +37,51 @@ json_escape() {
   printf '%s' "$out"
 }
 
+json_file_round_trip_valid() {
+  local path="$1"
+  local valid=1
+  if [[ ! -f "$path" || -L "$path" ]]; then
+    valid=0
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 - "$path" <<'PY' >/dev/null 2>&1 || valid=0
+import json
+import pathlib
+import sys
+
+value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+PY
+  elif command -v perl >/dev/null 2>&1; then
+    perl -MJSON::PP -e '
+      use strict;
+      use warnings;
+      my ($path) = @ARGV;
+      open my $fh, "<", $path or die $!;
+      local $/;
+      my $value = decode_json(<$fh>);
+      JSON::PP->new->canonical->encode($value);
+    ' "$path" >/dev/null 2>&1 || valid=0
+  else
+    valid=0
+  fi
+  if [[ "$valid" -ne 1 ]]; then
+    printf 'omnilane: JSON round-trip validation failed for %s\n' "$path" >&2
+    return 1
+  fi
+}
+
+file_sha256() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$path" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$path" | awk '{print $1}'
+  else
+    printf 'omnilane: no sha256sum/shasum available for worker provenance\n' >&2
+    return 1
+  fi
+}
+
 resolve_timeout_cmd() {
   if command -v timeout &>/dev/null; then echo "timeout";
   elif command -v gtimeout &>/dev/null; then echo "gtimeout";
@@ -456,7 +501,8 @@ acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not 
       empty_since=-1
     fi
     if [[ "$waited" -ge "$lock_timeout" ]]; then
-      echo "omnilane: lock timeout for $vendor in $dir" >&2; exit 87
+      echo "omnilane: lock timeout for $vendor in $dir; advise/read-only tasks may use a different --workdir to avoid this lock" >&2
+      exit 87
     fi
     sleep 2; waited=$((waited + 2))
   done

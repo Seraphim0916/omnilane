@@ -50,40 +50,21 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
   fi
   LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
 
-  finalize_live_output() {
-    local tmp="${OUTPUT_FILE}.tmp"
-    if ! command -v python3 >/dev/null 2>&1; then
+finalize_live_output() {
+  local tmp="${OUTPUT_FILE}.tmp"
+  if command -v python3 >/dev/null 2>&1; then
+    if python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
+      "$EVENTS_FILE" "$tmp"; then
+      mv "$tmp" "$OUTPUT_FILE"
+      return 0
+    fi
+    echo "omnilane: Claude live stream ended without readable successful result or top-level assistant text" >> "$STDERR_FILE"
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
       echo "omnilane: cannot extract Claude live result: python3 not found" >> "$STDERR_FILE"
       return 1
     fi
-    if ! python3 - "$EVENTS_FILE" "$tmp" <<'PY'
-import json
-import pathlib
-import sys
-
-events_path = pathlib.Path(sys.argv[1])
-output_path = pathlib.Path(sys.argv[2])
-last_result = None
-
-with events_path.open(encoding="utf-8") as events:
-    for raw_line in events:
-        try:
-            event = json.loads(raw_line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "result" and isinstance(event.get("result"), str):
-            last_result = event["result"]
-
-if last_result is None:
-    raise SystemExit(1)
-
-output_path.write_text(last_result.rstrip("\n") + "\n", encoding="utf-8")
-PY
-    then
-      echo "omnilane: Claude live stream ended without a readable result event" >> "$STDERR_FILE"
-      return 1
-    fi
-    mv "$tmp" "$OUTPUT_FILE"
   }
 
   # Invoked by signal traps below.
@@ -103,6 +84,9 @@ PY
       fi
       wait "$LIVE_CHILD_PID" 2>/dev/null
     fi
+    # Recover the transcript unconditionally so an aborted turn still leaves
+    # its work in out.txt; whether that recovery counts as success is decided
+    # by the job worker, which alone knows why the session was closed.
     finalize_live_output || true
     [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
     exit "$signal_rc"
@@ -166,6 +150,11 @@ RC=$?
 set -e
 
 if [[ -n "$THREAD_MODE" ]]; then
+  if [[ "$RC" -eq 0 ]] && ! python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
+    "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp"; then
+    echo "omnilane: Claude thread stream without successful result or top-level assistant text" >> "${OUTPUT_FILE}.stderr.log"
+    RC=1
+  fi
   if [[ "$RC" -eq 0 ]]; then
     if ! python3 - "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp" <<'PY'
 import json

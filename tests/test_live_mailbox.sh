@@ -422,8 +422,93 @@ case_jobs_send_json_escape_round_trip() {
   wait_for_file "$job_dir/exit" || fail "jobs.sh send JSON escape job did not finish"
 }
 
+case_codex_shutdown_grace() {
+  local fixture="$TEST_ROOT/codex-shutdown-fixture"
+  local runner="$fixture/scripts/runners/run-codex.sh"
+  local probe="$fixture/codex"
+  mkdir -p "$fixture/scripts/lib" "$fixture/scripts/runners"
+  ln -s "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
+  ln -s "$ROOT/scripts/lib/common.sh" "$fixture/scripts/lib/common.sh"
+  ln -s "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
+  make_codex "$probe"
+  cat > "$runner" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$$" > "${FAKE_RUNNER_PID_FILE:?}"
+trap 'printf "TERM\n" > "${FAKE_TERM_FILE:?}"; exit 143' TERM
+case "${FAKE_RUNNER_MODE:?}" in
+  already-gone)
+    IFS= read -r _ < "${OMNILANE_INBOX:?}" || true
+    ;;
+  grace-exit)
+    while IFS= read -r _; do :; done < "${OMNILANE_INBOX:?}"
+    /bin/sleep 0.2
+    ;;
+  require-term)
+    while IFS= read -r _; do :; done < "${OMNILANE_INBOX:?}"
+    while :; do /bin/sleep 1; done
+    ;;
+  *)
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$runner"
+
+  local mode case_dir worker_pid runner_pid holder_pid tries worker_rc
+  for mode in already-gone grace-exit require-term; do
+    case_dir="$TEST_ROOT/codex-shutdown-$mode"
+    mkdir -p "$case_dir/job" "$case_dir/workdir"
+    printf 'shutdown test\n' > "$case_dir/prompt.txt"
+    OMNILANE_HOME="$case_dir/home" OMNILANE_REPO="$fixture" CODEX_BIN="$probe" \
+      OMNILANE_SESSION_MODE=live OMNILANE_LIVE_REQUIRED=1 \
+      OMNILANE_IDLE_TIMEOUT=0 FAKE_RUNNER_MODE="$mode" \
+      FAKE_CODEX_COUNTER="$case_dir/probe.counter" FAKE_CODEX_INPUT="$case_dir/probe.input" \
+      FAKE_RUNNER_PID_FILE="$case_dir/runner.pid" FAKE_TERM_FILE="$case_dir/term" \
+      "$fixture/scripts/lib/job-worker.sh" codex advise "$case_dir/workdir" fake medium \
+      "$case_dir/prompt.txt" "$case_dir/job/out.txt" \
+      > "$case_dir/stdout" 2> "$case_dir/stderr" &
+    worker_pid=$!
+
+    wait_for_file "$case_dir/runner.pid" \
+      || fail "Codex $mode runner did not start: $(cat "$case_dir/stderr")"
+    if [[ "$mode" != "already-gone" ]]; then
+      wait_for_file "$case_dir/job/inbox.ready" || fail "Codex $mode mailbox did not become ready"
+      holder_pid="$(cat "$case_dir/job/inbox.holder.pid")"
+      kill -USR1 "$holder_pid"
+    fi
+
+    tries=0
+    while kill -0 "$worker_pid" 2>/dev/null && [[ "$tries" -lt 120 ]]; do
+      sleep 0.1
+      tries=$((tries + 1))
+    done
+    if kill -0 "$worker_pid" 2>/dev/null; then
+      runner_pid="$(cat "$case_dir/runner.pid")"
+      kill -TERM "$worker_pid" "$runner_pid" 2>/dev/null || true
+      wait "$worker_pid" 2>/dev/null || true
+      fail "Codex $mode shutdown hung"
+    fi
+    set +e
+    wait "$worker_pid"
+    worker_rc=$?
+    set -e
+
+    if [[ "$mode" == "already-gone" ]]; then
+      [[ "$worker_rc" -eq 0 ]] || fail "already-gone Codex runner returned $worker_rc"
+      [[ ! -e "$case_dir/term" ]] || fail "already-gone Codex runner was TERMed"
+    elif [[ "$mode" == "grace-exit" ]]; then
+      [[ ! -e "$case_dir/term" ]] || fail "Codex runner exiting in grace window was TERMed"
+    else
+      [[ -e "$case_dir/term" ]] || fail "stuck Codex runner was not TERMed after grace window"
+    fi
+  done
+}
+
 case "$CASE" in
   "")
+    bash "$0" codex-shutdown-grace
+    printf 'ok - Codex live shutdown waits gracefully then escalates\n'
     bash "$0" live-fail-fast
     printf 'ok - live mode rejects non-capable vendor\n'
     bash "$0" single-shot-claude
@@ -449,5 +534,6 @@ case "$CASE" in
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   codex-live-rpc) case_codex_live_rpc ;;
   codex-live-fallback) case_codex_live_fallback ;;
+  codex-shutdown-grace) case_codex_shutdown_grace ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac
