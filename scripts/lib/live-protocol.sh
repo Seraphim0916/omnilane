@@ -19,9 +19,7 @@ codex_live_surface_available() {
   command -v python3 >/dev/null 2>&1 || return 1
   python3 - "$bin" 2>/dev/null <<'PY'
 import json
-import os
 import select
-import signal
 import subprocess
 import sys
 
@@ -34,7 +32,9 @@ try:
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
-        start_new_session=True,
+        # Stay in the caller's supervised process group. A whole-job SIGKILL
+        # bypasses this probe's finally block, so a private session would leak.
+        start_new_session=False,
     )
     request = {
         "jsonrpc": "2.0",
@@ -53,11 +53,11 @@ except (OSError, ValueError, json.JSONDecodeError):
 finally:
     if process is not None and process.poll() is None:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            process.terminate()
             process.wait(timeout=1)
         except (OSError, subprocess.TimeoutExpired):
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                process.kill()
             except OSError:
                 pass
             process.wait()

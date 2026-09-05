@@ -46,7 +46,10 @@ class CodexLiveClient:
             stderr=None,
             text=True,
             bufsize=1,
-            start_new_session=True,
+            # The outer watchdog owns this process group. Do not split the
+            # app-server into a session that survives if this client is
+            # SIGKILLed before its finally block can run.
+            start_new_session=False,
         )
         threading.Thread(target=self.read_server, name="codex-app-server", daemon=True).start()
 
@@ -260,11 +263,11 @@ class CodexLiveClient:
                 pass
         if self.process.poll() is None:
             try:
-                os.killpg(self.process.pid, signal.SIGTERM)
+                self.process.terminate()
                 self.process.wait(timeout=1)
             except (OSError, subprocess.TimeoutExpired):
                 try:
-                    os.killpg(self.process.pid, signal.SIGKILL)
+                    self.process.kill()
                 except OSError:
                     pass
                 self.process.wait()
@@ -302,7 +305,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--session-id-file", required=True)
     parser.add_argument("--version", default="0.34.0")
     parser.add_argument("--rpc-timeout", type=float, default=10.0)
-    parser.add_argument("--close-grace", type=float, default=9.0)
+    # Coupled to job-worker.sh's 50 * 0.1s outer grace: leave time for the
+    # one-second app-server TERM wait before the worker escalates.
+    parser.add_argument("--close-grace", type=float, default=3.0)
     return parser.parse_args()
 
 

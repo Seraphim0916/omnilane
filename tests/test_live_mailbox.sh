@@ -422,6 +422,144 @@ case_jobs_send_json_escape_round_trip() {
   wait_for_file "$job_dir/exit" || fail "jobs.sh send JSON escape job did not finish"
 }
 
+case_codex_killed_runner_reaps_app_server() {
+ local case_dir="$TEST_ROOT/codex-killed-runner" fake="$TEST_ROOT/codex-killed-runner/codex"
+ mkdir -p "$case_dir"
+ : > "$case_dir/inbox"
+ cat > "$fake" <<'EOF'
+#!/usr/bin/env bash
+trap '' TERM
+sleep 30 &
+printf '%s %s\n' "$$" "$!" > "${FAKE_CODEX_PID_FILE:?}"
+wait
+EOF
+ chmod +x "$fake"
+
+ if ! ROOT="$ROOT" CASE_DIR="$case_dir" FAKE_CODEX="$fake" \
+  FAKE_CODEX_PID_FILE="$case_dir/codex-pids" python3 - <<'PY'
+import os
+import pathlib
+import signal
+import subprocess
+import time
+
+root = pathlib.Path(os.environ["ROOT"])
+case_dir = pathlib.Path(os.environ["CASE_DIR"])
+pidfile = pathlib.Path(os.environ["FAKE_CODEX_PID_FILE"])
+command = [
+    str(root / "scripts/runners/run-codex-live.py"),
+    "--codex-bin", os.environ["FAKE_CODEX"],
+    "--cwd", str(case_dir),
+    "--model", "fake-model",
+    "--effort", "low",
+    "--sandbox", "read-only",
+    "--inbox", str(case_dir / "inbox"),
+    "--events", str(case_dir / "events.jsonl"),
+    "--output", str(case_dir / "out.txt"),
+    "--progress", str(case_dir / "progress.json"),
+    "--session-id-file", str(case_dir / "session-id"),
+    "--rpc-timeout", "30",
+]
+stderr = (case_dir / "stderr").open("w", encoding="utf-8")
+runner = subprocess.Popen(
+    command,
+    stdout=subprocess.DEVNULL,
+    stderr=stderr,
+    start_new_session=True,
+)
+server_pids: list[int] = []
+try:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not pidfile.exists():
+        time.sleep(0.05)
+    if not pidfile.exists():
+        raise AssertionError("fake app-server did not start")
+    server_pids = [int(value) for value in pidfile.read_text().split()]
+
+    # Model the outer watchdog's uncatchable escalation. The app-server and
+    # its child must remain in this group even though the runner's finally
+    # block cannot execute after SIGKILL.
+    os.killpg(runner.pid, signal.SIGKILL)
+    runner.wait(timeout=2)
+
+    deadline = time.monotonic() + 2
+    survivors = server_pids
+    while survivors and time.monotonic() < deadline:
+        current = []
+        for pid in survivors:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                continue
+            current.append(pid)
+        survivors = current
+        if survivors:
+            time.sleep(0.05)
+    if survivors:
+        raise AssertionError(f"surviving app-server pids: {survivors}")
+finally:
+    stderr.close()
+    if runner.poll() is None:
+        try:
+            os.killpg(runner.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        runner.wait(timeout=2)
+    for pid in server_pids:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+PY
+ then
+  fail "killed Codex live runner left its app-server process group alive"
+ fi
+}
+
+case_codex_close_grace_precedes_worker_escalation() {
+ if ! ROOT="$ROOT" python3 - <<'PY'
+import ast
+import os
+import pathlib
+import re
+
+root = pathlib.Path(os.environ["ROOT"])
+runner_path = root / "scripts/runners/run-codex-live.py"
+worker_path = root / "scripts/lib/job-worker.sh"
+
+tree = ast.parse(runner_path.read_text(encoding="utf-8"))
+close_grace = None
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Call) or not node.args:
+        continue
+    if not isinstance(node.func, ast.Attribute) or node.func.attr != "add_argument":
+        continue
+    if not isinstance(node.args[0], ast.Constant) or node.args[0].value != "--close-grace":
+        continue
+    for keyword in node.keywords:
+        if keyword.arg == "default":
+            close_grace = float(ast.literal_eval(keyword.value))
+
+worker = worker_path.read_text(encoding="utf-8")
+block = worker[worker.index("graceful_wait=0"):]
+iterations = re.search(r'\$graceful_wait" -lt ([0-9]+)', block)
+delay = re.search(r'^\s*sleep ([0-9.]+)$', block, re.MULTILINE)
+if close_grace is None or iterations is None or delay is None:
+    raise AssertionError("could not resolve close timing constants")
+outer_grace = int(iterations.group(1)) * float(delay.group(1))
+
+# close() itself may spend one more second waiting after TERM. Keep a real
+# margin instead of merely making the two nominal deadlines equal.
+if not close_grace + 1.0 < outer_grace:
+    raise AssertionError(
+        f"inner={close_grace}s plus cleanup is not below outer={outer_grace}s"
+    )
+PY
+ then
+  fail "Codex close grace does not expire before worker escalation"
+ fi
+}
+
 case_codex_shutdown_grace() {
   local fixture="$TEST_ROOT/codex-shutdown-fixture"
   local runner="$fixture/scripts/runners/run-codex.sh"
@@ -506,8 +644,12 @@ EOF
 }
 
 case "$CASE" in
-  "")
-    bash "$0" codex-shutdown-grace
+ "")
+  bash "$0" codex-killed-runner
+  printf 'ok - killed Codex live runner reaps app-server process group\n'
+  bash "$0" codex-close-grace-invariant
+  printf 'ok - Codex close grace precedes worker escalation\n'
+  bash "$0" codex-shutdown-grace
     printf 'ok - Codex live shutdown waits gracefully then escalates\n'
     bash "$0" live-fail-fast
     printf 'ok - live mode rejects non-capable vendor\n'
@@ -533,7 +675,9 @@ case "$CASE" in
   json-escape) case_json_escape_round_trip ;;
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   codex-live-rpc) case_codex_live_rpc ;;
-  codex-live-fallback) case_codex_live_fallback ;;
-  codex-shutdown-grace) case_codex_shutdown_grace ;;
+ codex-live-fallback) case_codex_live_fallback ;;
+ codex-killed-runner) case_codex_killed_runner_reaps_app_server ;;
+ codex-close-grace-invariant) case_codex_close_grace_precedes_worker_escalation ;;
+ codex-shutdown-grace) case_codex_shutdown_grace ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac
