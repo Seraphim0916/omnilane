@@ -12,7 +12,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("events", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--existing-only", action="store_true")
     args = parser.parse_args()
 
     last_result: str | None = None
@@ -51,7 +50,7 @@ def main() -> int:
     if last_result is not None:
         if last_result_error:
             return 1
-    elif args.existing_only or last_top_level_text is None:
+    elif last_top_level_text is None:
         return 1
     else:
         last_result = last_top_level_text

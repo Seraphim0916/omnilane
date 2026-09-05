@@ -54,7 +54,7 @@ finalize_live_output() {
   local tmp="${OUTPUT_FILE}.tmp"
   if command -v python3 >/dev/null 2>&1; then
     if python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
-      "$EVENTS_FILE" "$tmp" ${1:+"$1"}; then
+      "$EVENTS_FILE" "$tmp"; then
       mv "$tmp" "$OUTPUT_FILE"
       return 0
     fi
