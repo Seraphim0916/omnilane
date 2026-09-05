@@ -46,6 +46,56 @@ elif [[ "$MODE" == "sysops" ]]; then
 else
   SANDBOX=workspace-write
 fi
+
+LIVE_INBOX="${OMNILANE_INBOX:-}"
+if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
+  EVENTS_FILE="${OUTPUT_FILE}.events.jsonl"
+  STDERR_FILE="${OUTPUT_FILE}.stderr.log"
+  PROGRESS_FILE="${OUTPUT_FILE}.progress.log"
+  SESSION_ID_FILE="${OUTPUT_FILE}.session-id"
+  CODEX_LIVE_RUNNER="$(dirname "${BASH_SOURCE[0]}")/run-codex-live.py"
+
+  for path in "$EVENTS_FILE" "$STDERR_FILE" "$PROGRESS_FILE" "$SESSION_ID_FILE"; do
+    if [[ -L "$path" || ( -e "$path" && ! -f "$path" ) ]]; then
+      echo "omnilane: unsafe Codex live artifact path" >&2
+      exit 125
+    fi
+  done
+  command -v python3 >/dev/null 2>&1 || {
+    echo "omnilane: Codex live mode requires python3" >&2
+    exit 127
+  }
+  [[ -f "$CODEX_LIVE_RUNNER" ]] || {
+    echo "omnilane: Codex live runner is missing" >&2
+    exit 127
+  }
+  truncate_payload "$PROMPT_FILE" 140000
+  (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
+
+  set +e
+  (
+    cd "$WORKDIR" || exit 127
+    run_with_timeout "$RUN_TIMEOUT" env \
+      -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_ORGANIZATION -u OPENAI_PROJECT -u OPENAI_API_BASE \
+      OMNILANE_DEPTH=1 \
+      python3 "$CODEX_LIVE_RUNNER" \
+        --codex-bin "$CODEX_BIN" \
+        --cwd "$WORKDIR" \
+        --model "$MODEL" \
+        --effort "$EFFORT" \
+        --sandbox "$SANDBOX" \
+        --inbox "$LIVE_INBOX" \
+        --events "$EVENTS_FILE" \
+        --output "$OUTPUT_FILE" \
+        --progress "$PROGRESS_FILE" \
+        --session-id-file "$SESSION_ID_FILE" \
+        2> "$STDERR_FILE"
+  )
+  RC=$?
+  set -e
+  [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
+  exit "$RC"
+fi
 # `codex exec resume` has no -s/--sandbox flag (rejects it with exit 2); the
 # same policy is only reachable there through the sandbox_mode config override.
 if [[ "$THREAD_MODE" == "resume" ]]; then

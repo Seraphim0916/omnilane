@@ -28,10 +28,13 @@ done
   echo "omnilane: --probe-timeout requires --probe V" >&2
   exit 2
 }
-REPO="${OMNILANE_DOCTOR_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="${OMNILANE_DOCTOR_REPO:-$SCRIPT_ROOT}"
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
 PROBE_SCRIPT="${OMNILANE_PROVIDER_PROBE_SCRIPT:-$REPO/scripts/provider-probe.sh}"
 GOAL_LOOP="${OMNILANE_DOCTOR_GOAL_LOOP:-$REPO/scripts/lib/goal-loop.sh}"
+# shellcheck disable=SC1091
+source "$SCRIPT_ROOT/scripts/lib/live-protocol.sh"
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
@@ -355,6 +358,43 @@ fi
 
 # A real inference call is explicit and single-vendor only. Default doctor
 # remains local/offline. Never relay provider output or runner stderr.
+live_capable_present=""
+live_unavailable_present=""
+resolved_codex_bin="$(
+  set +u
+  [[ -f "$OMNILANE_HOME/local.sh" ]] && . "$OMNILANE_HOME/local.sh" 2>/dev/null
+  printf '%s' "${CODEX_BIN:-codex}"
+)"
+for name in $vendor_present; do
+  case "$name" in
+    claude|gemini)
+      live_capable_present="$live_capable_present $name"
+      ;;
+    codex)
+      if codex_live_surface_available "$resolved_codex_bin"; then
+        live_capable_present="$live_capable_present codex"
+        report PASS codex-live "app-server initialize handshake succeeded"
+      else
+        live_unavailable_present="$live_unavailable_present codex"
+        report PASS codex-live "unavailable: app-server initialize handshake failed; upgrade codex"
+      fi
+      ;;
+    *)
+      live_unavailable_present="$live_unavailable_present $name"
+      ;;
+  esac
+done
+if [[ -n "$live_capable_present" ]]; then
+  report PASS live-capable "${live_capable_present# }"
+else
+  report WARN live-capable "none"
+fi
+if [[ -n "$live_unavailable_present" ]]; then
+  report PASS live-unavailable "${live_unavailable_present# }"
+else
+  report PASS live-unavailable "none"
+fi
+
 if [[ -n "$PROBE_VENDOR" ]]; then
   if [[ ! -x "$PROBE_SCRIPT" ]]; then
     report FAIL provider-probe "probe runner is unavailable"
