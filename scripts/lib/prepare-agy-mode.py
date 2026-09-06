@@ -255,13 +255,13 @@ def stage_work_agent(app_root: Path, workdir: Path) -> None:
     # Never adopt or overwrite a user profile, an active run or stale state.
     try:
         leaf.mkdir(mode=0o700)
-        initial_stat = leaf.stat(follow_symlinks=False)
+        initial_stat = leaf.lstat()
         expected_identity = (initial_stat.st_dev, initial_stat.st_ino)
     except FileExistsError as exc:
         cleaned = load_json(app_root / "workspace-agent-cleaned.json", "cleaned workspace policy")
         if leaf.is_symlink() or not leaf.is_dir():
             raise ValueError("unsafe existing agy workspace policy leaf") from exc
-        st = leaf.stat(follow_symlinks=False)
+        st = leaf.lstat()
         if (cleaned.get("leaf") != str(leaf) or cleaned.get("app_root") != str(app_root.resolve())
                 or cleaned.get("workdir") != str(workdir) or cleaned.get("agent") != name
                 or (st.st_dev, st.st_ino) != (cleaned.get("device"), cleaned.get("inode"))
@@ -281,7 +281,7 @@ def stage_work_agent(app_root: Path, workdir: Path) -> None:
             json.dump(marker, handle)
             handle.write("\n")
         os.symlink(agent, "agent.md", dir_fd=fd)
-        current = leaf.stat(follow_symlinks=False)
+        current = leaf.lstat()
         if (current.st_dev, current.st_ino) != (st.st_dev, st.st_ino):
             raise ValueError("agy workspace policy leaf changed during staging")
     finally:
@@ -331,7 +331,7 @@ def cleanup_work_agent(app_root: Path, workdir: Path) -> None:
         os.unlink(".omnilane-owned.json", dir_fd=fd)
         # No path-based rmdir: another process could replace the name after
         # validation. Keep this empty owned directory and reuse its exact inode.
-        current = leaf.stat(follow_symlinks=False)
+        current = leaf.lstat()
         if (current.st_dev, current.st_ino) != (st.st_dev, st.st_ino):
             raise ValueError("agy workspace policy leaf changed during cleanup; replacement preserved")
         atomic_write_json(app_root / "workspace-agent-cleaned.json", state)
