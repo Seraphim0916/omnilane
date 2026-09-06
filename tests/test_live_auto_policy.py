@@ -104,22 +104,22 @@ def main():
                     process = subprocess.run(args, cwd=ROOT, env=env, text=True, capture_output=True)
                     reject = (
                         (vendor == "grok" and mode == "work")
-                        or (vendor == "gemini" and mode == "work")
                         or (vendor == "grok" and mode == "advise" and requested == "live")
                     )
                     expected = "single-shot" if requested == "single-shot" or (requested == "auto" and vendor in ["codex", "grok"]) else "live"
                     label = f"{vendor}/{mode}/{requested}"
                     if reject:
-                        if vendor == "gemini" and mode == "work":
-                            marker_text = "SearchWeb bypasses"
-                        elif mode == "work":
+                        if mode == "work":
                             marker_text = "not enforced on macOS"
                         else:
                             marker_text = "only explicit --mode sysops"
                         ok = process.returncode == 2 and marker_text in process.stderr
                     else:
                         result = dict(line.split("=", 1) for line in process.stdout.splitlines() if "=" in line)
-                        ok = process.returncode == 0 and result.get("session_mode") == expected
+                        ok = (process.returncode == 0
+                              and result.get("session_mode") == expected
+                              and result.get("vendor") == vendor
+                              and result.get("mode") == mode)
                     if not ok:
                         failures.append(f"{label}: expected {'reject' if reject else expected}; rc={process.returncode}; stdout={process.stdout.strip()}; stderr={process.stderr.strip()}")
                     count += 1

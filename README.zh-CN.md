@@ -300,6 +300,8 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 - **work**：文件与命令操作限于显式 `--workdir`，关闭代理工具网络访问，保留模型连接。不支持的强制边界在调用模型前停止，不会静默切换为 sysops。
 - **sysops**：每次派工显式选择，开放代理工具、文件和网络访问；不作为通道默认值，任务必须列明允许的操作。
 
+CLI 省略 `--workdir` 时默认使用调用端当前目录；任务说明仍应明确工作目录。MCP `route`／`dry_run` 的 work 接口则单独要求明确的 `workdir`。
+
 Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
 
 ## 🔒 内置安全机制

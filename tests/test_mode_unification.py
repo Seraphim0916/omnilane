@@ -774,18 +774,37 @@ class DispatchModeContracts(unittest.TestCase):
         self.assertEqual(plan.get("session_mode"), "live")
         self.assertEqual(plan.get("mode"), "sysops")
 
-    def test_gemini_advise_resolves_without_mode_downgrade_and_work_fails_closed(self) -> None:
+    def test_gemini_advise_resolves_without_mode_downgrade(self) -> None:
         advise = self.dispatch("gemini", "advise", "--live")
         self.assertEqual(advise.returncode, 0, advise.stderr)
         plan = dict(line.split("=", 1) for line in advise.stdout.splitlines() if "=" in line)
         self.assertEqual(plan.get("mode"), "advise")
         self.assertEqual(plan.get("session_mode"), "live")
 
-        work = self.dispatch("gemini", "work", "--live")
-        self.assertEqual(work.returncode, 2)
-        self.assertIn("SearchWeb bypasses", work.stderr)
-        self.assertIn("native work policy is not yet verified", work.stderr)
         self.assertFalse((self.home / "jobs").exists())
+
+    def test_help_describes_sysops_for_all_supported_vendors(self) -> None:
+        result = subprocess.run(
+            ["/bin/bash", str(ROOT / "scripts/dispatch.sh"), "--help"],
+            cwd=ROOT, env=self.env, text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("sysops (vendor sandbox disabled", result.stdout)
+        self.assertIn("codex, claude, grok, and gemini", result.stdout)
+        self.assertNotIn("codex only", result.stdout)
+        self.assertNotIn("other vendors treat it as work", result.stdout)
+
+    def test_gemini_work_routes_ordinary_and_live_without_downgrade(self) -> None:
+        for session_flag, session_mode in (("--single-shot", "single-shot"), ("--live", "live")):
+            with self.subTest(session_mode=session_mode):
+                result = self.dispatch("gemini", "work", session_flag)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                plan = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+                self.assertEqual(plan.get("vendor"), "gemini")
+                self.assertEqual(plan.get("mode"), "work")
+                self.assertEqual(plan.get("session_mode"), session_mode)
+        self.assertFalse((self.home / "jobs").exists())
+
 
 
 if __name__ == "__main__":

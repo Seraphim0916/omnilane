@@ -60,9 +60,9 @@ flags:
                          before any provider call or job state
   --mode advise|work|sysops
                          advise (read-only, default), work (may edit files),
-                         or sysops (work without the vendor sandbox, for
-                         service operations like launchctl — codex only;
-                         other vendors treat it as work)
+                         or sysops (vendor sandbox disabled, for service
+                         operations like launchctl; supported by
+                         codex, claude, grok, and gemini)
   --workdir DIR          working directory handed to the vendor CLI
   --vendor V             pin one configured vendor (codex|claude|grok|gemini|kimi|qwen|opencode|openrouter|deepseek|zai|mistral|groq|cerebras)
   --model M              override the routed model
@@ -787,10 +787,6 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 
 # Fail closed before creating job state or starting a provider when the selected
 # runtime cannot enforce the requested mode. Dry-run reports the same gap.
-if [[ "$VENDOR" == "gemini" && "$MODE" == "work" ]]; then
-  echo "omnilane: Gemini work is unavailable: native work policy is not yet verified; SearchWeb bypasses URL permission rules and selected-agent terminal behavior remains unverified" >&2
-  exit 2
-fi
 if [[ "$VENDOR" == "grok" && "$MODE" == "work" && "$(uname -s)" == "Darwin" ]]; then
   echo "omnilane: Grok work requires disabled agent-tool network; xAI CLI child-network restrictions are not enforced on macOS" >&2
   exit 2

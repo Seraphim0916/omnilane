@@ -200,7 +200,13 @@ dispatch stay in this skill and the CLI. Manage the local board with
 - **`--mode sysops`** explicitly selects unrestricted native policies for
   Codex, Claude, Grok, and Agy; it is not an alias for work. It is a per-dispatch
   opt-in, never a lane default, and task text must name the allowed operations.
-  Codex `work`/`sysops` still needs a git-repo `--workdir`.
+  Codex `work`/`sysops` supports non-Git directories through
+  `--skip-git-repo-check`. Without an existing whole-job timeout, dispatch
+  adds one when its supervisor is available; otherwise it warns and retains
+  the per-call watchdog path.
+  The CLI defaults an omitted `--workdir` to the caller’s current directory;
+  task briefs must still specify it explicitly. The MCP work interface
+  separately requires an explicit `workdir`.
 - **Grok advise web tools** use internal `web_search` / `web_fetch` selectors,
   while permission rules keep their native `WebSearch` / `WebFetch` class names.
   The complete single-shot `plain` path has real search, fetched-page, and native
