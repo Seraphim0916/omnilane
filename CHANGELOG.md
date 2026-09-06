@@ -8,10 +8,19 @@ semantic version tags.
 
 ## [0.41.1] - 2026-09-06
 
+### Changed
+
+- Default the Astra candidates in hardest-coding and hard-judgment to `xhigh`, retaining explicit `--vendor codex --effort max` upgrades. Vendor order and other model efforts are unchanged; this adds no automatic risk/retry escalation and makes no claim of measured CLI subscription-quota savings.
+
 ### Fixed
 
 - Restore Python 3.9 compatibility in Agy workspace-policy staging and cleanup by replacing four unsupported `Path.stat(follow_symlinks=False)` calls with equivalent `Path.lstat()` calls. Symlink no-follow behavior, inode identity checks, directory-descriptor operations, and concurrent-replacement protections remain intact.
 - Complete the isolated CI strict-doctor fixture with explicit plugin-enabled and directory-marketplace settings. Strict checking and native settings validation remain enabled; missing, disabled, or mismatched plugin fixtures still fail.
+
+- Make Linux and macOS offline fixtures independent of the operator home, use portable permission-mode checks, and assert platform-specific live restrictions without assuming macOS behavior on Linux.
+- Fix new Gemini threads on stock macOS Bash 3.2 by guarding the empty thread-argument array expansion under `set -u`; populated resume arguments, provider modes, and permissions remain unchanged.
+
+- Keep Codex live close bounded under FIFO backpressure and interrupted partial input: forward raw bytes through a private bounded buffer, preserve unsent suffixes for the close drain, and retain accepted queued input with a failure result if the runner exits before forwarding it. Undelivered input is reported instead of silently dropped; other providers retain their existing forwarding paths.
 
 ## [0.40.0] - 2026-09-06
 

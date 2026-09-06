@@ -107,12 +107,12 @@ therefore it does not replace the current long-context default or fallbacks.
 
 ### Product defaults: old → new
 
-| Lane | Previous first/chain | 2026-09-05 first/chain | Decision boundary |
+| Lane | Previous first/chain | 2026-09-06 first/chain | Decision boundary |
 |---|---|---|---|
-| hardest-coding | Fable 5.1 xhigh → Sol xhigh → Grok 4.6 → Flash 3.7 high | Fable 5.1 max → Astra max → Grok 4.6 → Flash 3.8 high | Correctness-first same-condition and native coding evidence |
+| hardest-coding | Fable 5.1 xhigh → Sol xhigh → Grok 4.6 → Flash 3.7 high | Fable 5.1 max → Astra xhigh → Grok 4.6 → Flash 3.8 high | Correctness-first same-condition and native coding evidence |
 | bulk-mechanical | Sol high → Flash 3.7 high → Sonnet 5 high | Sol high → Flash 3.8 high → Sonnet 5 high | Keep proven migration/endurance first choice; refresh Flash fallback |
 | triage | Luna high → Flash 3.7 low → Haiku 4.5 | Luna high → Flash 3.8 low → Haiku 4.5 | Keep cheap first-pass route; refresh Flash fallback |
-| hard-judgment | Opus 5 xhigh → Sol max → Grok 4.6 | Fable 5.1 xhigh → Astra max → Grok 4.6 | Strongest current judgment rows; this is not a controller selector |
+| hard-judgment | Opus 5 xhigh → Sol max → Grok 4.6 | Fable 5.1 xhigh → Astra xhigh → Grok 4.6 | Strongest current judgment rows; this is not a controller selector |
 | taste-final | Fable 5.1 high → Sol max → Grok 4.6 → Flash 3.7 high | Fable 5.1 xhigh → Astra xhigh → Grok 4.6 → Flash 3.8 high | General-quality ordering with an explicit no-aesthetic-benchmark caveat |
 | consult | Sol max → Fable 5.1 high → Grok 4.6 → Flash 3.7 high | Astra xhigh → Fable 5.1 xhigh → Grok 4.6 → Flash 3.8 medium | Four-vendor explicit consultation; `--vendor` still pins family |
 | ui-draft | Sol xhigh → Fable 5.1 high → Flash 3.7 high | Sol high → Fable 5.1 xhigh → Flash 3.8 high | Native high is faster/cheaper than xhigh here; references remain required |
@@ -121,6 +121,15 @@ therefore it does not replace the current long-context default or fallbacks.
 | live-search | Grok 4.6 → Flash 3.7 high → Sonnet 5 high → off | Grok 4.6 → Flash 3.8 high → Sonnet 5 high → off | Preserve native X first; backups are generic web search |
 | coding-overflow | Grok 4.6 → Flash 3.7 high → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Grok 4.6 → Flash 3.8 high → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit quota relief; preserve supported non-Codex vendors and aliases |
 | arbitrate | off | off | Opt-in only; each voter and round consumes quota |
+
+**2026-09-06 effort policy:** Astra defaults to `xhigh` in hardest-coding and
+hard-judgment, including their Codex fallbacks; explicitly request
+`--vendor codex --effort max` when needed. The dated AA v4.2 non-estimated
+rows put xhigh at 54.31 and $1.8473/task versus max at 54.66 and
+$2.5673/task. These are benchmark API costs, not demonstrated CLI subscription
+quota savings or a guarantee for individual tasks. Vendor order, Claude efforts,
+Sol high, Luna high, and Gemini/Grok routes remain unchanged. No automatic
+risk classifier, retry escalation, or new paid API route is introduced.
 
 `voter_spec` is a separate model table: Astra xhigh, Fable 5.1 xhigh,
 Flash 3.8 medium, and Grok 4.6 back the same four voters. It does not add

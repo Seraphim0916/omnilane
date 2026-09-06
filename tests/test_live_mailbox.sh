@@ -339,8 +339,11 @@ EOF
 case_gemini_schema() {
   local home="$TEST_ROOT/gemini" bin="$TEST_ROOT/gemini/bin"
   local fake="$bin/agy" args="$home/agy.args" input="$home/agy.input"
+  local provider_home="$home/provider-home"
   local job job_dir second close_out
-  mkdir -p "$home" "$bin"
+  # The real runner resolves GeminiDir before starting agy. Keep the fake CLI
+  # independent of an operator's installed/authenticated ~/.gemini directory.
+  mkdir -p "$home" "$bin" "$provider_home/.gemini"
   cat > "$fake" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -354,7 +357,7 @@ done
 EOF
   chmod +x "$fake"
   printf 'triage: gemini "Gemini Fake" -\n' > "$home/routing.local.yaml"
-  job="$(OMNILANE_HOME="$home" AGY_BIN="$fake" FAKE_AGY_ARGS="$args" \
+  job="$(HOME="$provider_home" OMNILANE_HOME="$home" AGY_BIN="$fake" FAKE_AGY_ARGS="$args" \
     FAKE_AGY_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
       --idle-timeout 0 --mode sysops --vendor gemini triage first)"
   job_dir="$home/jobs/$job"

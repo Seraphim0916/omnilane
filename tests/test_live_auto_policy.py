@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dry-run compatibility matrix; fake CLIs never call a provider."""
 import os
+import platform
 from pathlib import Path
 import subprocess
 import tempfile
@@ -102,14 +103,13 @@ def main():
                         args.append("--" + requested)
                     args += ["policy-" + vendor, "Never call a provider."]
                     process = subprocess.run(args, cwd=ROOT, env=env, text=True, capture_output=True)
-                    reject = (
-                        (vendor == "grok" and mode == "work")
-                        or (vendor == "grok" and mode == "advise" and requested == "live")
-                    )
+                    macos_work = vendor == "grok" and mode == "work" and platform.system() == "Darwin"
+                    restricted_live = vendor == "grok" and mode != "sysops" and requested == "live"
+                    reject = macos_work or restricted_live
                     expected = "single-shot" if requested == "single-shot" or (requested == "auto" and vendor in ["codex", "grok"]) else "live"
                     label = f"{vendor}/{mode}/{requested}"
                     if reject:
-                        if mode == "work":
+                        if macos_work:
                             marker_text = "not enforced on macOS"
                         else:
                             marker_text = "only explicit --mode sysops"

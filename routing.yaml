@@ -20,10 +20,10 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding: claude claude-fable-5-1 max | codex gpt-6-astra max | grok grok-4.6 - | gemini gemini-3.8-flash-high - # correctness-first coding: Fable max leads the same-condition comparison; Astra max is the strongest verified Codex fallback; Grok and Flash keep cross-vendor depth
+hardest-coding: claude claude-fable-5-1 max | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high - # correctness-first coding: Fable max leads the same-condition comparison; Astra xhigh is the default Codex quality/cost tradeoff; explicit --effort max remains available; Grok and Flash keep cross-vendor depth
 bulk-mechanical: codex gpt-5.6-sol high | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high # endurance and migration work stays on proven Sol high; Flash 3.8 refreshes the fast middle fallback; Sonnet preserves cross-vendor depth
 triage: codex gpt-5.6-luna high | gemini gemini-3.8-flash-low - | claude claude-haiku-4-5 - # first-pass filtering favors the low-cost Luna row; Flash low and Haiku remain cheap cross-vendor fallbacks
-hard-judgment: claude claude-fable-5-1 xhigh | codex gpt-6-astra max | grok grok-4.6 - # strongest same-condition judgment row first, then an independently verified Codex family and Grok; this lane is not a controller selector
+hard-judgment: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 - # strongest same-condition judgment row first, then an independently verified Codex family and Grok; this lane is not a controller selector
 taste-final: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high - # final prose and style still require human taste review; general quality evidence orders the candidates without claiming an aesthetic benchmark
 consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-medium - # direct named-model consultation chain; keep --vendor to pin the requested family and prevent fallback
 ui-draft: codex gpt-5.6-sol high | claude claude-fable-5-1 xhigh | gemini gemini-3.8-flash-high - # UI drafts require a design system or references; measured coding/agent evidence supports the order but does not prove visual taste
@@ -38,7 +38,7 @@ arbitrate: off - - # opinion panel remains opt-in because each voter and round c
 # Claude Fable 5.1 is in the taste and hardest-coding defaults because it leads
 # Opus 5 on every Artificial Analysis axis at the same effort. It is not in
 # bulk or triage: it prices at twice Opus 5 per token and consumes the most
-# subscription quota per turn. Opus 5 now leads hard-judgment on a per-cost,
-# lower-hallucination basis and remains selectable everywhere via
-# ~/.omnilane/routing.local.yaml, for example, to bring Fable back:
-# hard-judgment: claude claude-fable-5-1 xhigh
+# subscription quota per turn. Fable leads hard-judgment; Opus remains
+# explicitly selectable via --vendor claude --model claude-opus-5.
+# Astra defaults to xhigh; use --vendor codex --effort max when explicitly needed.
+# No automatic risk escalation or failure-triggered effort upgrade is added.

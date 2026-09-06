@@ -68,10 +68,10 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
 | taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
@@ -88,6 +88,11 @@ Claude Fable 5.1 leads the current hardest-coding, hard-judgment, and
  Codex-quota backup/reviewer. These are role recommendations, not a lane or
  automatic selector. Opus remains explicitly selectable and in long-context
  fallback.
+
+Astra defaults to `xhigh` on the high-difficulty lanes. For an explicitly needed
+upgrade, use `--vendor codex --effort max`; no automatic risk classification or
+failure-triggered effort escalation is added. AA API task costs do not prove
+subscription-quota savings.
 
 ## Natural-language consultation
 
@@ -244,7 +249,8 @@ These notes never expand the commander's reserved self-execution scope. If the v
   duty in bulk-mechanical and live-search; never self-assign top judgment or
   hardest implementation.
 - **GPT Astra main**: prompt-level controller backup and independent reviewer.
-  Use max for hardest coding/judgment and xhigh for consult/taste. Explicit
+  Default to xhigh for hardest coding/judgment and consult/taste; use
+  `--vendor codex --effort max` only for an explicitly requested upgrade. Explicit
   model and effort always outrank these defaults.
 - **GPT Sol main**: bulk mechanical work and constrained UI drafts are yours at
   high; escalate hardest coding and judgment to Fable/Astra.

@@ -235,7 +235,7 @@ if [[ -n "$THREAD_MODE" ]]; then
       "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
       "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --print-timeout "${RUN_TIMEOUT}s" --output-format json \
-      "${THREAD_ARGS[@]}" -p "$(cat "$PROMPT_FILE")" \
+      ${THREAD_ARGS[@]+"${THREAD_ARGS[@]}"} -p "$(cat "$PROMPT_FILE")" \
       > "${OUTPUT_FILE}.result.json" 2> "${OUTPUT_FILE}.stderr.log"
   )
   RC=$?

@@ -127,6 +127,7 @@ close_requested=0
 close_reason=""
 close_drain_failed=0
 close_partial=""
+natural_runner_exit=0
 CLOSE_DRAIN_TIMEOUT=0.1
 CLOSE_RUNNER_GRACE=7.5
 CLOSE_TERM_GRACE=0.1
@@ -134,11 +135,14 @@ CLOSE_KILL_GRACE=0.1
 runner_writer_open=0
 inbox_open=0
 events_reader_open=0
+forward_spool_open=0
 runner_pid=""
 
 # Invoked by the EXIT trap below.
 # shellcheck disable=SC2329
 cleanup_live_mailbox() {
+  if [[ -n "${forward_spool:-}" ]]; then rm "$forward_spool" 2>/dev/null || true; fi
+  if [[ "$forward_spool_open" -eq 1 ]]; then exec 6<&-; exec 7>&-; forward_spool_open=0; fi
   if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
   if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
   if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
@@ -231,7 +235,72 @@ fi
 trap 'close_requested=1' USR1
 trap 'close_requested=1' PIPE
 trap cleanup_live_mailbox EXIT
+if [[ "$VENDOR" == "codex" ]]; then
+  # Allocate once before publishing the holder PID. Reader and writer offsets
+  # are independent; unlink immediately and keep this 0600 file private to us.
+  forward_spool="$(mktemp "$JOB_DIR/.forward.XXXXXX")" || exit 1
+  exec 6< "$forward_spool"
+  forward_spool_open=1
+  exec 7> "$forward_spool"
+  rm "$forward_spool"
+  forward_spool=""
+fi
 truncate_payload "$PROMPT_FILE" 102400
+# Codex input must not be consumed by Bash read: an interrupted partial read
+# can discard bytes before the close trap runs. Pump raw bytes instead. The
+# anonymous file holds at most one 64 KiB chunk, with shared read offset on FD 6
+# and an independent append/reset offset on FD 7. A close drains its remaining
+# suffix first; successful sends truncate/reset it instead of growing a spool.
+pump_codex_input() {
+  python3 - <<'PYPUMP'
+import os
+import select
+import sys
+import time
+
+pending = b""
+progress = False
+
+def reset_spool():
+    os.ftruncate(7, 0)
+    os.lseek(6, 0, os.SEEK_SET)
+    os.lseek(7, 0, os.SEEK_SET)
+
+os.set_blocking(3, False)
+os.set_blocking(4, False)
+try:
+    pending = os.read(6, 65536)
+    if not pending:
+        reset_spool()
+        readable, _, _ = select.select([4], [], [], 1)
+        if not readable:
+            sys.exit(3)
+        chunk = os.read(4, 65536)
+        if not chunk:
+            sys.exit(1)
+        # FD 7 is a private regular file, never the backpressured FIFO.
+        while chunk:
+            chunk = chunk[os.write(7, chunk):]
+        pending = os.read(6, 65536)
+        progress = True
+    deadline = time.monotonic() + 0.05
+    while pending and time.monotonic() < deadline:
+        _, writable, _ = select.select([], [3], [], max(0, deadline - time.monotonic()))
+        if writable:
+            pending = pending[os.write(3, pending):]
+            progress = True
+    if not pending:
+        reset_spool()
+except OSError:
+    if pending:
+        os.lseek(6, -len(pending), os.SEEK_CUR)
+    sys.exit(1)
+if pending:
+    os.lseek(6, -len(pending), os.SEEK_CUR)
+sys.exit((4 if progress else 2) if pending else 0)
+PYPUMP
+}
+
 INITIAL_TEXT="$(cat "$PROMPT_FILE")"
 if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
   FOREMAN_SESSION_VALUE="$FOREMAN_SESSION"
@@ -241,7 +310,7 @@ fi
 
 write_current_pid_file "$HOLDER_PID_FILE"
 export OMNILANE_INBOX="$RUNNER_INBOX_FIFO"
-"$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" &
+"$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
 runner_pid=$!
 
 # Open the runner writer only after its FIFO reader starts.
@@ -257,7 +326,13 @@ if ! printf '%s\n' "$initial_payload" >&3; then close_requested=1; fi
 
 last_activity=$SECONDS
 last_result_event=""
-while kill -0 "$runner_pid" 2>/dev/null; do
+# A dead Codex reader can leave accepted bytes in the public FIFO even when
+# the previous pump was idle. Always take one final bounded drain in that case.
+while kill -0 "$runner_pid" 2>/dev/null || [[ "$VENDOR" == "codex" || "$close_requested" -ne 0 ]]; do
+  if [[ "$VENDOR" == "codex" && "$close_requested" -eq 0 ]] && ! kill -0 "$runner_pid" 2>/dev/null; then
+    natural_runner_exit=1
+    close_requested=1
+  fi
   if [[ "$close_requested" -ne 0 ]]; then
     rm "$READY_FILE" 2>/dev/null || true
     if [[ "$VENDOR" == "codex" ]]; then
@@ -265,7 +340,7 @@ while kill -0 "$runner_pid" 2>/dev/null; do
       # including backpressure, rather than granting each line another second.
       # Retain unforwarded bytes and report failure instead of silently dropping
       # an accepted follow-up when the runner stalls or a writer never stops.
-      if ! CLOSE_PARTIAL="$close_partial" python3 - "$JOB_DIR/close-pending.jsonl" "$CLOSE_DRAIN_TIMEOUT" <<'PY'
+      if ! CLOSE_PARTIAL="$close_partial" FORWARD_PENDING="$forward_spool_open" python3 - "$JOB_DIR/close-pending.jsonl" "$CLOSE_DRAIN_TIMEOUT" <<'PY'
 import array
 import fcntl
 import os
@@ -275,7 +350,14 @@ import termios
 import time
 
 deadline = time.monotonic() + float(sys.argv[2])
-pending = os.environ.get("CLOSE_PARTIAL", "").encode()
+pending = b""
+if os.environ.get("FORWARD_PENDING") == "1":
+    while True:
+        chunk = os.read(6, 65536)
+        if not chunk:
+            break
+        pending += chunk
+pending += os.environ.get("CLOSE_PARTIAL", "").encode()
 for fd in (3, 4):
     os.set_blocking(fd, False)
 try:
@@ -315,12 +397,29 @@ PY
     fi
     break
   fi
-  incoming=""
-  if IFS= read -r -t 1 incoming <&4; then
-    if ! printf '%s\n' "$incoming" >&3; then close_requested=1; fi
-    last_activity=$SECONDS
-  elif [[ "$close_requested" -ne 0 && -n "$incoming" ]]; then
-    close_partial="$incoming"
+  if [[ "$VENDOR" == "codex" ]]; then
+    if pump_codex_input; then
+      last_activity=$SECONDS
+    else
+      pump_status=$?
+      # 2/4 retain a suffix (4 made progress); 3 is an idle poll. A reader
+      # that dies with pending bytes still enters the close drain, even after
+      # its PID disappears, so those bytes are retained rather than dropped.
+      if [[ "$pump_status" -eq 2 || "$pump_status" -eq 4 ]]; then
+        [[ "$pump_status" -ne 4 ]] || last_activity=$SECONDS
+        kill -0 "$runner_pid" 2>/dev/null || close_requested=1
+      elif [[ "$pump_status" -ne 3 ]]; then
+        close_requested=1
+      fi
+    fi
+  else
+    incoming=""
+    if IFS= read -r -t 1 incoming <&4; then
+      if ! printf '%s\n' "$incoming" >&3; then close_requested=1; fi
+      last_activity=$SECONDS
+    elif [[ "$close_requested" -ne 0 && -n "$incoming" ]]; then
+      close_partial="$incoming"
+    fi
   fi
   while IFS= read -r event <&5; do
     [[ "$close_requested" -eq 0 ]] || break
@@ -337,6 +436,7 @@ PY
   fi
 done
 
+if [[ "$forward_spool_open" -eq 1 ]]; then exec 6<&-; exec 7>&-; forward_spool_open=0; fi
 if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
 if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
 if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
@@ -344,8 +444,8 @@ if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 set +e
 if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
-  # With the main read's 1s wakeup, 8.8s also precedes the shortest ~9s
-  # real interval of jobs close's integer SECONDS + 10 deadline.
+  # With the input pump's 1s read + 0.05s write, 8.85s also precedes
+  # the shortest ~9s interval of jobs close's integer SECONDS + 10 deadline.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
   if ! perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
@@ -384,7 +484,12 @@ if [[ -n "$close_reason" ]]; then
   emit_mode_notice "$close_reason" || true
 fi
 
-if [[ "$close_requested" -eq 1 ]]; then
+if [[ "$natural_runner_exit" -eq 1 ]]; then
+  # Draining after a natural/failed reader exit must not turn its exit status
+  # into success because an earlier turn happened to emit a result event.
+  rc="$runner_rc"
+  if [[ "$rc" -eq 0 && "$close_drain_failed" -ne 0 ]]; then rc=1; fi
+elif [[ "$close_requested" -eq 1 ]]; then
   # A vendor-emitted result always stands. A transcript the normalizer recovered
   # stands only for an idle-cap close whose runner still exited on its own: that
   # is the case the idle-cap recovery was written for, and out.txt carries the

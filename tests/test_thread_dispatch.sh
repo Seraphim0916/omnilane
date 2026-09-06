@@ -18,6 +18,10 @@ fail() {
   exit 1
 }
 
+mode_of() {
+  perl -e 'my @st=lstat($ARGV[0]); die "lstat: $!\n" unless @st; printf "%o\n", $st[2] & 07777;' "$1"
+}
+
 # Lines an operator sees: captured stdout plus the stderr file of the same run.
 count_visible() {
   local stdout_text="$1" stderr_file="$2" needle="$3"
@@ -52,7 +56,10 @@ PY
 
 HOME_DIR="$TEST_ROOT/home"
 BIN_DIR="$TEST_ROOT/bin"
-mkdir -p "$HOME_DIR" "$BIN_DIR"
+PROVIDER_HOME="$TEST_ROOT/provider-home"
+# Gemini's real policy helper requires GeminiDir even when its CLI is a fake.
+# No thread fixture should depend on an operator's provider installation.
+mkdir -p "$HOME_DIR" "$BIN_DIR" "$PROVIDER_HOME/.gemini"
 printf 'consult: claude fake-thread-model low | codex fake-codex low | grok fake-grok low | gemini fake-gemini low\n' \
   > "$HOME_DIR/routing.local.yaml"
 
@@ -209,8 +216,8 @@ OUT1="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
   || fail "first turn visibility missing: $OUT1"
 SESSION1="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["session_id"])' "$STATE")"
 assert_state "$STATE" orchard fake-thread-model "$SESSION1" 1
-[[ "$(stat -f '%Lp' "$HOME_DIR/threads")" == "700" ]] || fail "thread store mode is not 700"
-[[ "$(stat -f '%Lp' "$STATE")" == "600" ]] || fail "thread state mode is not 600"
+[[ "$(mode_of "$HOME_DIR/threads")" == "700" ]] || fail "thread store mode is not 700"
+[[ "$(mode_of "$STATE")" == "600" ]] || fail "thread state mode is not 600"
 FIRST_ARGV="$(sed -n '1p' "$FAKE_CLAUDE_ARGV_LOG")"
 [[ "$FIRST_ARGV" == *"--session-id $SESSION1"* ]] || fail "first turn omitted --session-id"
 [[ "$FIRST_ARGV" != *"--resume"* ]] || fail "first turn unexpectedly resumed"
@@ -357,7 +364,7 @@ rm "$FAKE_GROK_RETURN_FILE"
 assert_state "$GROK_STATE" grok-thread fake-grok "$GROK_SESSION2" 3 grok
 
 GEMINI_STATE="$HOME_DIR/threads/gemini-thread.json"
-GEMINI_OUT1="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
+GEMINI_OUT1="$(HOME="$PROVIDER_HOME" OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
   --thread gemini-thread --vendor gemini --model fake-gemini --effort low \
   --single-shot consult 'gemini turn one' 2>"$TEST_ROOT/gemini1.err")" \
   || fail "Gemini first turn failed"
@@ -377,7 +384,7 @@ GEMINI_ARGV1="$(sed -n '1p' "$FAKE_GEMINI_ARGV_LOG")"
   || fail "Gemini first turn argv malformed: $GEMINI_ARGV1"
 assert_state "$GEMINI_STATE" gemini-thread fake-gemini "$GEMINI_SESSION1" 1 gemini
 
-GEMINI_OUT2="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
+GEMINI_OUT2="$(HOME="$PROVIDER_HOME" OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
   --thread gemini-thread --vendor gemini --model fake-gemini --effort low \
   --single-shot consult 'gemini turn two' 2>"$TEST_ROOT/gemini2.err")" \
   || fail "Gemini second turn failed"
@@ -390,7 +397,7 @@ assert_state "$GEMINI_STATE" gemini-thread fake-gemini "$GEMINI_SESSION1" 2 gemi
 
 GEMINI_SESSION2="55555555-5555-4555-8555-555555555555"
 printf '%s\n' "$GEMINI_SESSION2" > "$FAKE_GEMINI_RETURN_FILE"
-GEMINI_OUT3="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
+GEMINI_OUT3="$(HOME="$PROVIDER_HOME" OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
   --thread gemini-thread --vendor gemini --model fake-gemini --effort low \
   --single-shot consult 'gemini replacement id')" || fail "Gemini replacement-id turn failed"
 rm "$FAKE_GEMINI_RETURN_FILE"

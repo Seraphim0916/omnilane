@@ -16,6 +16,10 @@ fail() {
   exit 1
 }
 
+mode_of() {
+  perl -e 'my @st = lstat($ARGV[0]); die "lstat: $!\n" unless @st; printf "%o\n", $st[2] & 07777;' "$1"
+}
+
 wait_for_file() {
   local path="$1" tries=0
   while [[ ! -f "$path" && "$tries" -lt 100 ]]; do
@@ -218,8 +222,8 @@ record="$home/inbox/$job_id.json"
 wait_for_file "$record" || fail "producer did not finish the atomic record write"
 [[ -f "$record" && ! -L "$record" ]] || fail "producer did not create one real record"
 [[ "$(find "$home/inbox" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" == "1" ]] || fail "producer created more than one record"
-[[ "$(stat -f '%Lp' "$home/inbox" 2>/dev/null || stat -c '%a' "$home/inbox")" == "700" ]] || fail "inbox mode is not 700"
-[[ "$(stat -f '%Lp' "$record" 2>/dev/null || stat -c '%a' "$record")" == "600" ]] || fail "record mode is not 600"
+[[ "$(mode_of "$home/inbox")" == "700" ]] || fail "inbox mode is not 700"
+[[ "$(mode_of "$record")" == "600" ]] || fail "record mode is not 600"
 
 RECORD="$record" EXPECTED_ID="$job_id" EXPECTED_WORKDIR="$workdir" perl -MJSON::PP -e '
   use bytes;
