@@ -365,6 +365,11 @@ resolved_codex_bin="$(
   [[ -f "$OMNILANE_HOME/local.sh" ]] && . "$OMNILANE_HOME/local.sh" 2>/dev/null
   printf '%s' "${CODEX_BIN:-codex}"
 )"
+resolved_grok_bin="$(
+  set +u
+  [[ -f "$OMNILANE_HOME/local.sh" ]] && . "$OMNILANE_HOME/local.sh" 2>/dev/null
+  printf '%s' "${GROK_BIN:-grok}"
+)"
 for name in $vendor_present; do
   case "$name" in
     claude|gemini)
@@ -377,6 +382,15 @@ for name in $vendor_present; do
       else
         live_unavailable_present="$live_unavailable_present codex"
         report PASS codex-live "unavailable: app-server initialize handshake failed; upgrade codex"
+      fi
+      ;;
+    grok)
+      if grok_live_surface_available "$resolved_grok_bin"; then
+        live_capable_present="$live_capable_present grok"
+        report PASS grok-live "agent stdio initialize handshake succeeded"
+      else
+        live_unavailable_present="$live_unavailable_present grok"
+        report PASS grok-live "unavailable: agent stdio initialize handshake failed"
       fi
       ;;
     *)

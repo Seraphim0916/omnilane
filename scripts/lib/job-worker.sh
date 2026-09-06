@@ -4,9 +4,19 @@ set -euo pipefail
 # Internal worker boundary for one dispatch. An optional whole-job supervisor
 # wraps this process so lock wait, retries, and vote rounds share one budget.
 
-# Runtime-relative shared library.
+# A per-job worker snapshot lives outside the repository tree. The dispatcher
+# pins its library root explicitly; direct invocations remain runtime-relative.
+JOB_WORKER_REPO="${OMNILANE_JOB_WORKER_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+source "$JOB_WORKER_REPO/scripts/lib/common.sh"
+if [[ -n "${OMNILANE_JOB_WORKER_EXPECTED_SHA256:-}" ]]; then
+  JOB_WORKER_STARTUP_SHA256="$(file_sha256 "${BASH_SOURCE[0]}")" || exit 2
+  if [[ "$JOB_WORKER_STARTUP_SHA256" != "$OMNILANE_JOB_WORKER_EXPECTED_SHA256" ]]; then
+    echo "omnilane: job worker snapshot SHA changed before startup" >&2
+    exit 2
+  fi
+fi
+unset OMNILANE_JOB_WORKER_REPO OMNILANE_JOB_WORKER_EXPECTED_SHA256
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 
@@ -56,8 +66,15 @@ LIVE_REQUIRED="${OMNILANE_LIVE_REQUIRED:-0}"
 [[ "$LIVE_REQUIRED" == "0" || "$LIVE_REQUIRED" == "1" ]] || {
   echo "omnilane: invalid worker live requirement" >&2; exit 2
 }
+if [[ "$VENDOR" == "grok" && "$MODE" != "sysops" && "$SESSION_MODE" != "single-shot" ]]; then
+  if [[ "$LIVE_REQUIRED" -eq 1 ]]; then
+    echo "omnilane: Grok --live supports only explicit --mode sysops; restricted ACP policy is unavailable" >&2
+    exit 2
+  fi
+  SESSION_MODE="single-shot"
+fi
 if [[ "$SESSION_MODE" == "auto" ]]; then
-  if [[ "$VENDOR" == "codex" ]]; then
+ if [[ "$VENDOR" == "codex" || "$VENDOR" == "grok" ]]; then
     SESSION_MODE="single-shot"
   elif live_vendor_capable "$VENDOR"; then
     SESSION_MODE="live"
@@ -66,18 +83,23 @@ if [[ "$SESSION_MODE" == "auto" ]]; then
   fi
 fi
 
-CODEX_LIVE_FALLBACK=0
+LIVE_SURFACE_FALLBACK=""
 if [[ "$VENDOR" == "codex" && "$SESSION_MODE" != "single-shot" ]]; then
   if ! codex_live_surface_available "${CODEX_BIN:-codex}"; then
     SESSION_MODE="single-shot"
-    CODEX_LIVE_FALLBACK=1
+    LIVE_SURFACE_FALLBACK="codex"
+  fi
+elif [[ "$VENDOR" == "grok" && "$SESSION_MODE" != "single-shot" ]]; then
+  if ! grok_live_surface_available "${GROK_BIN:-grok}"; then
+    SESSION_MODE="single-shot"
+    LIVE_SURFACE_FALLBACK="grok"
   fi
 fi
 
 if [[ "$SESSION_MODE" == "single-shot" ]]; then
   set +e
-  if [[ "$CODEX_LIVE_FALLBACK" -eq 1 ]]; then
-    run_single_shot "omnilane: codex live surface unavailable; ran in single-shot mode"
+  if [[ -n "$LIVE_SURFACE_FALLBACK" ]]; then
+    run_single_shot "omnilane: $LIVE_SURFACE_FALLBACK live surface unavailable; ran in single-shot mode"
   elif live_vendor_capable "$VENDOR"; then
     run_single_shot "omnilane: vendor '$VENDOR' was resolved to single-shot mode"
   else
@@ -103,6 +125,12 @@ EVENTS_FILE="${OUTPUT_FILE}.events.jsonl"
 EVENTS_ALIAS="$JOB_DIR/events.jsonl"
 close_requested=0
 close_reason=""
+close_drain_failed=0
+close_partial=""
+CLOSE_DRAIN_TIMEOUT=0.1
+CLOSE_RUNNER_GRACE=7.5
+CLOSE_TERM_GRACE=0.1
+CLOSE_KILL_GRACE=0.1
 runner_writer_open=0
 inbox_open=0
 events_reader_open=0
@@ -174,6 +202,20 @@ close_had_result() {
   last_result_status "$vendor_only"
 }
 
+recover_close_result_output() {
+  # Claude's stream-json process may remain resident after stdin EOF. The
+  # worker then enforces its bounded close deadline, so the runner's signal
+  # trap is not guaranteed enough time to normalize the already-completed
+  # result. Preserve that successful vendor result before declaring the job
+  # done; never synthesize output for an incomplete turn or overwrite output
+  # the runner already committed.
+  [[ "$VENDOR" == "claude" ]] || return 0
+  [[ ! -s "$OUTPUT_FILE" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
+    "$EVENTS_FILE" "$OUTPUT_FILE"
+}
+
 if ! prepare_live_mailbox; then
   if [[ "$LIVE_REQUIRED" -eq 1 ]]; then
     echo "omnilane: required $VENDOR live mailbox unavailable because FIFO setup failed" >&2
@@ -217,11 +259,59 @@ last_activity=$SECONDS
 last_result_event=""
 while kill -0 "$runner_pid" 2>/dev/null; do
   if [[ "$close_requested" -ne 0 ]]; then
+    rm "$READY_FILE" 2>/dev/null || true
     if [[ "$VENDOR" == "codex" ]]; then
-      while IFS= read -r -t 0.1 incoming <&4; do
-        if ! printf '%s\n' "$incoming" >&3; then break; fi
-        last_activity=$SECONDS
-      done
+      # Bash 3.2 has no fractional read timeout. Bound the *whole* drain,
+      # including backpressure, rather than granting each line another second.
+      # Retain unforwarded bytes and report failure instead of silently dropping
+      # an accepted follow-up when the runner stalls or a writer never stops.
+      if ! CLOSE_PARTIAL="$close_partial" python3 - "$JOB_DIR/close-pending.jsonl" "$CLOSE_DRAIN_TIMEOUT" <<'PY'
+import array
+import fcntl
+import os
+import select
+import sys
+import termios
+import time
+
+deadline = time.monotonic() + float(sys.argv[2])
+pending = os.environ.get("CLOSE_PARTIAL", "").encode()
+for fd in (3, 4):
+    os.set_blocking(fd, False)
+try:
+    while time.monotonic() < deadline:
+        readable, writable, _ = select.select([4], [3] if pending else [], [], 0)
+        if not readable and not pending:
+            sys.exit(0)
+        if readable and len(pending) < 65536:
+            pending += os.read(4, 65536 - len(pending))
+        if pending:
+            _, writable, _ = select.select([], [3], [], max(0, deadline - time.monotonic()))
+            if writable:
+                pending = pending[os.write(3, pending):]
+except (BrokenPipeError, OSError):
+    pass
+# Snapshot only bytes already queued at the deadline; a continuous writer
+# cannot extend this phase. New send callers no longer see inbox.ready.
+available = array.array("i", [0])
+fcntl.ioctl(4, termios.FIONREAD, available, True)
+remaining = available[0]
+while remaining:
+    chunk = os.read(4, min(remaining, 65536))
+    if not chunk:
+        break
+    pending += chunk
+    remaining -= len(chunk)
+if pending:
+    fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as saved:
+        saved.write(pending)
+    sys.exit(1)
+PY
+      then
+        close_drain_failed=1
+        emit_mode_notice "omnilane: close drain incomplete; unforwarded input retained in $JOB_DIR/close-pending.jsonl" || true
+      fi
     fi
     break
   fi
@@ -229,8 +319,11 @@ while kill -0 "$runner_pid" 2>/dev/null; do
   if IFS= read -r -t 1 incoming <&4; then
     if ! printf '%s\n' "$incoming" >&3; then close_requested=1; fi
     last_activity=$SECONDS
+  elif [[ "$close_requested" -ne 0 && -n "$incoming" ]]; then
+    close_partial="$incoming"
   fi
   while IFS= read -r event <&5; do
+    [[ "$close_requested" -eq 0 ]] || break
     if live_event_is_valid "$event"; then
       last_activity=$SECONDS
       if live_event_is_result "$VENDOR" "$event"; then
@@ -250,17 +343,40 @@ if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 
 set +e
 if [[ "$close_requested" -eq 1 ]]; then
-  graceful_wait=0
-  while kill -0 "$runner_pid" 2>/dev/null && [[ "$graceful_wait" -lt 50 ]]; do
-    sleep 0.1
-    graceful_wait=$((graceful_wait + 1))
-  done
-  if kill -0 "$runner_pid" 2>/dev/null; then
-    kill -TERM "$runner_pid" 2>/dev/null || true
+  # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
+  # With the main read's 1s wakeup, 8.8s also precedes the shortest ~9s
+  # real interval of jobs close's integer SECONDS + 10 deadline.
+  # Codex retains its full 3+2+1+1=7s normal shutdown budget.
+  # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
+  if ! perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
+    my ($pid, $grace, $term, $kill) = @ARGV;
+    sub wait_until {
+      my ($pid, $duration) = @_;
+      my $deadline = clock_gettime(CLOCK_MONOTONIC) + $duration;
+      while (kill 0, $pid) {
+        my $left = $deadline - clock_gettime(CLOCK_MONOTONIC);
+        return 0 if $left <= 0;
+        sleep($left < 0.02 ? $left : 0.02);
+      }
+      return 1;
+    }
+    exit 0 if wait_until($pid, $grace);
+    kill "TERM", $pid;
+    exit 0 if wait_until($pid, $term);
+    kill "KILL", $pid;
+    exit(wait_until($pid, $kill) ? 0 : 1);
+  ' "$runner_pid" "$CLOSE_RUNNER_GRACE" "$CLOSE_TERM_GRACE" "$CLOSE_KILL_GRACE"; then
+    close_drain_failed=1
   fi
 fi
-wait "$runner_pid" 2>/dev/null
-runner_rc=$?
+if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then
+  runner_rc=1
+  close_drain_failed=1
+  emit_mode_notice "omnilane: runner did not stop within close deadline" || true
+else
+  wait "$runner_pid" 2>/dev/null
+  runner_rc=$?
+fi
 set -e
 
 if [[ -n "$close_reason" ]]; then
@@ -276,9 +392,14 @@ if [[ "$close_requested" -eq 1 ]]; then
   # transcript is written but must not be reported as a finished turn.
   recovered_counts=0
   if [[ -n "$close_reason" && "$runner_rc" -eq 0 ]]; then recovered_counts=1; fi
-  if close_had_result 1 \
-    || { [[ "$recovered_counts" -eq 1 ]] && close_had_result 0; }; then
-    rc=0
+    if [[ "$close_drain_failed" -eq 0 ]] && { close_had_result 1 \
+      || { [[ "$recovered_counts" -eq 1 ]] && close_had_result 0; }; }; then
+      if recover_close_result_output; then
+        rc=0
+      else
+        rc=1
+        emit_mode_notice "omnilane: Claude live result completed but output recovery failed" || true
+      fi
   else
     rc=1
     emit_mode_notice "omnilane: $VENDOR live mailbox closed without a successful result event" || true

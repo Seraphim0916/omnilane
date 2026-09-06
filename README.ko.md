@@ -110,18 +110,18 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
-| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
-| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 실시간 X／웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
-| 🗳️ arbitrate | `off`(옵트인) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
+| 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
+| ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
 디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
@@ -313,18 +313,13 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
 
 ## 🎭 모드
 
-- **advise(기본)** — 읽기 전용 워커. Codex 는 read-only 샌드박스,
-  Claude 는 Read/Glob/Grep 만, Grok 은 plan 모드, Kimi 와 OpenCode 는 각자의
-  읽기 전용 plan 모드 고정, OpenRouter 는 설계상 advise 전용(순수 추론).
-- **work** — 지정한 `--workdir` 안에서만 파일 수정 허용. Codex 는
-  workspace-write, Claude 는 편집 자동 승인, Gemini 는 accept-edits 모드.
-  `openrouter` vendor 는 work 모드를 명확한 오류로 거부합니다——파일 편집은
-  에이전트형 CLI 벤더로 보내세요.
-- **sysops** — `work` 에서 벤더 샌드박스를 뺀 모드. 샌드박스가 거부하는 서비스
-  작업(`launchctl` 등)을 위한 것입니다. Codex 는 `-s danger-full-access` 로
-  실행하고, 다른 벤더는 일반 `work` 로 취급합니다. 워커에게 머신 전체 접근 권한을
-  주는 셈이므로 디스패치마다 명시적으로 지정해야 하며 레인 기본값이 될 수 없습니다.
-  `work` 가 샌드박스 거부로 실패하는 것을 직접 확인한 경우에만 쓰세요.
+- **advise(기본)**: 로컬 읽기 전용 분석입니다. 지원 벤더의 기본 검색 도구와 모델 연결은 유지하고 변경 도구는 제한합니다. 모든 벤더의 X／웹 검색 기능이 동등하다는 뜻은 아닙니다.
+- **work**: 파일 및 명령 작업은 명시한 `--workdir` 내부로 제한하고 에이전트 도구의 네트워크 접근을 끕니다. 모델 연결은 유지합니다. 강제 경계가 지원되지 않으면 모델 시작 전에 중단하며 sysops 로 조용히 전환하지 않습니다.
+- **sysops**: 매번 명시적으로 선택하여 도구, 파일, 네트워크 제한을 해제합니다. 레인 기본값으로 설정하지 않으며 작업에 허용된 동작을 명시해야 합니다.
+
+Codex 와 Claude 는 세 모드에 서로 다른 정책을 적용합니다. Agy advise／sysops 는 구독 인증을 교체하지 않고 독립 세션 설정을 사용합니다. Agy 1.1.27 work 는 검증된 네 도구와 기본 터미널 샌드박스로 신규／재개 범위를 검증했으며 작업 영역 내 읽기·쓰기·편집·빌드와 영역 밖 쓰기 거부를 확인했습니다. 외부 임시 파일／캐시 읽기도 제한됩니다. 설정은 시작할 때마다 명시적으로 다시 생성하며 불변이라고 주장하지 않습니다. 별도의 실제 work 라이브／FIFO 두 턴 검증에서 이전 턴 읽기, 영역 밖 쓰기 거부, 정상 종료 및 소스 불변을 확인했습니다. Grok advise 는 기본 도구 허용／거부 규칙을 사용합니다. 자식 프로세스 네트워크 격리는 Linux 전용이므로 macOS Grok work 는 시작 전에 중단됩니다. Grok 라이브는 명시적 sysops 가 필요합니다. 검색 가용성과 사용자 훅 영향은 실제 도구 이벤트로 검증하며 성공 종료 코드만으로 입증하지 않습니다. OpenRouter 는 advise 전용이며 다른 벤더는 이 네 벤더 계약에 자동 포함되지 않습니다.
+
+Grok 1.0.13의 단발 `plain` advise는 전체 도구 집합으로 실제 검색, 페이지 조회, 쓰기 거부를 검증했습니다. 내부 웹 도구 ID와 작업별 MCP 준비 상태를 사용하며 훅은 끄지 않습니다. 기존의 비어 있지 않은 `CONTEXT_MODE_MCP_SENTINEL_DIR`은 덮어쓰지 않고 충돌로 모델 시작 전에 중단합니다. 이 결과를 라이브나 macOS work 검증으로 확장하지 않습니다. 자세한 범위는 [날짜별 런타임 게이트](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)를 참조하십시오.
 
 ## 🔒 안전 장치
 
@@ -357,7 +352,7 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
 
 ## 📬 라이브 메일함
 
-라이브 메일함은 일회성 dispatch와 다른 Claude 및 Gemini용 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 유휴 상한 또는 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
+라이브 메일함은 일회성 dispatch와 다른 지원 모드의 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 유휴 상한 또는 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "시간 제한 테스트 실패를 확인해 주세요"
@@ -369,7 +364,7 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch`는 `$JOB_DIR/events.jsonl`을 따라가고, `tail`은 공개 `out.txt`를 읽습니다. 라이브 메일함은 Claude와 Gemini를 지원하며, 다른 벤더는 일반 일회성 dispatch로 실행되고 stderr와 `$JOB_DIR/mode-notice.txt`에 알림이 남습니다. `--live`는 상주 세션을 필수로 하며 결정된 벤더가 지원하지 않으면 즉시 실패합니다. `--single-shot`은 Claude나 Gemini에서도 일회성 실행을 강제합니다. `--idle-timeout SECONDS`는 유휴 상한을 설정하며 기본값은 900초이고 `0`이면 비활성화됩니다.
+`watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. Grok 은 추가로 `--mode sysops --workdir DIR` 가 필요합니다. ACP 가 제한 모드 경계를 강제하지 않으므로 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
 
 유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
 
@@ -490,12 +485,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
 <br/>
 
 요청했을 때만 가능합니다. 디스패치의 기본값은 읽기 전용 `advise` 이며 벤더별로
-구현되어 있습니다(읽기 전용 샌드박스, plan 모드, 또는 읽기 전용 도구 집합).
-수정하려면 `--mode work` 와 명시적인 `--workdir` 가 모두 필요합니다. 세 번째 모드인
-`--mode sysops` 는 `work` 에서 벤더 샌드박스를 뺀 것으로, 샌드박스가 거부하는 서비스
-작업(`launchctl` 등)을 위한 것입니다. codex 는 `-s danger-full-access` 로 실행하고
-다른 벤더는 `work` 로 취급하며, 디스패치마다 명시해야 할 뿐 레인 기본값이 될 수
-없습니다. 워커는 다시
+구현되어 있습니다(읽기 전용 샌드박스 또는 기본 도구 권한).
+범위를 제한한 수정에는 `--mode work` 와 명시적인 `--workdir` 가 모두 필요합니다.
+work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 유지하고 도구 네트워크를 끕니다.
+`--mode sysops` 는 Codex, Claude, Grok, Agy 각각의 독립적인 전체 접근 정책이며 work 의 별칭이 아닙니다.
+서비스 관리처럼 work 경계를 넘는 동작을 작업에서 명시적으로 허용할 때마다 선택하며 레인 기본값이 될 수 없습니다. 워커는 다시
 디스패치할 수도 없습니다——깊이 가드가 종료 코드 86 으로 중첩 팬아웃을 거부하므로,
 명령 하나가 에이전트 연쇄로 번져 할당량을 태우는 일은 없습니다.
 
@@ -521,6 +515,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.40.0 새 기능
+
+- **모드 구분 및 Grok 웹 기능 수정.** advise 는 읽기 전용과 지원되는 기본 검색, work 는 명시한 `--workdir` 내부 변경과 도구 네트워크 차단, sysops 는 매번 명시하는 전체 접근입니다. Grok 1.0.13의 완전한 단발 `plain` advise 경로에서 검색, 페이지 조회, 쓰기 거부를 검증했습니다. macOS work 및 제한된 라이브의 시작 전 검사는 유지합니다.
+- **명시적 Codex 및 Grok 라이브 세션.** Codex work와 Grok sysops 작업은 `--background --live`로 후속 입력과 명시적 종료를 지원합니다. Codex／Grok 자동 디스패치는 단발 실행을 유지하고 Claude／Gemini는 기존 자동 라이브 동작을 유지합니다. Grok advise는 ACP에 강제 가능한 읽기 전용 경계가 없어 `--live`를 거부합니다.
+- **제한되고 관측 가능한 종료.** EOF 인식 기능 프로브, 작업별 불변 worker 스냅샷, 인터프리터／SHA 출처, 종료 기한 및 프로세스 그룹 정리를 통해 멈추거나 종료된 라이브 작업을 제한합니다. OS 샌드박스 격리를 의미하지 않습니다.
+- **AA 기반 모델 범위.** 12개 레인 기본값에 Fable 5.1, GPT-6 Astra, Gemini 3.8 Flash를 반영하면서 기존 공급자와 명시적 모델 재정의를 유지합니다. 날짜가 지정된 AA v4.2 스냅샷은 643개 순위 구성을 기록하지만 카탈로그 등재가 런타임 지원을 보장하지는 않습니다.
+- **업그레이드.** `npm i -g omnilane@0.40.0`을 실행하거나 checkout을 업데이트한 뒤 `./install.sh`를 다시 실행하십시오.
 
 ## v0.33.0 새 기능
 
@@ -610,6 +612,8 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계�
   벤치마크가 닿지 않는 1M 훑기이기 때문입니다.
 
 ## v0.12.0 새 기능
+
+아래는 당시 릴리스 기록입니다. 현재 세 모드 계약과 0.40.0의 독립적인 전체 접근 sysops 정책은 [모드](#-모드)를 참조하십시오.
 
 - **`hardest-coding`의 Sol을 `max`에서 `xhigh`로** — AA의 노력 수준별 Coding Index
   에서 Sol의 xhigh가 자신의 max와 모든 Claude 티어를 앞서면서 비용은 약 3분의 1

@@ -7,7 +7,7 @@ description: 'Universal model-routing table + cross-vendor dispatch for ANY harn
 
 You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identical:
 
-1. **Identify your main model.** You know which model you are running as.
+1. **Identify the main model from current runtime metadata.** If the identity is unavailable, report it as unverified instead of guessing from a skill name or prior session.
 2. **Split the work into subtasks and classify each into a lane** (table below).
 3. **Dispatch every task by default — even when the lane's model is you:**
    implementation, search, investigation, file reads, verification, tests,
@@ -68,26 +68,26 @@ what dispatch picks when the first-choice vendor CLI is not installed.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
-| consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | Direct named-model consultation; always keep `--vendor` |
-| ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | UI drafts only WITH a design system / reference images; open-ended visual taste goes to taste-final |
-| long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-context synthesis ordered on AA-LCR, then cost and throughput |
-| fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | Fast multi-step agentic loops, multimodal checks |
-| live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) → off | Realtime X/web search and social context; Flash/Sonnet fall back to their own web-search tools |
-| coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex-quota relief valve for mid-tier coding; verify factual claims |
+| hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; always keep `--vendor` |
+| ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
+| long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-context synthesis; context size alone is not a quality result |
+| fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | Fast multi-step agentic loops and multimodal checks |
+| live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
+| coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. Enable with `arbitrate: vote codex,claude,grok -` in routing.local.yaml or via the configurator (any 1-4 voters). One quota hit PER VOTER PER ROUND; you chair: read the opinions and own the decision. Effort field 2 = debate round (voters rebut each other) |
 
-Claude Fable 5.1 (`claude-fable-5-1`) is in the taste and hardest-coding
-defaults because it leads Opus 5 on every Artificial Analysis axis at the same
-effort. It is not in bulk or triage because it prices at twice Opus 5 per token
-and consumes the most subscription quota per turn. Opus 5 now leads
-hard-judgment on a per-cost, lower-hallucination basis and remains selectable
-everywhere via `~/.omnilane/routing.local.yaml`, for example, to bring Fable
-back: `hard-judgment: claude claude-fable-5-1 xhigh`.
+Claude Fable 5.1 leads the current hardest-coding, hard-judgment, and
+ taste-final defaults at task-specific max/xhigh efforts. GPT-6 Astra is the
+ Codex-family fallback and independent-review path. Fable max is the quality-first prompt-level controller. Opus high/xhigh is
+ the balanced controller/independent-review option; Astra is the existing-
+ Codex-quota backup/reviewer. These are role recommendations, not a lane or
+ automatic selector. Opus remains explicitly selectable and in long-context
+ fallback.
 
 ## Natural-language consultation
 
@@ -107,15 +107,19 @@ Users may speak normally; they do not need lane names.
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
 | Opus | claude | claude-opus-5 | high |
-| Fable 5.1 | claude | claude-fable-5-1 | high |
+| Fable 5.1 | claude | claude-fable-5-1 | xhigh |
 | Sonnet | claude | claude-sonnet-5 | high |
 | Haiku | claude | claude-haiku-4-5 | - |
-| Sol | codex | gpt-5.6-sol | max |
+| Sol | codex | gpt-5.6-sol | high |
 | Terra | codex | gpt-5.6-terra | max |
 | Luna | codex | gpt-5.6-luna | high |
+| Astra | codex | gpt-6-astra | xhigh |
 | Grok 4.6 | grok | grok-4.6 | - |
 | Gemini 3.1 Pro | gemini | Gemini 3.1 Pro (High) | - |
-| Gemini 3.7 Flash | gemini | Gemini 3.7 Flash (High) | - |
+| Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
+| Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
+| Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
+| Gemini 3.7 Flash | gemini | gemini-3.7-flash-high | - |
 | Kimi | kimi | kimi-k3 | - |
 | Qwen | qwen | qwen3-coder-plus | - |
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
@@ -156,10 +160,12 @@ dispatch stay in this skill and the CLI. Manage the local board with
   finished `--background` job is delivered into the foreman's next prompt by
   the bundled `UserPromptSubmit` hook, so do not poll for it. Outside Claude
   Code, block on `scripts/jobs.sh wait <id> [--timeout N]` instead.
-- **Live mailbox**: a `--background` dispatch to Claude or Gemini is a
-  resident worker. Send follow-up instructions with `scripts/jobs.sh send <id>
-  "<text>"` and end it with `scripts/jobs.sh close <id>`; other vendors (and
-  `--single-shot`) run one-shot. Do not use a mailbox for fire-and-forget work.
+- **Live mailbox**: Claude and Gemini retain automatic resident background
+  sessions for supported modes. Codex and Grok remain single-shot by default;
+  explicit `--live` opts in. Grok live requires explicit `--mode sysops` because
+  ACP has no enforceable restricted-mode boundary. Send follow-up instructions
+  with `scripts/jobs.sh send <id> "<text>"` and finish with
+  `scripts/jobs.sh close <id>`. `--single-shot` forces one-shot execution.
 - **Goal orchestration**: when the next step depends on the previous result,
   wrap the dispatches in `omnilane goal open "<objective>" --workdir DIR`, then
   `goal dispatch <goal-id> ...`, `goal note`, `goal status`, `goal close --summary`.
@@ -172,13 +178,37 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 - **Dispatch in `advise` mode by default** (read-only worker). Use `--mode work`
   only when the worker must edit files, and give it an explicit `--workdir`.
-- **`--mode sysops`** is `work` minus the vendor sandbox, for service
-  operations the sandbox denies (launchctl, system daemons). Codex runs with
-  `-s danger-full-access`; other vendors treat it as `work`. Explicit
-  per-dispatch opt-in only — never a lane default, and the task text must
-  name the exact service commands the worker is authorized to run.
-  Codex `work`/`sysops` still needs a git-repo `--workdir` (non-git
-  directories trip the whole-job fuse).
+- **Mode contract**: `advise` is read-only with supported native web tools;
+  `work` confines file/command changes to explicit `--workdir` and disables
+  agent-tool networking, not the model connection. Codex and Claude have
+  distinct policies for these modes. Agy 1.1.27 work has bounded new/resume
+  acceptance with native sandboxed commands and four validated tools; external
+  temp/cache reads are also restricted. A separate two-turn work live/FIFO
+  check passed readback, outside-write denial and normal close. macOS Grok work remains blocked because native child-network
+  isolation is Linux-only. Do not turn gaps into sysops implicitly or claim
+  every provider/mode/session path has passed the runtime matrix.
+- **Agy work tools** are `view_file`, `write_to_file`, `run_command`, and `finish`.
+  The native `commandExecutionPolicy: sandbox`, `--sandbox`, and
+  `proceed-in-sandbox` policy permits tested workspace edits/builds and denies
+  tested outside writes, shell networking and explicit unsandboxed execution.
+  Settings are rewritten explicitly before each start/resume: native omission
+  of false/empty fields has not been proven default-equivalent. Workspace-local
+  caches and the verified empty owned policy directory remain; external cached
+  dependencies may be inaccessible, and the tested successful C build still
+  emitted an xcrun default-cache denial warning. See the dated capability notes
+  for the exact evidence boundary; complete effective SBPL was not captured.
+- **`--mode sysops`** explicitly selects unrestricted native policies for
+  Codex, Claude, Grok, and Agy; it is not an alias for work. It is a per-dispatch
+  opt-in, never a lane default, and task text must name the allowed operations.
+  Codex `work`/`sysops` still needs a git-repo `--workdir`.
+- **Grok advise web tools** use internal `web_search` / `web_fetch` selectors,
+  while permission rules keep their native `WebSearch` / `WebFetch` class names.
+  The complete single-shot `plain` path has real search, fetched-page, and native
+  denied-write evidence on Grok 1.0.13. MCP readiness is job-local because this
+  mode denies MCPTool; hooks and their security checks remain enabled. A caller
+  supplied nonempty `CONTEXT_MODE_MCP_SENTINEL_DIR` is a conflict and stops before provider
+  startup rather than being overwritten. Do not extend this result to restricted
+  live or macOS work.
 - **Every dispatched task states acceptance criteria and the exact verification
   command.** Do not accept "done" without evidence.
 - **No nested dispatch**: workers must not fan out again (enforced via
@@ -193,29 +223,34 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 ## Per-model notes (apply the row matching YOUR main model)
 
-- **Claude Fable 5.1 main**: taste finalization and the hardest coding are
-  yours; hard judgment now defaults to Opus 5. Dispatch bulk work to Sol high,
-  hard judgment to Opus 5 xhigh, and long-context or fast loops to Gemini 3.7
-  Flash.
-- **Claude Opus 5 main**: hard judgment is now yours by default. Taste-final
-  remains Fable's; use local overrides when Opus's lower hallucination rate or
-  price is preferred there.
-- **Claude Sonnet main**: coordination/tools/mid-tier coding only, plus
-  fallback duty in bulk-mechanical and live-search; never self-assign top
-  judgment or hardest implementation.
-- **GPT Sol main**: hardest coding + hard judgment are yours (use max for
-  judgment turns, xhigh for coding); cross to taste-final for style calls.
-- **GPT Terra main**: long-context Codex fallback work is yours at max;
-  bulk-mechanical now defaults to Sol high, and genuinely hardest pieces
-  escalate to Sol xhigh.
-- **Grok 4.6 main**: live-search and coding overflow are yours, plus fallback
-  duty in hardest-coding, hard-judgment, and taste-final; its measured
-  hallucination rate is the lowest among the frontier rows, but still verify
-  every API signature and cited fact before shipping.
-- **Gemini 3.7 Flash main**: long-context and fast agentic/multimodal loops
-  are yours at the lane's configured effort; bulk and overflow use the high
-  row, plus fallback duty (High) in hardest-coding, taste-final, ui-draft, and
-  live-search. Never self-assign top judgment.
-- **Gemini 3.1 Pro main**: it remains directly selectable, but the default
-  long-context lane now prefers Gemini 3.7 Flash on LCR, cost, and throughput;
-  route hardest coding and judgment to the stronger Codex and Claude lanes.
+These notes never expand the commander's reserved self-execution scope. If the verified main model has no matching row, use the configured lane table under the current user request and `rules.d/60`; do not assume the nearest older model is equivalent or silently override vendor/model/effort. If a required capability or explicit model choice is unresolved, report that exact gap before dispatch rather than inventing a fallback.
+
+- **Claude Fable 5.1 main**: recommended prompt-level controller for
+  quality-sensitive work (not a lane or automatic selector). Hardest coding
+  uses max; judgment and taste use xhigh. Dispatch bulk work to Sol high,
+  long/fast work to Gemini 3.8 Flash, and use Astra as an independent Codex
+  review path.
+- **Claude Opus 5 main**: balanced prompt-level controller and independent
+  reviewer when explicitly selected (`high`, or `xhigh` for deeper review),
+  plus Claude long-context fallback. This is a role/opt-in choice, not a new
+  lane or the current hard-judgment default.
+- **Claude Sonnet main**: coordination/tools/mid-tier coding only, plus fallback
+  duty in bulk-mechanical and live-search; never self-assign top judgment or
+  hardest implementation.
+- **GPT Astra main**: prompt-level controller backup and independent reviewer.
+  Use max for hardest coding/judgment and xhigh for consult/taste. Explicit
+  model and effort always outrank these defaults.
+- **GPT Sol main**: bulk mechanical work and constrained UI drafts are yours at
+  high; escalate hardest coding and judgment to Fable/Astra.
+- **GPT Terra main**: long-context Codex fallback work is yours at max; bulk
+  stays on Sol high and hard work escalates to Fable/Astra.
+- **GPT Luna main**: high-volume triage is yours at high; do not promote its
+  low price into correctness-critical or controller work.
+- **Grok 4.6 main**: live-search and coding-overflow are yours, plus fallback
+  duty in hard lanes. Grok effort remains ignored; verify API signatures and
+  cited facts before shipping.
+- **Gemini 3.8 Flash main**: long-context uses medium, fast-agentic and triage
+  use low, and bulk/overflow/web fallbacks use high. Do not infer visual taste
+  or controller authority from agent/coding benchmarks.
+- **Gemini 3.1 Pro main**: remains directly selectable, but is not promoted by
+  this refresh; route hard coding and judgment to the stronger configured lanes.

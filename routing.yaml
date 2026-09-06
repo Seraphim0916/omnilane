@@ -12,7 +12,7 @@
 # deliberately carry no numbers: they state WHY a lane is ordered the way it is, which
 # stays true for months, while the numbers move every few weeks. Change an ordering and
 # you update the doc; a figure going stale should never need a routing-table edit.
-# (Audited 2026-07-12; re-audited 2026-07-25, 2026-08-02, 2026-08-03, and 2026-09-02.)
+# (Audited 2026-07-12; re-audited 2026-07-25, 2026-08-02, 2026-08-03, 2026-09-02, and 2026-09-05.)
 # defaults follow Artificial Analysis data, 2026-09
 # snapshot. Verified against AA site records + vendor pricing pages: Intelligence &
 # Coding indexes and 7:2:1 blended prices all match (AA field price1mBlended7To2To1);
@@ -20,17 +20,17 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding: claude claude-fable-5-1 xhigh | codex gpt-5.6-sol xhigh | grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" - # ordered on coding capability: the leading Claude tier wins both coding components; Sol remains the established Codex-harness value fallback; Grok and Flash High keep the lane alive when neither subscription is reachable
-bulk-mechanical: codex gpt-5.6-sol high | gemini "Gemini 3.7 Flash (High)" - | claude claude-sonnet-5 high # ordered on endurance per dollar: Sol dominates Terra within Codex; current Flash is the faster, cheaper middle fallback; Sonnet preserves subscription quota
-triage: codex gpt-5.6-luna high | gemini "Gemini 3.7 Flash (Low)" - | claude claude-haiku-4-5 - # ordered on cost per task at usable intelligence: Luna high buys a meaningful quality lift cheaply; Flash and Haiku are low-cost cross-vendor fallbacks
-hard-judgment: claude claude-opus-5 xhigh | codex gpt-5.6-sol max | grok grok-4.6 - # ordered on agentic knowledge work per cost: Opus nearly matches Fable's agentic score at meaningfully lower cost and a lower hallucination rate; Sol stays ahead of Grok because Grok effort is ignored and its reproduced row is unknown
-taste-final: claude claude-fable-5-1 high | codex gpt-5.6-sol max | grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" - # ordered on prose and polish: Fable leads Opus on intelligence and factual breadth; Sol is the cross-vendor fallback; Grok matches Sol on intelligence with a far better factual score and lower hallucination rate; Flash High closes out the lane
-consult: codex gpt-5.6-sol max | claude claude-fable-5-1 high | grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" - # direct named-model chain uses the strongest current Claude and Flash slots; keep --vendor to prevent fallback
-ui-draft: codex gpt-5.6-sol xhigh | claude claude-fable-5-1 high | gemini "Gemini 3.7 Flash (High)" - # ordered for drafts with a design system or reference images: Sol leads measured multimodal and coding evidence; Fable follows for polish; Flash High holds the highest measured multimodal score among the cheapest three and keeps the lane alive
-long-context: gemini "Gemini 3.7 Flash (Medium)" - | codex gpt-5.6-terra max | claude claude-opus-5 medium # ordered on long-context reasoning, then cost and throughput: Flash leads; Terra matches its long-context result; Opus is the cheaper Claude fallback
-fast-agentic: gemini "Gemini 3.7 Flash (Medium)" - | codex gpt-5.6-luna high | claude claude-haiku-4-5 - # ordered on interactive tool-loop latency: Flash gives up little agentic quality for far faster first output; Luna high is the low-latency Codex fallback; Haiku adds a low-latency Claude fallback
-live-search: grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" - | claude claude-sonnet-5 high | off # native X and web search lane; Grok is the only candidate with real live search — Flash and Sonnet fall back to their own web-search tools so a missing Grok CLI does not strand the lane entirely
-coding-overflow: grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off # coding relief ordered by capability and value: Grok has the lowest frontier hallucination rate; Flash is the cheapest strong coder here; revisit the best-value Qwen tier when its CLI alias can be verified
+hardest-coding: claude claude-fable-5-1 max | codex gpt-6-astra max | grok grok-4.6 - | gemini gemini-3.8-flash-high - # correctness-first coding: Fable max leads the same-condition comparison; Astra max is the strongest verified Codex fallback; Grok and Flash keep cross-vendor depth
+bulk-mechanical: codex gpt-5.6-sol high | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high # endurance and migration work stays on proven Sol high; Flash 3.8 refreshes the fast middle fallback; Sonnet preserves cross-vendor depth
+triage: codex gpt-5.6-luna high | gemini gemini-3.8-flash-low - | claude claude-haiku-4-5 - # first-pass filtering favors the low-cost Luna row; Flash low and Haiku remain cheap cross-vendor fallbacks
+hard-judgment: claude claude-fable-5-1 xhigh | codex gpt-6-astra max | grok grok-4.6 - # strongest same-condition judgment row first, then an independently verified Codex family and Grok; this lane is not a controller selector
+taste-final: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high - # final prose and style still require human taste review; general quality evidence orders the candidates without claiming an aesthetic benchmark
+consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-medium - # direct named-model consultation chain; keep --vendor to pin the requested family and prevent fallback
+ui-draft: codex gpt-5.6-sol high | claude claude-fable-5-1 xhigh | gemini gemini-3.8-flash-high - # UI drafts require a design system or references; measured coding/agent evidence supports the order but does not prove visual taste
+long-context: gemini gemini-3.8-flash-medium - | codex gpt-5.6-terra max | claude claude-opus-5 medium # Flash medium leads long-document synthesis; Terra and Opus stay because context capacity alone does not prove task quality
+fast-agentic: gemini gemini-3.8-flash-low - | codex gpt-5.6-luna high | claude claude-haiku-4-5 - # low-latency tool loops favor Flash low; Luna and Haiku retain cross-vendor fallback depth
+live-search: grok grok-4.6 - | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high | off # Grok remains the native X/web choice; Flash and Sonnet provide generic web-search fallback, not equivalent social context
+coding-overflow: grok grok-4.6 - | gemini gemini-3.8-flash-high - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off # explicit quota-relief lane; keep all existing non-Codex fallbacks and do not infer unverified Qwen aliases from another harness
 arbitrate: off - - # opinion panel remains opt-in because each voter and round consumes quota
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.

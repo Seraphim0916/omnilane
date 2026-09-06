@@ -535,7 +535,12 @@ printf 'codex selected\n' > "$out"
 EOF
   cat > "$bin/fake-claude" <<'EOF'
 #!/usr/bin/env bash
-printf '{"type":"result","is_error":false,"result":"claude selected %s"}\n' "$*"
+python3 - "$@" <<'PYJSON'
+import json
+import sys
+print(json.dumps({"type": "result", "is_error": False,
+                  "result": "claude selected " + " ".join(sys.argv[1:])}))
+PYJSON
 EOF
   chmod +x "$bin/fake-codex" "$bin/fake-claude"
 
@@ -833,7 +838,7 @@ test_consult_lane_and_configurator() {
     bash "$ROOT/scripts/configure.sh" > "$home/configure.out" 2>&1
 
   if [[ "$listed" != *'consult:'* ||
-        "$listed" != *'codex gpt-5.6-sol max'* ]]; then
+        "$listed" != *'codex gpt-6-astra xhigh'* ]]; then
     fail "$name" "consult lane missing from effective routing"
   elif grep -Eq '^  [0-9]+\) consult$' "$home/configure.out"; then
     fail "$name" "single-candidate configurator exposed consult"
@@ -1452,7 +1457,7 @@ EOF
   fi
   while IFS= read -r path; do
     mode="$(file_mode "$path")"
-    [[ "$mode" == "600" ]] || { bad="$path:$mode"; break; }
+  [[ "$mode" == "600" || "$mode" == "400" ]] || { bad="$path:$mode"; break; }
   done < <(find "$job_dir" -type f -print)
   if [[ -n "$bad" ]]; then
     fail "$name" "job file is not owner-only: $bad"
@@ -3347,6 +3352,17 @@ test_round2_failure_is_nonzero
 test_round2_untrusted_boundary_and_cleanup
 test_shell_completion_is_safe_and_current
 test_release_audit_is_offline_read_only_and_actionable
+release_audit_usage_doc_rc=0
+release_audit_usage_doc_output="$(/bin/bash "$ROOT/tests/test_release_audit_usage_doc.sh" 2>&1)" || release_audit_usage_doc_rc=$?
+printf '%s\n' "$release_audit_usage_doc_output"
+release_audit_usage_doc_summary="${release_audit_usage_doc_output##*$'\n'}"
+if [[ "$release_audit_usage_doc_summary" =~ ^([0-9]+)\ passed,\ ([0-9]+)\ failed$ ]]; then
+  PASS=$((PASS + 10#${BASH_REMATCH[1]}))
+  FAIL=$((FAIL + 10#${BASH_REMATCH[2]}))
+  if [[ "$release_audit_usage_doc_rc" -ne 0 && "${BASH_REMATCH[2]}" -eq 0 ]]; then FAIL=$((FAIL + 1)); fi
+else
+  FAIL=$((FAIL + 1))
+fi
 
 test_opencode_runner_contract() {
   local name="opencode runner contract" home fake prompt argv rc
@@ -4158,12 +4174,40 @@ test_live_mailbox_case() {
   fi
 }
 
+test_live_auto_policy() {
+  local out rc=0
+  out="$(python3 "$ROOT/tests/test_live_auto_policy.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "live auto compatibility policy" "$out"
+  else
+    pass "live auto compatibility policy"
+  fi
+}
+test_live_auto_policy
+
+test_mode_unification() {
+  local name="advise work sysops exact provider policy contracts" out rc=0
+  out="$(python3 "$ROOT/tests/test_mode_unification.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_mode_unification
+
 test_live_mailbox_case live-fail-fast "live mode rejects non-capable vendor"
 test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-shot"
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
+test_live_mailbox_case claude-close-recovery "Claude close recovers completed result output"
 test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
 test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
+test_live_mailbox_case codex-close-deadline "Codex worker close deadline preserves queued input and precedes jobs timeout"
 test_live_mailbox_case codex-live-fallback "Codex failed handshake degrades to single-shot"
+test_live_mailbox_case grok-killed-runner "killed Grok live runner reaps ACP process group"
+test_live_mailbox_case grok-close-grace-invariant "Grok close grace precedes worker escalation"
+test_live_mailbox_case grok-live-acp "Grok live ACP mailbox and incremental output"
+test_live_mailbox_case grok-live-fallback "Grok failed handshake degrades to single-shot"
 
 test_goal_loop_case() {
   local test_case="$1" name="$2" out rc=0
@@ -4207,23 +4251,45 @@ test_configure_model_catalogs() {
       return
     fi
   done <<'EOF'
-codex|1|8|1|gpt-5.3-codex-spark
+codex|1|9|1|gpt-5.3-codex-spark
 claude|2|21|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official
-gemini|4|11||gpt-oss-120b-medium
+gemini|4|14||gpt-oss-120b-medium
 kimi|5|3||kimi-k2.5
 qwen|6|8||qwen3-coder-flash
 opencode|7|13||openrouter/qwen/qwen3-coder-plus
 openrouter|8|13||qwen/qwen3-coder-plus
 deepseek|9|2||deepseek-v4-flash
-zai|10|7||glm-4.6
-mistral|11|5||mistral-large-latest
+zai|10|8||glm-4.6
+mistral|11|6||mistral-large-latest
 groq|12|7||llama-3.1-8b-instant
 cerebras|13|5||llama3.1-8b
 EOF
   pass "$name"
 }
 test_configure_model_catalogs
+
+test_aa_routing_update() {
+  local name="AA routing update offline contracts" out rc=0
+  out="$(python3 "$ROOT/tests/test_aa_routing_update.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_aa_routing_update
+
+test_aa_model_coverage() {
+ local name="AA full model coverage offline contracts" out rc=0
+ out="$(python3 "$ROOT/tests/test_aa_model_coverage.py" 2>&1)" || rc=$?
+ if [[ "$rc" -ne 0 ]]; then
+ fail "$name" "$out"
+ else
+ pass "$name"
+ fi
+}
+test_aa_model_coverage
 
 test_completion_fish() {
   local name="fish completion script" out rc badrc fish_rc tmp w

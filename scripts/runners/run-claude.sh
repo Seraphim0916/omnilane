@@ -13,6 +13,60 @@ CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
 truncate_payload "$PROMPT_FILE" 102400
+WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
+  echo "omnilane: Claude workdir is not accessible" >&2
+  exit 2
+}
+
+MODE_ENV=(OMNILANE_DEPTH=1)
+if [[ "$MODE" == "work" ]]; then
+  CLAUDE_TMP_BASE="$WORKDIR/.omnilane-claude-tmp"
+  if [[ -L "$CLAUDE_TMP_BASE" || ( -e "$CLAUDE_TMP_BASE" && ! -d "$CLAUDE_TMP_BASE" ) ]]; then
+    echo "omnilane: unsafe Claude work temp path" >&2
+    exit 125
+  fi
+  mkdir -p "$CLAUDE_TMP_BASE"
+  chmod 700 "$CLAUDE_TMP_BASE"
+  CLAUDE_TMP_BASE="$(cd -- "$CLAUDE_TMP_BASE" && pwd -P)"
+  case "$CLAUDE_TMP_BASE/" in
+    "$WORKDIR/"*) ;;
+    *) echo "omnilane: Claude work temp escaped workdir" >&2; exit 125 ;;
+  esac
+  MODE_ENV+=("CLAUDE_CODE_TMPDIR=$CLAUDE_TMP_BASE")
+fi
+
+RESTRICTED_SETTINGS='{"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"autoAllowBashIfSandboxed":true,"excludedCommands":[],"filesystem":{"disabled":false,"allowRead":[],"allowWrite":[]},"network":{"allowedDomains":[]}}}'
+MODE_ARGS=()
+case "$MODE" in
+  advise)
+    MODE_ARGS=(
+      --safe-mode --restricted --setting-sources ""
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+      --settings "$RESTRICTED_SETTINGS"
+      --permission-prompts none --permission-mode plan
+      --tools 'Bash,Read,Glob,Grep,WebSearch,WebFetch'
+    )
+    ;;
+  work)
+    MODE_ARGS=(
+      --safe-mode --restricted --setting-sources ""
+      --strict-mcp-config --mcp-config '{"mcpServers":{}}'
+      --settings "$RESTRICTED_SETTINGS"
+      --permission-prompts none --permission-mode acceptEdits
+      --tools 'Bash,Read,Glob,Grep,Edit,Write,NotebookEdit'
+    )
+    ;;
+  sysops)
+    MODE_ARGS=(
+      --settings '{"sandbox":{"enabled":false}}'
+      --permission-mode bypassPermissions --dangerously-skip-permissions
+    )
+    ;;
+  *)
+    echo "omnilane: invalid Claude mode '$MODE'" >&2
+    exit 2
+    ;;
+esac
 
 THREAD_MODE="${OMNILANE_THREAD_MODE:-}"
 THREAD_ID="${OMNILANE_THREAD_ID:-}"
@@ -42,13 +96,9 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   LIVE_ARGS=(--disable-slash-commands --model "$MODEL")
-  [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && LIVE_ARGS+=(--effort "$EFFORT")
-  if [[ "$MODE" == "advise" ]]; then
-    LIVE_ARGS+=(--tools Read Glob Grep)
-  else
-    LIVE_ARGS+=(--permission-mode acceptEdits)
-  fi
-  LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
+[[ -n "$EFFORT" && "$EFFORT" != "-" ]] && LIVE_ARGS+=(--effort "$EFFORT")
+LIVE_ARGS+=("${MODE_ARGS[@]}")
+LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
 
 finalize_live_output() {
   local tmp="${OUTPUT_FILE}.tmp"
@@ -96,7 +146,7 @@ finalize_live_output() {
   (
     cd "$WORKDIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
-      OMNILANE_DEPTH=1 \
+      "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${LIVE_ARGS[@]}" < "$LIVE_INBOX" > "$EVENTS_FILE" 2> "$STDERR_FILE"
   ) &
   LIVE_CHILD_PID=$!
@@ -119,12 +169,7 @@ fi
 
 ARGS=(--disable-slash-commands --model "$MODEL")
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(--effort "$EFFORT")
-if [[ "$MODE" == "advise" ]]; then
-  # Read-only surface: the worker can inspect the repo but not change or run anything.
-  ARGS+=(--tools Read Glob Grep)
-else
-  ARGS+=(--permission-mode acceptEdits)
-fi
+ARGS+=("${MODE_ARGS[@]}")
 if [[ -n "$THREAD_MODE" ]]; then
   ARGS+=(--verbose --output-format stream-json)
   ARGS+=("${THREAD_ARGS[@]}")
@@ -138,11 +183,11 @@ set +e
   cd "$WORKDIR" || exit 127
   if [[ -n "$THREAD_MODE" ]]; then
     run_with_timeout "$RUN_TIMEOUT" env \
-      OMNILANE_DEPTH=1 \
+      "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.events.jsonl" 2> "${OUTPUT_FILE}.stderr.log"
   else
     run_with_timeout "$RUN_TIMEOUT" env \
-      OMNILANE_DEPTH=1 \
+      "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
   fi
 )

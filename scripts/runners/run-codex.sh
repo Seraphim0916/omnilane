@@ -38,14 +38,25 @@ else
   ARGS=(exec --json -m "$MODEL" -o "${OUTPUT_FILE}.tmp" --skip-git-repo-check)
 fi
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
+ARGS+=(-c 'approval_policy="never"')
 if [[ "$MODE" == "advise" ]]; then
   [[ -z "$THREAD_MODE" ]] && ARGS+=(--ephemeral)
   SANDBOX=read-only
+  ARGS+=(-c 'web_search="live"')
 elif [[ "$MODE" == "sysops" ]]; then
   SANDBOX=danger-full-access
+  ARGS+=(-c 'web_search="live"')
 else
   SANDBOX=workspace-write
+  ARGS+=(
+    -c 'web_search="disabled"'
+    -c 'sandbox_workspace_write.network_access=false'
+    -c 'sandbox_workspace_write.exclude_slash_tmp=true'
+    -c 'sandbox_workspace_write.exclude_tmpdir_env_var=true'
+    -c 'sandbox_workspace_write.writable_roots=[]'
+  )
 fi
+ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
 
 LIVE_INBOX="${OMNILANE_INBOX:-}"
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
@@ -98,9 +109,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
 fi
 # `codex exec resume` has no -s/--sandbox flag (rejects it with exit 2); the
 # same policy is only reachable there through the sandbox_mode config override.
-if [[ "$THREAD_MODE" == "resume" ]]; then
-  ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
-else
+if [[ "$THREAD_MODE" != "resume" ]]; then
   ARGS+=(-s "$SANDBOX")
 fi
 [[ "$THREAD_MODE" == "resume" ]] && ARGS+=("$THREAD_ID" -)

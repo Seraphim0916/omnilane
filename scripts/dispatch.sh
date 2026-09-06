@@ -785,13 +785,36 @@ fi
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
-SESSION_MODE="single-shot"
-if [[ -z "$THREAD_NAME" && "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR"; then
-  SESSION_MODE="live"
-fi
-if [[ "$SESSION_REQUEST" == "live" ]] && ! live_vendor_capable "$VENDOR"; then
-  echo "omnilane: vendor '$VENDOR' cannot run live; live-capable vendors: $(live_capable_vendors)" >&2
+# Fail closed before creating job state or starting a provider when the selected
+# runtime cannot enforce the requested mode. Dry-run reports the same gap.
+if [[ "$VENDOR" == "gemini" && "$MODE" == "work" ]]; then
+  echo "omnilane: Gemini work is unavailable: native work policy is not yet verified; SearchWeb bypasses URL permission rules and selected-agent terminal behavior remains unverified" >&2
   exit 2
+fi
+if [[ "$VENDOR" == "grok" && "$MODE" == "work" && "$(uname -s)" == "Darwin" ]]; then
+  echo "omnilane: Grok work requires disabled agent-tool network; xAI CLI child-network restrictions are not enforced on macOS" >&2
+  exit 2
+fi
+
+SESSION_MODE="single-shot"
+if [[ -z "$THREAD_NAME" && "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR" &&
+   [[ "$SESSION_REQUEST" == "live" || "$VENDOR" == "claude" || "$VENDOR" == "gemini" ]]; then
+  # Preserve established auto behavior: Codex/Grok require an explicit --live.
+  # Claude/Gemini retain their existing auto-selected resident sessions.
+    # Grok ACP currently exposes no enforceable restricted policy.
+    # Only explicit sysops dispatch may use its resident ACP session.
+    if [[ "$VENDOR" != "grok" || "$MODE" == "sysops" ]]; then
+      SESSION_MODE="live"
+    fi
+fi
+if [[ "$SESSION_REQUEST" == "live" ]]; then
+    if [[ "$VENDOR" == "grok" && "$MODE" != "sysops" ]]; then
+      echo "omnilane: Grok --live supports only explicit --mode sysops; restricted ACP policy is unavailable" >&2
+    exit 2
+  elif ! live_vendor_capable "$VENDOR"; then
+    echo "omnilane: vendor '$VENDOR' cannot run live; live-capable vendors: $(live_capable_vendors)" >&2
+    exit 2
+  fi
 fi
 export OMNILANE_SESSION_MODE="$SESSION_MODE"
 if [[ "$SESSION_REQUEST" == "live" ]]; then
@@ -829,14 +852,13 @@ if [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDL
 fi
 
 JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
-JOB_WORKER="$OMNILANE_REPO/scripts/lib/job-worker.sh"
+JOB_WORKER_SOURCE="$OMNILANE_REPO/scripts/lib/job-worker.sh"
 # Pinned deliberately: /bin/bash is 3.2 on macOS while a PATH bash is typically
 # 5.x, so the worker and every library it sources must stay bash-3.2 compatible.
 # No declare -A, mapfile, ${v,,}, [[ -v ]], ;;&, EPOCHSECONDS or coproc.
 JOB_WORKER_BASH="/bin/bash"
 [[ -x "$JOB_WORKER_BASH" ]] || { echo "omnilane: fixed worker interpreter is unavailable: $JOB_WORKER_BASH" >&2; exit 2; }
 JOB_WORKER_BASH_VERSION="$($JOB_WORKER_BASH -c 'printf %s "$BASH_VERSION"')"
-JOB_WORKER_SHA256="$(file_sha256 "$JOB_WORKER")" || exit 2
 
 # Optional whole-job seconds: flag > per-lane env > global env > automatic
 # non-Git Codex work guard > disabled.
@@ -882,7 +904,7 @@ if [[ -n "$JOB_TIMEOUT" && ! "$JOB_TIMEOUT" =~ ^[1-9][0-9]{0,8}$ ]]; then
 fi
 JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
 unset OMNILANE_JOB_SUPERVISED
-[[ -x "$JOB_WORKER" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
+[[ -x "$JOB_WORKER_SOURCE" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
 if [[ -n "$JOB_TIMEOUT" ]]; then
   [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: whole-job timeout supervisor is unavailable" >&2; exit 2; }
   command -v perl &>/dev/null || { echo "omnilane: --job-timeout requires perl" >&2; exit 2; }
@@ -916,6 +938,17 @@ chmod 700 "$JOBS_ROOT"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
+JOB_WORKER="$JOB_DIR/job-worker.sh"
+JOB_WORKER_TMP="$JOB_DIR/.job-worker.tmp.$$-$RANDOM"
+(umask 077; cat "$JOB_WORKER_SOURCE" > "$JOB_WORKER_TMP")
+chmod 400 "$JOB_WORKER_TMP"
+mv "$JOB_WORKER_TMP" "$JOB_WORKER"
+JOB_WORKER_SOURCE_SHA256="$(file_sha256 "$JOB_WORKER_SOURCE")" || exit 2
+JOB_WORKER_SHA256="$(file_sha256 "$JOB_WORKER")" || exit 2
+if [[ "$JOB_WORKER_SHA256" != "$JOB_WORKER_SOURCE_SHA256" ]]; then
+  echo "omnilane: job worker source changed while creating the per-job snapshot" >&2
+  exit 1
+fi
 FOREMAN_SESSION=""
 if [[ -n "${CLAUDE_CODE_SESSION_ID+x}" ]]; then
   if [[ "$CLAUDE_CODE_SESSION_ID" =~ ^[A-Za-z0-9._:-]+$ &&
@@ -961,9 +994,11 @@ if [[ "$META_BASE" != *'}' ]]; then
   exit 1
 fi
 META_BASE="${META_BASE%\}}"
-printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_sha256":"%s"}\n' \
+printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_source_path":"%s","job_worker_source_sha256":"%s","job_worker_path":"%s","job_worker_sha256":"%s"}\n' \
   "$META_BASE" "$(json_escape "$JOB_WORKER_BASH")" \
-  "$(json_escape "$JOB_WORKER_BASH_VERSION")" "$(json_escape "$JOB_WORKER_SHA256")" \
+  "$(json_escape "$JOB_WORKER_BASH_VERSION")" "$(json_escape "$JOB_WORKER_SOURCE")" \
+  "$(json_escape "$JOB_WORKER_SOURCE_SHA256")" "$(json_escape "$JOB_WORKER")" \
+  "$(json_escape "$JOB_WORKER_SHA256")" \
   > "$META_TMP"
 json_file_round_trip_valid "$META_TMP" || exit 1
 chmod 600 "$META_TMP"
@@ -976,6 +1011,9 @@ fi
 
 secure_job_files() {
   find "$JOB_DIR" -type f -exec chmod 600 {} +
+  if [[ -f "$JOB_WORKER" && ! -L "$JOB_WORKER" ]]; then
+    chmod 400 "$JOB_WORKER"
+  fi
 }
 
 sanitize_utf8() {
@@ -1088,11 +1126,15 @@ run_job() {
   write_current_pid_file "$JOB_DIR/pid"
   set +e
   if [[ -n "$JOB_TIMEOUT" ]]; then
-    OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
+    OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
+      OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
+      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
       "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   else
-    "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+    OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
+      OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
+      "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   fi
   rc=$?

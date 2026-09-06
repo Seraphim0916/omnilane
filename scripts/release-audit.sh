@@ -140,6 +140,28 @@ sha256_stdin() {
   fi
 }
 
+extract_long_flags() {
+  awk '
+    {
+      text = $0
+      while (match(text, /--[a-z][a-z-]*/)) {
+        token = substr(text, RSTART, RLENGTH)
+        if (token != "--help") print token
+        text = substr(text, RSTART + RLENGTH)
+      }
+    }
+  ' | LC_ALL=C sort -u
+}
+
+extract_help_subcommands() {
+  awk '$1 == "omnilane" && $2 ~ /^[a-z][a-z-]*$/ { print $2 }' |
+    LC_ALL=C sort -u
+}
+
+join_token_lines() {
+  awk 'NF { printf "%s%s", separator, $0; separator = "," } END { print "" }'
+}
+
 command -v git >/dev/null 2>&1 || {
   fail git-unavailable
   if [[ "$json_output" -eq 1 ]]; then render_json FAIL;
@@ -165,6 +187,87 @@ if [[ -n "$dirty" ]]; then
   fi
 else
   pass clean-worktree
+fi
+
+usage_doc="${OMNILANE_USAGE_DOC:-}"
+if [[ -z "$usage_doc" ]]; then
+  [[ "$json_output" -eq 1 ]] ||
+    printf 'SKIP usage-doc-drift OMNILANE_USAGE_DOC is not configured\n'
+elif [[ ! -f "$usage_doc" || ! -r "$usage_doc" ]]; then
+  fail "usage-doc-unreadable:$usage_doc"
+else
+  usage_help_failed=0
+  dispatch_usage_help=""
+  jobs_usage_help=""
+  omnilane_usage_help=""
+  if ! dispatch_usage_help="$(/bin/bash "$ROOT/scripts/dispatch.sh" --help 2>&1)"; then
+    fail usage-doc-dispatch-help-unavailable
+    usage_help_failed=1
+  fi
+  if ! jobs_usage_help="$(/bin/bash "$ROOT/scripts/jobs.sh" --help 2>&1)"; then
+    fail usage-doc-jobs-help-unavailable
+    usage_help_failed=1
+  fi
+  if ! omnilane_usage_help="$(/bin/bash "$ROOT/bin/omnilane" help 2>&1)"; then
+    fail usage-doc-omnilane-help-unavailable
+    usage_help_failed=1
+  fi
+
+  if [[ "$usage_help_failed" -eq 0 ]]; then
+    expected_usage_flags="$(
+      printf '%s\n%s\n' "$dispatch_usage_help" "$jobs_usage_help" |
+        extract_long_flags
+    )"
+    expected_usage_subcommands="$(
+      printf '%s\n' "$omnilane_usage_help" | extract_help_subcommands
+    )"
+    expected_usage_tokens="$(
+      printf '%s\n%s\n' "$expected_usage_flags" "$expected_usage_subcommands" |
+        awk 'NF' | LC_ALL=C sort -u
+    )"
+
+    documented_usage_flags="$(extract_long_flags < "$usage_doc")"
+    documented_usage_subcommands="$(
+      {
+        while IFS= read -r token; do
+          [[ -n "$token" ]] || continue
+          if LC_ALL=C grep -E -q \
+            "(^|[^a-z-])${token}([^a-z-]|$)" "$usage_doc"; then
+            printf '%s\n' "$token"
+          fi
+        done <<< "$expected_usage_subcommands"
+        {
+          LC_ALL=C grep -Eo 'omnilane[[:space:]]+[a-z][a-z-]*' "$usage_doc" 2>/dev/null ||
+            true
+        } | awk '{ print $2 }'
+      } | awk 'NF' | LC_ALL=C sort -u
+    )"
+    documented_usage_tokens="$(
+      printf '%s\n%s\n' "$documented_usage_flags" "$documented_usage_subcommands" |
+        awk 'NF' | LC_ALL=C sort -u
+    )"
+
+    missing_usage_tokens="$(
+      comm -23 \
+        <(printf '%s\n' "$expected_usage_tokens" | awk 'NF') \
+        <(printf '%s\n' "$documented_usage_tokens" | awk 'NF')
+    )"
+    stale_usage_tokens="$(
+      comm -13 \
+        <(printf '%s\n' "$expected_usage_tokens" | awk 'NF') \
+        <(printf '%s\n' "$documented_usage_tokens" | awk 'NF')
+    )"
+
+    expected_usage_count="$(printf '%s\n' "$expected_usage_tokens" | awk 'NF { count++ } END { print count + 0 }')"
+    documented_usage_count="$(printf '%s\n' "$documented_usage_tokens" | awk 'NF { count++ } END { print count + 0 }')"
+    if [[ -z "$missing_usage_tokens" && -z "$stale_usage_tokens" ]]; then
+      pass "usage-doc-drift:expected=$expected_usage_count documented=$documented_usage_count"
+    else
+      missing_usage_list="$(printf '%s\n' "$missing_usage_tokens" | join_token_lines)"
+      stale_usage_list="$(printf '%s\n' "$stale_usage_tokens" | join_token_lines)"
+      fail "usage-doc-drift:path=$usage_doc missing=${missing_usage_list:-none} stale=${stale_usage_list:-none}"
+    fi
+  fi
 fi
 
 version=""

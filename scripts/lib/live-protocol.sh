@@ -3,12 +3,12 @@
 # Shared live-mailbox protocol differences. Callers provide json_escape().
 
 live_capable_vendors() {
-  printf 'claude, gemini, codex'
+  printf 'claude, gemini, codex, grok'
 }
 
 live_vendor_capable() {
   case "$1" in
-    claude|gemini|codex) return 0 ;;
+    claude|gemini|codex|grok) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -44,7 +44,67 @@ try:
     }
     process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
     process.stdin.flush()
-    process.stdin.close()
+    # Keep stdin open until the reply arrives: codex 0.153.4 exits on EOF
+    # before answering, which made a healthy machine look live-unavailable.
+    if select.select([process.stdout], [], [], 3)[0]:
+        response = json.loads(process.stdout.readline())
+        ok = isinstance(response, dict) and isinstance(response.get("result"), dict)
+except (OSError, ValueError, json.JSONDecodeError):
+    ok = False
+finally:
+    if process is not None and process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=1)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                process.kill()
+            except OSError:
+                pass
+            process.wait()
+sys.exit(0 if ok else 1)
+PY
+}
+
+grok_live_surface_available() {
+  local bin="${1:-${GROK_BIN:-grok}}"
+  command -v "$bin" >/dev/null 2>&1 || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+
+  python3 - "$bin" 2>/dev/null <<'PY'
+import json
+import select
+import subprocess
+import sys
+
+process = None
+ok = False
+try:
+    process = subprocess.Popen(
+        [sys.argv[1], "agent", "stdio"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        # Stay in the caller's supervised process group. A whole-job SIGKILL
+        # bypasses the probe's finally block, so a private session would leak.
+        start_new_session=False,
+    )
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": 1,
+            "clientCapabilities": {
+                "fs": {"readTextFile": False, "writeTextFile": False}
+            },
+        },
+    }
+    process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+    process.stdin.flush()
+    # Same as the codex probe: keep stdin open until the reply arrives so an
+    # agent that exits on EOF before answering is not reported unavailable.
     if select.select([process.stdout], [], [], 3)[0]:
         response = json.loads(process.stdout.readline())
         ok = isinstance(response, dict) and isinstance(response.get("result"), dict)
@@ -80,6 +140,9 @@ live_encode_message() {
     codex)
       printf '{"type":"codex-user","text":"%s"}' "$(json_escape "$text")"
       ;;
+    grok)
+      printf '{"type":"grok-user","text":"%s"}' "$(json_escape "$text")"
+      ;;
     *) return 2 ;;
   esac
 }
@@ -107,6 +170,7 @@ live_event_is_result() {
     claude) pattern='"type"[[:space:]]*:[[:space:]]*"result"' ;;
     gemini) pattern='"event"[[:space:]]*:[[:space:]]*"result"' ;;
     codex) pattern='"method"[[:space:]]*:[[:space:]]*"turn/completed"' ;;
+    grok) pattern='"method"[[:space:]]*:[[:space:]]*"_x.ai/session/prompt_complete"' ;;
     *) return 2 ;;
   esac
   [[ "$event" =~ $pattern ]]
@@ -126,6 +190,10 @@ live_event_is_success() {
       ;;
     codex)
       pattern='"status"[[:space:]]*:[[:space:]]*"completed"'
+      [[ "$event" =~ $pattern ]]
+      ;;
+    grok)
+      pattern='"stopReason"[[:space:]]*:[[:space:]]*"end_turn"'
       [[ "$event" =~ $pattern ]]
       ;;
     *) return 2 ;;

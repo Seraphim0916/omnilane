@@ -295,6 +295,79 @@ PY
   printf 'ok - single-shot dispatch omits the idle diagnostic and records worker provenance\n'
 }
 
+test_background_worker_uses_readonly_snapshot() {
+  local fixture="$TEST_ROOT/snapshot-fixture" home="$TEST_ROOT/snapshot-home"
+  local workdir="$TEST_ROOT/snapshot-work" gate="$TEST_ROOT/snapshot-gate.sh"
+  local ready="$TEST_ROOT/snapshot.ready" release="$TEST_ROOT/snapshot.release"
+  local job job_dir source_hash
+  mkdir -p "$fixture/scripts/lib" "$fixture/scripts/runners" "$home" "$workdir"
+  cp "$ROOT/scripts/dispatch.sh" "$fixture/scripts/dispatch.sh"
+  cp "$ROOT/scripts/lib/common.sh" "$fixture/scripts/lib/common.sh"
+  cp "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
+  cp "$ROOT/scripts/lib/job-timeout.pl" "$fixture/scripts/lib/job-timeout.pl"
+  cp "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
+  cp "$ROOT/scripts/runners/run-exec.sh" "$fixture/scripts/runners/run-exec.sh"
+  chmod +x "$fixture/scripts/dispatch.sh" "$fixture/scripts/lib/job-worker.sh" \
+    "$fixture/scripts/runners/run-exec.sh" "$fixture/scripts/lib/job-timeout.pl"
+  source_hash="$(shasum -a 256 "$fixture/scripts/lib/job-worker.sh" | awk '{print $1}')"
+
+  cat > "$gate" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+: > "${SNAPSHOT_READY:?}"
+tries=0
+while [[ ! -f "${SNAPSHOT_RELEASE:?}" && "$tries" -lt 100 ]]; do
+  sleep 0.05
+  tries=$((tries + 1))
+done
+[[ -f "$SNAPSHOT_RELEASE" ]] || exit 91
+printf 'snapshot worker ok\n' > "$5"
+EOF
+  chmod +x "$gate"
+  printf 'probe: exec "%s" -\n' "$gate" > "$home/routing.local.yaml"
+
+  job="$(OMNILANE_HOME="$home" SNAPSHOT_READY="$ready" SNAPSHOT_RELEASE="$release" \
+    "$fixture/scripts/dispatch.sh" --background --workdir "$workdir" \
+    probe "snapshot mutation probe")"
+  job_dir="$home/jobs/$job"
+  wait_for_file "$ready" || fail "snapshot worker did not reach runner"
+  printf '# source changed after snapshot\nexit 97\n' > "$fixture/scripts/lib/job-worker.sh"
+  : > "$release"
+  wait_for_file "$job_dir/exit" || fail "snapshot worker never finished"
+  [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "source mutation changed running snapshot result"
+  grep -Fxq 'snapshot worker ok' "$job_dir/out.txt" || fail "snapshot worker output missing"
+
+  META="$job_dir/meta.json" SNAPSHOT="$job_dir/job-worker.sh" \
+    SOURCE_HASH="$source_hash" python3 - <<'PY' \
+    || fail "background worker snapshot provenance mismatch"
+import hashlib
+import json
+import os
+import stat
+from pathlib import Path
+
+meta = json.loads(Path(os.environ["META"]).read_text(encoding="utf-8"))
+snapshot = Path(os.environ["SNAPSHOT"])
+snapshot_hash = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+assert meta["job_worker_source_sha256"] == os.environ["SOURCE_HASH"], meta
+assert meta["job_worker_sha256"] == snapshot_hash == os.environ["SOURCE_HASH"], meta
+assert Path(meta["job_worker_path"]).resolve() == snapshot.resolve(), meta
+assert not snapshot.stat().st_mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH), snapshot.stat()
+PY
+  printf 'ok - background dispatch executes its recorded read-only worker snapshot\n'
+}
+
+test_worker_snapshot_rejects_sha_mismatch() {
+  local out rc=0
+  out="$(OMNILANE_JOB_WORKER_REPO="$ROOT" \
+    OMNILANE_JOB_WORKER_EXPECTED_SHA256="$(printf '0%.0s' {1..64})" \
+    /bin/bash "$ROOT/scripts/lib/job-worker.sh" 2>&1)" || rc=$?
+  [[ "$rc" -eq 2 ]] || fail "worker snapshot SHA mismatch returned $rc"
+  [[ "$out" == *'job worker snapshot SHA changed before startup'* ]] \
+    || fail "worker snapshot SHA mismatch lacked a fail-closed diagnostic"
+  printf 'ok - worker snapshot rejects a startup SHA mismatch\n'
+}
+
 make_result_only_claude() {
   local path="$1"
   cat > "$path" <<'EOF'
@@ -350,5 +423,7 @@ test_event_validator_without_strict_parser
 test_operator_close_reports_aborted_turn
 test_json_escape_and_round_trip_guard
 test_timeout_diagnostic_and_worker_metadata
+test_background_worker_uses_readonly_snapshot
+test_worker_snapshot_rejects_sha_mismatch
 test_timeout_diagnostic_on_live_dispatch
 test_lock_timeout_hint

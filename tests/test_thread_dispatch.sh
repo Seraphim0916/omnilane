@@ -297,8 +297,8 @@ CODEX_ARGV1="$(sed -n '1p' "$FAKE_CODEX_ARGV_LOG")"
 [[ "$CODEX_ARGV1" == exec\ --json* ]] || fail "Codex first turn argv malformed: $CODEX_ARGV1"
 [[ "$CODEX_ARGV1" != *" resume "* && "$CODEX_ARGV1" != *"--ephemeral"* ]] \
   || fail "Codex first turn resumed or was ephemeral: $CODEX_ARGV1"
-[[ "$CODEX_ARGV1" == *" -s read-only "* && "$CODEX_ARGV1" != *"sandbox_mode"* ]] \
-  || fail "Codex plain exec lost -s read-only: $CODEX_ARGV1"
+[[ "$CODEX_ARGV1" == *" -s read-only "* && "$CODEX_ARGV1" == *'-c sandbox_mode=\"read-only\"'* ]] \
+  || fail "Codex plain exec lost its read-only flag/config pair: $CODEX_ARGV1"
 assert_state "$CODEX_STATE" codex-thread fake-codex "$CODEX_SESSION1" 1 codex
 
 CODEX_OUT2="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \

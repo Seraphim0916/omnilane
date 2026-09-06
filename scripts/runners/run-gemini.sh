@@ -31,6 +31,58 @@ fi
 
 truncate_payload "$PROMPT_FILE" 140000
 
+WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
+  echo "omnilane: Gemini workdir is not accessible" >&2
+  exit 2
+}
+
+# agy 1.1.27 loads per-run CLI settings from the hidden app_data_dir
+# interface while leaving GeminiDir (and subscription auth) unchanged. Keep
+# one stable root for a named thread; anonymous jobs use their output path.
+AGY_PREPARE="$OMNILANE_REPO/scripts/lib/prepare-agy-mode.py"
+[[ -f "$AGY_PREPARE" ]] || {
+  echo "omnilane: Gemini mode policy helper missing" >&2
+  exit 127
+}
+if [[ -n "${OMNILANE_THREAD_NAME:-}" ]]; then
+  AGY_APP_KEY="thread-v1-${MODE}-$(printf '%s' "$OMNILANE_THREAD_NAME" | hash_str)"
+else
+  AGY_APP_KEY="job-v1-${MODE}-$(printf '%s' "$OUTPUT_FILE" | hash_str)"
+fi
+AGY_APP_ROOT="$OMNILANE_HOME/agy-app/$AGY_APP_KEY"
+AGY_APP_DATA_REL="$(python3 "$AGY_PREPARE" \
+  --mode "$MODE" --workdir "$WORKDIR" --app-root "$AGY_APP_ROOT" \
+  --gemini-dir "$HOME/.gemini")" || {
+  echo "omnilane: Gemini isolated mode settings could not be prepared" >&2
+  exit 2
+}
+APP_DATA_ARGS=("--app_data_dir=$AGY_APP_DATA_REL")
+AGY_WORK_ENV=()
+if [[ "$MODE" == "work" ]]; then
+  agy_cleanup_workspace_policy() {
+    local previous_rc=$?
+    trap - EXIT
+    if ! python3 "$AGY_PREPARE" --cleanup --mode "$MODE" --workdir "$WORKDIR" \
+        --app-root "$AGY_APP_ROOT" --gemini-dir "$HOME/.gemini"; then
+      echo "omnilane: agy workspace policy cleanup/integrity check failed; inspect owned leaf" >&2
+      [[ "$previous_rc" -ne 0 ]] || previous_rc=125
+    fi
+    exit "$previous_rc"
+  }
+  trap agy_cleanup_workspace_policy EXIT
+  AGY_WORK_META="$(python3 - "$AGY_APP_ROOT/workspace-agent.json" <<'PY'
+import json, pathlib, sys
+state = json.loads(pathlib.Path(sys.argv[1]).read_text())
+print(state["agent"])
+print(state["cache"])
+PY
+  )"
+  AGY_AGENT_NAME="${AGY_WORK_META%%$'\n'*}"
+  AGY_CACHE_ROOT="${AGY_WORK_META#*$'\n'}"
+  AGY_WORK_ENV=("TMPDIR=$AGY_CACHE_ROOT/tmp" "XDG_CACHE_HOME=$AGY_CACHE_ROOT/cache"
+    "CLANG_MODULE_CACHE_PATH=$AGY_CACHE_ROOT/clang" "SWIFT_MODULECACHE_PATH=$AGY_CACHE_ROOT/swift")
+fi
+
 # Both modes run inside the target WORKDIR so the worker can actually see the
 # repo it is asked about. Tradeoff: repo-level agent personas may color advise
 # answers; set OMNILANE_GEMINI_SCRATCH=1 to run advise in a neutral scratch dir.
@@ -44,9 +96,26 @@ fi
 MODEL_ARGS=()
 [[ -n "$MODEL" && "$MODEL" != "-" ]] && MODEL_ARGS=(--model "$MODEL")
 
-# Without an execution mode, print mode denies tool calls outright:
-# plan = read-only tools (advise), accept-edits = file edits allowed (work).
-if [[ "$MODE" == "advise" ]]; then MODE_ARGS=(--mode plan); else MODE_ARGS=(--mode accept-edits); fi
+MODE_ARGS=()
+case "$MODE" in
+  advise)
+    # A private per-job settings file carries the permission policy; --sandbox
+    # supplies the native terminal sandbox for restricted modes.
+    MODE_ARGS=(--sandbox)
+    ;;
+  work)
+    MODE_ARGS=(--sandbox --agent "$AGY_AGENT_NAME")
+    ;;
+  sysops)
+    # Explicit opt-in: bypass approval prompts. The private settings file also
+    # selects always-proceed and disables the terminal sandbox for this job.
+    MODE_ARGS=(--mode accept-edits --dangerously-skip-permissions)
+    ;;
+  *)
+    echo "omnilane: invalid Gemini mode (advise|work|sysops)" >&2
+    exit 2
+    ;;
+esac
 
 LIVE_INBOX="${OMNILANE_INBOX:-}"
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
@@ -129,8 +198,8 @@ PY
     cd "$RUN_DIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
       -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
-      NO_BROWSER=1 OMNILANE_DEPTH=1 \
-      "$AGY_BIN" --dangerously-skip-permissions --add-dir "$RUN_DIR" \
+      NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
+      "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
       "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --input-format stream-json --output-format stream-json -p "" \
       < "$LIVE_INBOX" > "$EVENTS_FILE" 2> "$STDERR_FILE"
@@ -162,8 +231,8 @@ if [[ -n "$THREAD_MODE" ]]; then
   (
     cd "$RUN_DIR" || exit 127
     env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
-      NO_BROWSER=1 OMNILANE_DEPTH=1 \
-      "$AGY_BIN" --dangerously-skip-permissions --add-dir "$RUN_DIR" \
+      NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
+      "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
       "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
       --print-timeout "${RUN_TIMEOUT}s" --output-format json \
       "${THREAD_ARGS[@]}" -p "$(cat "$PROMPT_FILE")" \
@@ -196,8 +265,8 @@ set +e
   # --add-dir registers RUN_DIR as the active workspace; without it agy's
   # sandbox denies every tool call (run_command/view_file) in print mode.
   env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
-    NO_BROWSER=1 OMNILANE_DEPTH=1 \
-    "$AGY_BIN" --dangerously-skip-permissions --add-dir "$RUN_DIR" \
+    NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
+    "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
     "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
     --print-timeout "${RUN_TIMEOUT}s" \
     --print "$(cat "$PROMPT_FILE")" \
@@ -205,6 +274,12 @@ set +e
 )
 RC=$?
 set -e
+fi
+
+
+if [[ "$RC" -eq 0 && -f "${OUTPUT_FILE}.tmp" && ! -s "${OUTPUT_FILE}.tmp" ]]; then
+  echo "omnilane: Gemini completed without a readable response" >> "${OUTPUT_FILE}.stderr.log"
+  RC=1
 fi
 
 if grep -Eiq "$CAPACITY_PATTERN" "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.stderr.log" 2>/dev/null; then

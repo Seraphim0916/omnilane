@@ -137,11 +137,15 @@ load_job_vendor() {
 }
 
 require_live_job() {
+  local action="${1:-}"
   load_job_vendor
   live_vendor_capable "$JOB_VENDOR" ||
     die 1 "job vendor '$JOB_VENDOR' is not live-capable (live vendors: $(live_capable_vendors)); it runs in single-shot mode"
   [[ "$JOB_SESSION_MODE" == "live" ]] ||
     die 1 "job vendor '$JOB_VENDOR' was dispatched in single-shot mode"
+  if [[ "$action" == "send" && "$JOB_VENDOR" == "grok" ]]; then
+    echo "note: Grok send cancels an active turn before starting the new prompt; conversation context survives, but in-progress work is lost"
+  fi
 }
 
 wait_for_live_ready() {
@@ -405,7 +409,7 @@ case "${1:-}" in
   send)
     [[ "$JSON_MODE" -eq 0 && $# -eq 3 ]] || usage
     select_job "$2"
-    require_live_job
+    require_live_job send
     wait_for_live_ready
     if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
       foreman_value="$FOREMAN_SESSION"

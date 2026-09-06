@@ -103,18 +103,18 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 重构、迁移、测试、大范围扫描——机械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 架构裁决、深度推理、第二意见 |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
-| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
-| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速多步骤工具循环、多模态检查 |
-| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 实时 X／网页搜索与社交上下文 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 配额耗尽时的中量级编码安全阀 |
-| 🗳️ arbitrate | `off`（可选模型评审团） | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | 架构裁决、深度推理、第二意见 |
+| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
+| 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
+| 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
+| ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速多步骤工具循环、多模态检查 |
+| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 实时 X／网页搜索与社交上下文 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 配额耗尽时的中量级编码安全阀 |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
 通道都是这样一条链;整条都没装时,通道自动降为 `off`。
@@ -296,17 +296,11 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 
 ## 🎭 模式
 
-- **advise(默认)** — 只读工作端。Codex 跑只读沙箱;Claude 只给
-  Read/Glob/Grep;Grok 跑 plan 模式;Kimi 与 OpenCode 锁各自的只读
-  plan 模式;OpenRouter 天生只做 advise(纯推理)。适合审查、提问、第二意见。
-- **work** — 允许改文件,仅限你指定的 `--workdir`。Codex 给
-  workspace-write 沙箱;Claude 自动接受编辑;Gemini 跑 accept-edits 模式。
-  `openrouter` vendor 会明确拒绝 work 模式——改文件请走代理式 CLI vendor。
-- **sysops** — 等于 `work` 拿掉 vendor 沙箱,用于沙箱会挡掉的服务操作
-  (`launchctl` 之类)。Codex 以 `-s danger-full-access` 执行;其他 vendor
-  一律当成普通 `work`。这等于把整台机器的访问权交给工作端,因此只能逐次
-  明确指定,永远不能设成 lane 默认值。只有在你亲眼看到 `work` 因沙箱拒绝而
-  失败时才动用它。
+- **advise（默认）**：本地只读分析；供应商支持时可用原生网页／搜索工具。保留模型连接，限制修改工具；不同供应商的 X／网页搜索能力并不等同。
+- **work**：文件与命令操作限于显式 `--workdir`，关闭代理工具网络访问，保留模型连接。不支持的强制边界在调用模型前停止，不会静默切换为 sysops。
+- **sysops**：每次派工显式选择，开放代理工具、文件和网络访问；不作为通道默认值，任务必须列明允许的操作。
+
+Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
 
 ## 🔒 内置安全机制
 
@@ -339,7 +333,7 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 rou
 
 ## 📬 实时邮箱
 
-实时邮箱是 Claude 和 Gemini 可用的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：空闲上限或已配置的整个作业超时（`--job-timeout`）到期后都会终止它。
+实时邮箱是受支持模式的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：空闲上限或已配置的整个作业超时（`--job-timeout`）到期后都会终止它。
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "检查超时测试失败的原因"
@@ -351,7 +345,7 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch` 会跟随 `$JOB_DIR/events.jsonl`；`tail` 读取公开的 `out.txt`。目前 Claude 和 Gemini 支持实时邮箱；其他供应商会执行普通的一次性派发，并在 stderr 和 `$JOB_DIR/mode-notice.txt` 留下提示。`--live` 明确要求常驻会话，解析出的供应商不支持时立即失败。`--single-shot` 即使遇到 Claude 或 Gemini 也强制一次性派发。`--idle-timeout SECONDS` 设置空闲上限，默认 900 秒，设为 `0` 可禁用。
+`watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 还要求 `--mode sysops --workdir DIR`，advise／work 的实时请求在启动前停止，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
 
 空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
 
@@ -465,11 +459,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 <br/>
 
-除非你明说要它改。派工默认是 `advise` 只读模式,而且是逐厂商实现的(只读沙箱、
-plan 模式,或只给只读工具集)。要改文件必须同时给 `--mode work` 和明确的
-`--workdir`。第三种模式 `--mode sysops` 等于 `work` 拿掉 vendor 沙箱,用于沙箱会
-挡掉的服务操作(例如 `launchctl`);codex 以 `-s danger-full-access` 执行,其他
-vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane 默认值。
+除非你明确要求修改。派工默认是 `advise`，通过各厂商的只读沙箱或原生工具权限
+保持只读，并保留支持的网页搜索。一般修改使用 `--mode work` 和明确的 `--workdir`，
+关闭代理工具网络，但保留模型连接。`--mode sysops` 是 Codex、Claude、Grok、Agy
+各自独立的完整权限策略，不是 work 的别名；只有任务明确允许超出 work 边界的
+操作，例如服务管理，才逐次选择，永远不作为通道默认值。
 工作端也不能再往外派——深度守卫会用退出码 86 拒绝嵌套派工,一道
 命令不可能失控变成一整串 AI 烧你的额度。
 
@@ -496,6 +490,14 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.40.0 新功能
+
+- **区分模式并修复 Grok 网页工具。** advise 只读并保留支持的原生搜索；work 限于明确的 `--workdir` 且关闭代理工具网络；sysops 每次显式启用完整权限。Grok 完整单次 `plain` advise 已取得真实搜索、抓页和写入拒绝证据；macOS work 与受限实时模式仍保留前置检查。
+- **Codex 与 Grok 显式实时会话。** Codex work 与 Grok sysops 作业可用 `--background --live` 继续发送消息并显式关闭；Codex／Grok 自动派发仍保持单次执行，Claude／Gemini 保留原有自动实时行为。Grok advise 因 ACP 没有可强制执行的只读边界而拒绝 `--live`。
+- **有界且可观测的关闭流程。** 能识别 EOF 的能力探测、每项作业的不可变 worker 快照、解释器／SHA 来源、关闭期限与进程组清理，可限制卡住或被终止的实时作业，但不宣称操作系统沙箱隔离。
+- **AA 驱动的模型覆盖。** 12 条通道默认值已纳入 Fable 5.1、GPT-6 Astra 与 Gemini 3.8 Flash，同时保留现有供应商和显式模型覆盖。日期化 AA v4.2 覆盖快照记录 643 个榜单配置；模型出现在目录中不代表运行环境已验证支持。
+- **升级。** 运行 `npm i -g omnilane@0.40.0`，或更新 checkout 后再次运行 `./install.sh`。
 
 ## v0.33.0 新功能
 
@@ -578,6 +580,8 @@ vendor 一律当成 `work`,而且它只能逐次明确指定,永远不是 lane �
   招牌工作是 1M 扫读,而该基准涵盖不到。
 
 ## v0.12.0 新功能
+
+以下保留当时版本的历史说明。当前三种模式的契约以[模式](#-模式)为准，包括 0.40.0 独立的完整权限 sysops 策略。
 
 - **`hardest-coding` 的 Sol 从 `max` 降到 `xhigh`**——在 AA 分档位的 Coding Index
   上,Sol 的 xhigh 不但胜过自己的 max,也胜过所有 Claude 档位,成本还少约三分之一。

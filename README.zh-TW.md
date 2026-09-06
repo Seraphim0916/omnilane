@@ -103,23 +103,23 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (xhigh) | GPT-5.6 Sol (xhigh) → Grok 4.6 → Gemini 3.7 Flash (High) | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 重構、搬遷、測試、大面積掃描——機械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.7 Flash (Low) → Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) → Grok 4.6 | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Fable 5.1 (high) | GPT-5.6 Sol (max) → Grok 4.6 → Gemini 3.7 Flash (High) | 對外文字、提示詞／文件潤飾、風格裁決 |
-| 💬 consult | GPT-5.6 Sol (max) | Claude Fable 5.1 (high) → Grok 4.6 → Gemini 3.7 Flash (High) | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
-| 🎨 ui-draft | GPT-5.6 Sol (xhigh) | Claude Fable 5.1 (high) → Gemini 3.7 Flash (High) | 只有在附設計系統／參考圖時才做 UI 草稿 |
-| 📚 long-context | Gemini 3.7 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文件擷取與整合，依 AA-LCR、成本與吞吐排序 |
-| ⚡ fast-agentic | Gemini 3.7 Flash (Medium) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速多步驟工具迴圈、多模態檢查 |
-| 📡 live-search | Grok 4.6 | Gemini 3.7 Flash (High) → Claude Sonnet 5 (high) | 即時 X／網頁搜尋與社群脈絡 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.7 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 額度用完時的中量級編碼安全閥 |
+| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（max）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol（high） | Gemini 3.8 Flash（High）→ Claude Sonnet 5（high） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
+| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（max）→ Grok 4.6 | 架構裁決、深度推理、第二意見 |
+| ✒️ taste-final | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
+| 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（Medium） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
+| 🎨 ui-draft | GPT-5.6 Sol（high） | Claude Fable 5.1（xhigh）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
+| 📚 long-context | Gemini 3.8 Flash（Medium） | GPT-5.6 Terra（max）→ Claude Opus 5（medium） | 長文件整合；上下文容量本身不證明任務品質 |
+| ⚡ fast-agentic | Gemini 3.8 Flash（Low） | GPT-5.6 Luna（high）→ Claude Haiku 4.5 | 高速多步驟工具迴圈、多模態檢查 |
+| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash（High）→ Claude Sonnet 5（high） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
+| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 
 **備選模型**是候選鏈的下一位——首選那家的廠商 CLI 沒裝時,派工就降到它。每條
 通道都是這樣一條鏈;整條都沒裝時,通道自動降為 `off`。
 
-> **Fable 5.1 已進入預設——以及 Opus 5 仍適合放在哪裡。** 三方數據與 Opus override 寫在[常見問題](#-常見問題)。
+> **Fable 5.1 與 Astra 現在領頭困難工作。** 同條件證據見[常見問題](#-常見問題)。
 
 ### 自然語言諮詢
 
@@ -140,12 +140,13 @@ flowchart LR
 你哪些通道**自己做**(你本來就是那個模型,省一次呼叫)、哪些**派出去**。你 CLI 裡
 的 `omnilane` 技能會自動套對的那一列,這裡是給人看的版本。
 
-- **Claude Code · Fable 5.1**——自己做：taste-final、hardest-coding。派出去：hard-judgment → Opus 5；bulk → Codex Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
-- **Claude Code · Opus 5**——自己做：hard-judgment,這是它的預設車道。需要較低幻覺率或價格時,用本機覆寫讓它接手 taste-final。最難編碼 → Fable 5.1 或 Sol；bulk → Sol high；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
-- **Codex · Sol**——自己做：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。派出去：taste-final → Claude；long-context／高速迴圈 → Gemini 3.7 Flash；即時搜尋 → Grok。
-- **Codex · Terra**——自己做 long-context 的 Codex 備援；bulk-mechanical 已改由 Sol high 預設處理。最難處升級 Sol xhigh，taste → Claude，高速迴圈 → Gemini 3.7 Flash，即時搜尋 → Grok。
+- **Claude Code · Fable 5.1**——品質敏感工作建議的提示詞層主控；這是角色，不是新通道或自動選模器。最難編碼用 max，判斷／文字用 xhigh；獨立 Codex 複核用 Astra，bulk 用 Sol，長文／高速工作用 Gemini 3.8 Flash，即時搜尋用 Grok。
+- **Claude Code · Opus 5**——顯式點名時可做均衡型提示詞層主控與獨立複核（一般用 `high`，更深複核可選 `xhigh`），也保留為 long-context 備援；這是選配角色，不是新通道或 hard-judgment 預設。
+- **Codex · Sol**——bulk-mechanical 與有參考限制的 ui-draft 用 high 自己做；最難編碼／判斷升級 Fable 或 Astra，長文／高速工作交 Gemini 3.8 Flash，即時搜尋交 Grok。
+- **Codex · Astra**——提示詞層主控備位與獨立複核者；最難編碼／判斷用 max，consult／taste 用 xhigh，顯式 model／effort 永遠優先。
+- **Codex · Terra**——用 max 接 Codex 的 long-context 備援；bulk 留給 Sol high，困難工作升級 Fable／Astra。
 - **Grok Build · Grok 4.6**——自己做 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
-- **Antigravity · Gemini 3.7 Flash**——自己做：Medium 的 long-context／高速迴圈、High 的 bulk／overflow、Low 的 triage，並以 High 兼任 hardest-coding、taste-final、ui-draft、live-search 的備援。首選人手在的話，最難編碼／判斷／文字交給 Codex、Claude。
+- **Antigravity · Gemini 3.8 Flash**——long-context 用 Medium，fast-agentic／triage 用 Low，bulk／overflow／網搜備援用 High。不要把代理／編碼評測推論成審美或主控權。
 
 </details>
 
@@ -323,17 +324,11 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 
 ## 🎭 模式
 
-- **advise(預設)** — 唯讀工作端。Codex 跑唯讀沙箱;Claude 只給
-  Read/Glob/Grep;Grok 跑 plan 模式;Kimi 與 OpenCode 鎖各自的唯讀
-  plan 模式;OpenRouter 天生只做 advise(純推論)。適合審查、提問、第二意見。
-- **work** — 允許改檔案,僅限你指定的 `--workdir`。Codex 給
-  workspace-write 沙箱;Claude 自動接受編輯;Gemini 跑 accept-edits 模式。
-  `openrouter` vendor 會明確拒絕 work 模式——改檔請走代理式 CLI vendor。
-- **sysops** — 等於 `work` 拿掉 vendor 沙箱,用於沙箱會擋掉的服務操作
-  (`launchctl` 之類)。Codex 以 `-s danger-full-access` 執行;其他 vendor
-  一律當成一般 `work`。這等於把整台機器的存取權交給工作端,因此只能逐次
-  明確指定,永遠不能設成 lane 預設。只有在你親眼看到 `work` 因沙箱拒絕而
-  失敗時才動用它。
+- **advise（預設）**：本機唯讀分析；供應商支援時可用原生網頁／搜尋工具。模型連線保留，修改工具受限；不同供應商的 X／網搜能力不視為等同。
+- **work**：檔案與命令操作限制在明示的 `--workdir`，關閉代理工具對外連線，但保留模型連線。尚未支援的強制邊界會在呼叫模型前停止，不偷偷變成 sysops。
+- **sysops**：每次派工明示選用，開放代理工具、檔案與網路存取；永遠不是通道預設值，任務須列明可執行操作。
+
+Codex 與 Claude 的三種模式使用不同政策。Agy advise／sysops 使用獨立的每工作階段原生設定，不替換訂閱認證；Agy 1.1.27 work 已以四個經驗證工具及原生終端沙箱完成限定的新建／續接驗收：工作目錄內讀寫、修改、編譯及越界寫入拒絕通過。外部暫存／快取讀取也受限；每次啟動重寫明示設定，不宣稱設定全程不可變。另一次正式 work 即時／FIFO 兩輪驗收已通過前輪讀回、越界寫入拒絕及正常關閉，來源保持不變。Grok advise 使用原生工具允許／拒絕規則；Grok 1.0.13 的完整一次性 `plain` 路徑已驗證原生關鍵字搜尋、抓頁及寫入拒絕，使用內部網頁工具 ID 與每筆工作的 MCP 就緒狀態隔離，不關閉掛鉤。若 `CONTEXT_MODE_MCP_SENTINEL_DIR` 已設為非空值，會在呼叫模型前明確回報衝突，不覆寫原設定。原生子程序網路隔離僅支援 Linux，因此 macOS Grok work 仍保留閘門；Grok 即時模式仍須明示 sysops，此次 advise 結果不擴張到其他路徑。OpenRouter 維持僅 advise；其餘供應商不自動納入這份四供應商契約。證據範圍見[日期化執行驗收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
 
 ## 🔒 內建安全機制
 
@@ -366,7 +361,7 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 
 ## 📬 即時信箱
 
-即時信箱是 Claude 與 Gemini 可用的常駐背景派工，不是一次性派工。派工者以 `--background` 開啟後，執行中仍能補傳指示，並負責用 `jobs.sh close ID` 收尾。即使沒人處理，也不會永久存在：閒置上限或設定的整體工作逾時（`--job-timeout`）一到就會結束。
+即時信箱是常駐背景派工，不是一次性派工。Claude 與 Gemini 保留 `--background` 自動使用即時信箱的既有行為；Codex 與 Grok 預設維持一次性派工，只有明示 `--background --live` 才啟用，Grok 另須指定 `--mode sysops --workdir DIR`。派工者能補傳指示，並負責用 `jobs.sh close ID` 收尾；閒置上限或設定的整體工作逾時（`--job-timeout`）仍會使工作結束。
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "檢查逾時測試失敗的原因"
@@ -378,7 +373,7 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
-`watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。目前 Claude 與 Gemini 支援即時信箱；其他供應商會執行一般的一次性派工，stderr 與 `$JOB_DIR/mode-notice.txt` 都會留下提示。`--live` 會明確要求常駐工作階段，解析出的供應商不支援時立即失敗。`--single-shot` 即使遇到 Claude 或 Gemini 也會強制一次性派工。`--idle-timeout SECONDS` 設定閒置上限，預設 900 秒，設為 `0` 則停用。
+`watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。Claude、Gemini、Codex 與 Grok 都支援即時信箱，但 Codex／Grok 自動選擇時仍是一次性派工，必須明示 `--live`。Grok 的 advise／work 即時請求會在啟動前停止，因為 ACP 未強制這些受限模式的邊界；一般 advise 採用一次性原生工具允許／拒絕規則。供應商不支援 `--live` 時立即失敗。`--single-shot` 對所有供應商強制一次性派工。`--idle-timeout SECONDS` 設定閒置上限，預設 900 秒，設為 `0` 則停用。
 
 閒置時不會發出 API 呼叫，也不會增加 API 費用。預設若 900 秒內沒有新信箱訊息或新結果事件，工作程序會自動收尾；整體工作逾時仍是外層上限。處理完成可提早執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請使用新的派工，或在工作完成後使用 `retry`。
 
@@ -426,49 +421,32 @@ omnilane goal close "$GOAL_ID" --summary "結帳整合已穩定"
 </details>
 
 <details>
-<summary><b>Fable 5.1 已進入預設——以及 Opus 5 仍適合放在哪裡</b></summary>
+<summary><b>為什麼困難工作現在由 Fable 5.1 與 Astra 領頭？</b></summary>
 
 <br/>
 
-Fable 5.1 現在領頭 `hardest-coding`、`taste-final`。同為 xhigh 時，它在智慧、
-代理式工作與編碼都領先 Opus 5；Sol max 則保留為便宜許多的跨廠商判斷備援。
-`hard-judgment` 本身現在改以 Opus 5 xhigh 為預設：它能拿到 Fable 代理式分數
-的 97.7%，成本卻只要 68%，幻覺率也更低——依這條車道自己的每成本準則，較
-便宜的組態勝出。
+2026-09-05 更新用 AA v4.2 同檔位比較兩者：Fable／Astra 在 max 為
+57／55、xhigh 為 54／54；AA Briefcase 在 max 為 1666／1566、xhigh
+為 1657／1540。原生編碼代理比較中，Fable max 完成 70、每題 $9.18、
+耗時 24 分鐘；Astra max 完成 67、每題 $4.72、耗時 26.8 分鐘。因此
+`hardest-coding` 用 Fable max，`hard-judgment`／`taste-final` 用 Fable
+xhigh，Astra 則是 Codex 家族備援與獨立複核者。
 
-| 評測（AA，擷取於 2026-09-02） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
-|---|---:|---:|---:|
-| 智慧 | 64.8 | 62.5 | 60.9 |
-| 代理式 | 59.8 | 58.4 | 57.8 |
-| 編碼 | 80.7 | 77.0 | 77.4 |
-| 幻覺率（越低越好） | .71 | **.60** | .92 |
-| AA 每任務成本 | $2.65 | $1.80 | **$0.95** |
-
-Fable 5.1 沒進 bulk 或 triage：每 token 價格是 Opus 5 的兩倍，而且每回合
-消耗最多 Claude Code 訂閱額度。Opus 5 現在預設領頭 `hard-judgment`，並以
-medium 留在 `long-context`；也能透過 `~/.omnilane/routing.local.yaml`
-放回任何通道——例如把 Fable 換回來：
-
-```yaml
-hard-judgment: claude claude-fable-5-1 xhigh
-```
+品質優先的提示詞層主控首選是 Fable max；Opus high／xhigh 是均衡型主控與
+獨立複核選項；Astra 則是沿用 Codex 額度的備位與複核者。這些都是角色建議，
+不是新增通道或自動主控選模器。Opus 也保留為 Claude 的 `long-context` 備援。
 
 </details>
 
 <details>
-<summary><b>Claude 那幾條通道為什麼用 <code>xhigh</code> 而不是 <code>max</code>?</b></summary>
+<summary><b>為什麼最難編碼用 <code>max</code>，其他 Claude 通道用 <code>xhigh</code>？</b></summary>
 
 <br/>
 
-因為推理檔位不是越高越好。Anthropic 官方把 `xhigh` 定為編碼與 agentic 工作的
-起手檔位,`high` 是其他吃智力任務的下限,`max` 保留給「正確性重於成本」的場合。
-第三方實測也一致:Vals.ai 的 Vibe Code Bench 上,Opus 5 在 `high` 拿 89.8%,
-`xhigh` 只有 88.3%、`max` 88.4%——最高檔傾向產出更繁複的解,反而更常出錯。
-你的工作型態如果不同意,單條通道自己拉高:
-
-```bash
-omnilane configure set hard-judgment "claude claude-opus-5 max"
-```
+推理檔位依任務選，不預設越高一定越好。目前同條件比較與原生編碼證據支持
+正確性優先的 `hardest-coding` 用 max；`hard-judgment`、`taste-final`
+及具名 Fable 諮詢則以 xhigh 平衡品質與成本。顯式 `--model`／`--effort`
+永遠覆蓋這些通道路由預設。
 
 </details>
 
@@ -492,11 +470,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 <br/>
 
-除非你明講要它改。派工預設是 `advise` 唯讀模式,而且是逐廠商實作的(唯讀沙箱、
-plan 模式,或只給唯讀工具集)。要改檔必須同時給 `--mode work` 和明確的
-`--workdir`。第三種模式 `--mode sysops` 等於 `work` 拿掉 vendor 沙箱,用於沙箱會
-擋掉的服務操作(例如 `launchctl`);codex 以 `-s danger-full-access` 執行,其他
-vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane 預設。
+除非你明講要它改。派工預設是 `advise`，以各廠商的唯讀沙箱或原生工具權限
+維持唯讀，並保留支援的網搜。一般修改使用 `--mode work` 與明確的 `--workdir`，
+關閉代理工具網路，但保留模型連線。`--mode sysops` 是 Codex、Claude、Grok、Agy
+各自獨立的完整權限政策，不是 work 的別名；只有任務明示允許超出 work 邊界的
+操作，例如服務管理，才逐次選用，永遠不是通道預設值。
 工作端也不能再往外派——深度守衛會用退出碼 86 拒絕巢狀派工,一道
 指令不可能失控變成一整串 AI 燒你的額度。
 
@@ -520,6 +498,15 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.40.0 新功能
+
+- **明確區分模式並修復 Grok 網頁工具。** advise 唯讀且保留支援的原生搜尋；work 限定明示 `--workdir` 並關閉代理工具網路；sysops 每次明示完整權限。Grok 完整一次性 `plain` advise 已取得真實搜尋、抓頁及寫入拒絕證據；macOS work 與受限即時模式仍保留閘門。
+- **Codex 與 Grok 明示即時工作階段。** Codex work 與 Grok sysops 工作可用 `--background --live` 接續補傳與明確關閉；Codex／Grok 自動派工仍維持一次性，Claude／Gemini 則保留既有自動即時行為。Grok advise 因 ACP 沒有強制唯讀邊界，所以拒絕 `--live`。
+- **有界且可觀察的關閉流程。** 能辨識 EOF 的能力探測、每筆工作的不可變 worker 快照、直譯器／SHA 來源、關閉期限與程序群組清理，能約束卡住或被終止的即時工作，但不宣稱是作業系統沙箱隔離。
+- **完成通知與閒置判定修正。** 完成通知可處理截斷的 UTF-8 尾端；終態以持久 exit 紀錄為準；閒置時間只在完整結果事件後推進，不受任意串流流量干擾。
+- **AA 驅動的模型覆蓋。** 12 條通道預設已納入 Fable 5.1、GPT-6 Astra 與 Gemini 3.8 Flash，同時保留既有供應商與明示模型覆寫。日期化 AA v4.2 覆蓋快照記錄 643 個榜單設定；模型出現在目錄不等於執行環境已驗證支援。
+- **升級。** 執行 `npm i -g omnilane@0.40.0`，或更新 checkout 後再跑 `./install.sh`。
 
 ## v0.33.0
 
@@ -607,6 +594,8 @@ vendor 一律當成 `work`,而且它只能逐次明確指定,永遠不是 lane �
   招牌工作是 1M 掃讀,而該基準涵蓋不到。
 
 ## v0.12.0 新功能
+
+以下保留當時版本的歷史說明。目前三種模式的契約以[模式](#-模式)為準，包含 0.40.0 獨立的完整權限 sysops 政策。
 
 - **`hardest-coding` 的 Sol 從 `max` 降到 `xhigh`**——在 AA 分檔位的 Coding Index
   上,Sol 的 xhigh 不但勝過自己的 max,也勝過所有 Claude 檔位,成本還少約三分之一。

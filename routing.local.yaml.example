@@ -8,7 +8,7 @@
 # consult is a multi-vendor direct-target chain. configure.sh intentionally
 # skips it because that menu writes one candidate per lane. If overriding it,
 # retain every vendor you want to address by name:
-# consult: codex gpt-5.6-sol max | claude claude-fable-5-1 high | grok grok-4.6 - | gemini "Gemini 3.7 Flash (High)" -
+# consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-medium -
 
 # ── Starter profiles ─────────────────────────────────────────────
 # Uncomment ONE block that matches what you actually subscribe to.
@@ -28,8 +28,13 @@
 
 # Profile: Claude Code (Fable 5.1) as the main loop — let Fable keep judgment/taste,
 # push only coding volume out to Codex.
-# hard-judgment:   claude claude-fable-5-1 high
-# taste-final:     claude claude-fable-5-1 high
+# hard-judgment: claude claude-fable-5-1 xhigh
+# taste-final: claude claude-fable-5-1 xhigh
+
+# Profile: Opus 5 balanced controller / independent review (opt-in).
+# Keep cross-vendor fallbacks explicit; this does not create a controller lane.
+# hard-judgment: claude claude-opus-5 xhigh | codex gpt-6-astra max | grok grok-4.6 -
+# taste-final: claude claude-opus-5 high | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high -
 
 # Profile: Codex-heavy (Sol main) — keep the hard lanes on Codex, Claude for taste.
 # taste-final:     claude claude-opus-5 high

@@ -149,11 +149,11 @@ esac
 
 # Native CLI catalogs are pinned from each installed CLI's live model surface.
 # Dynamic/API catalogs stay curated — "c" always accepts an exact model ID.
-CODEX_MODELS=("gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
+CODEX_MODELS=("gpt-6-astra" "gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
 CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
 CLAUDE_MODELS=("default" "best" "fable" "opus" "sonnet" "haiku" "opus[1m]" "sonnet[1m]" "opusplan" "claude-fable-5" "claude-fable-5-1" "claude-opus-5" "claude-sonnet-5" "claude-opus-4-8" "claude-opus-4-7" "claude-opus-4-6" "claude-opus-4-5-20251101" "claude-sonnet-4-6" "claude-sonnet-4-5-20250929" "claude-haiku-4-5" "claude-haiku-4-5-20251001")
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
-GEMINI_MODELS=("gemini-3.7-flash-high" "gemini-3.7-flash-medium" "gemini-3.7-flash-low" "gemini-3.6-flash-high" "gemini-3.6-flash-medium" "gemini-3.6-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low" "claude-sonnet-4-6" "claude-opus-4-6-thinking" "gpt-oss-120b-medium")
+GEMINI_MODELS=("gemini-3.8-flash-high" "gemini-3.8-flash-medium" "gemini-3.8-flash-low" "gemini-3.7-flash-high" "gemini-3.7-flash-medium" "gemini-3.7-flash-low" "gemini-3.6-flash-high" "gemini-3.6-flash-medium" "gemini-3.6-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low" "claude-sonnet-4-6" "claude-opus-4-6-thinking" "gpt-oss-120b-medium")
 GROK_MODELS=("grok-4.6" "headroom-grok-build" "grok-4.3-official")
 KIMI_MODELS=("kimi-k3" "kimi-k2.7-code" "kimi-k2.5")
 QWEN_MODELS=("qwen3.7-max" "qwen3.7-plus" "qwen3.6-plus" "qwen3.5-plus" "qwen3-max-2026-01-23" "qwen3-coder-next" "qwen3-coder-plus" "qwen3-coder-flash")
@@ -163,8 +163,8 @@ OPENROUTER_MODELS=("anthropic/claude-opus-5" "anthropic/claude-fable-5" "anthrop
 # Direct-API OpenAI-compatible vendors (curl + <VENDOR>_API_KEY); slugs are
 # suggestions — "c" free text covers anything each provider's /models lists.
 DEEPSEEK_MODELS=("deepseek-v4-pro" "deepseek-v4-flash")
-ZAI_MODELS=("glm-5.1" "glm-5" "glm-5-turbo" "glm-4.7" "glm-4.7-flashx" "glm-4.7-flash" "glm-4.6")
-MISTRAL_MODELS=("devstral-latest" "devstral-small-latest" "codestral-latest" "mistral-medium-latest" "mistral-large-latest")
+ZAI_MODELS=("glm-5.3" "glm-5.1" "glm-5" "glm-5-turbo" "glm-4.7" "glm-4.7-flashx" "glm-4.7-flash" "glm-4.6")
+MISTRAL_MODELS=("devstral-latest" "devstral-small-latest" "codestral-latest" "mistral-medium-3-5" "mistral-medium-latest" "mistral-large-latest")
 GROQ_MODELS=("groq/compound" "groq/compound-mini" "openai/gpt-oss-120b" "openai/gpt-oss-20b" "qwen/qwen3.6-27b" "llama-3.3-70b-versatile" "llama-3.1-8b-instant")
 CEREBRAS_MODELS=("zai-glm-4.7" "gpt-oss-120b" "qwen-3-235b-a22b-instruct-2507" "qwen-3-32b" "llama3.1-8b")
 

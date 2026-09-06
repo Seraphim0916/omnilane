@@ -6,6 +6,34 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-09-06
+
+### Added
+
+- Codex work-mode background jobs can use a resident app-server session with incremental output, follow-up prompts, explicit close, bounded cleanup, capability detection, and single-shot fallback.
+- Grok explicit sysops background jobs can use a resident ACP live session with incremental output, follow-up prompts, explicit close, bounded cleanup, capability detection, and single-shot fallback.
+
+### Changed
+
+- Refresh all 12 routing lanes from the dated AA v4.2 evidence set: add Fable 5.1, GPT-6 Astra, and Gemini 3.8 Flash where supported while retaining existing vendors, explicit overrides, and single-shot Codex/Grok auto behavior. The model catalog remains a selection menu rather than a runtime capability guarantee.
+- Publish a machine-readable 643-configuration AA coverage snapshot plus model capability notes, and expose verified identifiers for explicit advise-only GLM 5.3, DeepSeek V4, and Mistral Medium 3.5 selection without adding them to default work routes.
+- Preserve background auto compatibility: Codex and Grok remain single-shot unless `--live` is explicit; Claude/Gemini retain their existing auto behavior.
+- Grok advise uses single-shot native tool allow/deny rules; explicit Grok `--live` requires `--mode sysops --workdir DIR` because ACP does not expose enforceable restricted-mode policies. macOS Grok work fails before provider startup because its native child-network isolation is Linux-only.
+- Background job metadata records the worker interpreter path and version used by the immutable worker snapshot.
+
+### Fixed
+
+- Agy work now uses four validated native tools with explicit sandboxed command execution and per-start policy regeneration. Real new/resume checks cover workspace read/write/edit/build and denied outside/policy writes; ownership-checked cleanup preserves replacement directories and the empty owned policy leaf. A separate real two-turn work live/FIFO check passed readback, outside-write denial and normal close. External temp/cache reads remain restricted and xcrun may warn on its default cache.
+- Grok advise now selects native `web_search` / `web_fetch` IDs so the strict hosted-tool gate can expose backend search, while retaining permission-rule class names and native write denials. A private per-job context-mode readiness scope prevents redirects to another session's inaccessible MCP without disabling hooks; nonempty caller-provided readiness scopes are reported as conflicts rather than overwritten. The complete single-shot `plain` path has real search, page-fetch and denied-write verification; this does not extend support to macOS work or restricted live.
+- Release audit can optionally compare documented CLI flags and subcommands against current help output through `OMNILANE_USAGE_DOC`, failing on missing or stale usage tokens while remaining offline and opt-in.
+- Completion notices recover safely from truncated UTF-8 output and classify terminal jobs from durable exit state instead of stale process observations; live idle detection now counts completed result events rather than arbitrary stream traffic.
+- Dispatches now execute a per-job read-only `job-worker.sh` snapshot whose source and startup SHA-256 values are recorded and checked, so editing the repository worker cannot splice a running Bash process while repository-rooted libraries and runners remain correctly resolved.
+- Live worker close uses a Bash 3.2-compatible, 0.1-second total FIFO drain deadline, preserves unforwarded input on drain failure, and bounds normal/TERM/KILL cleanup below `jobs close`'s 10-second timeout while retaining Codex's full 7-second shutdown budget.
+- Codex app-server shutdown now waits for normal EOF cleanup before bounded TERM/KILL escalation, allowing app-server-owned sidecars to exit normally without making stuck shutdown unbounded.
+- Codex app-server and Grok ACP capability probes keep stdin open until the initialize reply, avoiding false live-unavailable results from runtimes that exit on early EOF.
+- Grok ACP live now forwards each job's selected model to `grok agent`, fails promptly on the active prompt's JSON-RPC error even after partial output, and ignores late errors from a cancelled prompt.
+- Grok advise stays fail-closed at both worker and runner boundaries when an internal live FIFO is requested, preventing live mailbox artifacts or metadata from contradicting its single-shot restricted policy.
+
 ## [0.34.0] - 2026-09-03
 
 ### Changed
@@ -771,7 +799,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...v0.40.0
 [0.34.0]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...v0.33.0
 [0.32.1]: https://github.com/Seraphim0916/omnilane/compare/v0.32.0...v0.32.1
