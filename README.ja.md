@@ -112,10 +112,10 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
 | ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
@@ -535,8 +535,13 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## v0.41.1 の新機能
 
+- **Astra の既定値を xhigh に変更。** `hardest-coding` と `hard-judgment` の Astra は `xhigh` が既定値です。必要な場合は `--vendor codex --effort max` を明示できます。プロバイダーの順序と他モデルの推論強度は変更しません。CLI サブスクリプション枠の節約を実測したという主張ではありません。
+
 - **Python 3.9 互換性。** Agy のワークスペースポリシーの準備・終了処理で `Path.lstat()` を使い、シンボリックリンク、inode、同時置換の保護を維持します。
 - **隔離した CI テスト設定。** strict doctor の検証にプラグイン有効化とディレクトリソース設定を追加します。設定の欠落、無効化、パス不一致は引き続き失敗します。
+- **移植可能なオフライン CI テスト設定。** 操作者の HOME への依存をなくし、移植可能な権限モード検査を使い、実際のプラットフォームに合わせて Linux／macOS のライブ実行制限を検証します。
+- **Bash 3.2 での Gemini スレッド。** 空のスレッド引数の展開を保護し、`set -u`、値がある場合の再開引数、既存のモードと権限ポリシーを維持します。
+- **時間制限付きの Codex ライブ終了。** FIFO のバックプレッシャーや部分書き込みでもバイト順序と未送信の末尾を保持し、終了時に制限時間内で転送します。実行プロセスが先に終了した場合も、受理済みで未転送の入力は保持して失敗を報告し、黙って破棄しません。他のプロバイダーの転送経路は変更しません。
 - **npm 公開後の更新。** `npm i -g omnilane@0.41.1`、または checkout 更新後に `./install.sh` を実行してください。npm は別途公開され、GitHub リリースは npm での提供開始を意味しません。
 
 ## v0.40.0 の新機能

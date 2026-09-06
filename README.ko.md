@@ -110,10 +110,10 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
 | ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
@@ -520,8 +520,13 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 ## v0.41.1 새 기능
 
+- **Astra 기본값을 xhigh로 변경.** `hardest-coding`과 `hard-judgment`의 Astra는 기본적으로 `xhigh`를 사용하며, 필요하면 `--vendor codex --effort max`를 명시할 수 있습니다. 공급자 순서와 다른 모델의 추론 강도는 그대로 유지합니다. CLI 구독 할당량 절감을 실측했다는 주장은 아닙니다.
+
 - **Python 3.9 호환성.** Agy 작업 영역 정책 준비와 정리에 `Path.lstat()`을 사용하며 심볼릭 링크, inode 및 동시 교체 보호를 유지합니다.
 - **격리된 CI 테스트 설정.** strict doctor 검증에 플러그인 활성화와 디렉터리 소스 설정을 추가합니다. 설정 누락, 비활성화 또는 경로 불일치는 계속 실패합니다.
+- **이식 가능한 오프라인 CI 테스트 설정.** 작업자 HOME 의존성을 제거하고 이식 가능한 권한 모드 검사를 사용하며, 실제 플랫폼에 맞춰 Linux／macOS 라이브 실행 제한을 검증합니다.
+- **Bash 3.2의 Gemini 스레드.** 빈 스레드 인수 확장을 보호하면서 `set -u`, 값이 있는 재개 인수, 기존 모드와 권한 정책을 유지합니다.
+- **시간 제한이 있는 Codex 라이브 종료.** FIFO 역압과 부분 쓰기에서도 바이트 순서와 미전송 뒷부분을 보존하여 종료 제한 시간 안에 전송합니다. 실행기가 먼저 종료되면 이미 수락했지만 전달하지 못한 대기 입력을 보존하고 실패를 보고하며 조용히 버리지 않습니다. 다른 공급자의 전달 경로는 그대로 유지합니다.
 - **npm 게시 후 업그레이드.** `npm i -g omnilane@0.41.1`을 실행하거나 checkout 업데이트 후 `./install.sh`를 실행하십시오. npm은 별도로 게시되며 GitHub 릴리스가 npm 제공을 뜻하지 않습니다.
 
 ## v0.40.0 새 기능

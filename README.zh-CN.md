@@ -103,10 +103,10 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | 重构、迁移、测试、大范围扫描——机械耐力活 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | 架构裁决、深度推理、第二意见 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | 架构裁决、深度推理、第二意见 |
 | ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
@@ -495,8 +495,13 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 ## v0.41.1 新功能
 
+- **Astra 默认 xhigh。** `hardest-coding` 与 `hard-judgment` 的 Astra 默认改用 `xhigh`；需要时可明确指定 `--vendor codex --effort max`。供应商顺序与其他模型的推理强度保持不变；这不代表已实测节省 CLI 订阅额度。
+
 - **Python 3.9 兼容性。** Agy 工作目录策略的建立与清理改用 `Path.lstat()`，保留符号链接、inode 和并发替换保护。
 - **隔离 CI 测试数据。** 严格 doctor 验收补齐明确启用插件与目录来源设置；设置缺失、停用或路径不匹配时仍会失败。
+- **可移植的离线 CI 测试数据。** 测试移除对操作者 HOME 的依赖，采用跨平台权限模式检查，并按实际平台验证 Linux／macOS 的实时任务限制。
+- **Bash 3.2 的 Gemini 任务。** 保护空任务参数展开，同时保留 `set -u`、非空续接参数以及现有模式与权限策略。
+- **有时间上限的 Codex 实时关闭。** FIFO 背压与部分写入会保留字节顺序及未发送尾段，供限时关闭排空处理；若执行器提前退出，已接受但尚未转发的排队输入仍会保留并报告失败，不会静默丢弃。其他供应商沿用原有转发路径。
 - **npm 上架后升级。** 运行 `npm i -g omnilane@0.41.1`，或更新 checkout 后再次运行 `./install.sh`。npm 单独发布，GitHub 发布不代表 npm 已上架。
 
 ## v0.40.0 新功能

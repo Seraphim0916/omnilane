@@ -115,10 +115,10 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (max) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (max) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
 | ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; keep `--vendor` to prevent fallback |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
@@ -160,7 +160,7 @@ already are that model, so no second call) versus **dispatch**. Your harness's
 - **Claude Code · Fable 5.1** — recommended prompt-level controller for quality-sensitive work; this is a role, not a lane or automatic selector. Self-execute hardest-coding at max and judgment/taste at xhigh; use Astra for an independent Codex review, Sol for bulk, Gemini 3.8 Flash for long/fast work, and Grok for live search.
 - **Claude Code · Opus 5** — balanced prompt-level controller and independent reviewer when explicitly selected (`high`, or `xhigh` for deeper review), plus long-context fallback. This is an opt-in role, not a new lane or the default hard-judgment route.
 - **Codex · Sol** — self-execute bulk-mechanical and constrained ui-draft at high. Escalate hardest coding and judgment to Fable/Astra; route long/fast work to Gemini 3.8 Flash and live search to Grok.
-- **Codex · Astra** — prompt-level controller backup and independent reviewer. Use max for hardest coding/judgment and xhigh for consult/taste; explicit model/effort always win.
+- **Codex · Astra** — prompt-level controller backup and independent reviewer. Use xhigh by default for hardest coding/judgment and consult/taste; explicitly select `--vendor codex --effort max` when needed. Explicit model/effort always win.
 - **Codex · Terra** — self-execute the Codex long-context fallback at max. Bulk stays on Sol high; escalate hard work to Fable/Astra.
 - **Grok Build · Grok 4.6** — self-execute: live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
 - **Antigravity · Gemini 3.8 Flash** — self-execute long-context Medium, fast-agentic/triage Low, and bulk/overflow/web fallbacks High. Do not infer visual taste or controller authority from agent/coding benchmarks.
@@ -581,8 +581,13 @@ working notes, including per-benchmark caveats, live in
 
 ## What's new in v0.41.1
 
+- **Astra defaults to xhigh.** In `hardest-coding` and `hard-judgment`, Astra now defaults to `xhigh`; explicitly select `--vendor codex --effort max` when needed. Provider order and other model efforts are unchanged. This is not a claim of measured CLI subscription-quota savings.
+
 - **Python 3.9 compatibility.** Agy workspace-policy staging and cleanup now use `Path.lstat()` without weakening symlink, inode, or concurrent-replacement protections.
 - **Isolated CI fixture.** Strict doctor acceptance now supplies explicit plugin-enabled and directory-marketplace settings; missing, disabled, or mismatched settings still fail.
+- **Portable offline CI fixtures.** Tests no longer depend on the operator HOME, use portable permission-mode checks, and verify Linux/macOS live restrictions for the actual platform.
+- **Gemini threads on Bash 3.2.** Empty thread-argument expansion is guarded while preserving `set -u`, populated resume arguments, and existing mode and permission policies.
+- **Bounded Codex live close.** FIFO backpressure and partial writes preserve byte ordering and unsent suffixes for the bounded close drain. If the runner exits before forwarding accepted queued input, that input is retained and the failure is reported rather than silently discarded. Other providers keep their existing forwarding paths.
 - **Upgrade after npm publication.** Run `npm i -g omnilane@0.41.1`, or update your checkout and rerun `./install.sh`. npm publication is handled separately; a GitHub release does not establish npm availability.
 
 ## What's new in v0.40.0

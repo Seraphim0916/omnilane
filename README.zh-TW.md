@@ -103,10 +103,10 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（max）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
 | 🏗️ bulk-mechanical | GPT-5.6 Sol（high） | Gemini 3.8 Flash（High）→ Claude Sonnet 5（high） | 重構、搬遷、測試、大面積掃描等耐力工作 |
 | 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（max）→ Grok 4.6 | 架構裁決、深度推理、第二意見 |
+| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Grok 4.6 | 架構裁決、深度推理、第二意見 |
 | ✒️ taste-final | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
 | 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（Medium） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
 | 🎨 ui-draft | GPT-5.6 Sol（high） | Claude Fable 5.1（xhigh）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
@@ -143,7 +143,7 @@ flowchart LR
 - **Claude Code · Fable 5.1**——品質敏感工作建議的提示詞層主控；這是角色，不是新通道或自動選模器。最難編碼用 max，判斷／文字用 xhigh；獨立 Codex 複核用 Astra，bulk 用 Sol，長文／高速工作用 Gemini 3.8 Flash，即時搜尋用 Grok。
 - **Claude Code · Opus 5**——顯式點名時可做均衡型提示詞層主控與獨立複核（一般用 `high`，更深複核可選 `xhigh`），也保留為 long-context 備援；這是選配角色，不是新通道或 hard-judgment 預設。
 - **Codex · Sol**——bulk-mechanical 與有參考限制的 ui-draft 用 high 自己做；最難編碼／判斷升級 Fable 或 Astra，長文／高速工作交 Gemini 3.8 Flash，即時搜尋交 Grok。
-- **Codex · Astra**——提示詞層主控備位與獨立複核者；最難編碼／判斷用 max，consult／taste 用 xhigh，顯式 model／effort 永遠優先。
+- **Codex · Astra**——提示詞層主控備位與獨立複核者；最難編碼／判斷與 consult／taste 預設用 xhigh，需要時可明確指定 `--vendor codex --effort max`；顯式 model／effort 永遠優先。
 - **Codex · Terra**——用 max 接 Codex 的 long-context 備援；bulk 留給 Sol high，困難工作升級 Fable／Astra。
 - **Grok Build · Grok 4.6**——自己做 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
 - **Antigravity · Gemini 3.8 Flash**——long-context 用 Medium，fast-agentic／triage 用 Low，bulk／overflow／網搜備援用 High。不要把代理／編碼評測推論成審美或主控權。
@@ -503,8 +503,13 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 ## v0.41.1 新功能
 
+- **Astra 預設 xhigh。** `hardest-coding` 與 `hard-judgment` 的 Astra 預設改用 `xhigh`；需要時可明確指定 `--vendor codex --effort max`。供應商順序與其他模型的努力程度維持原樣；這不代表已實測節省 CLI 訂閱額度。
+
 - **Python 3.9 相容性。** Agy 工作目錄政策的建立與清理改用 `Path.lstat()`，保留符號連結、inode 與並行替換保護。
 - **隔離 CI 測試資料。** 嚴格 doctor 驗收補齊明示啟用外掛與目錄來源設定；設定缺少、停用或路徑不符仍會失敗。
+- **可攜式離線 CI 測試資料。** 測試移除對操作者 HOME 的依賴，採用跨平台權限模式檢查，並依實際平台驗證 Linux／macOS 的即時工作限制。
+- **Bash 3.2 的 Gemini 任務。** 保護空任務參數展開，同時保留 `set -u`、有值時的續接參數，以及既有模式與權限政策。
+- **有時間上限的 Codex 即時關閉。** FIFO 背壓與部分寫入會保留位元組順序及未送出尾段，供限時關閉排空處理；若執行器提前退出，已接受但尚未轉送的排隊輸入仍會保留並回報失敗，不會靜默丟棄。其他供應商沿用原有轉送路徑。
 - **npm 上架後升級。** 執行 `npm i -g omnilane@0.41.1`，或更新 checkout 後再跑 `./install.sh`。npm 另行發布，GitHub 發布不代表 npm 已上架。
 
 ## v0.40.0 新功能
