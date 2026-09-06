@@ -6,6 +6,13 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.41.1] - 2026-09-06
+
+### Fixed
+
+- Restore Python 3.9 compatibility in Agy workspace-policy staging and cleanup by replacing four unsupported `Path.stat(follow_symlinks=False)` calls with equivalent `Path.lstat()` calls. Symlink no-follow behavior, inode identity checks, directory-descriptor operations, and concurrent-replacement protections remain intact.
+- Complete the isolated CI strict-doctor fixture with explicit plugin-enabled and directory-marketplace settings. Strict checking and native settings validation remain enabled; missing, disabled, or mismatched plugin fixtures still fail.
+
 ## [0.40.0] - 2026-09-06
 
 ### Added
@@ -799,7 +806,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...HEAD
+[0.41.1]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...v0.41.1
 [0.40.0]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...v0.40.0
 [0.34.0]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/Seraphim0916/omnilane/compare/v0.32.1...v0.33.0

@@ -579,6 +579,12 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.41.1
+
+- **Python 3.9 compatibility.** Agy workspace-policy staging and cleanup now use `Path.lstat()` without weakening symlink, inode, or concurrent-replacement protections.
+- **Isolated CI fixture.** Strict doctor acceptance now supplies explicit plugin-enabled and directory-marketplace settings; missing, disabled, or mismatched settings still fail.
+- **Upgrade after npm publication.** Run `npm i -g omnilane@0.41.1`, or update your checkout and rerun `./install.sh`. npm publication is handled separately; a GitHub release does not establish npm availability.
+
 ## What's new in v0.40.0
 
 - **Distinct modes and repaired Grok web access.** Advise is read-only with supported native search, work confines edits to explicit `--workdir` with agent-tool networking off, and sysops explicitly opts into full access. Grok's full single-shot `plain` advise path now has real search/fetch and denied-write evidence; macOS work and restricted live remain gated.

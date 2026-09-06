@@ -493,6 +493,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 ## 📜 版本历程
 
+## v0.41.1 新功能
+
+- **Python 3.9 兼容性。** Agy 工作目录策略的建立与清理改用 `Path.lstat()`，保留符号链接、inode 和并发替换保护。
+- **隔离 CI 测试数据。** 严格 doctor 验收补齐明确启用插件与目录来源设置；设置缺失、停用或路径不匹配时仍会失败。
+- **npm 上架后升级。** 运行 `npm i -g omnilane@0.41.1`，或更新 checkout 后再次运行 `./install.sh`。npm 单独发布，GitHub 发布不代表 npm 已上架。
+
 ## v0.40.0 新功能
 
 - **区分模式并修复 Grok 网页工具。** advise 只读并保留支持的原生搜索；work 限于明确的 `--workdir` 且关闭代理工具网络；sysops 每次显式启用完整权限。Grok 完整单次 `plain` advise 已取得真实搜索、抓页和写入拒绝证据；macOS work 与受限实时模式仍保留前置检查。

@@ -438,7 +438,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True)
     parser.add_argument("--progress", required=True)
     parser.add_argument("--session-id-file", required=True)
-    parser.add_argument("--version", default="0.40.0")
+    parser.add_argument("--version", default="0.41.1")
     parser.add_argument("--rpc-timeout", type=float, default=10.0)
     # Coupled to job-worker.sh's 100 * 0.1s outer grace. The default turn,
     # EOF, TERM, and KILL waits total seven seconds below that boundary.
