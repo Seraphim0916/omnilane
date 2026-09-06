@@ -35,6 +35,13 @@ MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""; OVERRIDE_IDLE_TIMEOUT=""; SESSION_REQUEST="auto"
 THREAD_NAME=""; THREAD_MODE=""; THREAD_ID=""; THREAD_TURN=""; THREAD_CREATED=""
+EXECUTOR="auto"; NATIVE_CONTEXT=""; RESOLVE_WITH_CONTEXT=0
+SELECTED_EXECUTOR="cli"; EXECUTOR_REASON="no-native-context"
+AA_POLICY_FILE="${OMNILANE_AA_POLICY_FILE:-$OMNILANE_REPO/config/aa-model-policy.json}"
+AA_CALLER_CONTEXT="${OMNILANE_AA_CALLER_CONTEXT:-}"
+AA_OPERATOR_ASSERTED_HUMAN="${OMNILANE_AA_OPERATOR_ASSERTED_HUMAN:-0}"
+AA_TARGET_CONFIG=""; AA_POLICY_ACTIVE=0; AA_EXPLICIT_TARGET=0
+AA_LAST_DECISION=""; AA_SELECTED_DECISION=""; AA_VOTE_PREFLIGHT=0
 
 usage_error() {
   echo 'usage: dispatch.sh [--background] [--dry-run] [--thread NAME] [flags] LANE "TASK" | [--json] --list|--validate [--json] | [--json] --explain LANE [--json] | --help' >&2
@@ -58,6 +65,13 @@ flags:
   --background           run in the background and print the JOB_ID
   --dry-run              print the fully resolved dispatch plan and stop
                          before any provider call or job state
+  --executor auto|native|cli  caller-owned native handoff or legacy CLI
+  --native-context FILE      explicit JSON capabilities; native is not a binary
+  --caller-context FILE      exact model caller identity plus inherited ceiling
+  --operator-asserted-human  explicit AA model-ceiling exemption; assertion only
+  --aa-policy FILE           frozen AA policy registry (default: repo config)
+  --transport-overlay FILE  host-local hashed request-selector contracts
+  --target-config ID         pin one runtime-verified registry configuration
   --mode advise|work|sysops
                          advise (read-only, default), work (may edit files),
                          or sysops (vendor sandbox disabled, for service
@@ -282,6 +296,9 @@ print_dry_run_plan() {
   print_dry_run_value vendor "$VENDOR"
   print_dry_run_value model "$MODEL"
   print_dry_run_value effort "$EFFORT"
+  print_dry_run_value executor "$SELECTED_EXECUTOR"
+  print_dry_run_value executor_reason "$EXECUTOR_REASON"
+  printf 'aa_policy=%s\n' "$AA_SELECTED_DECISION"
   print_dry_run_value mode "$MODE"
   print_dry_run_value workdir "$WORKDIR"
   printf 'timeout=%s\n' "$TIMEOUT"
@@ -351,10 +368,59 @@ routing_candidate_available() {
   fi
 }
 
+aa_policy_decide() {
+  # vendor model effort [target-config] -> structured JSON in AA_LAST_DECISION
+  local vendor="$1" model="$2" effort="$3" target_config="${4:-}" rc=0
+  local args=(--registry "$AA_POLICY_FILE" --vendor "$vendor" --model "$model" --effort "$effort")
+  [[ -z "$target_config" ]] || args+=(--target-config "$target_config")
+  if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "1" ]]; then
+    args+=(--operator-asserted-human)
+  elif [[ -n "$AA_CALLER_CONTEXT" ]]; then
+    args+=(--caller-context "$AA_CALLER_CONTEXT")
+  fi
+  AA_LAST_DECISION="$(python3 "$OMNILANE_REPO/scripts/lib/aa_policy.py" "${args[@]}")" || rc=$?
+  return "$rc"
+}
+
+aa_vote_child_spec() {
+  case "$1" in
+    codex) printf 'gpt-6-astra\txhigh\n' ;;
+    claude) printf 'claude-fable-5-1\txhigh\n' ;;
+    gemini) printf 'gemini-3.8-flash-medium\t-\n' ;;
+    grok) printf 'grok-4.6\t-\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+aa_policy_candidate_allowed() {
+  local vendor="$1" model="$2" effort="$3" voter spec child_model child_effort
+  local voters=()
+  AA_VOTE_PREFLIGHT=0
+  if [[ "$vendor" != "vote" ]]; then
+    aa_policy_decide "$vendor" "$model" "$effort" "$AA_TARGET_CONFIG"
+    return $?
+  fi
+  [[ -z "$AA_TARGET_CONFIG" ]] || {
+    AA_LAST_DECISION='{"schema_version":1,"allowed":false,"code":"vote-target-config-invalid","message":"--target-config cannot identify an entire vote panel"}'
+    return 3
+  }
+  IFS=',' read -ra voters <<< "$model"
+  for voter in ${voters[@]+"${voters[@]}"}; do
+    spec="$(aa_vote_child_spec "$voter")" || {
+      AA_LAST_DECISION='{"schema_version":1,"allowed":false,"code":"unknown-vote-child","message":"vote panel contains an unknown child"}'
+      return 3
+    }
+    child_model="${spec%%$'\t'*}"; child_effort="${spec##*$'\t'}"
+    aa_policy_decide "$voter" "$child_model" "$child_effort" || return $?
+  done
+  AA_VOTE_PREFLIGHT=1
+  return 0
+}
+
 # Pick the first candidate whose vendor CLI is present ("off" always matches).
 # Sets RESOLVED_SPEC / RESOLVED_FIELDS / RESOLVED_IDX / RESOLVED_TOTAL.
 resolve_chain() {
-  local chain="$1" requested_vendor="${2:-}" seg i=0 vendor
+  local chain="$1" requested_vendor="${2:-}" seg i=0 vendor model effort considered=0
   RESOLVED_SPEC=""; RESOLVED_IDX=0; RESOLVED_TOTAL=0; RESOLVED_FIELDS=()
   local SEGS=() F=()
   IFS='|' read -ra SEGS <<< "$chain"
@@ -371,16 +437,35 @@ resolve_chain() {
     }
     F=("${PARSED_FIELDS[@]}")
     vendor="${F[0]:-}"
+    model="${OVERRIDE_MODEL:-${F[1]:-}}"
+    effort="${OVERRIDE_EFFORT:-${F[2]:-}}"
     if [[ -n "$requested_vendor" ]]; then
       [[ "$vendor" == "$requested_vendor" ]] || continue
+      considered=1
+      if [[ "$AA_POLICY_ACTIVE" -eq 1 ]] &&
+         ! aa_policy_candidate_allowed "$vendor" "$model" "$effort"; then
+        return 6
+      fi
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}"); RESOLVED_IDX="$i"
-      if routing_candidate_available "$vendor" "${F[1]:-}"; then return 0; fi
+      AA_SELECTED_DECISION="$AA_LAST_DECISION"
+      if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 ]] || routing_candidate_available "$vendor" "$model"; then return 0; fi
       return 4
     fi
-    if [[ "$vendor" == "off" ]] || routing_candidate_available "$vendor" "${F[1]:-}"; then
+    if [[ "$AA_EXPLICIT_TARGET" -eq 1 && "$considered" -eq 1 ]]; then
+      return 6
+    fi
+    considered=1
+    if [[ "$AA_POLICY_ACTIVE" -eq 1 ]] &&
+       ! aa_policy_candidate_allowed "$vendor" "$model" "$effort"; then
+      [[ "$AA_EXPLICIT_TARGET" -eq 1 ]] && return 6
+      continue
+    fi
+    if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 || "$vendor" == "off" ]] || routing_candidate_available "$vendor" "$model"; then
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}")
+      AA_SELECTED_DECISION="$AA_LAST_DECISION"
       RESOLVED_IDX="$i"; return 0
     fi
+    [[ "$AA_EXPLICIT_TARGET" -eq 1 ]] && return 4
   done
   [[ -n "$requested_vendor" ]] && return 5
   return 1
@@ -627,7 +712,9 @@ while [[ $# -gt 0 ]]; do
       }
       SESSION_REQUEST="single-shot"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
-    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout|--thread)
+    --operator-asserted-human)
+      AA_OPERATOR_ASSERTED_HUMAN=1; shift ;;
+    --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout|--thread|--executor|--native-context|--caller-context|--aa-policy|--target-config|--transport-overlay)
       # Value-taking flags: a missing value must be a clean usage error (exit 2),
       # not a `set -u` "unbound variable" crash on $2.
       [[ $# -ge 2 ]] || { echo "omnilane: $1 needs a value" >&2; exit 2; }
@@ -641,6 +728,14 @@ while [[ $# -gt 0 ]]; do
         --job-timeout) OVERRIDE_JOB_TIMEOUT="$2" ;;
         --idle-timeout) OVERRIDE_IDLE_TIMEOUT="$2" ;;
         --thread) THREAD_NAME="$2" ;;
+        --executor) EXECUTOR="$2" ;;
+        --native-context)
+          [[ -n "$2" ]] || { echo "omnilane: native context path is empty" >&2; exit 2; }
+          NATIVE_CONTEXT="$2" ;;
+        --caller-context) AA_CALLER_CONTEXT="$2" ;;
+        --aa-policy) AA_POLICY_FILE="$2" ;;
+        --target-config) AA_TARGET_CONFIG="$2" ;;
+      --transport-overlay) export OMNILANE_AA_TRANSPORT_OVERLAY="$2" ;;
       esac
       shift 2 ;;
     -*) echo "omnilane: unknown flag" >&2; exit 2 ;;
@@ -686,6 +781,35 @@ if [[ -n "$OVERRIDE_VENDOR" ]] &&
 fi
 
 depth_guard
+command -v python3 >/dev/null 2>&1 || {
+  echo "omnilane: exact-AA policy requires Python 3" >&2; exit 2
+}
+[[ "$AA_OPERATOR_ASSERTED_HUMAN" == "0" || "$AA_OPERATOR_ASSERTED_HUMAN" == "1" ]] || {
+  echo "omnilane: OMNILANE_AA_OPERATOR_ASSERTED_HUMAN must be 0 or 1" >&2; exit 2
+}
+if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "1" && -n "$AA_CALLER_CONTEXT" ]]; then
+  echo "omnilane: caller context and operator assertion are mutually exclusive" >&2
+  exit 2
+fi
+[[ -n "$AA_POLICY_FILE" ]] || { echo "omnilane: AA policy path is empty" >&2; exit 2; }
+if [[ -n "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]]; then
+  OMNILANE_AA_OVERLAY_SHA256="$(file_sha256 "$OMNILANE_AA_TRANSPORT_OVERLAY")"
+  export OMNILANE_AA_OVERLAY_SHA256
+fi
+AA_POLICY_ACTIVE=1
+if [[ -n "$OVERRIDE_VENDOR" || -n "$OVERRIDE_MODEL" || -n "$OVERRIDE_EFFORT" || -n "$AA_TARGET_CONFIG" ]]; then
+  AA_EXPLICIT_TARGET=1
+fi
+case "$EXECUTOR" in
+  cli) EXECUTOR_REASON="forced-cli" ;;
+  auto|native)
+    if [[ "$EXECUTOR" == "native" || -n "$NATIVE_CONTEXT" ]]; then
+      # Resolve independently of installed executables. Native rejection may
+      # fall back only to this exact CLI target, not to the next routing row.
+      RESOLVE_WITH_CONTEXT=1
+    fi ;;
+  *) echo "omnilane: invalid executor (auto|native|cli)" >&2; exit 2 ;;
+esac
 
 CHAIN="$(raw_lane_line "$LANE")" || { echo "omnilane: unknown lane '$LANE' (try --list)" >&2; exit 2; }
 if [[ -n "$OVERRIDE_VENDOR" ]]; then
@@ -699,7 +823,11 @@ if [[ -n "$OVERRIDE_VENDOR" ]]; then
         echo "omnilane: requested vendor '$OVERRIDE_VENDOR' is configured for lane '$LANE' but its CLI is unavailable" >&2
         exit 4
         ;;
-      5)
+    6)
+      printf '%s\n' "$AA_LAST_DECISION" >&2
+      exit 3
+      ;;
+    5)
         echo "omnilane: requested vendor '$OVERRIDE_VENDOR' is not configured for lane '$LANE'" >&2
         exit 2
         ;;
@@ -710,17 +838,77 @@ if [[ -n "$OVERRIDE_VENDOR" ]]; then
     esac
   fi
 else
-  resolve_chain "$CHAIN" || {
-    echo "omnilane: no vendor CLI available for lane '$LANE' (chain:$CHAIN)." >&2
-    echo "omnilane: install a vendor CLI or override the lane in ~/.omnilane/routing.local.yaml" >&2
+  resolve_rc=0
+  resolve_chain "$CHAIN" || resolve_rc=$?
+  if [[ "$resolve_rc" -eq 6 ]]; then
+    printf '%s\n' "$AA_LAST_DECISION" >&2
+    exit 3
+  elif [[ "$resolve_rc" -ne 0 ]]; then
+    echo "omnilane: no eligible available target for lane '$LANE' (chain:$CHAIN)." >&2
+    [[ -z "$AA_LAST_DECISION" ]] || printf '%s\n' "$AA_LAST_DECISION" >&2
     exit 4
-  }
+  fi
 fi
 
 FIELDS=("${RESOLVED_FIELDS[@]}")
 VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_MODEL" ]] && MODEL="$OVERRIDE_MODEL"
 [[ -n "$OVERRIDE_EFFORT" ]] && EFFORT="$OVERRIDE_EFFORT"
+
+AA_REGISTRY_SHA256="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["registry_sha256"])' "$AA_SELECTED_DECISION")"
+AA_CALLER_SHA256="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("caller_context_sha256", ""))' "$AA_SELECTED_DECISION")"
+export OMNILANE_AA_POLICY_FILE="$AA_POLICY_FILE"
+export OMNILANE_AA_REGISTRY_SHA256="$AA_REGISTRY_SHA256"
+export OMNILANE_AA_CALLER_CONTEXT="$AA_CALLER_CONTEXT"
+export OMNILANE_AA_CALLER_SHA256="$AA_CALLER_SHA256"
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="$AA_OPERATOR_ASSERTED_HUMAN"
+export OMNILANE_AA_VOTE_PREFLIGHT="$AA_VOTE_PREFLIGHT"
+
+# Shared routing fields are fixed before executor selection. Native never
+# sources runners or launches a shell agent.
+TIMEOUT="$OVERRIDE_TIMEOUT"
+if [[ -z "$TIMEOUT" ]]; then
+  LANE_TIMEOUT_VAR="OMNILANE_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
+  TIMEOUT="${!LANE_TIMEOUT_VAR:-}"
+fi
+[[ -n "$TIMEOUT" ]] || TIMEOUT="${OMNILANE_TIMEOUT:-600}"
+[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+  echo "omnilane: invalid timeout (want a positive integer of seconds)" >&2; exit 2
+}
+if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 ]]; then
+  command -v python3 >/dev/null 2>&1 || { echo "omnilane: native protocol requires Python 3" >&2; exit 2; }
+  NATIVE_JOB_VAR="OMNILANE_JOB_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
+  NATIVE_ARGS=(route --home "$OMNILANE_HOME" --executor "$EXECUTOR" --lane "$LANE"
+    --vendor "$VENDOR" --model="$MODEL" --effort="$EFFORT" --workdir "$WORKDIR"
+    --mode "$MODE" --task="$TASK" --session "$SESSION_REQUEST" --thread "$THREAD_NAME"
+    --policy "$AA_POLICY_FILE" --expected-registry-sha256 "$AA_REGISTRY_SHA256"
+    --timeout "$TIMEOUT" --job-timeout "${OVERRIDE_JOB_TIMEOUT:-${!NATIVE_JOB_VAR:-${OMNILANE_JOB_TIMEOUT:-}}}"
+    --idle-timeout "${OVERRIDE_IDLE_TIMEOUT:-${OMNILANE_IDLE_TIMEOUT:-}}")
+  [[ -z "$NATIVE_CONTEXT" ]] || NATIVE_ARGS+=(--context "$NATIVE_CONTEXT")
+  [[ -z "$AA_TARGET_CONFIG" ]] || NATIVE_ARGS+=(--target-config "$AA_TARGET_CONFIG")
+  if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "1" ]]; then
+    NATIVE_ARGS+=(--operator-asserted-human)
+  elif [[ -n "$AA_CALLER_CONTEXT" ]]; then
+    NATIVE_ARGS+=(--caller-context "$AA_CALLER_CONTEXT")
+    [[ -z "$AA_CALLER_SHA256" ]] || NATIVE_ARGS+=(--expected-caller-sha256 "$AA_CALLER_SHA256")
+  fi
+  [[ "$BACKGROUND" -eq 0 ]] || NATIVE_ARGS+=(--background)
+  [[ "$DRY_RUN" -eq 0 ]] || NATIVE_ARGS+=(--dry-run)
+  NATIVE_RC=0
+  NATIVE_OUTPUT="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" "${NATIVE_ARGS[@]}")" || NATIVE_RC=$?
+  if [[ "$NATIVE_RC" -eq 0 ]]; then
+    printf '%s\n' "$NATIVE_OUTPUT"
+    exit 0
+  elif [[ "$NATIVE_RC" -ne 10 ]]; then
+    exit "$NATIVE_RC"
+  fi
+  EXECUTOR_REASON="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["reason"])' "$NATIVE_OUTPUT")"
+  MODEL="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["model"])' "$NATIVE_OUTPUT")"
+  [[ "$VENDOR" == "off" ]] || routing_candidate_available "$VENDOR" "$MODEL" || {
+    echo "omnilane: native rejected ($EXECUTOR_REASON); exact CLI target '$VENDOR' unavailable; no vendor/model substitution" >&2
+    exit 4
+  }
+fi
 
 if [[ -n "$THREAD_NAME" ]]; then
   case "$VENDOR" in
@@ -823,15 +1011,6 @@ fi
 # Resolve here and export so every runner (and vote's sub-runners) inherits the
 # same value without a per-runner code change; they already read OMNILANE_TIMEOUT.
 # This bounds each runner CLI call, not the whole dispatch (see header note).
-TIMEOUT="$OVERRIDE_TIMEOUT"
-if [[ -z "$TIMEOUT" ]]; then
-  LANE_TIMEOUT_VAR="OMNILANE_TIMEOUT_$(printf '%s' "${LANE//-/_}" | tr '[:lower:]' '[:upper:]')"
-  TIMEOUT="${!LANE_TIMEOUT_VAR:-}"
-fi
-[[ -n "$TIMEOUT" ]] || TIMEOUT="${OMNILANE_TIMEOUT:-600}"
-[[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
-  echo "omnilane: invalid timeout (want a positive integer of seconds)" >&2; exit 2
-}
 export OMNILANE_TIMEOUT="$TIMEOUT"
 
 IDLE_TIMEOUT="$OVERRIDE_IDLE_TIMEOUT"
@@ -919,6 +1098,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
+printf 'omnilane: executor=cli reason=%s\n' "$EXECUTOR_REASON" >&2
 mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
@@ -934,6 +1114,47 @@ chmod 700 "$JOBS_ROOT"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
+# Snapshot authorizer separately from the worker identity. Never hand a worker
+# its parent's identity as its own caller context.
+python3 - "$OMNILANE_REPO" "$JOB_DIR" "$AA_POLICY_FILE" "$AA_REGISTRY_SHA256" "$AA_CALLER_CONTEXT" "$AA_CALLER_SHA256" "$AA_SELECTED_DECISION" "$VENDOR" <<'AA_PUBLISH'
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts/lib"))
+import aa_policy
+_, repo, directory, policy, policy_sha, context, context_sha, raw, vendor = sys.argv
+registry, _ = aa_policy.load_registry(policy, policy_sha)
+caller = aa_policy.load_caller(context, registry, context_sha)[0] if context else None
+decision = json.loads(raw)
+if vendor == "vote":
+    decision["target_config_id"] = None
+    decision["child_context"] = None
+    decision["target_request"] = {"vendor": "vote", "model": None, "effort": None}
+aa_policy.publish_context(directory, registry, caller, decision, policy)
+AA_PUBLISH
+AA_POLICY_FILE="$JOB_DIR/aa-registry.json"
+AA_REGISTRY_SHA256="$(file_sha256 "$AA_POLICY_FILE")"
+AA_CALLER_CONTEXT=""
+AA_CALLER_SHA256=""
+if [[ -f "$JOB_DIR/aa-authorizer.json" ]]; then
+  AA_CALLER_CONTEXT="$JOB_DIR/aa-authorizer.json"
+  AA_CALLER_SHA256="$(file_sha256 "$AA_CALLER_CONTEXT")"
+fi
+export OMNILANE_AA_POLICY_FILE="$AA_POLICY_FILE"
+export OMNILANE_AA_REGISTRY_SHA256="$AA_REGISTRY_SHA256"
+export OMNILANE_AA_AUTHORIZER_CONTEXT="$AA_CALLER_CONTEXT"
+export OMNILANE_AA_AUTHORIZER_SHA256="$AA_CALLER_SHA256"
+export OMNILANE_AA_AUTHORIZER_HUMAN="$AA_OPERATOR_ASSERTED_HUMAN"
+export OMNILANE_AA_CONTEXT_DIR="$JOB_DIR"
+export OMNILANE_AA_TARGET_CONFIG="$AA_TARGET_CONFIG"
+# Human exemptions belong only to this operator launch, never to a model child.
+unset OMNILANE_AA_OPERATOR_ASSERTED_HUMAN
+export OMNILANE_AA_CALLER_CONTEXT=""
+export OMNILANE_AA_CALLER_SHA256=""
+if [[ -f "$JOB_DIR/aa-child-context.json" ]]; then
+  export OMNILANE_AA_CALLER_CONTEXT="$JOB_DIR/aa-child-context.json"
+  OMNILANE_AA_CALLER_SHA256="$(file_sha256 "$JOB_DIR/aa-child-context.json")"
+  export OMNILANE_AA_CALLER_SHA256
+fi
 JOB_WORKER="$JOB_DIR/job-worker.sh"
 JOB_WORKER_TMP="$JOB_DIR/.job-worker.tmp.$$-$RANDOM"
 (umask 077; cat "$JOB_WORKER_SOURCE" > "$JOB_WORKER_TMP")
@@ -990,6 +1211,7 @@ if [[ "$META_BASE" != *'}' ]]; then
   exit 1
 fi
 META_BASE="${META_BASE%\}}"
+META_BASE="$META_BASE,\"executor\":\"cli\",\"executor_reason\":\"$(json_escape "$EXECUTOR_REASON")\""
 printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_source_path":"%s","job_worker_source_sha256":"%s","job_worker_path":"%s","job_worker_sha256":"%s"}\n' \
   "$META_BASE" "$(json_escape "$JOB_WORKER_BASH")" \
   "$(json_escape "$JOB_WORKER_BASH_VERSION")" "$(json_escape "$JOB_WORKER_SOURCE")" \

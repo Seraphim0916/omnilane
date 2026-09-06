@@ -155,6 +155,10 @@ fi
 # Grok intermittently emits empty output on large inputs; retry until it speaks.
 RC=0; attempt=1
 while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
+  # Grok can retry provider startup internally, so each attempt rechecks the
+  # frozen decision.  In model-caller mode this also rejects Grok effort rows:
+  # the current runner accepts EFFORT only for parity and discards it.
+  aa_policy_gate grok "$MODEL" "$EFFORT" || exit $?
   set +e
   OMNILANE_DEPTH=1 run_with_timeout "$RUN_TIMEOUT" \
     "$GROK_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"

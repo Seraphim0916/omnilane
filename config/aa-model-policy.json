@@ -1,0 +1,3046 @@
+{
+  "schema_version": 1,
+  "snapshot": {
+    "id": "aa-v4.2-2026-09-07-v1",
+    "benchmark": "Artificial Analysis Intelligence Index",
+    "benchmark_version": "4.2",
+    "as_of": "2026-09-07",
+    "timezone": "Asia/Taipei",
+    "frozen": true,
+    "approval": {
+      "status": "approved",
+      "scope": "model-governance-proposal-v2",
+      "source": "docs/model-governance-proposal.md",
+      "estimated_scores": "approved_provisional"
+    },
+    "automatic_refresh_grants_authority": false
+  },
+  "policy": {
+    "decision": "target_score <= min(caller_score, inherited_ceiling)",
+    "inherited_ceiling_required_for_child": true,
+    "root_ceiling": "verified_caller_score",
+    "same_score_allowed": true,
+    "unknown": "deny",
+    "missing_identity_field": "deny",
+    "missing_transport_mapping": "deny",
+    "snapshot_version_mismatch": "deny",
+    "family_only_lookup": "deny",
+    "display_grade_is_authority": false,
+    "score_field": "score",
+    "estimate_is_independent_measurement": false,
+    "identity_fields": [
+      "vendor",
+      "model",
+      "effort",
+      "reasoning",
+      "fallback"
+    ],
+    "null_identity_field": "literal_unspecified_in_evidence_not_wildcard",
+    "transport_mapping_requires_runtime_verification": true
+  },
+  "scored_configs": [
+    {
+      "id": "codex/gpt-6-astra",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": "max",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra",
+      "score": 55,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-6-astra-xhigh",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra-xhigh",
+      "score": 54,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra-xhigh",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-6-astra-high",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra-high",
+      "score": 53,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra-high",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-6-astra-medium",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra-medium",
+      "score": 52,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-6-astra-low",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra-low",
+      "score": 49,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra-low",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-6-astra-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-6-astra",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-6-astra-non-reasoning",
+      "score": 48,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-6-astra-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-6-astra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-6-astra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "max",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol",
+      "score": 51,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol-xhigh",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol-xhigh",
+      "score": 50,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol-xhigh",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol-high",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol-high",
+      "score": 48,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol-high",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol-medium",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol-medium",
+      "score": 46,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol-low",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol-low",
+      "score": 41,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol-low",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-sol-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.6-sol",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-sol-non-reasoning",
+      "score": 33,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-sol-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-sol"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-sol"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "max",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra",
+      "score": 47,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra-xhigh",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra-xhigh",
+      "score": 44,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra-xhigh",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra-high",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra-high",
+      "score": 41,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra-high",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra-medium",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra-medium",
+      "score": 37,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra-low",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra-low",
+      "score": 32,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra-low",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-terra-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.6-terra",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-terra-non-reasoning",
+      "score": 26,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-terra-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-terra"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "max",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna",
+      "score": 43,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna-xhigh",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna-xhigh",
+      "score": 42,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna-xhigh",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna-high",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna-high",
+      "score": 37,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna-high",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna-medium",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna-medium",
+      "score": 30,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna-low",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna-low",
+      "score": 26,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna-low",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-6-luna-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.6-luna",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-6-luna-non-reasoning",
+      "score": 19,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-6-luna-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.6-luna"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-5",
+      "vendor": "codex",
+      "model": "gpt-5.5",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-5",
+      "score": 46,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-5",
+        "https://artificialanalysis.ai/models/releases/gpt-5-5"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-5-high",
+      "vendor": "codex",
+      "model": "gpt-5.5",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-5-high",
+      "score": 44,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-5-high",
+        "https://artificialanalysis.ai/models/releases/gpt-5-5"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-5-medium",
+      "vendor": "codex",
+      "model": "gpt-5.5",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-5-medium",
+      "score": 42,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-5-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-5-5"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-5-low",
+      "vendor": "codex",
+      "model": "gpt-5.5",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-5-low",
+      "score": 35,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-5-low",
+        "https://artificialanalysis.ai/models/releases/gpt-5-5"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-5-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.5",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-5-non-reasoning",
+      "score": 27,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-5-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-5"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4",
+      "vendor": "codex",
+      "model": "gpt-5.4",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4",
+      "score": 43,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4-low",
+      "vendor": "codex",
+      "model": "gpt-5.4",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4-low",
+      "score": 32,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4-low",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.4",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4-non-reasoning",
+      "score": 21,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4-mini",
+      "vendor": "codex",
+      "model": "gpt-5.4-mini",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4-mini",
+      "score": 32,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4-mini",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4-mini"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4-mini"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4-mini-medium",
+      "vendor": "codex",
+      "model": "gpt-5.4-mini",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4-mini-medium",
+      "score": 23,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4-mini-medium",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4-mini"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4-mini"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "codex/gpt-5-4-mini-non-reasoning",
+      "vendor": "codex",
+      "model": "gpt-5.4-mini",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "gpt-5-4-mini-non-reasoning",
+      "score": 11,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gpt-5-4-mini-non-reasoning",
+        "https://artificialanalysis.ai/models/releases/gpt-5-4-mini"
+      ],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gpt-5.4-mini"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5-1",
+      "vendor": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": "default",
+      "aa_slug": "claude-fable-5-1",
+      "score": 57,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5-1"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5-1"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5-1-xhigh",
+      "vendor": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "xhigh",
+      "reasoning": "adaptive",
+      "fallback": "default",
+      "aa_slug": "claude-fable-5-1-xhigh",
+      "score": 54,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5-1-xhigh"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5-1"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5-1-high",
+      "vendor": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "high",
+      "reasoning": "adaptive",
+      "fallback": "default",
+      "aa_slug": "claude-fable-5-1-high",
+      "score": 52,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5-1-high"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5-1"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5-1-medium",
+      "vendor": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "medium",
+      "reasoning": "adaptive",
+      "fallback": "default",
+      "aa_slug": "claude-fable-5-1-medium",
+      "score": 50,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5-1-medium"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5-1"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5-1-low",
+      "vendor": "claude",
+      "model": "claude-fable-5-1",
+      "effort": "low",
+      "reasoning": "adaptive",
+      "fallback": "default",
+      "aa_slug": "claude-fable-5-1-low",
+      "score": 48,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5-1-low"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5-1"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-fable-5",
+      "vendor": "claude",
+      "model": "claude-fable-5",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": "claude-opus-4-8",
+      "aa_slug": "claude-fable-5",
+      "score": 53,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-fable-5"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-fable-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-5",
+      "vendor": "claude",
+      "model": "claude-opus-5",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-5",
+      "score": 54,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-5"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-5-xhigh",
+      "vendor": "claude",
+      "model": "claude-opus-5",
+      "effort": "xhigh",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-5-xhigh",
+      "score": 53,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-5-xhigh"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-5-high",
+      "vendor": "claude",
+      "model": "claude-opus-5",
+      "effort": "high",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-5-high",
+      "score": 52,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-5-high"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-5-medium",
+      "vendor": "claude",
+      "model": "claude-opus-5",
+      "effort": "medium",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-5-medium",
+      "score": 50,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-5-medium"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-5-low",
+      "vendor": "claude",
+      "model": "claude-opus-5",
+      "effort": "low",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-5-low",
+      "score": 44,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-5-low"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-sonnet-5",
+      "score": 45,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-sonnet-5"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5-non-reasoning",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "high",
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-sonnet-5-non-reasoning",
+      "score": 33,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-sonnet-5-non-reasoning"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-8",
+      "vendor": "claude",
+      "model": "claude-opus-4-8",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-8",
+      "score": 46,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-8"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-8"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-7",
+      "vendor": "claude",
+      "model": "claude-opus-4-7",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-7",
+      "score": 44,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-7"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-7"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-7-non-reasoning",
+      "vendor": "claude",
+      "model": "claude-opus-4-7",
+      "effort": "high",
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-7-non-reasoning",
+      "score": 35,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-7-non-reasoning"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-7"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-6-adaptive",
+      "vendor": "claude",
+      "model": "claude-opus-4-6",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-6-adaptive",
+      "score": 36,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-6-adaptive"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-6",
+      "vendor": "claude",
+      "model": "claude-opus-4-6",
+      "effort": "high",
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-6",
+      "score": 31,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-6"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-5-thinking",
+      "vendor": "claude",
+      "model": "claude-opus-4-5",
+      "effort": null,
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-5-thinking",
+      "score": 34,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-5-thinking"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-opus-4-5",
+      "vendor": "claude",
+      "model": "claude-opus-4-5",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-opus-4-5",
+      "score": 28,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-opus-4-5"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-opus-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-4-6-adaptive",
+      "vendor": "claude",
+      "model": "claude-sonnet-4-6",
+      "effort": "max",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "aa_slug": "claude-sonnet-4-6-adaptive",
+      "score": 38,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-sonnet-4-6-adaptive"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-4-6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-4-6",
+      "vendor": "claude",
+      "model": "claude-sonnet-4-6",
+      "effort": "high",
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-sonnet-4-6",
+      "score": 29,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-sonnet-4-6"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-4-6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-4-6-non-reasoning-low-effort",
+      "vendor": "claude",
+      "model": "claude-sonnet-4-6",
+      "effort": "low",
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-sonnet-4-6-non-reasoning-low-effort",
+      "score": 27,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-sonnet-4-6-non-reasoning-low-effort"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-4-6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-4-5-sonnet-thinking",
+      "vendor": "claude",
+      "model": "claude-sonnet-4-5",
+      "effort": null,
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "claude-4-5-sonnet-thinking",
+      "score": 29,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-4-5-sonnet-thinking"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-4-5-sonnet",
+      "vendor": "claude",
+      "model": "claude-sonnet-4-5",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-4-5-sonnet",
+      "score": 23,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-4-5-sonnet"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-sonnet-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-4-5-haiku-reasoning",
+      "vendor": "claude",
+      "model": "claude-haiku-4-5",
+      "effort": null,
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "claude-4-5-haiku-reasoning",
+      "score": 22,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-4-5-haiku-reasoning"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-haiku-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "claude/claude-4-5-haiku",
+      "vendor": "claude",
+      "model": "claude-haiku-4-5",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "claude-4-5-haiku",
+      "score": 17,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/claude-4-5-haiku"
+      ],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "claude-haiku-4-5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-8-flash",
+      "vendor": "gemini",
+      "model": "gemini-3.8-flash",
+      "effort": "high",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-8-flash",
+      "score": 47,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-medium"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.8-flash-high"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-8-flash-medium",
+      "vendor": "gemini",
+      "model": "gemini-3.8-flash",
+      "effort": "medium",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-8-flash-medium",
+      "score": 47,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-medium"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.8-flash-medium"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-8-flash-low",
+      "vendor": "gemini",
+      "model": "gemini-3.8-flash",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-8-flash-low",
+      "score": 42,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-low"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.8-flash-low"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-7-flash",
+      "vendor": "gemini",
+      "model": "gemini-3.7-flash",
+      "effort": "high",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-7-flash",
+      "score": 45,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-7-flash"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.7-flash-high"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-7-flash-medium",
+      "vendor": "gemini",
+      "model": "gemini-3.7-flash",
+      "effort": "medium",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-7-flash-medium",
+      "score": 43,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-7-flash-medium"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.7-flash-medium"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-7-flash-low",
+      "vendor": "gemini",
+      "model": "gemini-3.7-flash",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-7-flash-low",
+      "score": 41,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-7-flash-low"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.7-flash-low"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "gemini/gemini-3-6-flash",
+      "vendor": "gemini",
+      "model": "gemini-3.6-flash",
+      "effort": "high",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-6-flash",
+      "score": 40,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-6-flash"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-3.6-flash-high"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      }
+    },
+    {
+      "id": "grok/grok-4-6",
+      "vendor": "grok",
+      "model": "grok-4.6",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-6",
+      "score": 51,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-6"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-6-xhigh",
+      "vendor": "grok",
+      "model": "grok-4.6",
+      "effort": "xhigh",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-6-xhigh",
+      "score": 49,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-6-xhigh"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-6-medium",
+      "vendor": "grok",
+      "model": "grok-4.6",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-6-medium",
+      "score": 48,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-6-medium"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-6-low",
+      "vendor": "grok",
+      "model": "grok-4.6",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-6-low",
+      "score": 42,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-6-low"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.6"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-5",
+      "vendor": "grok",
+      "model": "grok-4.5",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-5",
+      "score": 45,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-5"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.5"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-3",
+      "vendor": "grok",
+      "model": "grok-4.3",
+      "effort": "high",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-3",
+      "score": 29,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-3"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.3"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-3-medium",
+      "vendor": "grok",
+      "model": "grok-4.3",
+      "effort": "medium",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-3-medium",
+      "score": 29,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-3-medium"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.3"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-3-low",
+      "vendor": "grok",
+      "model": "grok-4.3",
+      "effort": "low",
+      "reasoning": "reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-3-low",
+      "score": 29,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-3-low"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.3"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    },
+    {
+      "id": "grok/grok-4-3-non-reasoning",
+      "vendor": "grok",
+      "model": "grok-4.3",
+      "effort": null,
+      "reasoning": "non-reasoning",
+      "fallback": null,
+      "aa_slug": "grok-4-3-non-reasoning",
+      "score": 17,
+      "estimated": true,
+      "evidence_marker": "estimated",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/grok-4-3-non-reasoning"
+      ],
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "grok-4.3"
+        ],
+        "runtime_verified": false,
+        "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
+      }
+    }
+  ],
+  "unknown_configs": [
+    {
+      "id": "codex/gpt-5.6/unspecified/unspecified",
+      "vendor": "codex",
+      "model": "gpt-5.6",
+      "effort": null,
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "Generic model alias is not verified as Sol",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "codex/gpt-5.3-codex-spark/unspecified/unspecified",
+      "vendor": "codex",
+      "model": "gpt-5.3-codex-spark",
+      "effort": null,
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "No exact AA configuration found; GPT-5.3 Codex score is not transferable",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5/xhigh/adaptive",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "xhigh",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "AA variant exists but Intelligence score unavailable in approved evidence",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5/high/adaptive",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "high",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "AA variant exists but Intelligence score unavailable in approved evidence",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5/medium/adaptive",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "medium",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "AA variant exists but Intelligence score unavailable in approved evidence",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "claude/claude-sonnet-5/low/adaptive",
+      "vendor": "claude",
+      "model": "claude-sonnet-5",
+      "effort": "low",
+      "reasoning": "adaptive",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "AA variant exists but Intelligence score unavailable in approved evidence",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "gemini/gemini-3.6-flash/medium/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-3.6-flash",
+      "effort": "medium",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "No separately verified AA score; do not reuse high score",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "gemini/gemini-3.6-flash/low/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-3.6-flash",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "No separately verified AA score; do not reuse high score",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "gemini/gemini-3.1-pro/high/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-3.1-pro",
+      "effort": "high",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "Reference-only Preview is not exact local high/low configuration",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "gemini/gemini-3.1-pro/low/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-3.1-pro",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "Reference-only Preview is not exact local high/low configuration",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    }
+  ],
+  "reference_configs": [
+    {
+      "id": "gemini/gemini-3-1-pro-preview",
+      "vendor": "gemini",
+      "model": "gemini-3.1-pro-preview",
+      "effort": null,
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-3-1-pro-preview",
+      "score": 37,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "4.2",
+      "as_of": "2026-09-07",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-1-pro-preview"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-09-07.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      },
+      "authority_eligible": false,
+      "reference_reason": "Proposal v2 retains this only as comparison; no local high/low mapping approved"
+    }
+  ],
+  "aliases": [
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-6-astra",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-6-astra",
+        "codex/gpt-6-astra-xhigh",
+        "codex/gpt-6-astra-high",
+        "codex/gpt-6-astra-medium",
+        "codex/gpt-6-astra-low",
+        "codex/gpt-6-astra-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.6-sol",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-6-sol",
+        "codex/gpt-5-6-sol-xhigh",
+        "codex/gpt-5-6-sol-high",
+        "codex/gpt-5-6-sol-medium",
+        "codex/gpt-5-6-sol-low",
+        "codex/gpt-5-6-sol-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.6-terra",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-6-terra",
+        "codex/gpt-5-6-terra-xhigh",
+        "codex/gpt-5-6-terra-high",
+        "codex/gpt-5-6-terra-medium",
+        "codex/gpt-5-6-terra-low",
+        "codex/gpt-5-6-terra-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.6-luna",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-6-luna",
+        "codex/gpt-5-6-luna-xhigh",
+        "codex/gpt-5-6-luna-high",
+        "codex/gpt-5-6-luna-medium",
+        "codex/gpt-5-6-luna-low",
+        "codex/gpt-5-6-luna-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-5",
+        "codex/gpt-5-5-high",
+        "codex/gpt-5-5-medium",
+        "codex/gpt-5-5-low",
+        "codex/gpt-5-5-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.4",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-4",
+        "codex/gpt-5-4-low",
+        "codex/gpt-5-4-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.4-mini",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-5-4-mini",
+        "codex/gpt-5-4-mini-medium",
+        "codex/gpt-5-4-mini-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.6",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
+      "catalog_model": "gpt-5.3-codex-spark",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "default",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "best",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "fable",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "opus",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "sonnet",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "haiku",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "opus[1m]",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "sonnet[1m]",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "opusplan",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-fable-5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-fable-5"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-fable-5-1",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-fable-5-1",
+        "claude/claude-fable-5-1-xhigh",
+        "claude/claude-fable-5-1-high",
+        "claude/claude-fable-5-1-medium",
+        "claude/claude-fable-5-1-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-opus-5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-opus-5",
+        "claude/claude-opus-5-xhigh",
+        "claude/claude-opus-5-high",
+        "claude/claude-opus-5-medium",
+        "claude/claude-opus-5-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-sonnet-5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-sonnet-5",
+        "claude/claude-sonnet-5-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-opus-4-8",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-opus-4-8"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-opus-4-7",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-opus-4-7",
+        "claude/claude-opus-4-7-non-reasoning"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-opus-4-6",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-opus-4-6-adaptive",
+        "claude/claude-opus-4-6"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-opus-4-5-20251101",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-sonnet-4-6",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-sonnet-4-6-adaptive",
+        "claude/claude-sonnet-4-6",
+        "claude/claude-sonnet-4-6-non-reasoning-low-effort"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-sonnet-4-5-20250929",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-haiku-4-5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-4-5-haiku-reasoning",
+        "claude/claude-4-5-haiku"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-haiku-4-5-20251001",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.8-flash-high",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-8-flash"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.8-flash-medium",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-8-flash-medium"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.8-flash-low",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-8-flash-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.7-flash-high",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-7-flash"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.7-flash-medium",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-7-flash-medium"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.7-flash-low",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-7-flash-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.6-flash-high",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-3-6-flash"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.6-flash-medium",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.6-flash-low",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.1-pro-high",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-3.1-pro-low",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "claude-sonnet-4-6",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "claude-opus-4-6-thinking",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gpt-oss-120b-medium",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "grok",
+      "catalog_model": "grok-4.6",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "grok/grok-4-6",
+        "grok/grok-4-6-xhigh",
+        "grok/grok-4-6-medium",
+        "grok/grok-4-6-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "grok",
+      "catalog_model": "headroom-grok-build",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "grok",
+      "catalog_model": "grok-4.3-official",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "No proven exact AA transport mapping; floating, dated, cross-provider, or missing model identity remains unresolved",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    }
+  ],
+  "coverage": {
+    "scored_configs": 78,
+    "reference_configs": 1,
+    "unknown_configs": 10,
+    "aliases": 47,
+    "by_vendor": {
+      "codex": 35,
+      "claude": 27,
+      "gemini": 7,
+      "grok": 9
+    }
+  },
+  "schema_notes": {
+    "estimated_false": "Unmarked in inspected evidence, not proof of complete independent measurement",
+    "reasoning_unspecified": "Evidence does not separately establish runtime reasoning selector; literal value, not wildcard",
+    "fallback_null": "Evidence does not specify a fallback; literal value, not permission to use any fallback",
+    "effort_null": "No AA effort label established for this reasoning configuration; do not fill with model maximum",
+    "candidate_config_ids": "Research cross-reference only; never authorize from an unresolved candidate",
+    "transport_mapping": "Live executor must verify exact vendor/model/effort/reasoning/fallback before evaluating score ceiling; all snapshot transports remain unverified",
+    "reference_configs": "Excluded from authority lookup"
+  }
+}

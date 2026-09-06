@@ -104,6 +104,7 @@ printf '{"type":"thread.started","thread_id":"mode-fixture"}\n'
                     output = tmp / f"{mode}.out"
                     env = os.environ.copy()
                     env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
                         CODEX_BIN=str(fake),
                         FAKE_CODEX_ARGV=str(argv_file),
                         OMNILANE_REPO=str(ROOT),
@@ -172,6 +173,7 @@ printf 'grok mode fixture\n'
         output = tmp / "out.txt"
         env = os.environ.copy()
         env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             GROK_BIN=str(fake),
             FAKE_GROK_ARGV=str(argv_file),
             OMNILANE_REPO=str(ROOT),
@@ -285,6 +287,7 @@ fi
         output = tmp / "out.txt"
         env = os.environ.copy()
         env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             CLAUDE_BIN=str(fake),
             FAKE_CLAUDE_ARGV=str(argv_file),
             OMNILANE_REPO=str(ROOT),
@@ -502,6 +505,7 @@ fi
         output = tmp / output_name
         env = os.environ.copy()
         env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             AGY_BIN=str(fake),
             HOME=str(tmp / "user-home"),
             FAKE_AGY_ARGV=str(argv_file),
@@ -724,6 +728,7 @@ class DispatchModeContracts(unittest.TestCase):
         uname.chmod(0o755)
         self.env = os.environ.copy()
         self.env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             OMNILANE_HOME=str(self.home),
             PATH=f"{self.bin}{os.pathsep}{self.env['PATH']}",
             GROK_BIN=str(self.bin / "grok"),

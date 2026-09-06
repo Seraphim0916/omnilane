@@ -518,6 +518,14 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 ## 📜 릴리스 기록
 
+## v0.42.0 새 기능
+
+- **네이티브 우선 실행.** `--executor auto`는 호스트가 정확히 호환되는 capability context를 제공할 때만 호출자 소유 네이티브 에이전트를 사용하며, 그 외에는 같은 vendor/model/effort의 CLI 경로를 유지합니다. 네이티브 handoff는 대기 중 작업이지 완료 결과가 아닙니다.
+- **고정 exact-AA 하향 위임.** 포함된 AA v4.2 policy는 각 provider 시도 전에 현재 caller와 상속 ceiling을 검사하고 정확한 child context를 만들며 retry에서도 다시 검증합니다. 점수가 있는 78개 구성은 policy 입력일 뿐, 전부 실행 가능하다는 의미가 아닙니다.
+- **명시적 네이티브 재사용.** 기존 Codex 에이전트를 재사용하려면 호출자가 확인한 idle 상태, context 보존 동의, 정확한 runtime 일치가 필요합니다. 용량 부족 시 new-agent 요청을 몰래 재사용으로 바꾸지 않습니다. 완료 기록도 상위 모델 identity 인증이나 cold-start 용량 보장이 아닙니다.
+- **Codex 완료 후속 검증.** `scripts/completion-wakeup.py`는 controller thread와 job allowlist를 연결하고 scheduler 등록, 종료 이벤트 poll, delivery와 acceptance를 분리해 기록합니다. 이는 주기적인 heartbeat polling이며 즉시 push가 아닙니다.
+- **패키지와 업그레이드.** npm tarball에는 AA policy, native／AA／wakeup helper, 공개 protocol 문서가 포함됩니다. npm 게시 후 `npm i -g omnilane@0.42.0`을 사용할 수 있으며, GitHub release만으로 npm 게시가 보장되지는 않습니다.
+
 ## v0.41.1 새 기능
 
 - **Astra 기본값을 xhigh로 변경.** `hardest-coding`과 `hard-judgment`의 Astra는 기본적으로 `xhigh`를 사용하며, 필요하면 `--vendor codex --effort max`를 명시할 수 있습니다. 공급자 순서와 다른 모델의 추론 강도는 그대로 유지합니다. CLI 구독 할당량 절감을 실측했다는 주장은 아닙니다.

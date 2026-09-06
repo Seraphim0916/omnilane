@@ -5,15 +5,15 @@
     "url": "https://github.com/Seraphim0916/omnilane"
   },
   "metadata": {
-    "description": "One routing table, cross-vendor dispatch, foreman completion inbox.",
- "version": "0.41.1"
+    "description": "One routing table, native-first or CLI delegation, supervised completion workflows.",
+    "version": "0.42.0"
   },
   "plugins": [
     {
       "name": "omnilane",
       "source": "./",
-      "description": "Route each subtask to the model that fits, dispatch it to any vendor CLI, and have finished dispatches report back into the foreman's next prompt.",
- "version": "0.41.1",
+      "description": "Route each subtask to the model that fits, then delegate through a compatible caller-owned native agent or vendor CLI.",
+      "version": "0.42.0",
       "category": "development",
       "keywords": [
         "routing",

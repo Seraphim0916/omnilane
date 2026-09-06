@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # omnilane background-job helper.
+# Native: jobs.sh [--json] complete-native JOB_ID COMPLETION.json
+# Native pending cancellation records state only; the caller owns its agent.
 # Usage: jobs.sh [--json] list | status JOB_ID | result JOB_ID | stats [--last N]
 #        jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
 #        jobs.sh wait JOB_ID [--timeout N]
@@ -29,7 +31,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]|status ID|result ID|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|pending|cancelled]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -322,6 +324,23 @@ done
 # set -u on Bash 3.2; a bare `jobs.sh` must reach usage, not crash.
 set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
+
+# Native jobs have no shell worker PID. Intercept before any CLI lifecycle
+# operation, including cancellation, retry, wait and rm. Python validates the
+# store, job ID, lock and record before accepting or publishing a transition.
+if [[ "$COMMAND" == "complete-native" ]] ||
+   { [[ "${2:-}" =~ $JOB_ID_PATTERN ]] &&
+     { [[ -e "$JOBS/${2}/native.json" || -L "$JOBS/${2}/native.json" ||
+          -e "$JOBS/${2}/native.lock" || -L "$JOBS/${2}/native.lock" ]]; }; }; then
+  case "$COMMAND" in
+    complete-native) [[ $# -eq 3 ]] || usage ;;
+    status|result|cancel) [[ $# -eq 2 ]] || usage ;;
+    *) die 2 "native job supports status, result, cancel and complete-native; caller owns agent lifecycle" ;;
+  esac
+  native_args=(job --home "$OMNILANE_HOME")
+  [[ "$JSON_MODE" -eq 0 ]] || native_args+=(--json)
+  exec python3 "$OMNILANE_REPO/scripts/lib/native.py" "${native_args[@]}" "$@"
+fi
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
     list|status|result|stats|recommend|audit|threads) ;;
@@ -511,6 +530,15 @@ case "${1:-}" in
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --background) retry_background=1; shift ;;
+        --caller-context)
+          [[ "$#" -ge 2 ]] || die 2 "retry --caller-context requires a file"
+          export OMNILANE_AA_CALLER_CONTEXT="$2"
+          unset OMNILANE_AA_OPERATOR_ASSERTED_HUMAN
+          shift 2 ;;
+        --operator-asserted-human)
+          export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+          unset OMNILANE_AA_CALLER_CONTEXT
+          shift ;;
         *) usage ;;
       esac
     done
@@ -521,18 +549,14 @@ case "${1:-}" in
     read_public_metadata "$JOB_DIR/meta.json" || {
       die 1 "cannot retry: unreadable job metadata"
     }
-    retry_re='^\{"lane":"([a-z][a-z0-9-]*)","vendor":"('"$OMNILANE_VENDOR_ALT"')","model":"([^"\\]*)","effort":"([^"\\]*)","timeout":([1-9][0-9]*),"job_timeout":([1-9][0-9]*|null),"mode":"(advise|work)","workdir":"([^"\\]*)",'
-    [[ "$PUBLIC_METADATA" =~ $retry_re ]] || {
-      die 1 "cannot retry: job metadata is not safely parseable"
-    }
-    retry_lane="${BASH_REMATCH[1]}"
-    retry_vendor="${BASH_REMATCH[2]}"
-    retry_model="${BASH_REMATCH[3]}"
-    retry_effort="${BASH_REMATCH[4]}"
-    retry_timeout="${BASH_REMATCH[5]}"
-    retry_job_timeout="${BASH_REMATCH[6]}"
-    retry_mode="${BASH_REMATCH[7]}"
-    retry_workdir="${BASH_REMATCH[8]}"
+    retry_fields_text="$(python3 "$OMNILANE_REPO/scripts/lib/aa_retry.py" --metadata "$JOB_DIR")" || exit $?
+    retry_fields=()
+    while IFS= read -r retry_field; do retry_fields+=("$retry_field"); done <<< "$retry_fields_text"
+    [[ "${#retry_fields[@]}" -eq 8 ]] || die 1 "invalid retry metadata fields"
+    retry_lane="${retry_fields[0]}"; retry_vendor="${retry_fields[1]}"
+    retry_model="${retry_fields[2]}"; retry_effort="${retry_fields[3]}"
+    retry_timeout="${retry_fields[4]}"; retry_job_timeout="${retry_fields[5]}"
+    retry_mode="${retry_fields[6]}"; retry_workdir="${retry_fields[7]}"
     task_path="$JOB_DIR/task.txt"
     [[ -f "$task_path" && ! -L "$task_path" ]] || {
       die 1 "cannot retry: original task text is missing"
@@ -541,6 +565,13 @@ case "${1:-}" in
       die 1 "cannot retry: original workdir no longer exists: $retry_workdir"
     }
     retry_args=(--mode "$retry_mode" --workdir "$retry_workdir" --timeout "$retry_timeout")
+    policy_retry_args="$(python3 "$OMNILANE_REPO/scripts/lib/aa_retry.py" "$JOB_DIR")" || exit $?
+    while IFS= read -r policy_arg; do
+      retry_args+=("$policy_arg")
+    done <<< "$policy_retry_args"
+    # Retry reauthorizes under the original job, not the current shell identity.
+    unset OMNILANE_AA_CALLER_CONTEXT OMNILANE_AA_OPERATOR_ASSERTED_HUMAN OMNILANE_AA_TRANSPORT_OVERLAY OMNILANE_AA_OVERLAY_SHA256
+
     [[ "$retry_job_timeout" == "null" ]] || retry_args+=(--job-timeout "$retry_job_timeout")
     # dispatch --vendor only accepts real CLI vendors; an exec gate is re-run
     # through normal lane resolution plus the recorded --model script path.
@@ -892,8 +923,8 @@ case "${1:-}" in
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
     [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     case "$filter_status" in
-      ""|running|done) ;;
-      *) die 2 "invalid --status value (want running or done)" ;;
+      ""|running|done|pending|cancelled) ;;
+      *) die 2 "invalid --status value (want running, done, pending or cancelled)" ;;
     esac
     if [[ ! -d "$JOBS" ]]; then
       [[ "$JSON_MODE" -eq 0 ]] || printf '{"schema_version":1,"command":"list","ok":true,"jobs":[]}\n'
@@ -929,6 +960,16 @@ case "${1:-}" in
       else
         json_state="running"
       fi
+      if [[ -e "$JOBS/$id/native.json" || -L "$JOBS/$id/native.json" || -e "$JOBS/$id/native.lock" ]]; then
+        json_state="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" list-state "$id")" || die 1 "invalid native state"
+        state="$json_state"
+        # Native completion lives in native.json, not a PID/exit pair.
+        exit_json="null"
+        if [[ "$json_state" != "pending" ]]; then
+          native_status="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" --json status "$id")" || die 1 "invalid native state"
+          exit_json="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["job"]["exit_code"])' "$native_status")"
+        fi
+      fi
       metadata=""
       metadata_json="null"
       metadata_status="missing"
@@ -953,6 +994,7 @@ case "${1:-}" in
         case "$json_state" in
           done) [[ "$filter_status" == "done" ]] || continue ;;
           running) [[ "$filter_status" == "running" ]] || continue ;;
+          pending|cancelled) [[ "$filter_status" == "$json_state" ]] || continue ;;
           *) continue ;;
         esac
       fi
@@ -1229,6 +1271,7 @@ case "${1:-}" in
         [[ -d "$job_dir" && ! -L "$job_dir" ]] || continue
         id="${job_dir##*/}"
         [[ "$id" =~ $JOB_ID_PATTERN ]] || continue
+        [[ ! -e "$job_dir/native.lock" && ! -e "$job_dir/native.json" ]] || continue
         read_exit_code "$job_dir/exit" || continue
         completed+=("$id")
       done

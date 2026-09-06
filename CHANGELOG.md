@@ -6,6 +6,20 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-09-07
+
+### Added
+
+- Add native-first execution for caller-owned agent tools. `--executor auto` uses only an explicitly compatible capability context and otherwise preserves the exact resolved vendor/model/effort on the CLI path; forced native rejects incompatible contexts. Native handoffs remain pending until the caller runs the declared new/reuse strategy and records an independently checked completion.
+- Add a frozen exact-AA downward-delegation gate backed by `config/aa-model-policy.json`. Every provider attempt checks the exact current caller and inherited ceiling; child contexts record the selected target, retries intersect the current caller with the original authorizer ceiling, and model retries do not inherit a human exemption.
+- Add the Codex completion-wakeup protocol and `scripts/completion-wakeup.py` lifecycle: prepare, registration receipt, poll, delivered acknowledgement, acceptance acknowledgement, pause, and close. The integration is scheduled heartbeat polling bound to a caller-owned thread, not an instant push channel.
+- Document native handoff/completion/reuse and completion-wakeup protocols in `docs/native-executor.md` and `docs/completion-wakeup.md`.
+
+### Changed
+
+- Package the AA policy registry and both public protocol documents. The package already includes `scripts/`, which carries `native.py`, `aa_policy.py`, `aa_retry.py`, and `completion-wakeup.py`.
+- Synchronize all five README release summaries with the 0.42.0 feature boundary. The AA snapshot contains 78 scored configurations, but catalog coverage is not a claim that every configuration is runnable; completion attestation does not certify upstream model identity, native capacity is not a cold-start guarantee, and heartbeat delivery is not instantaneous.
+
 ## [0.41.1] - 2026-09-06
 
 ### Changed
@@ -815,7 +829,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...v0.41.1
 [0.40.0]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...v0.40.0
 [0.34.0]: https://github.com/Seraphim0916/omnilane/compare/v0.33.0...v0.34.0

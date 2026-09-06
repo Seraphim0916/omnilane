@@ -6,6 +6,11 @@ set -u
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
 unset OMNILANE_JOB_TIMEOUT OMNILANE_JOB_SUPERVISED
 unset OMNILANE_IDLE_TIMEOUT OMNILANE_SESSION_MODE
+# Existing behavioral fixtures exercise routing mechanics rather than model
+# hierarchy.  Their explicit operator assertion preserves that scope; focused
+# exact-AA tests below cover model-caller fail-closed behavior.
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+unset OMNILANE_AA_CALLER_CONTEXT OMNILANE_AA_POLICY_FILE
 for inherited_timeout in "${!OMNILANE_TIMEOUT_@}"; do
   unset "$inherited_timeout"
 done
@@ -809,13 +814,13 @@ EOF
     fail "$name" "dry run wrote through the symlinked workdir"
   elif [[ "$rc_disabled" -ne 3 || "$disabled" != *"disabled"* ]]; then
     fail "$name" "disabled lane did not preserve exit 3: $disabled"
-  elif [[ "$rc_unavailable" -ne 4 || "$unavailable" != *"no vendor CLI"* ]]; then
+  elif [[ "$rc_unavailable" -ne 4 || "$unavailable" != *"no eligible available target"* ]]; then
     fail "$name" "unavailable route did not preserve exit 4: $unavailable"
   elif [[ "$rc_bad" -ne 2 || "$bad" != *"invalid timeout"* ]]; then
     fail "$name" "invalid timeout did not fail before state: $bad"
   elif [[ "$rc_nested" -ne 86 || "$nested" != *"nested dispatch"* ]]; then
     fail "$name" "nested depth did not fail before state: $nested"
-  elif [[ "$rc_control" -ne 0 || "$control" == *$'\033'* || "$control" != *"FORGED"* ]]; then
+  elif [[ "$rc_control" -ne 4 || "$control" == *$'\033'* || "$control" != *"FORGED"* ]]; then
     fail "$name" "dry-run output did not safely quote control input"
   elif [[ "$rc_unsafe" -ne 1 || "$unsafe" != *"unsafe jobs store"* ]]; then
     fail "$name" "dry run disagreed with the real jobs-store safety gate: rc=$rc_unsafe out=$unsafe"
@@ -2758,6 +2763,9 @@ make_fake_vote_repo() {
   mkdir -p "$repo/scripts/runners" "$repo/scripts/lib"
   cp "$ROOT/scripts/runners/run-vote.sh" "$repo/scripts/runners/run-vote.sh"
   cp "$ROOT/scripts/lib/common.sh" "$repo/scripts/lib/common.sh"
+  cp "$ROOT/scripts/lib/aa_policy.py" "$repo/scripts/lib/aa_policy.py"
+  mkdir -p "$repo/config"
+  cp "$ROOT/config/aa-model-policy.json" "$repo/config/aa-model-policy.json"
   cat > "$repo/scripts/runners/fake-voter.sh" <<'EOF'
 #!/usr/bin/env bash
 set -u
@@ -3156,6 +3164,9 @@ EOF
     "$gate" "$home" > "$job/meta.json"
 
   rc=0
+  # Explicit human fixture with the same persisted lineage as real dispatches.
+  python3 "$ROOT/scripts/lib/aa_policy.py" --registry "$ROOT/config/aa-model-policy.json" \
+    --operator-asserted-human --vendor exec --model "$gate" --effort - --publish-dir "$job" >/dev/null || return 1
   out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" retry 20260101-000000-1-1 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 || "$out" != *'retry worked'* ]]; then
     fail "$name" "retry did not replay through the exec gate (rc=$rc, out=$out)"
@@ -3946,7 +3957,7 @@ test_jobs_list_filters() {
     [[ -n "$jid" ]] || continue
     d="$j/$jid"; mkdir -p "$d"
     printf '{"lane":"%s","vendor":"%s"}' "$lane" "$vendor" > "$d/meta.json"
-    if [[ "$st" == done ]]; then printf '0\n' > "$d/exit"; fi
+    if [[ "$st" == "done" ]]; then printf '0\n' > "$d/exit"; fi
   done <<'JOBFIXTURES'
 20260719-000001-1-1|triage|codex|done
 20260719-000002-1-1|triage|claude|running
@@ -3962,7 +3973,7 @@ JOBFIXTURES
   if [[ "$out" != *000001* || "$out" != *000003* || "$out" != *000004* || "$out" == *000002* ]]; then
     fail "$name" "--vendor codex wrong set: $out"; return
   fi
-  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --status done 2>&1)"
+  out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" list --status "done" 2>&1)"
   if [[ "$out" != *000001* || "$out" == *000002* || "$out" == *000003* || "$out" == *000004* ]]; then
     fail "$name" "--status done wrong set: $out"; return
   fi
@@ -4400,6 +4411,35 @@ test_completion_idle_fixes() {
   fi
 }
 test_completion_idle_fixes
+
+test_native_executor() {
+  local name="native executor protocol (offline fixtures)" out rc=0
+  out="$(python3 "$ROOT/tests/test_native_executor.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_native_executor
+
+test_aa_policy() {
+ local name="exact-AA downward policy (offline fixtures)" out rc=0
+ out="$(python3 "$ROOT/tests/test_aa_policy.py" 2>&1)" || rc=$?
+ if [[ "$rc" -ne 0 ]]; then
+  fail "$name" "$out"
+ else
+  pass "$name"
+ fi
+}
+test_aa_policy
+
+test_aa_lineage() {
+  local name="AA lineage and model-caller provider spies (offline)" out rc=0
+  out="$(python3 "$ROOT/tests/test_aa_lineage.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "$out"; else pass "$name"; fi
+}
+test_aa_lineage
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

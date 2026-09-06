@@ -32,8 +32,8 @@ architecture question runs on whatever you happened to open.
 **What omnilane does.** It gives your assistant a routing table. Work gets
 sorted into **lanes** — hardest coding, bulk mechanical, triage, hard judgment,
 final polish — and each lane names the model that is best (and cheapest) for
-it. Your assistant keeps the lanes it is already good at and hands the rest to
-another vendor's CLI in the background, using the logins you already have.
+it. The assistant delegates each lane through a compatible caller-owned native
+agent or the existing vendor CLI, even when the worker uses the same model.
 
 **What it is not.** Not a proxy, not a new subscription, not another service to
 keep alive. It is a table plus a dispatch script that runs behind the tool you
@@ -95,7 +95,7 @@ flowchart LR
   and shells out to the vendor's CLI headlessly. `--vendor` selects one named
   vendor without fallback.
 - **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
-  identify your own model, self-execute your lane, dispatch the rest.
+  identify the lane's model and delegate through a compatible native agent or CLI.
 - **`omnilane mcp`** — the same routing surface as an MCP stdio server,
   for hosts that integrate via MCP instead of skills.
 
@@ -147,23 +147,71 @@ request; this is not a free-form shell parser in `dispatch.sh`.
   table. If an explicit target is absent or unavailable, the command fails
   clearly instead of falling back to another vendor or family.
 
+## Native-first delegation, terminal-compatible
+
+Model routing and execution are separate. `--executor auto` (default) selects
+a caller-owned native tool only from explicit structured capabilities. Without
+that context a standalone terminal uses legacy CLI. `--executor cli` forces
+the old behavior; `--executor native` rejects missing/incompatible capability.
+Same vendor is not same model; explicit model/vendor/effort are preserved.
+On native rejection, auto reports a CLI reason and keeps the exact resolved
+target rather than substituting another vendor/model.
+
+```sh
+# Standalone terminal: CLI dry run, no jobs or provider calls.
+omnilane route --executor auto --dry-run hardest-coding "Review this change"
+
+# Host supplies honest shared/inherited capability JSON; inspect the linked schema.
+omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review this change"
+# The host now spawns its native agent tool, waits and writes actual evidence.
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+omnilane jobs --json result JOB_ID
+omnilane jobs --json list --status pending
+```
+
+Native route emits **pending handoff JSON**, not a shell-native invocation or
+completed job. Codex `collaboration.spawn_agent` has no sandbox/tool/workdir
+restriction parameters and inherits parent tools/filesystem. Its honest request
+and matching capability row explicitly use `shared-inherited` with empty tool
+arrays; `advise`/`work` and workdir are task intent, not an OS boundary. Hard
+isolation remains same-model CLI in auto and rejects forced native.
+
+The caller spawns the real agent with the exact resolved model/effort, then
+ingests the actual agent ID, runtime model/effort/vendor/harness/backend,
+outcome, public result, and evidence. An explicit model override uses
+`fork_turns: "none"` or bounded positive history, never `fork_turns: "all"`.
+Unknown caller current model may be omitted when the route explicitly selects
+an exact model declared by the matching capability row. Duplicate completion is
+rejected. Native cancellation never signals PIDs; the caller separately stops
+any spawned agent.
+
+Background/durable/live/named CLI sessions, sysops, unsupported isolation,
+vote/arbitration and multi-round paths remain CLI-only. Native integration is
+limited to list/status/result/cancel/completion, not CLI wait/retry/mailbox or
+goal-loop. Protocol handling needs Python 3.9+; legacy terminal CLI remains
+compatible. Tests are fixtures, not live native acceptance. The parent alone
+syncs the host AGENTS managed block after review.
+See [schemas, complete examples and limitations](docs/native-executor.md).
+
 <details>
-<summary><b>👉 Which lanes do you run yourself? Pick your main model</b></summary>
+<summary><b>Model-role guidance (delegation still required)</b></summary>
 
 <br/>
 
-The table above is vendor-neutral — the *best* model for a lane doesn't change
-with who is driving. What changes is which lanes you **self-execute** (you
-already are that model, so no second call) versus **dispatch**. Your harness's
-`omnilane` skill applies the right row automatically; this is the human view.
+The best model for a lane does not change with the commander. These are role
+hints, not self-execution exemptions: even a same-model task is delegated.
+A native agent is eligible only when the caller explicitly confirms the exact
+model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
+The commander orchestrates and validates; workers do not delegate again.
 
-- **Claude Code · Fable 5.1** — recommended prompt-level controller for quality-sensitive work; this is a role, not a lane or automatic selector. Self-execute hardest-coding at max and judgment/taste at xhigh; use Astra for an independent Codex review, Sol for bulk, Gemini 3.8 Flash for long/fast work, and Grok for live search.
+- **Claude Code · Fable 5.1** — recommended prompt-level controller for quality-sensitive work; this is a role, not a lane or automatic selector. Delegate hardest-coding at max and judgment/taste at xhigh; use Astra for an independent Codex review, Sol for bulk, Gemini 3.8 Flash for long/fast work, and Grok for live search.
 - **Claude Code · Opus 5** — balanced prompt-level controller and independent reviewer when explicitly selected (`high`, or `xhigh` for deeper review), plus long-context fallback. This is an opt-in role, not a new lane or the default hard-judgment route.
-- **Codex · Sol** — self-execute bulk-mechanical and constrained ui-draft at high. Escalate hardest coding and judgment to Fable/Astra; route long/fast work to Gemini 3.8 Flash and live search to Grok.
+- **Codex · Sol** — delegate bulk-mechanical and constrained ui-draft at high. Escalate hardest coding and judgment to Fable/Astra; route long/fast work to Gemini 3.8 Flash and live search to Grok.
 - **Codex · Astra** — prompt-level controller backup and independent reviewer. Use xhigh by default for hardest coding/judgment and consult/taste; explicitly select `--vendor codex --effort max` when needed. Explicit model/effort always win.
-- **Codex · Terra** — self-execute the Codex long-context fallback at max. Bulk stays on Sol high; escalate hard work to Fable/Astra.
-- **Grok Build · Grok 4.6** — self-execute: live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
-- **Antigravity · Gemini 3.8 Flash** — self-execute long-context Medium, fast-agentic/triage Low, and bulk/overflow/web fallbacks High. Do not infer visual taste or controller authority from agent/coding benchmarks.
+- **Codex · Terra** — delegate the Codex long-context fallback at max. Bulk stays on Sol high; escalate hard work to Fable/Astra.
+- **Grok Build · Grok 4.6** — delegate live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
+- **Antigravity · Gemini 3.8 Flash** — delegate long-context Medium, fast-agentic/triage Low, and bulk/overflow/web fallbacks High. Do not infer visual taste or controller authority from agent/coding benchmarks.
 
 </details>
 
@@ -578,6 +626,14 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.42.0
+
+- **Native-first execution.** Routing and execution are separate: `--executor auto` uses a caller-owned native agent only when the host supplies an exact compatible capability context, and otherwise keeps the same vendor/model/effort on the CLI path. A native handoff is pending work, not a completed job; the caller executes it and records verified completion separately.
+- **Frozen exact-AA downward delegation.** The checked-in AA v4.2 policy gates every provider attempt against the current caller and inherited ceiling, carries an exact child context, and revalidates retries without inheriting a model's earlier human exemption. Its 78 scored configurations are policy inputs, not a claim that all 78 are runnable.
+- **Explicit native reuse.** Reusing an existing Codex agent requires caller-observed idle state, preserved-context consent, and an exact runtime match; capacity exhaustion never silently changes a new-agent request into reuse. Completion is caller-attested evidence, not independent certification of upstream model identity or a cold-start guarantee.
+- **Codex completion wakeup.** `scripts/completion-wakeup.py` binds a run to a controller thread and job allowlist, records scheduler registration, polls terminal events, and separates delivery from acceptance before closing. This is scheduled heartbeat polling, not instant push; without a supported callback the controller keeps waiting directly.
+- **Package and upgrade.** The npm tarball now carries the AA policy, native/AA/wakeup helpers, and both public protocol documents. After npm publication, run `npm i -g omnilane@0.42.0`. Existing repo-symlink installations only need the checkout updated to the released revision and `omnilane --version` verified; review `./install.sh` only for first installation or required rewiring. A GitHub release alone does not establish npm availability.
 
 ## What's new in v0.41.1
 

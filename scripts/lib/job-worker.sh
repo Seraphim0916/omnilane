@@ -43,6 +43,7 @@ emit_mode_notice() {
 
 run_single_shot() {
   local notice="$1" rc
+  aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || return $?
   set +e
   (
     unset OMNILANE_INBOX
@@ -310,6 +311,7 @@ fi
 
 write_current_pid_file "$HOLDER_PID_FILE"
 export OMNILANE_INBOX="$RUNNER_INBOX_FIFO"
+aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || exit $?
 "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
 runner_pid=$!
 

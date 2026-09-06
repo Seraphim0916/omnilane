@@ -82,6 +82,65 @@ file_sha256() {
   fi
 }
 
+# Re-run the same provider-free AA decision immediately before a runner or one
+# of its internal constituents/retries.  Inputs are cooperative workflow
+# metadata; hashes detect mutation after dispatch but do not authenticate the
+# operator or prove the provider's actual model identity.
+aa_policy_gate() {
+  local vendor="$1" model="$2" effort="$3" target_config="${4:-${OMNILANE_AA_TARGET_CONFIG:-}}"
+  local policy_file="${OMNILANE_AA_POLICY_FILE:-$OMNILANE_REPO/config/aa-model-policy.json}" output rc=0
+  local authorizer="${OMNILANE_AA_AUTHORIZER_CONTEXT-${OMNILANE_AA_CALLER_CONTEXT:-}}"
+  local authorizer_sha="${OMNILANE_AA_AUTHORIZER_SHA256-${OMNILANE_AA_CALLER_SHA256:-}}"
+  local args=()
+  if [[ "$vendor" == "vote" && "${OMNILANE_AA_VOTE_PREFLIGHT:-0}" == "1" ]]; then
+    return 0
+  fi
+  [[ -n "$policy_file" ]] || {
+    echo 'omnilane: AA policy metadata missing before provider invocation' >&2
+    return 3
+  }
+  args=(--registry "$policy_file" --vendor "$vendor" --model "$model" --effort "$effort")
+  [[ -z "${OMNILANE_AA_REGISTRY_SHA256:-}" ]] ||
+    args+=(--expected-registry-sha256 "$OMNILANE_AA_REGISTRY_SHA256")
+  [[ -z "$target_config" ]] || args+=(--target-config "$target_config")
+  if [[ "${OMNILANE_AA_AUTHORIZER_HUMAN-${OMNILANE_AA_OPERATOR_ASSERTED_HUMAN:-0}}" == "1" ]]; then
+    args+=(--operator-asserted-human)
+  elif [[ -n "$authorizer" ]]; then
+    args+=(--caller-context "$authorizer")
+    [[ -z "$authorizer_sha" ]] ||
+      args+=(--expected-caller-sha256 "$authorizer_sha")
+  fi
+  output="$(python3 "$OMNILANE_REPO/scripts/lib/aa_policy.py" "${args[@]}")" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    printf '%s\n' "$output" >&2
+    return "$rc"
+  fi
+  if [[ -n "${OMNILANE_AA_CONTEXT_DIR:-}" ]]; then
+    local child_path
+    child_path="$(python3 - "$OMNILANE_REPO" "$OMNILANE_AA_CONTEXT_DIR" "$output" <<'AA_CHILD'
+import hashlib, json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts/lib"))
+import aa_policy
+decision = json.loads(sys.argv[3])
+child = decision.get("child_context")
+if child is not None:
+    name = "aa-child-" + hashlib.sha256(aa_policy._json_line(child).encode()).hexdigest() + ".json"
+    path = Path(sys.argv[2]) / name
+    aa_policy.atomic_json(path, child)
+    print(path)
+AA_CHILD
+)" || return $?
+    export OMNILANE_AA_CALLER_CONTEXT="$child_path"
+    export OMNILANE_AA_CALLER_SHA256=""
+    if [[ -n "$child_path" ]]; then
+      OMNILANE_AA_CALLER_SHA256="$(file_sha256 "$child_path")"
+      export OMNILANE_AA_CALLER_SHA256
+    fi
+  fi
+  return 0
+}
+
 resolve_timeout_cmd() {
   if command -v timeout &>/dev/null; then echo "timeout";
   elif command -v gtimeout &>/dev/null; then echo "gtimeout";

@@ -21,7 +21,9 @@ scratch = pathlib.Path(tempfile.mkdtemp(prefix='close-deadline-', dir=root / '.t
 fixture = scratch / 'repo'
 (fixture / 'scripts/lib').mkdir(parents=True)
 (fixture / 'scripts/runners').mkdir()
-for name in ('common.sh', 'live-protocol.sh'):
+(fixture / 'config').mkdir()
+shutil.copyfile(root / 'config/aa-model-policy.json', fixture / 'config/aa-model-policy.json')
+for name in ('common.sh', 'live-protocol.sh', 'aa_policy.py'):
     shutil.copyfile(root / 'scripts/lib' / name, fixture / 'scripts/lib' / name)
 with (fixture / 'scripts/lib/live-protocol.sh').open('a') as stream:
     stream.write('\ncodex_live_surface_available() { return 0; }\n')
@@ -109,7 +111,7 @@ try:
         job.mkdir(parents=True)
         (case / 'prompt').write_text('initial\n')
         (job / 'meta.json').write_text('{"lane":"hardest-coding","vendor":"codex","session_mode":"live"}')
-        env = dict(os.environ, OMNILANE_HOME=str(home), OMNILANE_REPO=str(fixture),
+        env = dict(os.environ, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_HOME=str(home), OMNILANE_REPO=str(fixture),
                    OMNILANE_SESSION_MODE='live', OMNILANE_LIVE_REQUIRED='1',
                    OMNILANE_IDLE_TIMEOUT='0', CASE_DIR=str(case), CASE_MODE=mode)
         for key in ('OMNILANE_JOB_WORKER_REPO', 'OMNILANE_JOB_WORKER_EXPECTED_SHA256'):

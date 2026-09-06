@@ -533,6 +533,14 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.42.0 の新機能
+
+- **ネイティブ優先実行。** `--executor auto` は、ホストが完全一致する互換 capability context を渡した場合だけ caller 所有のネイティブエージェントを使い、それ以外は同じ vendor／model／effort の CLI 経路を維持します。ネイティブ handoff は未完了の作業であり、完了結果ではありません。
+- **凍結 exact-AA 下方委任。** 同梱の AA v4.2 policy は provider 試行ごとに現在の caller と継承 ceiling を検査し、正確な child context を作り、retry 時も再検証します。78 個の採点済み構成は policy 入力であり、すべてが実行可能という意味ではありません。
+- **明示的なネイティブ再利用。** 既存 Codex エージェントの再利用には caller が確認した idle 状態、context 保持への同意、runtime の完全一致が必要です。容量不足時に new-agent 要求を暗黙に再利用へ変更しません。完了記録は上流モデル identity の認証や cold-start 容量保証でもありません。
+- **Codex 完了継続確認。** `scripts/completion-wakeup.py` は controller thread と job allowlist を結び、scheduler 登録、終端イベントの poll、delivery と acceptance を別々に記録します。これは定期 heartbeat polling であり、即時 push ではありません。
+- **パッケージと更新。** npm tarball は AA policy、native／AA／wakeup helper、公開 protocol 文書を含みます。npm 公開後は `npm i -g omnilane@0.42.0` を実行できますが、GitHub release だけでは npm 公開済みとは限りません。
+
 ## v0.41.1 の新機能
 
 - **Astra の既定値を xhigh に変更。** `hardest-coding` と `hard-judgment` の Astra は `xhigh` が既定値です。必要な場合は `--vendor codex --effort max` を明示できます。プロバイダーの順序と他モデルの推論強度は変更しません。CLI サブスクリプション枠の節約を実測したという主張ではありません。

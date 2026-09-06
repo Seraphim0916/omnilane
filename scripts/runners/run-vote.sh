@@ -42,6 +42,9 @@ run_voter() { # vendor, prompt_file, out_file -> rc
   local v="$1" pf="$2" out="$3" spec model effort rc
   spec="$(voter_spec "$v")" || return 3
   model="${spec%%$'\t'*}"; effort="${spec##*$'\t'}"
+  # Each round and each constituent gets its own decision immediately before
+  # the child runner.  The panel-level check in dispatch.sh is not a substitute.
+  aa_policy_gate "$v" "$model" "$effort" || return $?
   if [[ "$v" == "codex" ]]; then
     acquire_cwd_lock codex "$WORKDIR"
     trap 'release_cwd_lock; cleanup_temp_files' EXIT

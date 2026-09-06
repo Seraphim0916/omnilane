@@ -89,7 +89,7 @@ def main():
         for key in list(env):
             if key.startswith("OMNILANE_") or key in ["CODEX_BIN", "GROK_BIN", "CLAUDE_BIN", "GEMINI_BIN", "AGY_BIN"]:
                 env.pop(key)
-        env.update(OMNILANE_HOME=str(home), PATH=str(bins) + os.pathsep + env["PATH"],
+        env.update(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_HOME=str(home), PATH=str(bins) + os.pathsep + env["PATH"],
                    CODEX_BIN=str(bins / "codex"), GROK_BIN=str(bins / "grok"),
                    CLAUDE_BIN=str(bins / "claude"), GEMINI_BIN=str(bins / "agy"))
         failures = []

@@ -9,21 +9,16 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
 
 1. **Identify the main model from current runtime metadata.** If the identity is unavailable, report it as unverified instead of guessing from a skill name or prior session.
 2. **Split the work into subtasks and classify each into a lane** (table below).
-3. **Dispatch every task by default — even when the lane's model is you:**
-   implementation, search, investigation, file reads, verification, tests,
-   builds, deploys. The commander self-executes only: planning and
-   decomposition, writing task briefs, reading worker reports and job files
-   (`out.txt`, `events.jsonl`, inbox records), acceptance judgment, replies to
-   the operator, git commit/push, and edits to governance files. Read-only
-   work goes out in advise mode: `triage` for high-volume scans, `long-context`
-   for large documents, `live-search` for web or X, `hard-judgment` for second
-   opinions. Editing work uses `--mode work --workdir <repo> --timeout 3600`
-   or more. Re-verify a worker's claim by reading its attached evidence or by
-   dispatching a second worker (change `--vendor`); the commander runs no
-   commands itself. Invalid reasons to skip dispatch: "this lane is mine",
-   "I am not dispatching so the rule does not apply", "it is only a file
-   read", "dispatch is slower", "it is one line". Dispatch:
-   `<repo>/scripts/dispatch.sh [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
+3. **Delegate every task by default, even to the commander's exact model.**
+   Native agents count as delegation; a model match is not permission for
+   commander self-execution. Resolve vendor/model/effort separately from
+   executor selection. Terminal `auto` without capabilities stays legacy CLI.
+   The commander owns planning, task briefs, handoff/completion orchestration,
+   reading public results, acceptance, operator replies, git commit/push and
+   governance edits. Workers execute the assigned task and never delegate again.
+   Read-only work uses advise; edits require `--mode work --workdir <repo>`.
+   `<repo>/scripts/dispatch.sh [--executor auto|native|cli] [--native-context FILE] [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
+
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    Use `--thread NAME` when later claude, codex, grok or gemini dispatches
    must retain earlier context. Threads in 0.33.0 pin vendor, model, effort and
@@ -58,8 +53,58 @@ Doctor remains offline unless the operator explicitly adds `--probe V`; that
 bounded probe returns metadata only. Use `bin/omnilane benchmark` for a fixed
 no-call route plan, and add `--run` only when actual advise-mode comparison calls
 were explicitly requested. Neither command changes routing.
-Lanes are fallback chains — dispatch uses the first vendor CLI actually installed,
+Without native context, fallback chains use the first vendor CLI installed,
 so the same table works with any subset of subscriptions.
+
+## Caller-owned native delegation
+
+Use explicit current-harness capabilities from the real agent-tool contract:
+active harness/vendor, exact supported model/effort combinations, optional known
+current model, task modes/workdirs, tools, isolation, and lifecycle. Codex
+`collaboration.spawn_agent` has no sandbox/tool/workdir restriction parameters;
+it inherits the parent's tools and filesystem. Advertise `shared-inherited` in
+both request and matching capability row, with empty tool arrays. Treat
+`advise`/`work` and workdir as task intent, not an OS sandbox. Hard isolation is
+CLI-only. Same vendor is not same model. Unknown capabilities do not match.
+Never inspect credentials or infer support from installed CLIs. Explicit
+vendor/model/effort survive native fallback; no next-vendor substitution.
+
+```sh
+omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review the change"
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+omnilane jobs --json result JOB_ID
+```
+
+For explicit reuse, the capability must prove the exact existing agent and its
+idle state, and explicitly preserve its existing context. Recheck idle immediately
+before `collaboration.followup_task`; completion must match the reuse strategy,
+agent ID and backend. Do not substitute an unknown inherited model or reuse a busy
+agent. New-agent capacity exhaustion is not success; see `docs/native-executor.md`.
+
+Route returns **pending handoff JSON**, not a successful agent run. The host calls
+its own agent tool with the resolved exact model and effort, passes workdir,
+mode, task, and deadline as intent, then ingests the actual agent ID, runtime
+vendor/model/effort/harness/backend, outcome, public result, and evidence. An
+explicit model override uses `fork_turns: "none"` or bounded positive history;
+never combine a model override with `fork_turns: "all"`. An unknown caller
+current model may be omitted when the route explicitly selects an exact model
+declared by the matching capability row. Never report completion before
+ingestion. Native is not a shell executable. The host
+passes **no nested delegation** to native workers; shell workers retain their
+depth guard. Workers do not create handoffs or call agent-spawn tools.
+
+Forced CLI retains external workers. Auto explains its CLI fallback reason;
+forced native rejects missing/incompatible capability. CLI sessions (background,
+live, named threads, explicit single-shot), durable/multi-round work,
+vote/arbitration, sysops and unsupported isolation remain CLI-only. The native
+deadline is host-enforced, not a shell watchdog. Native cancellation changes
+pending state without PID signals; the host separately stops any spawned agent.
+Native goal-loop, retry, mailbox, CLI wait and managed-block sync are not included.
+
+See [native protocol](../../docs/native-executor.md) for strict schemas, terminal
+examples, lifecycle and public-data boundaries. The parent alone backs up and
+syncs the host's managed `~/.codex/AGENTS.md` block after review.
 
 ## Lanes (defaults; see routing.yaml for the live values)
 
@@ -161,10 +206,21 @@ dispatch stay in this skill and the CLI. Manage the local board with
 
 ## Job lifecycle defaults
 
-- **Completion inbox**: with the Claude Code plugin's hooks installed, a
-  finished `--background` job is delivered into the foreman's next prompt by
-  the bundled `UserPromptSubmit` hook, so do not poll for it. Outside Claude
-  Code, block on `scripts/jobs.sh wait <id> [--timeout N]` instead.
+- **Active completion (Codex)**: after background CLI dispatch, use
+  `scripts/completion-wakeup.py prepare` with the actual controller app thread,
+  host, unique run ID and exact job allowlist. Use the returned handoff with the
+  app `automation_update` heartbeat tool (reuse an existing monitor), then record
+  the actual registration receipt. Do this before ending a turn with unobserved
+  jobs. On callback, `poll`, keep unchanged state quiet, acknowledge delivery,
+  inspect public results and verify, then acknowledge acceptance with evidence.
+  Pause the real automation and record `closed` after all tracked events are
+  handled. Never reuse a historical run ID or infer delivery from registration.
+  See `docs/completion-wakeup.md` for exact commands and receipt schemas.
+- **Other completion surfaces**: native agent callbacks provide the host result;
+  still ingest and verify it. Claude's `UserPromptSubmit` inbox is passive and
+  requires another prompt; it does not wake an idle controller. If no supported
+  active callback exists, keep the controller active with `scripts/jobs.sh wait`
+  and resume acceptance on return rather than asking the user to check again.
 - **Live mailbox**: Claude and Gemini retain automatic resident background
   sessions for supported modes. Codex and Grok remain single-shot by default;
   explicit `--live` opts in. Grok live requires explicit `--mode sysops` because
@@ -226,8 +282,8 @@ dispatch stay in this skill and the CLI. Manage the local board with
   `OMNILANE_DEPTH`). Escalate back to the main loop instead.
 - **Same-directory codex dispatches are serialized automatically** (lock);
   do not try to parallelize them yourself.
-- Escalate without asking: two failed attempts on a lane → move one lane up
-  (triage → bulk-mechanical → hardest-coding).
+- After two failed attempts, reassess scope and retry only an eligible exact configuration.
+  An upward AA move requires the human to take over; a model cannot approve its own uplift.
 - Vendor quota exhausted (429 / "stream disconnected" / usage-limit message):
   send mid-tier coding through coding-overflow instead; never silently downgrade
   hardest-coding — wait or escalate to the user.
@@ -248,15 +304,14 @@ These notes never expand the commander's reserved self-execution scope. If the v
 - **Claude Sonnet main**: coordination/tools/mid-tier coding only, plus fallback
   duty in bulk-mechanical and live-search; never self-assign top judgment or
   hardest implementation.
-- **GPT Astra main**: prompt-level controller backup and independent reviewer.
-  Default to xhigh for hardest coding/judgment and consult/taste; use
-  `--vendor codex --effort max` only for an explicitly requested upgrade. Explicit
-  model and effort always outrank these defaults.
-- **GPT Sol main**: bulk mechanical work and constrained UI drafts are yours at
-  high; escalate hardest coding and judgment to Fable/Astra.
-- **GPT Terra main**: long-context Codex fallback work is yours at max; bulk
-  stays on Sol high and hard work escalates to Fable/Astra.
-- **GPT Luna main**: high-volume triage is yours at high; do not promote its
+- **GPT Astra main**: controller backup and independent reviewer. Resolve the
+  actual caller effort first; select only an exact target at or below its ceiling.
+  An explicit higher-effort request does not bypass model-level AA policy.
+- **GPT Sol main**: mechanical work and constrained UI drafts only within the
+  exact effective ceiling; return higher-score needs to the operator.
+- **GPT Terra main**: long-context and mechanical work only within the exact
+  effective ceiling; do not infer eligibility from the Terra family label.
+- **GPT Luna main**: high-volume triage is delegated at high; do not promote its
   low price into correctness-critical or controller work.
 - **Grok 4.6 main**: live-search and coding-overflow are yours, plus fallback
   duty in hard lanes. Grok effort remains ignored; verify API signatures and
@@ -266,3 +321,37 @@ These notes never expand the commander's reserved self-execution scope. If the v
   or controller authority from agent/coding benchmarks.
 - **Gemini 3.1 Pro main**: remains directly selectable, but is not promoted by
   this refresh; route hard coding and judgment to the stronger configured lanes.
+
+## Frozen exact-AA downward gate
+
+All lane and per-model preferences above are subordinate to this gate, including
+explicit vendor/model/effort requests. Supply `--caller-context /absolute/context.json`
+with schema_version=1, snapshot_id, kind=model, caller containing exact vendor/model/
+effort/reasoning/fallback, and inherited_ceiling. Effective ceiling is the minimum of
+that exact frozen score and the inherited ceiling. Targets at or below it are allowed;
+unknown identities and unresolved request-selector mappings fail closed. No family,
+displayed grade, highest-effort assumption, retry or fallback grants an uplift.
+
+A `--transport-overlay /absolute/overlay.json` may prove a small set of host-local
+request selectors using exact identities and hashed local contract evidence. It does
+not change frozen AA scores or certify upstream provider identity. The explicit
+`--operator-asserted-human` exemption is cooperative operator metadata, not automatic
+model detection or OS authentication; model callers must not assert it for themselves.
+
+CLI jobs atomically save an original authorizer, exact child caller context, decision,
+and registry snapshot. Provider processes receive the child identity, not the parent's.
+Retries preserve original target config, check stored hashes, and intersect the
+current exact caller score/inherited ceiling with the original authorizer ceiling.
+Use `omnilane jobs retry ID --caller-context FILE`; missing current identity fails
+closed, and a model retry never inherits an earlier human exemption. Native handoffs carry the same decision plus a job-owned
+`worker_contract.caller_context_path`; pass that context to the native child together
+with the no-nested-dispatch requirement. `OMNILANE_DEPTH` remains an independent guard.
+
+A background job or PENDING native handoff is not completion. Observe its terminal
+result and acceptance evidence before closing the controller task. Completion wakeup
+availability must be separately verified; never claim delivery from scheduling alone.
+
+For Gemini `model_id_encoded_effort` selectors, the proven native model ID encodes
+the AA effort. An absent parity effort or the matching effort is accepted; a conflicting
+parity effort is rejected. Do not represent a discarded EFFORT parameter as an active
+provider setting. Frozen reasoning=`unspecified` remains a literal, not a wildcard.

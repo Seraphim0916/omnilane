@@ -493,6 +493,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 ## 📜 版本历程
 
+## v0.42.0 新功能
+
+- **原生优先执行。** `--executor auto` 只在主机提供精确兼容的能力上下文时使用调用方持有的原生代理；否则保持同一供应商、模型和推理强度走 CLI。原生 handoff 仍是待执行任务，并不代表已经完成。
+- **冻结的 exact-AA 向下委派。** 内置 AA v4.2 策略在每次供应商调用前检查当前 caller 与继承上限，生成精确子上下文，并在重试时重新验证。78 个评分配置是策略输入，不表示 78 个配置都可运行。
+- **明确的原生复用边界。** 复用现有 Codex 代理要求调用方已确认空闲、允许保留上下文且运行身份完全匹配；容量不足不会把新代理请求静默改成复用。完成记录也不是上游模型身份认证或冷启动容量保证。
+- **Codex 完成续验。** `scripts/completion-wakeup.py` 绑定控制线程与任务白名单，记录排程注册，并区分送达和验收。这是定时 heartbeat 轮询，而不是即时推送。
+- **封装与升级。** npm 包现在包含 AA 策略、原生／AA／wakeup 辅助脚本以及公开协议文档。npm 发布后可运行 `npm i -g omnilane@0.42.0`；GitHub release 本身不代表 npm 已上架。
+
 ## v0.41.1 新功能
 
 - **Astra 默认 xhigh。** `hardest-coding` 与 `hard-judgment` 的 Astra 默认改用 `xhigh`；需要时可明确指定 `--vendor codex --effort max`。供应商顺序与其他模型的推理强度保持不变；这不代表已实测节省 CLI 订阅额度。

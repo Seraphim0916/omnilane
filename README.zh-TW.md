@@ -30,7 +30,7 @@ Gemini CLI** 之類。每一個都只接一個模型家族,所以你交代的每
 
 **omnilane 做什麼。** 它給你的助手一張路由表。工作被分進**通道**——最難的實作、
 機械粗活、初篩、硬判斷、文字終審——每條通道指名對那件事最強(也最省)的模型。
-助手保留自己本來就擅長的通道,其餘用你既有的登入,在背景丟給別家廠商的 CLI。
+助手依通道解析目標模型，再委派給能力相符的原生子代理或既有 CLI；同模型也仍須派工。
 
 **它不是什麼。** 不是 proxy、不是另一筆訂閱、不是又一個要顧的服務。它就是一張表
 加一支派工腳本,躲在你現有工具背後跑。`./install.sh --uninstall` 可完全清除。
@@ -86,7 +86,7 @@ flowchart LR
 - **`scripts/dispatch.sh [--vendor V] <通道> "<任務>"`** — 查表後以無頭方式
   呼叫對應廠商的 CLI。`--vendor` 會鎖定點名廠商，不做降級。
 - **`skills/omnilane/SKILL.md`** — 一份技能四個框架都能載入:
-  先認出自己是哪個模型,自己通道的活自己做,其餘派出去。
+  先解析通道的目標模型，再透過相符的原生子代理或 CLI 派工。
 - **`omnilane mcp`** — 同一套路由改以 MCP stdio server 提供,
   給走 MCP 而非 skill 整合的宿主。
 
@@ -131,21 +131,54 @@ flowchart LR
 - 點標準模型別名(例如 Opus)時,會鎖定技能表裡的確切模型家族。明確目標
   不存在或 CLI 不可用時會清楚失敗,不會暗中換廠商或模型家族。
 
+## 原生優先派工，保留終端相容性
+
+模型路由與執行器（executor）分開判定。`--executor auto` 是預設：只有呼叫端明示的
+結構化能力全部相符，才選原生子代理（native agent）；一般終端沒有能力脈絡，
+就保留既有 CLI。`--executor cli` 強制原流程；`--executor native` 遇到能力缺漏或不符就報錯。
+同廠商不代表同模型；明確指定的廠商、模型及推理強度都保留。原生不符時，
+自動模式會說明 CLI 原因，只使用同一個已解析目標，不換廠商或模型。
+
+```sh
+# 一般終端的預覽：不建立工作，也不呼叫供應商。
+omnilane route --executor auto --dry-run hardest-coding "檢查這次變更"
+
+# 呼叫端依工具契約準備共享繼承能力 JSON；完整格式見下方文件。
+omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "檢查這次變更"
+# 接著由呼叫端啟動原生代理、等待結果，再登錄真實證據。
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+omnilane jobs --json result JOB_ID
+omnilane jobs --json list --status pending
+```
+
+原生路由輸出的是「等待執行」交接 JSON，不會從 shell 啟動原生代理，也不代表任務成功。
+Codex `collaboration.spawn_agent` 沒有沙箱、工具或工作目錄限制參數，會繼承父代理的工具與檔案系統權限。要求與同一能力列都必須明示 `shared-inherited`，工具陣列留空；`advise`／`work` 與工作目錄只是任務意圖，不是作業系統隔離。要求硬隔離時，自動模式保留同模型 CLI，強制原生則失敗。
+
+呼叫端以精確模型與推理強度啟動工作，最後登錄實際代理 ID、模型／推理強度／廠商／框架／後端、成敗、公開結果與證據。明示模型覆寫時使用 `fork_turns: "none"` 或有限的正整數歷史，不得搭配 `fork_turns: "all"`。路由已明示選中能力列中的精確模型時，可省略未知的呼叫端目前模型。重複登錄會被擋下；原生取消只改工作狀態，不發程序訊號，已啟動的代理由呼叫端另外停止。
+
+背景、持久、即時、具名 CLI 工作階段、sysops、不支援的隔離、投票／仲裁及多輪路徑
+仍走 CLI。原生只整合清單、狀態、結果、取消與完成登錄，未接 CLI 等待、重試、
+信箱或目標迴圈。原生協定需要 Python 3.9+；一般終端 CLI 保留相容。
+測試替身不等於真實原生驗收；主機 AGENTS 管理區塊只由父代理審查後同步。
+詳見[能力與完成格式、完整範例及限制](docs/native-executor.md)。
+
 <details>
-<summary><b>👉 哪些通道你自己跑?選你的主控模型</b></summary>
+<summary><b>模型角色指引：仍須派工</b></summary>
 
 <br/>
 
-上面那張表跟廠商無關——一條通道的*最佳*模型不會因為誰在主控而改變。會變的是
-你哪些通道**自己做**(你本來就是那個模型,省一次呼叫)、哪些**派出去**。你 CLI 裡
-的 `omnilane` 技能會自動套對的那一列,這裡是給人看的版本。
+通道的最佳模型不因主控是誰而改變。以下是角色指引，不是親自執行的豁免：
+即使模型相同，也要委派給子代理。呼叫端明示模型、推理強度、任務模式與工作目錄，
+並以空工具陣列及 `shared-inherited` 隔離和生命週期能力同列相符時，才採原生代理；否則走 CLI。
+主控負責編排與驗收，工作代理執行任務且不得再派工。
 
 - **Claude Code · Fable 5.1**——品質敏感工作建議的提示詞層主控；這是角色，不是新通道或自動選模器。最難編碼用 max，判斷／文字用 xhigh；獨立 Codex 複核用 Astra，bulk 用 Sol，長文／高速工作用 Gemini 3.8 Flash，即時搜尋用 Grok。
 - **Claude Code · Opus 5**——顯式點名時可做均衡型提示詞層主控與獨立複核（一般用 `high`，更深複核可選 `xhigh`），也保留為 long-context 備援；這是選配角色，不是新通道或 hard-judgment 預設。
-- **Codex · Sol**——bulk-mechanical 與有參考限制的 ui-draft 用 high 自己做；最難編碼／判斷升級 Fable 或 Astra，長文／高速工作交 Gemini 3.8 Flash，即時搜尋交 Grok。
+- **Codex · Sol**——bulk-mechanical 與有參考限制的 ui-draft 委派並使用 high；最難編碼／判斷升級 Fable 或 Astra，長文／高速工作交 Gemini 3.8 Flash，即時搜尋交 Grok。
 - **Codex · Astra**——提示詞層主控備位與獨立複核者；最難編碼／判斷與 consult／taste 預設用 xhigh，需要時可明確指定 `--vendor codex --effort max`；顯式 model／effort 永遠優先。
 - **Codex · Terra**——用 max 接 Codex 的 long-context 備援；bulk 留給 Sol high，困難工作升級 Fable／Astra。
-- **Grok Build · Grok 4.6**——自己做 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
+- **Grok Build · Grok 4.6**——委派 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
 - **Antigravity · Gemini 3.8 Flash**——long-context 用 Medium，fast-agentic／triage 用 Low，bulk／overflow／網搜備援用 High。不要把代理／編碼評測推論成審美或主控權。
 
 </details>
@@ -500,6 +533,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.42.0 新功能
+
+- **原生優先執行。** 路由與執行已拆開：`--executor auto` 只在主機提供精確且相容的能力內容時使用呼叫端擁有的原生代理，否則維持同一組供應商／模型／努力程度走 CLI。原生 handoff 只是待辦工作，不代表任務完成；呼叫端仍須實際執行並另行寫入已驗證結果。
+- **凍結的 exact-AA 向下派工。** 內附的 AA v4.2 政策會在每次供應商嘗試前，以目前 caller 與繼承上限進行閘控，產生精確子 caller 內容，並在重試時重新驗證，不繼承模型先前取得的人類豁免。78 個評分配置是政策輸入，不代表 78 個配置都能實際執行。
+- **明示原生重用。** 重用既有 Codex 代理需要呼叫端已觀察到閒置、同意保留內容，且 runtime 身分完全相符；新代理容量耗盡時不會偷偷改成重用。完成紀錄是 caller attestation，不是上游模型身分認證，也不保證 cold start 一定有容量。
+- **Codex 完成續驗。** `scripts/completion-wakeup.py` 將 run 綁定主控 thread 與 job 白名單，記錄排程器登錄、輪詢終態事件，並把送達與驗收分開後再關閉。這是定期 heartbeat 輪詢，不是即時 push；沒有支援的 callback 時，主控會直接持續等待。
+- **封裝與升級。** npm 套件現在包含 AA 政策、原生／AA／喚醒輔助程式及兩份公開協定文件。npm 發布後可執行 `npm i -g omnilane@0.42.0`；既有程式庫連結式安裝只需更新至已發布版本並核對 `omnilane --version`，首次安裝或需要重新接線時才審核及執行 `./install.sh`。只有 GitHub 發布不代表 npm 已可下載。
 
 ## v0.41.1 新功能
 
