@@ -534,6 +534,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 ## 📜 版本歷程
 
+## v0.42.1 新功能
+
+- **修復 CI 測試資料。** 完整 Python discovery 現在會讓舊 routing 與 Grok readiness 測試明示 synthetic-human caller；production 的缺少身分拒絕、核准 registry SHA、向下分數閘、重試 lineage 與 skip 斷言都維持不變。
+- **可攜式 lineage 證據。** encoded-effort Gemini spy 改用可攜式 Python 解譯器選擇，並驗證精確的 `--model gemini-3.8-flash-high` 參數組。AA 涵蓋仍是 78 個 scored target、1 個 scored reference-only 項目與 10 個 unknown configuration。
+- **修補版升級。** npm 上架後可執行 `npm i -g omnilane@0.42.1`。既有 repo-symlink 安裝只要更新 checkout 並執行 `omnilane --version`；除非刻意重新接線，否則不要重跑 `./install.sh`。GitHub release 與 npm 上架仍是兩件事。
+
 ## v0.42.0 新功能
 
 - **原生優先執行。** 路由與執行已拆開：`--executor auto` 只在主機提供精確且相容的能力內容時使用呼叫端擁有的原生代理，否則維持同一組供應商／模型／努力程度走 CLI。原生 handoff 只是待辦工作，不代表任務完成；呼叫端仍須實際執行並另行寫入已驗證結果。

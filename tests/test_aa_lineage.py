@@ -34,7 +34,7 @@ class LineageTests(unittest.TestCase):
         self.context = self.base/'caller.json'; self.context.write_text(json.dumps(self.context_value))
         self.marker = self.base/'spy.jsonl'; self.bins = self.base/'bin'; self.bins.mkdir()
         spy = self.bins/'codex'
-        spy.write_text('#!'+sys.executable+'\n'+'''import json,os,sys
+        spy.write_text('#!/usr/bin/env python3\n'+'''import json,os,sys
 from pathlib import Path
 p=os.environ.get('OMNILANE_AA_CALLER_CONTEXT')
 with open(os.environ['AA_SPY'],'a') as f:
@@ -142,13 +142,27 @@ if '-o' in sys.argv:
 
     def test_cross_vendor_encoded_effort_provider_receives_exact_selector(self):
         self.configure_gemini_spy()
-        r=self.run_dispatch('--executor','cli','--vendor','gemini','--model','gemini-3.8-flash-high','--effort','-',lane='aa-gemini')
+        # Isolate the one-shot spy from Gemini's default live/FIFO lifecycle.
+        r=self.run_dispatch('--background','--single-shot','--executor','cli','--vendor','gemini','--model','gemini-3.8-flash-high','--effort','-',lane='aa-gemini')
         self.assertEqual(r.returncode,0,r.stderr)
+        job_id=r.stdout.strip()
+        self.assertRegex(job_id,r'^\d{8}-\d{6}-\d+-\d+$')
+        waited=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'wait',job_id,'--timeout','20'],
+                              env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=25)
+        self.assertEqual(waited.returncode,0,waited.stderr)
+        self.assertIn('done exit=0',waited.stdout)
+        job=self.home/'jobs'/job_id
+        self.assertEqual(json.loads((job/'meta.json').read_text())['session_mode'],'single-shot')
+        self.assertFalse((job/'inbox.fifo').exists())
         called=json.loads(self.marker.read_text().splitlines()[-1])
-        self.assertIn('gemini-3.8-flash-high',called['args'])
+        selector_index=called['args'].index('--model')
+        self.assertEqual(called['args'][selector_index:selector_index+2],
+                         ['--model','gemini-3.8-flash-high'])
         self.assertEqual(called['context']['caller']['vendor'],'gemini')
         self.assertEqual(called['context']['caller']['model'],'gemini-3.8-flash')
         self.assertEqual(called['context']['caller']['effort'],'high')
+        self.assertEqual(called['context']['inherited_ceiling'],52)
+        self.assertIsNone(called['human'])
 
     def test_cross_vendor_encoded_effort_conflict_never_invokes_provider(self):
         self.configure_gemini_spy()

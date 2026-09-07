@@ -533,6 +533,12 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.42.1 の新機能
+
+- **CI フィクスチャの修復。** 完全な Python discovery では、旧 routing／Grok readiness テストに synthetic-human caller を明示します。production の missing-identity 拒否、承認済み registry SHA、下方向スコア検査、retry lineage、skip assertion は変更しません。
+- **移植可能な lineage 証拠。** encoded-effort Gemini spy は移植可能な Python インタープリター選択を使い、正確な `--model gemini-3.8-flash-high` の組を検証します。AA の内訳は scored target 78、scored reference-only 1、unknown configuration 10 のままです。
+- **パッチ版への更新。** npm 公開後は `npm i -g omnilane@0.42.1` を実行できます。既存の repo-symlink インストールでは checkout を更新して `omnilane --version` を確認し、意図的に再配線する場合以外は `./install.sh` を再実行しません。GitHub release と npm 公開は別です。
+
 ## v0.42.0 の新機能
 
 - **ネイティブ優先実行。** `--executor auto` は、ホストが完全一致する互換 capability context を渡した場合だけ caller 所有のネイティブエージェントを使い、それ以外は同じ vendor／model／effort の CLI 経路を維持します。ネイティブ handoff は未完了の作業であり、完了結果ではありません。

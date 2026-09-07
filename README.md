@@ -627,6 +627,12 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.42.1
+
+- **CI fixture repair.** Full Python discovery now gives legacy routing and Grok-readiness fixtures an explicit synthetic-human caller, while production missing-identity denial, the approved registry SHA, downward score checks, retry lineage, and skip assertions remain unchanged.
+- **Portable lineage evidence.** The encoded-effort Gemini spy uses a portable Python interpreter selector and verifies the exact `--model gemini-3.8-flash-high` pair. AA coverage remains 78 scored targets, one scored reference-only entry, and 10 unknown configurations.
+- **Patch upgrade.** After npm publication, run `npm i -g omnilane@0.42.1`. For an existing repo-symlink installation, update the checkout and run `omnilane --version`; do not rerun `./install.sh` unless deliberately rewiring integrations. GitHub release and npm publication remain separate.
+
 ## What's new in v0.42.0
 
 - **Native-first execution.** Routing and execution are separate: `--executor auto` uses a caller-owned native agent only when the host supplies an exact compatible capability context, and otherwise keeps the same vendor/model/effort on the CLI path. A native handoff is pending work, not a completed job; the caller executes it and records verified completion separately.

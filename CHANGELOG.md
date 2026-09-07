@@ -6,6 +6,14 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.1] - 2026-09-07
+
+### Fixed
+
+- Make legacy routing and Grok-readiness fixtures explicitly synthetic-human so the frozen exact-AA gate still fails closed for real missing model identity without pre-empting the behavior those fixtures test.
+- Make the cross-vendor encoded-effort lineage spy portable across CI hosts and assert the exact `--model gemini-3.8-flash-high` selector pair delivered to the provider fixture.
+- Package the current 0.42.1 release notes while retaining the immutable 0.42.0 release history. The AA registry remains 78 scored targets, one scored reference-only entry, and 10 unknown configurations.
+
 ## [0.42.0] - 2026-09-07
 
 ### Added
@@ -829,7 +837,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...HEAD
+[0.42.1]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...v0.41.1
 [0.40.0]: https://github.com/Seraphim0916/omnilane/compare/v0.34.0...v0.40.0

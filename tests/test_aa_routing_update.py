@@ -41,10 +41,18 @@ class AARoutingUpdateTests(unittest.TestCase):
         self.home.mkdir()
         self.bin.mkdir()
         self.fake_ok = self._script("provider-ok", "exit 0\n")
-        self.env = os.environ.copy()
+        # These legacy routing tests exercise provider-selection behavior, not
+        # model lineage.  Give the fixture an explicit synthetic-human caller
+        # and never inherit a real caller context from the invoking harness.
+        self.env = {
+            name: value
+            for name, value in os.environ.items()
+            if not name.startswith("OMNILANE_AA_") and name != "OMNILANE_DEPTH"
+        }
         self.env.update(
             {
                 "OMNILANE_HOME": str(self.home),
+                "OMNILANE_AA_OPERATOR_ASSERTED_HUMAN": "1",
                 "CODEX_BIN": str(self.fake_ok),
                 "CLAUDE_BIN": str(self.fake_ok),
                 "GROK_BIN": str(self.fake_ok),

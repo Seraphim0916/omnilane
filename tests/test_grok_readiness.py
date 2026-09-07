@@ -38,10 +38,18 @@ raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
         # Exercise the existing Linux work branch independently of the test host.
         (self.bin / "uname").write_text("#!/bin/sh\nprintf 'Linux\\n'\n")
         (self.bin / "uname").chmod(0o700)
-        self.env = os.environ.copy()
+        # Readiness isolation predates model-lineage policy.  Keep this fixture
+        # explicitly synthetic-human so exact-AA still fails closed everywhere
+        # that is actually under test, without inheriting the outer harness.
+        self.env = {
+            name: value
+            for name, value in os.environ.items()
+            if not name.startswith("OMNILANE_AA_") and name != "OMNILANE_DEPTH"
+        }
         for name in ("CONTEXT_MODE_MCP_SENTINEL_DIR", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID", "OMNILANE_INBOX", "OMNILANE_GROK_NO_WEB"):
             self.env.pop(name, None)
         self.env.update(GROK_BIN=str(self.fake), TEST_GROK_RECORD=str(self.record),
+                        OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
                         OMNILANE_GROK_MAX_ATTEMPTS="1", OMNILANE_TIMEOUT="15",
                         TMPDIR=str(self.base), PATH=str(self.bin) + os.pathsep + self.env["PATH"])
 

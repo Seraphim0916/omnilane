@@ -518,6 +518,12 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 ## 📜 릴리스 기록
 
+## v0.42.1 새 기능
+
+- **CI 픽스처 복구.** 전체 Python discovery는 기존 routing 및 Grok readiness 테스트에 synthetic-human caller를 명시합니다. production의 missing-identity 거부, 승인된 registry SHA, 하향 점수 검사, retry lineage, skip assertion은 변경하지 않습니다.
+- **이식 가능한 lineage 증거.** encoded-effort Gemini spy는 이식 가능한 Python 인터프리터 선택을 사용하고 정확한 `--model gemini-3.8-flash-high` 인수 쌍을 검증합니다. AA 구성 수는 scored target 78개, scored reference-only 1개, unknown configuration 10개로 유지됩니다.
+- **패치 버전 업그레이드.** npm 게시 후 `npm i -g omnilane@0.42.1`을 실행할 수 있습니다. 기존 repo-symlink 설치는 checkout을 업데이트하고 `omnilane --version`만 확인하며, 의도적으로 다시 연결할 때가 아니면 `./install.sh`를 재실행하지 않습니다. GitHub release와 npm 게시는 별개입니다.
+
 ## v0.42.0 새 기능
 
 - **네이티브 우선 실행.** `--executor auto`는 호스트가 정확히 호환되는 capability context를 제공할 때만 호출자 소유 네이티브 에이전트를 사용하며, 그 외에는 같은 vendor/model/effort의 CLI 경로를 유지합니다. 네이티브 handoff는 대기 중 작업이지 완료 결과가 아닙니다.
