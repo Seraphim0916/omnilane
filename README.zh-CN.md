@@ -493,6 +493,15 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 ## 📜 版本历程
 
+## v0.42.3 新功能
+
+- **纯文档更新。** 路由、评分、闸门与执行器行为均未变更。
+- **`--caller-context` 进入快速参考。** 派工命令签名现已列出该参数，并说明模型主控未携带时会在创建作业前被 `missing-caller-context` 拒绝。
+- **完整的 caller-context 示例。** 冻结 exact-AA 下行闸章节补充了可直接复制的 JSON 示例，并要求在首次派工前建好，而非被拒后才补。
+- **自行查询强度，不要猜测。** 当运行环境只给出模型名称而无强度时，沿自身祖先进程链读取确切标志；应比对整条链，而非主机上第一个同名进程。声明最低分配置是查不到时的退路，而非首选，因为过低的上限会静默关闭车道。
+- **两个拒绝码，两种修法。** `missing-caller-context` 表示未提供文件；`runtime-mapping-unverified` 表示目标缺少已验证的本机选择器，须以真实证据支撑的 `--transport-overlay` 条目修正，绝不可通过修改冻结注册表解决。
+- **升级。** npm 发布后执行 `npm i -g omnilane@0.42.3`。既有的 repo 符号链接安装可更新检出并确认 `omnilane --version`，无需重跑安装。
+
 ## v0.42.2 新功能
 
 - **Grok 强度确实传入 CLI。** 显式的 `low`、`medium`、`high`、`xhigh` 通过 `--reasoning-effort` 传递；Grok 4.6 默认路由指定 `high`。

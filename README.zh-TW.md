@@ -534,6 +534,15 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 ## 📜 版本歷程
 
+## v0.42.3 新功能
+
+- **純文件更新。** 路由、評分、閘門與執行器行為皆未變更。
+- **`--caller-context` 進入快速參考。** 派工指令簽名現在明列這個參數，並說明模型主控未帶時會在建立工作前被 `missing-caller-context` 拒絕。
+- **完整的 caller-context 範例。** 凍結 exact-AA 下行閘章節補上可直接複製的 JSON 範例，並要求在第一次派工前就建好，而非被拒絕後才補。
+- **自己查強度，不要猜。** 當執行環境只給模型名稱而沒有強度時，走自己的祖先行程鏈讀出確切旗標；要比對整條鏈，不要抓主機上第一個同名行程。宣告最低分設定是查不到時的退路，不是第一步，因為過低的上限會靜默關掉車道。
+- **兩個拒絕碼，兩種修法。** `missing-caller-context` 是沒有提供檔案；`runtime-mapping-unverified` 是目標缺少已驗證的本機選擇器，須以有真實證據支撐的 `--transport-overlay` 條目修正，絕不可透過修改凍結登錄檔解決。
+- **升級。** npm 發布後執行 `npm i -g omnilane@0.42.3`。既有的 repo 符號連結安裝可更新檢出並確認 `omnilane --version`，不需重跑安裝。
+
 ## v0.42.2 新功能
 
 - **Grok 強度確實傳入 CLI。** 明示的 `low`、`medium`、`high`、`xhigh` 透過 `--reasoning-effort` 傳遞；Grok 4.6 預設路由指定 `high`。

@@ -17,7 +17,12 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    reading public results, acceptance, operator replies, git commit/push and
    governance edits. Workers execute the assigned task and never delegate again.
    Read-only work uses advise; edits require `--mode work --workdir <repo>`.
-   `<repo>/scripts/dispatch.sh [--executor auto|native|cli] [--native-context FILE] [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
+   `<repo>/scripts/dispatch.sh --caller-context FILE [--executor auto|native|cli] [--native-context FILE] [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
+
+   A model caller MUST pass `--caller-context`; without it every dispatch is
+   refused with `missing-caller-context` before a job exists. Build that file
+   before the first dispatch — see **Frozen exact-AA downward gate** for the
+   schema, a worked example, and what to do when your own effort is unverifiable.
 
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    Use `--thread NAME` when later claude, codex, grok or gemini dispatches
@@ -331,6 +336,47 @@ effort/reasoning/fallback, and inherited_ceiling. Effective ceiling is the minim
 that exact frozen score and the inherited ceiling. Targets at or below it are allowed;
 unknown identities and unresolved request-selector mappings fail closed. No family,
 displayed grade, highest-effort assumption, retry or fallback grants an uplift.
+
+Build the file before the first dispatch, not after a refusal. Every field is an
+exact identity: `caller` must reproduce one `scored_configs` row byte-for-byte,
+and `snapshot_id` must equal the registry's own `snapshot.id`.
+
+```json
+{
+  "schema_version": 1,
+  "snapshot_id": "<registry snapshot.id>",
+  "kind": "model",
+  "caller": {"vendor": "claude", "model": "claude-opus-5", "effort": "high",
+             "reasoning": "adaptive", "fallback": null},
+  "inherited_ceiling": 52
+}
+```
+
+Set `inherited_ceiling` to your own row's score when you are the root caller, or
+to the ceiling you were handed when you are a child.
+
+**When your harness names a model but no effort, look before you guess.** The
+launching process usually carries the exact flags. Walk your own ancestor chain
+(`ps -o ppid=,comm= -p <pid>` upward, then `ps -o args= -p <ancestor>`) and read
+its `--model` / `--effort`. Match the ancestor chain rather than the first
+matching process on the host — a second session of the same CLI is common and
+its flags are not yours. This is request-selector evidence, the same class the
+transport overlay carries, and it does not certify upstream identity.
+
+Only when that genuinely yields nothing: ask the operator, or declare the
+lowest-scoring row of your model and say so in your report. Understating only
+narrows what you may dispatch to, so it fails in the safe direction — but it is
+the fallback, not the first move, and an unnecessarily low ceiling silently
+closes lanes and pushes the question back onto the operator. Never raise the
+declared effort to unblock a refused target, and never assert
+`--operator-asserted-human` on your own behalf.
+
+Two refusal codes mean different things and need different fixes.
+`missing-caller-context` means you passed no file — write one.
+`runtime-mapping-unverified` means the file is fine but the *target* has no proven
+host-local request selector; that is fixed by a `--transport-overlay` entry backed
+by real evidence, never by editing the frozen registry (its sha256 is pinned in
+`scripts/lib/aa_policy.py`, so any edit fails the whole gate closed).
 
 A `--transport-overlay /absolute/overlay.json` may prove a small set of host-local
 request selectors using exact identities and hashed local contract evidence. It does

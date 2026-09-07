@@ -627,6 +627,15 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.42.3
+
+- **Documentation only.** No routing, scoring, gate, or runner behaviour changes.
+- **`--caller-context` is in the quick reference.** The dispatch command signature now shows it, and states that a model caller without it is refused with `missing-caller-context` before a job exists.
+- **A worked caller-context example.** The frozen exact-AA downward gate section gains a complete JSON example, and says to build the file before the first dispatch rather than after a refusal.
+- **Find your own effort instead of guessing.** When a harness names a model but no effort, read the exact flags from the launching process by walking your own ancestor chain; match the chain rather than the first same-named process on the host. Declaring the lowest-scoring row is the fallback, not the first move, because an unnecessarily low ceiling silently closes lanes.
+- **Two refusal codes, two fixes.** `missing-caller-context` means no file was passed; `runtime-mapping-unverified` means the target lacks a proven host-local selector, which is fixed by a `--transport-overlay` entry backed by real evidence and never by editing the frozen registry.
+- **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.3`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
+
 ## What's new in v0.42.2
 
 - **Grok effort reaches the CLI.** Explicit `low`, `medium`, `high`, and `xhigh` selections are passed with `--reasoning-effort`; Grok 4.6 default routes now select `high`.

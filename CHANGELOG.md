@@ -6,6 +6,27 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.3] - 2026-09-07
+
+### Documentation
+
+- The dispatch quick reference now shows `--caller-context FILE` in the command
+  signature and states that a model caller without it is refused with
+  `missing-caller-context` before a job exists.
+- The frozen exact-AA downward gate section gains a complete caller-context
+  example and says to build the file before the first dispatch rather than after
+  a refusal.
+- New guidance for a harness that names a model but no effort: read the exact
+  flags from the launching process by walking your own ancestor chain, matching
+  the chain rather than the first same-named process on the host. Declaring the
+  lowest-scoring row is documented as the fallback when that yields nothing, not
+  as the first move, because an unnecessarily low ceiling silently closes lanes.
+- `missing-caller-context` and `runtime-mapping-unverified` are now distinguished
+  with the fix for each, including the warning that the second is never resolved
+  by editing the frozen registry whose SHA-256 is pinned in `aa_policy.py`.
+
+No routing, scoring, gate, or runner behaviour changes in this release.
+
 ## [0.42.2] - 2026-09-07
 
 ### Fixed
@@ -849,7 +870,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.3...HEAD
+[0.42.3]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...v0.42.0

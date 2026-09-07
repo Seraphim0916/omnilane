@@ -1,6 +1,6 @@
 {
   "name": "omnilane",
-  "version": "0.42.2",
+  "version": "0.42.3",
   "description": "One routing table, every harness: classify subtasks into lanes and delegate through compatible caller-owned native agents or vendor CLIs with exact-AA downward policy and supervised jobs.",
   "author": {
     "name": "Seraphim0916"
