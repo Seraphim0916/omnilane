@@ -47,6 +47,7 @@ Gemini CLI** 之类。每一个都只接一个模型家族,所以你交代的每
 
 ```bash
 npm i -g omnilane                                    # 装 CLI
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
 omnilane route hardest-coding "修掉会间歇失败的 auth token 更新测试"
 omnilane doctor                                      # 看你手上有哪些 AI CLI / 金钥
 omnilane ui start                                    # 选配:在浏览器即时看派工
@@ -57,8 +58,16 @@ omnilane ui start                                    # 选配:在浏览器即时
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # 侦测你的 CLI、接好技能、说你的语言
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
 omnilane route hardest-coding "修掉会间歇失败的 auth token 更新测试"
 ```
+
+> **那个 export 是做什么的?** omnilane 会用调用者自己的能力分数来把关每一次派工,
+> 所以派工必须表明「是谁在问」。人类在终端前只要设一次
+> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`,或每次带 `--operator-asserted-human`。
+> 模型驱动 omnilane 时**不能替自己主张**这个标志,它要改用 `--caller-context FILE`
+> 提供确切的厂商、模型与强度。两者都没有的话,派工会在创建作业前就被
+> `missing-caller-context` 拒绝。
 
 > 第一次用?先跑 `omnilane doctor`——它会告诉你 omnilane 现在能接到哪些模型 CLI 与
 > API 金钥,你就知道实际会跑什么。
@@ -267,6 +276,7 @@ omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 只读检查路由与本地运行环境
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目录]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
             通道 "任务"                              # "-" 表示从 stdin 读任务
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
@@ -492,6 +502,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.42.4 新功能
+
+- **快速上手现在真的跑得起来。** `omnilane route` 必须知道「是谁在问」,但 60 秒上手漏了这件事,新安装照抄会直接吃到 `missing-caller-context` 且没有任何指引。现在会先用 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 表明操作者身分,并说明模型主控该改用什么。
+- **命令参考。** `dispatch.sh` 的用法摘要补上 `[--caller-context FILE | --operator-asserted-human]`。
 
 ## v0.42.3 新功能
 

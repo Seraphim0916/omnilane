@@ -52,6 +52,7 @@ Cursor、Gemini CLI** など——を使っていますよね。どれも一つ�
 
 ```bash
 npm i -g omnilane                                    # CLI をインストール
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 呼び出しているのは人間の操作者
 omnilane route hardest-coding "auth トークン更新テストの不安定さを修正"
 omnilane doctor                                      # 使える AI CLI / キーを確認
 omnilane ui start                                    # 任意:ブラウザでジョブをライブ表示
@@ -62,8 +63,16 @@ omnilane ui start                                    # 任意:ブラウザでジ
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # CLI を検出、スキルを接続、あなたの言語で対話
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 呼び出しているのは人間の操作者
 omnilane route hardest-coding "auth トークン更新テストの不安定さを修正"
 ```
+
+> **あの export は何のため?** omnilane は呼び出し元自身の能力スコアで各ディスパッチを
+> ゲートするため、「誰が依頼しているか」を必ず示す必要があります。端末の前にいる人間は
+> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` を一度設定するか、呼び出しごとに
+> `--operator-asserted-human` を付けます。omnilane を動かすモデルは**自分でこれを主張
+> できません**。代わりに正確なベンダー・モデル・effort を持つ `--caller-context FILE` を
+> 渡します。どちらも無い場合、ジョブ生成前に `missing-caller-context` で拒否されます。
 
 > はじめての方は、まず `omnilane doctor` を実行してください。omnilane が今どのモデル CLI と
 > API キーに接続できるかがわかり、実際に何が動くか把握できます。
@@ -292,6 +301,7 @@ omnilane ui stop                               # Live UI を停止
 omnilane doctor [--json]                       # ルーティングとローカル実行環境を読み取り専用で診断
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
             LANE "TASK"                              # "-" で stdin から読む
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 候補ごとの決定理由をオフライン表示
@@ -532,6 +542,11 @@ work の別名ではありません。サービス管理など、work の境界�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.42.4 の新機能
+
+- **クイックスタートが実際に動くようになりました。** `omnilane route` は「誰が依頼しているか」を必要としますが、60 秒クイックスタートにその記載が無く、新規インストールでは案内無しに `missing-caller-context` で拒否されていました。今は `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` で人間の操作者を一度宣言し、モデル呼び出し元が代わりに渡すものも説明します。
+- **コマンドリファレンス。** `dispatch.sh` の書式に `[--caller-context FILE | --operator-asserted-human]` を追加しました。
 
 ## v0.42.3 の新機能
 

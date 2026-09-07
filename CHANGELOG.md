@@ -6,6 +6,22 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.4] - 2026-09-07
+
+### Fixed
+
+- The 60-second start in all five READMEs ran `omnilane route` with no caller
+  identity, so a new user following it was refused with `missing-caller-context`
+  and the READMEs said nothing about the fix. The quickstart now asserts the
+  human operator once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, and a note
+  explains why a dispatch must say who is asking, what a model caller passes
+  instead, and what happens when neither is present.
+- The `dispatch.sh` synopsis in the command reference gains
+  `[--caller-context FILE | --operator-asserted-human]`.
+
+0.42.3 documented this inside the dispatch skill but left the user-facing
+quickstart unchanged, which is the path a new install actually takes.
+
 ## [0.42.3] - 2026-09-07
 
 ### Documentation
@@ -870,7 +886,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.3...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.4...HEAD
+[0.42.4]: https://github.com/Seraphim0916/omnilane/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...v0.42.1

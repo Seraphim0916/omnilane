@@ -51,6 +51,7 @@ Gemini CLI** 같은——를 쓰고 계시죠. 각각은 하나의 모델 계열
 
 ```bash
 npm i -g omnilane                                    # CLI 설치
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 호출자는 모델이 아닌 사람 운영자
 omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 테스트 수정"
 omnilane doctor                                      # 사용 가능한 AI CLI / 키 확인
 omnilane ui start                                    # 선택: 브라우저에서 잡을 실시간 확인
@@ -61,8 +62,16 @@ omnilane ui start                                    # 선택: 브라우저에�
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # CLI 감지, 스킬 연결, 당신의 언어로 대화
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 호출자는 모델이 아닌 사람 운영자
 omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 테스트 수정"
 ```
+
+> **그 export 는 왜 필요한가요?** omnilane 은 호출자 자신의 능력 점수로 모든 디스패치를
+> 게이트하므로, 디스패치는 «누가 요청하는지»를 반드시 밝혀야 합니다. 터미널 앞의 사람은
+> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 을 한 번 설정하거나 호출마다
+> `--operator-asserted-human` 을 붙입니다. omnilane 을 구동하는 모델은 **스스로 이를 주장할
+> 수 없으며**, 대신 정확한 벤더·모델·effort 를 담은 `--caller-context FILE` 을 전달합니다.
+> 둘 다 없으면 잡 생성 전에 `missing-caller-context` 로 거부됩니다.
 
 > 처음이신가요? 먼저 `omnilane doctor` 를 실행하세요. omnilane 이 지금 어떤 모델 CLI 와
 > API 키에 접근할 수 있는지 알려 주어, 실제로 무엇이 실행될지 파악할 수 있습니다.
@@ -284,6 +293,7 @@ omnilane ui stop                               # Live UI 중지
 omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
             LANE "TASK"                              # "-" 는 stdin 에서 읽기
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 후보별 라우팅 결정을 오프라인 설명
@@ -517,6 +527,11 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.42.4 새 기능
+
+- **퀵스타트가 실제로 동작합니다.** `omnilane route` 는 «누가 요청하는지»를 알아야 하지만 60초 시작에 그 내용이 없어, 새 설치에서는 안내 없이 `missing-caller-context` 로 거부되었습니다. 이제 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 로 사람 운영자를 한 번 선언하며, 모델 호출자가 대신 전달할 것도 설명합니다.
+- **명령 참조.** `dispatch.sh` 서식에 `[--caller-context FILE | --operator-asserted-human]` 을 추가했습니다.
 
 ## v0.42.3 새 기능
 

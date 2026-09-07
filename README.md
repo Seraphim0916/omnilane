@@ -52,6 +52,7 @@ subscription.
 
 ```bash
 npm i -g omnilane                                    # install the CLI
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # you are the operator, not a model
 omnilane route hardest-coding "fix the flaky auth token refresh"
 omnilane doctor                                      # see which AI CLIs / keys you have
 omnilane ui start                                    # optional: watch jobs live in your browser
@@ -62,8 +63,17 @@ omnilane ui start                                    # optional: watch jobs live
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # finds your CLIs, links the skill, speaks your language
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # you are the operator, not a model
 omnilane route hardest-coding "fix the flaky auth token refresh"
 ```
+
+> **Why that export?** Omnilane gates every delegation against the caller's own
+> capability score, so a dispatch has to say who is asking. A human at a terminal
+> asserts that once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, or per call with
+> `--operator-asserted-human`. A model driving omnilane cannot assert it for
+> itself — it passes `--caller-context FILE` carrying its exact vendor, model and
+> effort instead. With neither, the dispatch is refused with
+> `missing-caller-context` before any job is created.
 
 > New to this? Run `omnilane doctor` first — it tells you which model CLIs and
 > API keys omnilane can already reach, so you know what will actually run.
@@ -372,6 +382,7 @@ omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live pr
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
             LANE "TASK"                              # "-" reads task from stdin
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
@@ -626,6 +637,11 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.42.4
+
+- **The quickstart actually runs now.** `omnilane route` needs to know who is asking; the 60-second start omitted that, so a fresh install hit `missing-caller-context` with no guidance. It now asserts the human operator once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, and explains what a model caller passes instead.
+- **Command reference.** The `dispatch.sh` synopsis shows `[--caller-context FILE | --operator-asserted-human]`.
 
 ## What's new in v0.42.3
 

@@ -47,6 +47,7 @@ Gemini CLI** 之類。每一個都只接一個模型家族,所以你交代的每
 
 ```bash
 npm i -g omnilane                                    # 裝 CLI
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
 omnilane route hardest-coding "修掉會間歇失敗的 auth token 更新測試"
 omnilane doctor                                      # 看你手上有哪些 AI CLI / 金鑰
 omnilane ui start                                    # 選配:在瀏覽器即時看派工
@@ -57,8 +58,16 @@ omnilane ui start                                    # 選配:在瀏覽器即時
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # 偵測你的 CLI、接好技能、說你的語言
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
 omnilane route hardest-coding "修掉會間歇失敗的 auth token 更新測試"
 ```
+
+> **那個 export 是做什麼的?** omnilane 會用呼叫者自己的能力分數來把關每一次派工,
+> 所以派工必須表明「是誰在問」。人類在終端機前只要設一次
+> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`,或每次帶 `--operator-asserted-human`。
+> 模型驅動 omnilane 時**不能替自己主張**這個旗標,它要改用 `--caller-context FILE`
+> 提供確切的廠商、模型與強度。兩者都沒有的話,派工會在建立工作前就被
+> `missing-caller-context` 拒絕。
 
 > 第一次用?先跑 `omnilane doctor`——它會告訴你 omnilane 現在能接到哪些模型 CLI 與
 > API 金鑰,你就知道實際會跑什麼。
@@ -306,6 +315,7 @@ omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # 實際�
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # 預設只乾跑
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
             通道 "任務"                              # "-" 表示從 stdin 讀任務
 dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 離線逐候選解釋路由決策
@@ -533,6 +543,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.42.4 新功能
+
+- **快速上手現在真的跑得起來。** `omnilane route` 必須知道「是誰在問」,但 60 秒上手漏了這件事,新安裝照抄會直接吃到 `missing-caller-context` 且沒有任何指引。現在會先用 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 表明操作者身分,並說明模型主控該改用什麼。
+- **指令參考。** `dispatch.sh` 的用法摘要補上 `[--caller-context FILE | --operator-asserted-human]`。
 
 ## v0.42.3 新功能
 
