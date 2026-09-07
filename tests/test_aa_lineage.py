@@ -128,6 +128,10 @@ if '-o' in sys.argv:
         self.assertIn('target-above-effective-ceiling',r.stderr)
 
     def configure_gemini_spy(self):
+        # The runner resolves ~/.gemini even for a spy; never use the host profile.
+        gemini_home=self.base/'gemini-home'
+        (gemini_home/'.gemini').mkdir(parents=True)
+        self.env['HOME']=str(gemini_home)
         row=next(r for r in self.registry['scored_configs'] if r['id']=='gemini/gemini-3-8-flash')
         spy=self.bins/'agy';spy.write_text((self.bins/'codex').read_text()+"\nprint(json.dumps({'event':'result','result':{'status':'SUCCESS','response':'SPY_GEMINI_OK'}}))\n");spy.chmod(0o755)
         self.env['AGY_BIN']=str(spy)
@@ -149,9 +153,16 @@ if '-o' in sys.argv:
         self.assertRegex(job_id,r'^\d{8}-\d{6}-\d+-\d+$')
         waited=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'wait',job_id,'--timeout','20'],
                               env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=25)
-        self.assertEqual(waited.returncode,0,waited.stderr)
-        self.assertIn('done exit=0',waited.stdout)
         job=self.home/'jobs'/job_id
+        diagnostics={'wait_stdout':waited.stdout,'wait_stderr':waited.stderr}
+        if waited.returncode:
+            # Only this synthetic job's bounded logs; never dump the environment.
+            for name in ('exit','worker.log','out.txt.stderr.log'):
+                path=job/name
+                if path.is_file():
+                    diagnostics[name]=path.read_text(errors='replace')[-4096:]
+        self.assertEqual(waited.returncode,0,json.dumps(diagnostics,sort_keys=True))
+        self.assertIn('done exit=0',waited.stdout)
         self.assertEqual(json.loads((job/'meta.json').read_text())['session_mode'],'single-shot')
         self.assertFalse((job/'inbox.fifo').exists())
         called=json.loads(self.marker.read_text().splitlines()[-1])
