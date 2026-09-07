@@ -533,6 +533,12 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.42.2 の新機能
+
+- **Grok の推論強度を CLI に渡します。** 明示的な `low`、`medium`、`high`、`xhigh` は `--reasoning-effort` で渡され、Grok 4.6 の既定ルートは `high` を選択します。
+- **証拠に基づくローカル対応付け。** ホストローカルの overlay で正確な CLI セレクター契約を検証し、固定 AA スコアや承認済み registry SHA は変更しません。対応付けの欠落・誤りは引き続き拒否し、live ACP の明示的な強度指定も検証完了まで拒否します。
+- **更新。** npm 公開後に `npm i -g omnilane@0.42.2` を実行します。既存の repo-symlink インストールは checkout を更新し、再インストールせずに `omnilane --version` を確認できます。
+
 ## v0.42.1 の新機能
 
 - **CI フィクスチャの修復。** 完全な Python discovery では、旧 routing／Grok readiness テストに synthetic-human caller を明示します。production の missing-identity 拒否、承認済み registry SHA、下方向スコア検査、retry lineage、skip assertion は変更しません。

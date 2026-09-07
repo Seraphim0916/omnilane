@@ -493,6 +493,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 ## 📜 版本历程
 
+## v0.42.2 新功能
+
+- **Grok 强度确实传入 CLI。** 显式的 `low`、`medium`、`high`、`xhigh` 通过 `--reasoning-effort` 传递；Grok 4.6 默认路由指定 `high`。
+- **本机映射以证据验证。** 主机本地覆盖文件证明精确 CLI 选择器契约，不调整固定 AA 分数或获准的注册表 SHA。缺失或错误映射仍拒绝派工；实时 ACP 的显式强度在验证完成前仍阻止执行。
+- **升级。** npm 发布后执行 `npm i -g omnilane@0.42.2`。现有 repo-symlink 安装更新 checkout 并确认 `omnilane --version`，无需重新安装。
+
 ## v0.42.1 新功能
 
 - **修复 CI 测试夹具。** 完整 Python discovery 现在会为旧 routing 与 Grok readiness 测试显式指定 synthetic-human caller；production 的缺失身份拒绝、获准 registry SHA、向下分数闸、重试 lineage 与 skip 断言均保持不变。

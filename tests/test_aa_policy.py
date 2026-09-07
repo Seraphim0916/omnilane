@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import socket
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -153,6 +157,66 @@ class ExactAAPolicyTests(unittest.TestCase):
         )
         self.assertFalse(grok["allowed"])
         self.assertEqual(grok["code"], "runtime-effort-discarded")
+
+    def test_grok_overlay_requires_exact_selector_evidence(self):
+        row = self.row("grok/grok-4-6")
+        evidence = self.base / "selector-proof.txt"
+        evidence.write_text("fixture CLI selector evidence")
+        mapping = dict(config_id=row["id"], identity=aa_policy._row_identity(row),
+                       verification="request-selector-contract", runtime_model=row["model"],
+                       runtime_effort=row["effort"], selector_type="cli_reasoning_effort",
+                       cli_flag="--reasoning-effort")
+        overlay = dict(schema_version=1, snapshot_id=self.registry["snapshot"]["id"],
+                       host=socket.gethostname(), mappings=[mapping],
+                       evidence=[dict(path=str(evidence), sha256=hashlib.sha256(evidence.read_bytes()).hexdigest())])
+        path = self.base / "overlay.json"
+        for kind in ("valid", "wrong-flag", "wrong-effort", "wrong-vendor"):
+            with self.subTest(kind=kind):
+                candidate = copy.deepcopy(overlay)
+                entry = candidate["mappings"][0]
+                if kind == "wrong-flag":
+                    entry["cli_flag"] = "--model"
+                elif kind == "wrong-effort":
+                    entry["runtime_effort"] = "invalid-value"
+                elif kind == "wrong-vendor":
+                    other = self.row("codex/gpt-6-astra")
+                    entry.update(config_id=other["id"], identity=aa_policy._row_identity(other),
+                                 runtime_model=other["model"], runtime_effort=other["effort"])
+                path.write_text(json.dumps(candidate))
+                registry = copy.deepcopy(self.registry)
+                with patch.dict(os.environ, {"OMNILANE_AA_TRANSPORT_OVERLAY": str(path),
+                                             "OMNILANE_AA_OVERLAY_SHA256": ""}):
+                    if kind == "valid":
+                        aa_policy.apply_transport_overlay(registry)
+                        target, code, _ = aa_policy._runtime_target(registry, "grok", row["model"], row["effort"], None)
+                        self.assertEqual(code, "runtime-mapping-verified")
+                        self.assertEqual(target["transport_mapping"]["cli_flag"], "--reasoning-effort")
+                    else:
+                        with self.assertRaises(ValueError):
+                            aa_policy.apply_transport_overlay(registry)
+
+    def test_grok_requires_verified_cli_effort_contract(self):
+        row = self.verify_mapping("grok/grok-4-6")
+        mapping = row["transport_mapping"]
+        mapping.update(selector_type="cli_reasoning_effort", cli_flag="--reasoning-effort")
+        target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "high", None)
+        self.assertEqual(code, "runtime-mapping-verified")
+        self.assertEqual(target["id"], row["id"])
+        for field, value, expected in (
+            ("cli_flag", "--model", "runtime-effort-discarded"),
+            ("selector_type", "model_id_encoded_effort", "runtime-effort-discarded"),
+            ("runtime_verified", False, "runtime-mapping-unverified"),
+        ):
+            with self.subTest(field=field):
+                original = mapping[field]
+                mapping[field] = value
+                target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "high", None)
+                self.assertIsNone(target)
+                self.assertEqual(code, expected)
+                mapping[field] = original
+        target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", None, None)
+        self.assertIsNone(target)
+        self.assertEqual(code, "unknown-target-runtime")
 
     def test_operator_assertion_is_explicit_exemption_not_authentication(self):
         result = aa_policy.decide(

@@ -164,7 +164,11 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
         _check(mapping.get("verification") == "request-selector-contract", "unsupported overlay verification")
         _check(mapping.get("runtime_effort") == row["effort"], "overlay effort mismatch")
         selector_type = mapping.get("selector_type", "model_and_effort")
-        _check(selector_type in ("model_and_effort", "model_id_encoded_effort"), "unknown selector type")
+        _check(selector_type in ("model_and_effort", "model_id_encoded_effort", "cli_reasoning_effort"), "unknown selector type")
+        if selector_type == "cli_reasoning_effort":
+            _check(row["vendor"] == "grok", "unsupported CLI-effort vendor")
+            _check(mapping.get("cli_flag") == "--reasoning-effort", "unproven CLI-effort flag")
+            _check(mapping.get("runtime_effort") in ("low", "medium", "high", "xhigh"), "unsupported CLI effort")
         if selector_type == "model_id_encoded_effort":
             _check(row["vendor"] == "gemini", "unsupported encoded-effort vendor")
             _check(mapping.get("runtime_model") in row["transport_mapping"].get("candidate_model_ids", []), "unproven encoded model selector")
@@ -175,6 +179,7 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             status="verified", runtime_verified=True,
             runtime_model=mapping["runtime_model"], runtime_effort=mapping["runtime_effort"],
             selector_type=selector_type,
+            cli_flag=mapping.get("cli_flag") if selector_type == "cli_reasoning_effort" else None,
             verification="request-selector-contract", upstream_identity_verified=False,
             overlay_sha256=digest, overlay_host=overlay["host"],
         )
@@ -248,10 +253,14 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
             candidates.append(row)
         else:
             unresolved.append(row["id"])
-    if vendor == "grok" and candidates:
-        # The checked-in Grok runner accepts EFFORT for interface parity but
-        # discards it.  A scored reasoning/effort row therefore cannot be
-        # proven by that runtime surface.
+    if vendor == "grok" and candidates and any(
+        row["transport_mapping"].get("selector_type") != "cli_reasoning_effort"
+        or row["transport_mapping"].get("cli_flag") != "--reasoning-effort"
+        or effort not in ("low", "medium", "high", "xhigh")
+        for row in candidates
+    ):
+        # Only the verified single-shot CLI selector proves scored effort.
+        # Legacy/encoded selectors and live ACP remain unsupported.
         return None, "runtime-effort-discarded", {"vendor": vendor, "model": model, "effort": effort}
     if len(candidates) == 1:
         return candidates[0], "runtime-mapping-verified", {}

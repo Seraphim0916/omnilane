@@ -996,7 +996,7 @@ PY
     FAKE_GROK_REPLY="$reply" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
       --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.6 \
-      live-search 'initial Grok prompt')"
+      --effort - live-search 'initial Grok prompt')"
   job_dir="$home/jobs/$job"
   wait_for_file "$job_dir/inbox.ready" || fail "Grok live mailbox did not become ready"
 
@@ -1523,7 +1523,8 @@ import pathlib
 args = pathlib.Path(os.environ["ARGS"]).read_text(encoding="utf-8").splitlines()
 index = args.index("--permission-mode")
 assert args[index + 1] == "dontAsk", args
-assert args[args.index("--tools") + 1] == "Bash,Read,Glob,Grep,WebSearch,WebFetch", args
+assert args[args.index("--tools") + 1] == "Bash,Read,Glob,Grep,web_search,web_fetch", args
+assert args[args.index("--reasoning-effort") + 1] == "high", args
 assert [args[i + 1] for i, item in enumerate(args[:-1]) if item == "--deny"] == [
     "Bash", "Edit", "MCPTool"
 ], args
@@ -1552,6 +1553,19 @@ PY
   [[ "$rc" -eq 2 ]] || fail "Direct Grok advise runner accepted a live FIFO"
   [[ "$(shasum -a 256 "$direct/args.txt")" == "$before" ]] ||
     fail "Direct Grok advise runner invoked CLI after rejecting live FIFO"
+
+  # ACP mailbox behavior uses unspecified effort; an explicit scored effort
+  # must still fail before provider launch even in the supported sysops mode.
+  rc=0
+  OMNILANE_INBOX="$direct/live.fifo" FAKE_GROK_ARGS="$direct/args.txt" GROK_BIN="$fake" \
+    "$grok_runner" sysops "$direct/workdir" grok-advise-model \
+      high "$direct/prompt.txt" "$direct/effort-out.txt" \
+      >"$direct/effort-stdout" 2>"$direct/effort-stderr" || rc=$?
+  [[ "$rc" -eq 2 ]] || fail "Direct Grok sysops runner accepted live high effort"
+  grep -q 'reasoning effort' "$direct/effort-stderr" ||
+    fail "Grok live high effort lacked selector verification diagnostic"
+  [[ "$(shasum -a 256 "$direct/args.txt")" == "$before" ]] ||
+    fail "Grok runner invoked CLI after rejecting live high effort"
 }
 
 case "$CASE" in

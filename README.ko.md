@@ -518,6 +518,12 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 ## 📜 릴리스 기록
 
+## v0.42.2 새 기능
+
+- **Grok 추론 강도를 CLI에 전달합니다.** 명시적 `low`, `medium`, `high`, `xhigh` 선택을 `--reasoning-effort`로 전달하며 Grok 4.6 기본 경로는 `high`를 선택합니다.
+- **증거 기반 로컬 매핑.** 호스트 로컬 overlay로 정확한 CLI 선택자 계약을 검증하며 고정 AA 점수와 승인된 registry SHA는 변경하지 않습니다. 누락되거나 잘못된 매핑은 계속 거부하며 live ACP의 명시적 강도도 검증될 때까지 차단합니다.
+- **업그레이드.** npm 게시 후 `npm i -g omnilane@0.42.2`를 실행합니다. 기존 repo-symlink 설치는 checkout을 업데이트하고 재설치 없이 `omnilane --version`을 확인할 수 있습니다.
+
 ## v0.42.1 새 기능
 
 - **CI 픽스처 복구.** 전체 Python discovery는 기존 routing 및 Grok readiness 테스트에 synthetic-human caller를 명시합니다. production의 missing-identity 거부, 승인된 registry SHA, 하향 점수 검사, retry lineage, skip assertion은 변경하지 않습니다.

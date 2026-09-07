@@ -627,6 +627,12 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.42.2
+
+- **Grok effort reaches the CLI.** Explicit `low`, `medium`, `high`, and `xhigh` selections are passed with `--reasoning-effort`; Grok 4.6 default routes now select `high`.
+- **Evidence-backed local mapping.** A host-local overlay proves the exact CLI selector contract without changing frozen AA scores or the approved registry SHA. Missing or incorrect mappings still deny dispatch; explicit effort on live ACP remains blocked until that surface is verified.
+- **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.2`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
+
 ## What's new in v0.42.1
 
 - **CI fixture repair.** Full Python discovery now gives legacy routing and Grok-readiness fixtures an explicit synthetic-human caller, while production missing-identity denial, the approved registry SHA, downward score checks, retry lineage, and skip assertions remain unchanged.

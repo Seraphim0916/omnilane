@@ -53,11 +53,33 @@ raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
                         OMNILANE_GROK_MAX_ATTEMPTS="1", OMNILANE_TIMEOUT="15",
                         TMPDIR=str(self.base), PATH=str(self.bin) + os.pathsep + self.env["PATH"])
 
-    def run_mode(self, mode="advise", **extra):
+    def run_mode(self, mode="advise", effort="-", **extra):
         return subprocess.run(["/bin/bash", str(ROOT / "scripts/runners/run-grok.sh"),
-                               mode, str(self.base), "grok-test", "-", str(self.prompt),
+                               mode, str(self.base), "grok-test", effort, str(self.prompt),
                                str(self.base / "output")], env={**self.env, **extra},
                               capture_output=True, text=True, timeout=20)
+
+    def test_explicit_effort_reaches_cli(self):
+        for effort in ("low", "medium", "high", "xhigh"):
+            with self.subTest(effort=effort):
+                result = self.run_mode(effort=effort)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args = json.loads(self.record.read_text())["args"]
+                self.assertEqual(args.count("--reasoning-effort"), 1)
+                self.assertEqual(args[args.index("--reasoning-effort") + 1], effort)
+
+    def test_unknown_effort_fails_before_cli(self):
+        result = self.run_mode(effort="invalid-value")
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(self.record.exists())
+
+    def test_live_explicit_effort_fails_before_acp(self):
+        inbox = self.base / "inbox"
+        os.mkfifo(inbox)
+        result = self.run_mode(mode="sysops", effort="high", OMNILANE_INBOX=str(inbox))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("reasoning effort", result.stderr)
+        self.assertFalse(self.record.exists())
 
     def test_advise_uses_private_empty_job_scope_and_keeps_native_denies(self):
         unrelated = self.base / "context-mode-mcp-ready-unrelated"

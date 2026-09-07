@@ -2,12 +2,17 @@
 set -euo pipefail
 # omnilane runner: Grok Build CLI
 # Usage: run-grok.sh MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE
-# EFFORT is accepted for interface parity; Grok has no reasoning-effort knob.
+# Explicit EFFORT is passed through Grok CLI's reasoning-effort selector.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
-: "$EFFORT" # parity with the uniform runner interface; Grok has no effort knob
+EFFORT_ARGS=()
+case "$EFFORT" in
+  low|medium|high|xhigh) EFFORT_ARGS=(--reasoning-effort "$EFFORT") ;;
+  -|"") ;; # Unspecified effort has no scored runtime mapping.
+  *) echo "omnilane: invalid Grok reasoning effort '$EFFORT'" >&2; exit 2 ;;
+esac
 
 GROK_BIN="${GROK_BIN:-grok}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
@@ -78,6 +83,10 @@ if [[ "$MODE" != "sysops" && -n "$LIVE_INBOX" ]]; then
   exit 2
 fi
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
+  if [[ ${#EFFORT_ARGS[@]} -gt 0 ]]; then
+    echo "omnilane: explicit Grok reasoning effort is not verified for live ACP; use single-shot" >&2
+    exit 2
+  fi
   EVENTS_FILE="${OUTPUT_FILE}.events.jsonl"
   STDERR_FILE="${OUTPUT_FILE}.stderr.log"
   PROGRESS_FILE="${OUTPUT_FILE}.progress.log"
@@ -145,6 +154,7 @@ fi
 ARGS=(--cwd "$WORKDIR" --model "$MODEL"
       --no-memory --no-subagents --no-plan --no-alt-screen
       --output-format plain --verbatim --prompt-file "$PROMPT_FILE")
+[[ ${#EFFORT_ARGS[@]} -eq 0 ]] || ARGS+=("${EFFORT_ARGS[@]}")
 [[ ${#THREAD_ARGS[@]} -eq 0 ]] || ARGS+=("${THREAD_ARGS[@]}")
 ARGS+=("${MODE_ARGS[@]}")
 # Web/X search stays ON by default for advise and sysops.

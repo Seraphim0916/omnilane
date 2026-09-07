@@ -6,6 +6,18 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.2] - 2026-09-07
+
+### Fixed
+
+- Pass explicit Grok effort through `--reasoning-effort` instead of silently discarding it. Accept the CLI's `low`, `medium`, `high`, and `xhigh` selectors; reject invalid values before starting the provider.
+- Require a verified `cli_reasoning_effort` transport contract with the exact CLI flag before admitting scored Grok targets. Host-local overlays retain their host, snapshot, exact identity, and evidence-hash checks; frozen AA scores and the approved registry SHA remain unchanged.
+- Make Grok 4.6 routing defaults explicitly `high`. Missing or stale mappings still fail closed, and explicit effort is rejected on the unsupported live ACP path.
+
+### Documentation
+
+- Document the distinction between request-selector verification and upstream model identity, and the local overlay refresh required when the CLI or runner changes.
+
 ## [0.42.1] - 2026-09-07
 
 ### Fixed
@@ -837,7 +849,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...HEAD
+[0.42.2]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...v0.42.2
 [0.42.1]: https://github.com/Seraphim0916/omnilane/compare/v0.42.0...v0.42.1
 [0.42.0]: https://github.com/Seraphim0916/omnilane/compare/v0.41.1...v0.42.0
 [0.41.1]: https://github.com/Seraphim0916/omnilane/compare/v0.40.0...v0.41.1

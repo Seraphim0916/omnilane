@@ -3,7 +3,7 @@
 #   vendor  = codex | claude | grok | gemini | kimi | qwen | opencode | openrouter
 #   openrouter is direct-API (needs only OPENROUTER_API_KEY + curl) and advise/consult
 #   only — it cannot edit files, so it is not in the default work-capable chains.
-#   effort  = codex reasoning effort / claude --effort / agy thinking suffix / (grok: ignored)
+#   effort  = codex reasoning effort / claude --effort / agy thinking suffix / grok --reasoning-effort
 #   Fallback chain: the first candidate whose vendor CLI is installed wins, so the
 #   same table degrades gracefully when you only subscribe to one or two vendors.
 # Override any line in ~/.omnilane/routing.local.yaml (same format; local wins).
@@ -20,17 +20,17 @@
 # standard short-context API tier — on subscription CLIs treat $ as relative ranking.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
 
-hardest-coding: claude claude-fable-5-1 max | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high - # correctness-first coding: Fable max leads the same-condition comparison; Astra xhigh is the default Codex quality/cost tradeoff; explicit --effort max remains available; Grok and Flash keep cross-vendor depth
+hardest-coding: claude claude-fable-5-1 max | codex gpt-6-astra xhigh | grok grok-4.6 high | gemini gemini-3.8-flash-high - # correctness-first coding: Fable max leads the same-condition comparison; Astra xhigh is the default Codex quality/cost tradeoff; explicit --effort max remains available; Grok and Flash keep cross-vendor depth
 bulk-mechanical: codex gpt-5.6-sol high | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high # endurance and migration work stays on proven Sol high; Flash 3.8 refreshes the fast middle fallback; Sonnet preserves cross-vendor depth
 triage: codex gpt-5.6-luna high | gemini gemini-3.8-flash-low - | claude claude-haiku-4-5 - # first-pass filtering favors the low-cost Luna row; Flash low and Haiku remain cheap cross-vendor fallbacks
-hard-judgment: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 - # strongest same-condition judgment row first, then an independently verified Codex family and Grok; this lane is not a controller selector
-taste-final: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high - # final prose and style still require human taste review; general quality evidence orders the candidates without claiming an aesthetic benchmark
-consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-medium - # direct named-model consultation chain; keep --vendor to pin the requested family and prevent fallback
+hard-judgment: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 high # strongest same-condition judgment row first, then an independently verified Codex family and Grok; this lane is not a controller selector
+taste-final: claude claude-fable-5-1 xhigh | codex gpt-6-astra xhigh | grok grok-4.6 high | gemini gemini-3.8-flash-high - # final prose and style still require human taste review; general quality evidence orders the candidates without claiming an aesthetic benchmark
+consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 high | gemini gemini-3.8-flash-medium - # direct named-model consultation chain; keep --vendor to pin the requested family and prevent fallback
 ui-draft: codex gpt-5.6-sol high | claude claude-fable-5-1 xhigh | gemini gemini-3.8-flash-high - # UI drafts require a design system or references; measured coding/agent evidence supports the order but does not prove visual taste
 long-context: gemini gemini-3.8-flash-medium - | codex gpt-5.6-terra max | claude claude-opus-5 medium # Flash medium leads long-document synthesis; Terra and Opus stay because context capacity alone does not prove task quality
 fast-agentic: gemini gemini-3.8-flash-low - | codex gpt-5.6-luna high | claude claude-haiku-4-5 - # low-latency tool loops favor Flash low; Luna and Haiku retain cross-vendor fallback depth
-live-search: grok grok-4.6 - | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high | off # Grok remains the native X/web choice; Flash and Sonnet provide generic web-search fallback, not equivalent social context
-coding-overflow: grok grok-4.6 - | gemini gemini-3.8-flash-high - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off # explicit quota-relief lane; keep all existing non-Codex fallbacks and do not infer unverified Qwen aliases from another harness
+live-search: grok grok-4.6 high | gemini gemini-3.8-flash-high - | claude claude-sonnet-5 high | off # Grok remains the native X/web choice; Flash and Sonnet provide generic web-search fallback, not equivalent social context
+coding-overflow: grok grok-4.6 high | gemini gemini-3.8-flash-high - | kimi kimi-k3 - | qwen qwen3-coder-plus - | opencode - - | off # explicit quota-relief lane; keep all existing non-Codex fallbacks and do not infer unverified Qwen aliases from another harness
 arbitrate: off - - # opinion panel remains opt-in because each voter and round consumes quota
                                                 # Enable: `arbitrate: vote codex,claude,grok -` (any 1-4 of codex/claude/grok/gemini)
                                                 # Debate round (each voter rebuts the others): set the effort field to 2.
