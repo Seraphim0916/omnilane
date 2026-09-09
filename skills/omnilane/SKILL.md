@@ -398,9 +398,15 @@ Re-signing is a probe, a rebuild, and an install, in that order. Back up
 directly through `subprocess`, so it works while the gate is refusing everything —
 this is what breaks the deadlock. `scripts/provider-probe.sh` goes through
 `dispatch.sh` and therefore through the gate, so it is useless in this state.
-Then `scripts/lib/build_overlay.py --root DIR` rebuilds, and you copy the result
-over the live overlay. Verify with a real dispatch on a lane belonging to the
-vendor you re-probed; loading the registry in Python is not the runtime surface.
+Then `scripts/lib/build_overlay.py` rebuilds, and you copy the result over the
+live overlay. Verify with a real dispatch on a lane belonging to the vendor you
+re-probed; loading the registry in Python is not the runtime surface.
+
+Keep the sweep where its default `--root` puts it,
+`~/.omnilane/transport-evidence/<sweep-id>/`. The rebuilt overlay anchors
+`probe-manifest.json` by absolute path as untagged evidence, so a sweep parked
+inside a repository is one `git clean -fdx` away from taking every vendor down
+at once — the same global refusal a re-signing session is usually trying to end.
 
 Never sign a probe you did not read. `probe.py` records a `verdict` because exit
 status alone is not evidence: the Claude CLI answers a quota refusal with a JSON
@@ -410,7 +416,10 @@ with only a stderr warning to show for it. Effort is half of a scored identity,
 so that path would certify a mapping at the wrong tier. Configurations whose
 probes failed are recorded in the overlay's `unproven[]` and surfaced by doctor
 instead of vanishing — six Fable rows sat unusable for two days in September
-2026 because a transient quota error left no trace anywhere.
+2026 because a 429 quota refusal left no trace anywhere. A refused probe is not
+always transient: re-probing those six two days later returned the same 429, so
+an `unproven[]` entry can mean the account, not the moment. Read the reason
+before assuming a retry will clear it.
 
 A `--transport-overlay /absolute/overlay.json` may prove a small set of host-local
 request selectors using exact identities and hashed local contract evidence. It does
