@@ -28,7 +28,9 @@ class ExactAAPolicyTests(unittest.TestCase):
         cls.real = json.loads((ROOT / "config/aa-model-policy.json").read_text())
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="aa-policy-")
+        sandbox = ROOT / ".sandbox-tmp"
+        sandbox.mkdir(exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(prefix="aa-policy-", dir=sandbox)
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.registry = copy.deepcopy(self.real)
@@ -226,6 +228,162 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["code"], "operator-asserted-human-exemption")
         self.assertIn("not authentication", result["evidence_limit"])
+
+
+REGISTRY_PATH = ROOT / "config" / "aa-model-policy.json"
+IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
+TARGETS = {
+    "codex": ("codex/gpt-5-4-mini", "gpt-5.4-mini", "xhigh", "model_and_effort"),
+    "claude": ("claude/claude-4-5-haiku-reasoning", "claude-haiku-4-5", None, "model_and_effort"),
+    "grok": ("grok/grok-4-5", "grok-4.5", "high", "cli_reasoning_effort"),
+    "gemini": ("gemini/gemini-3-6-flash", "gemini-3.6-flash-high", "high", "model_id_encoded_effort"),
+}
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+class TransportOverlayEvidenceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        sandbox = ROOT / ".sandbox-tmp"
+        sandbox.mkdir(exist_ok=True)
+        self.temp_dir = tempfile.TemporaryDirectory(dir=sandbox)
+        self.work = Path(self.temp_dir.name)
+        self.overlay_path = self.work / "transport-overlay.json"
+
+        with patch.dict(os.environ, self._environment(None), clear=True):
+            self.base_registry, self.registry_sha256 = aa_policy.load_registry(REGISTRY_PATH)
+
+        rows = {row["id"]: row for row in self.base_registry["scored_configs"]}
+        evidence = []
+        mappings = []
+        for vendor, (config_id, runtime_model, runtime_effort, selector_type) in TARGETS.items():
+            evidence_path = self.work / f"{vendor}.evidence"
+            evidence_path.write_text(f"{vendor} selector evidence\n", encoding="utf-8")
+            evidence.append({"path": str(evidence_path), "sha256": sha256(evidence_path), "vendor": vendor})
+
+            row = rows[config_id]
+            mapping = {
+                "config_id": config_id,
+                "identity": {key: row[key] for key in IDENTITY_FIELDS},
+                "runtime_model": runtime_model,
+                "runtime_effort": runtime_effort,
+                "selector_type": selector_type,
+                "verification": "request-selector-contract",
+            }
+            if selector_type == "cli_reasoning_effort":
+                mapping["cli_flag"] = "--reasoning-effort"
+            mappings.append(mapping)
+
+        manifest_path = self.work / "probe-manifest.json"
+        manifest_path.write_text('{"probe_runs": {}}\n', encoding="utf-8")
+        evidence.append({"path": str(manifest_path), "sha256": sha256(manifest_path)})
+        self.overlay = {
+            "schema_version": 1,
+            "snapshot_id": self.base_registry["snapshot"]["id"],
+            "host": socket.gethostname(),
+            "evidence": evidence,
+            "mappings": mappings,
+        }
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    @staticmethod
+    def _environment(overlay_path: Path | None) -> dict[str, str]:
+        env = dict(os.environ)
+        env.pop("OMNILANE_AA_OVERLAY_SHA256", None)
+        if overlay_path is None:
+            env.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
+        else:
+            env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(overlay_path)
+        return env
+
+    def _load_overlay(self) -> tuple[dict, str]:
+        self.overlay_path.write_text(json.dumps(self.overlay), encoding="utf-8")
+        with patch.dict(os.environ, self._environment(self.overlay_path), clear=True):
+            return aa_policy.load_registry(REGISTRY_PATH)
+
+    def _decision(self, registry: dict, vendor: str) -> dict:
+        caller_row = max(registry["scored_configs"], key=lambda row: row["score"])
+        caller = {
+            "caller": {key: caller_row[key] for key in IDENTITY_FIELDS},
+            "inherited_ceiling": caller_row["score"],
+        }
+        _, model, effort, _ = TARGETS[vendor]
+        return aa_policy.decide(
+            registry,
+            self.registry_sha256,
+            vendor=vendor,
+            model=model,
+            effort=effort,
+            caller=caller,
+            caller_sha256="fixture",
+        )
+
+    def assert_only_vendor_is_stale(self, registry: dict, stale_vendor: str) -> None:
+        for vendor in TARGETS:
+            decision = self._decision(registry, vendor)
+            if vendor == stale_vendor:
+                self.assertFalse(decision["allowed"])
+                self.assertEqual(decision["code"], "unknown-target-runtime")
+            else:
+                self.assertTrue(decision["allowed"], decision)
+
+    def test_hash_drift_degrades_only_tagged_vendor(self) -> None:
+        codex_evidence = next(item for item in self.overlay["evidence"] if item.get("vendor") == "codex")
+        codex_evidence["sha256"] = "0" * 64
+
+        registry, _ = self._load_overlay()
+
+        self.assert_only_vendor_is_stale(registry, "codex")
+
+    def test_missing_file_degrades_only_tagged_vendor(self) -> None:
+        claude_evidence = next(item for item in self.overlay["evidence"] if item.get("vendor") == "claude")
+        claude_evidence["path"] = str(self.work / "missing-claude-version")
+
+        registry, _ = self._load_overlay()
+
+        self.assert_only_vendor_is_stale(registry, "claude")
+
+    def test_untagged_manifest_hash_drift_remains_fail_closed(self) -> None:
+        manifest = next(item for item in self.overlay["evidence"] if "vendor" not in item)
+        manifest["sha256"] = "0" * 64
+
+        with self.assertRaises(aa_policy.PolicyError):
+            self._load_overlay()
+
+    def test_stale_vendor_does_not_bypass_mapping_validation(self) -> None:
+        codex_evidence = next(item for item in self.overlay["evidence"] if item.get("vendor") == "codex")
+        codex_evidence["sha256"] = "0" * 64
+        codex_mapping = next(item for item in self.overlay["mappings"] if item["identity"]["vendor"] == "codex")
+        codex_mapping["identity"]["model"] = "structurally-invalid"
+
+        with self.assertRaises(aa_policy.PolicyError):
+            self._load_overlay()
+
+    def test_evidence_vendor_must_be_a_supported_string(self) -> None:
+        codex_evidence = next(item for item in self.overlay["evidence"] if item.get("vendor") == "codex")
+        codex_evidence["vendor"] = None
+
+        with self.assertRaises(aa_policy.PolicyError):
+            self._load_overlay()
+
+    def test_live_overlay_still_verifies_all_49_mappings(self) -> None:
+        live_overlay = Path.home() / ".omnilane" / "transport-contracts.local.json"
+        if not live_overlay.is_file():
+            self.skipTest("host-local transport overlay is unavailable")
+
+        with patch.dict(os.environ, self._environment(live_overlay), clear=True):
+            registry, _ = aa_policy.load_registry(REGISTRY_PATH)
+
+        verified = sum(
+            1
+            for row in registry["scored_configs"]
+            if row["transport_mapping"].get("runtime_verified") is True
+        )
+        self.assertEqual(verified, 49)
 
 
 if __name__ == "__main__":

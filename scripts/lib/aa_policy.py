@@ -28,6 +28,7 @@ MAX_BYTES = 1_048_576
 APPROVED_REGISTRY_SHA256 = "0782c87de123c02738c3ff60e4bc3c1cc10d110113e872b8f8627212861cdaab"
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
+TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}\Z")
 
 
@@ -147,14 +148,35 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
     _check(overlay.get("schema_version") == 1, "unsupported transport overlay")
     _check(overlay.get("snapshot_id") == registry["snapshot"]["id"], "transport overlay snapshot mismatch")
     _check(overlay.get("host") == socket.gethostname(), "transport overlay host mismatch")
+    stale_vendors: set[str] = set()
     for evidence in overlay.get("evidence", []):
-        fd = os.open(evidence["path"], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        _check(isinstance(evidence, dict), "invalid transport evidence")
+        vendor = evidence.get("vendor")
+        _check(
+            "vendor" not in evidence
+            or type(vendor) is str and vendor in TRANSPORT_EVIDENCE_VENDORS,
+            "invalid transport evidence vendor",
+        )
+        evidence_path = evidence["path"]
+        evidence_sha256 = evidence["sha256"]
+        _check(type(evidence_path) is str, "invalid transport evidence path")
+        _check(type(evidence_sha256) is str, "invalid transport evidence digest")
+        try:
+            fd = os.open(evidence_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            if vendor is None:
+                raise
+            stale_vendors.add(vendor)
+            continue
         with os.fdopen(fd, "rb") as stream:
             _check(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "invalid transport evidence file")
             digest_file = hashlib.sha256()
             for block in iter(lambda: stream.read(1024 * 1024), b""):
                 digest_file.update(block)
-        _check(digest_file.hexdigest() == evidence["sha256"], "transport contract evidence changed")
+        if digest_file.hexdigest() != evidence_sha256:
+            if vendor is None:
+                _check(False, "transport contract evidence changed")
+            stale_vendors.add(vendor)
     _check(bool(overlay.get("evidence")), "transport overlay requires local evidence")
     for mapping in overlay.get("mappings", []):
         rows = [row for row in registry["scored_configs"] if row["id"] == mapping.get("config_id")]
@@ -175,6 +197,8 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             _check(mapping["runtime_model"].endswith("-" + row["effort"]), "encoded effort does not match exact tuple")
         else:
             _check(mapping.get("runtime_model") == row["model"], "overlay model mismatch")
+        if row["vendor"] in stale_vendors:
+            continue
         row["transport_mapping"].update(
             status="verified", runtime_verified=True,
             runtime_model=mapping["runtime_model"], runtime_effort=mapping["runtime_effort"],
@@ -183,6 +207,7 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             verification="request-selector-contract", upstream_identity_verified=False,
             overlay_sha256=digest, overlay_host=overlay["host"],
         )
+    registry["_stale_transport_vendors"] = sorted(stale_vendors)
 
 
 def load_registry(path: str | Path, expected_sha256: str | None = None) -> tuple[dict[str, Any], str]:
@@ -233,6 +258,8 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
     exact_id = [row for row in registry["scored_configs"] if row["id"] == target_config] if target_config else registry["scored_configs"]
     if target_config and not exact_id:
         return None, "unknown-target-config", {"target_config": target_config}
+    if vendor in registry.get("_stale_transport_vendors", []):
+        return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
     vendor_rows = [row for row in exact_id if row["vendor"] == vendor]
     candidates: list[dict[str, Any]] = []
     unresolved: list[str] = []
