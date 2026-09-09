@@ -74,6 +74,15 @@ for cid, model in [("claude/claude-sonnet-5", "claude-sonnet-5"),
                    ("claude/claude-sonnet-4-6-adaptive", "claude-sonnet-4-6")]:
     PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-max")
 
+# Fable is listed so its failures reach unproven[] rather than vanishing. Its
+# probes were refused for quota on 2026-09-07 and again on 2026-09-09; the
+# verdict decides whether these rows become mappings or stay visible failures.
+for effort in ["max", "xhigh", "high", "medium", "low"]:
+    cid = "claude/claude-fable-5-1" + ("" if effort == "max" else f"-{effort}")
+    PROVEN[cid] = ("model_and_effort", "claude-fable-5-1", f"cl-claude-fable-5-1-{effort}")
+PROVEN["claude/claude-fable-5"] = (
+    "model_and_effort", "claude-fable-5", "cl-claude-fable-5-max")
+
 CORE_EVIDENCE = [
     (HOME / ".grok/downloads/grok-1.0.13-macos-aarch64", "grok"),
     (REPO / "scripts/runners/run-grok.sh", "grok"),

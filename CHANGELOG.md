@@ -26,7 +26,10 @@ semantic version tags.
   configurations had been unusable since 2026-09-07 because their probes hit a
   quota refusal and were silently omitted. Probes now carry a per-vendor
   `verdict`, non-passing probes are refused and recorded in the overlay's
-  `unproven[]`, and evidence predating the field is signed with a warning.
+  `unproven[]`, and evidence predating the field is signed with a warning. The
+  six Fable configurations are listed in the probe table so their failures are
+  reported; a 2026-09-09 re-probe returned the same quota refusal, so they stay
+  unusable and `omnilane doctor` now says so.
 - A Claude CLI probe that requested an unknown `--effort` returned exit 0, no
   error, the right `modelUsage`, and the expected token while silently using the
   default effort. The verdict now fails that case, so a mapping cannot be

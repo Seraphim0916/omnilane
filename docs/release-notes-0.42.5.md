@@ -68,9 +68,14 @@ operator to notice.
   - codex prints a banner to stderr on every run, so stderr is recorded for review
     rather than treated as failure.
 - `build_overlay.py` refuses to sign a non-passing probe and records it in a new
-  `unproven[]` block with its reason, so a transient quota refusal is visible
-  instead of silently dropping configurations. Evidence predating the verdict
-  field is still signed, with a warning naming each legacy entry.
+  `unproven[]` block with its reason, so a quota refusal is visible instead of
+  silently dropping configurations. Evidence predating the verdict field is
+  still signed, with a warning naming each legacy entry.
+- The six `claude-fable-5-1` and `claude-fable-5` configurations are listed in
+  the probe table so their failures reach `unproven[]`. Re-probing them on
+  2026-09-09 returned the same quota refusal as on 09-07, so they remain
+  unusable — but `omnilane doctor` now says so rather than leaving an operator
+  to discover it from a refused dispatch.
 - `build_overlay.py` and `probe.py` moved from an untracked `.rollback` sweep
   directory into `scripts/lib/`, and take `--root`; overlay rebuilds no longer
   depend on a directory that a cleanup can delete.
