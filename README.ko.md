@@ -507,6 +507,36 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 </details>
 
+<details>
+<summary><b>디스패치가 거부되었습니다. 어떤 거부인가요?</b></summary>
+
+<br/>
+
+세 가지 코드에는 각각 다른 해결책이 있습니다. 먼저 `omnilane doctor`를 실행하세요.
+`transport-overlay` 검사가 문제의 원인이 이 머신의 설정인지 요청인지 바로
+알려줍니다.
+
+`missing-caller-context` — 호출자 신원을 전달하지 않았습니다. 사람은
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 또는 `--operator-asserted-human`을
+사용합니다. omnilane을 구동하는 모델은 정확한 벤더·모델·effort가 담긴
+`--caller-context FILE`을 전달해야 하며, 사람용 면제를 스스로 주장해서는 안 됩니다.
+
+`runtime-mapping-unverified` — 신원은 정상이지만 **대상**에 검증된 호스트 로컬
+요청 셀렉터가 없습니다. 프로브를 한 적이 없거나 프로브가 실패한 경우입니다.
+`omnilane doctor`가 해당 구성의 개수를 보고하고, overlay의 `unproven[]`에 각
+실패 사유가 기록됩니다. 공급자 할당량 제한으로 인한 거부는 그 할당량이 회복될
+때까지 해소되지 않습니다.
+
+`invalid-policy-input`과 "transport contract evidence changed" — 위 둘 다
+아닙니다. overlay 자체가 로드되지 않아 **모든 벤더**가 거부됩니다. 흔한 원인은
+벤더 CLI 업그레이드입니다. overlay는 각 벤더의 실행 파일과 러너 스크립트 해시를
+고정하며, Codex와 Claude의 증거 경로에는 버전 디렉터리가 포함되어 업그레이드 시
+다이제스트가 바뀌는 대신 파일이 사라집니다. 태그가 있는 증거는 해당 벤더만
+강등시키고, 프로브 매니페스트처럼 태그가 없는 증거는 게이트 전체를 닫습니다.
+doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스킬에 있습니다.
+
+</details>
+
 ## 📊 기본값과 출처
 
 기본 레인 배치는 Artificial Analysis 2026-07 스냅샷(AA 사이트 원본 레코드와

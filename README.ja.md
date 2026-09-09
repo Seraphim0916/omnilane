@@ -521,6 +521,36 @@ work の別名ではありません。サービス管理など、work の境界�
 
 </details>
 
+<details>
+<summary><b>ディスパッチが拒否されました。どの拒否ですか？</b></summary>
+
+<br/>
+
+3 つのコードには 3 つの異なる対処があります。まず `omnilane doctor` を実行して
+ください。その `transport-overlay` チェックが、問題はこのマシンの設定なのか
+リクエストなのかをすぐに示します。
+
+`missing-caller-context` — 呼び出し元の識別情報がありません。人間は
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` または `--operator-asserted-human` を
+使います。omnilane を動かすモデルは、正確なベンダー・モデル・effort を含む
+`--caller-context FILE` を渡し、人間向けの免除を自称してはいけません。
+
+`runtime-mapping-unverified` — 識別情報は正しく、**ターゲット**にホストローカルの
+リクエストセレクタの証明がありません。未プローブか、プローブが失敗しています。
+`omnilane doctor` がその件数を報告し、overlay の `unproven[]` に各失敗の理由が
+残ります。プロバイダーの利用上限による拒否は、その上限が解消するまで続きます。
+
+`invalid-policy-input` と "transport contract evidence changed" — 上記のいずれ
+でもありません。overlay 自体が読み込めないため、**すべてのベンダー**が拒否され
+ます。よくある原因はベンダー CLI の更新です。overlay は各ベンダーの実行ファイルと
+ランナースクリプトのハッシュを固定しており、Codex と Claude の証拠パスは
+バージョンディレクトリを含むため、更新ではダイジェストが変わるのではなく
+ファイルが消えます。タグ付きの証拠は自分のベンダーだけを降格させ、プローブ
+マニフェストのようなタグなしの証拠はゲート全体を閉じます。doctor がファイルと
+ベンダーを示し、再署名の手順はディスパッチスキルにあります。
+
+</details>
+
 ## 📊 デフォルト値と出典
 
 デフォルトのレーン割当は Artificial Analysis の 2026-07 スナップショット

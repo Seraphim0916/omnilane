@@ -481,6 +481,33 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 
 </details>
 
+<details>
+<summary><b>派工被拒了，是哪一种拒绝？</b></summary>
+
+<br/>
+
+三个代码，三种不同的修法。先运行 `omnilane doctor`——它的 `transport-overlay`
+检查会直接告诉你问题出在本机配置还是你的请求。
+
+`missing-caller-context`——你没带身份。真人加上
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 或 `--operator-asserted-human`；
+模型驱动 omnilane 时要写一份 `--caller-context FILE`，包含它精确的厂商、模型与
+强度，且不得替自己主张真人豁免。
+
+`runtime-mapping-unverified`——你的身份没问题，但**目标**没有已验证的本机请求
+选择器。可能从未探测过，也可能探测失败；`omnilane doctor` 会报告这类配置的数量，
+overlay 的 `unproven[]` 记录每一条失败的原因。因供应商额度上限造成的拒绝，
+在额度恢复前不会自行解除。
+
+`invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
+是 overlay 本身加载失败，因此**所有厂商**都会被拒。常见成因是厂商 CLI 升级：
+overlay 钉住每家的可执行文件与 runner 脚本哈希，而 Codex 与 Claude 的证据路径
+内嵌版本目录，升级后是文件消失而非哈希改变。带标签的证据只降级自己那一家；
+未标签的证据（例如探测清单）仍会关闭整个闸门。doctor 会指出文件与厂商，
+重签流程写在派工技能里。
+
+</details>
+
 ## 📊 默认值与数据来源
 
 默认通道配置依据 Artificial Analysis 2026-07 快照(已对 AA 站上原始记录与

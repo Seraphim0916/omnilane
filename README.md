@@ -379,6 +379,7 @@ omnilane ui status                             # report whether the Live UI is r
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
+                                               # transport-overlay check names a stale vendor
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
@@ -612,6 +613,37 @@ work. Use it only when the task explicitly permits operations outside work's
 boundary, such as service management. It is never a lane default. Workers
 also cannot dispatch again — the depth guard refuses nested fan-out with exit 86,
 so one command can never spiral into a chain of agents spending your quota.
+
+</details>
+
+<details>
+<summary><b>My dispatch was refused. Which refusal is it?</b></summary>
+
+<br/>
+
+Three codes, three different fixes. Run `omnilane doctor` first — its
+`transport-overlay` check tells you immediately whether the problem is your
+machine's configuration or your request.
+
+`missing-caller-context` — you passed no identity. A human adds
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`; a model
+driving omnilane writes a `--caller-context FILE` with its exact vendor, model,
+and effort, and must not assert the human exemption for itself.
+
+`runtime-mapping-unverified` — your identity is fine, but the *target* has no
+proven host-local request selector. Either it was never probed, or its probe
+failed; `omnilane doctor` reports the count of such configurations and the
+overlay's `unproven[]` records why each one failed. A refusal caused by a
+provider quota limit will not clear until that quota does.
+
+`invalid-policy-input` with "transport contract evidence changed" — neither of
+the above. The overlay itself will not load, so *every* vendor is refused. The
+usual cause is a vendor CLI upgrade: the overlay pins each vendor's executable
+and runner-script hash, and Codex and Claude evidence paths embed version
+directories, so an upgrade removes the file rather than changing its digest.
+Tagged evidence degrades only its own vendor; untagged evidence, such as the
+probe manifest, still closes the whole gate. Doctor names the file and the
+vendor; the dispatch skill carries the re-signing runbook.
 
 </details>
 
