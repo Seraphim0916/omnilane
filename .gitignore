@@ -3,3 +3,5 @@ locks/
 *.stderr.log
 __pycache__/
 *.py[cod]
+.sandbox-tmp/
+.test-scratch/
