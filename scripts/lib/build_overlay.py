@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import socket
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(os.environ.get("OMNILANE_REPO", "/Users/vincentw/dev/omnilane"))
@@ -105,6 +106,7 @@ def main(argv: list[str] | None = None) -> None:
     root = args.root.expanduser()
 
     manifest = {"probe_runs": {}}
+    unproven = []
     for cid, (_, _, ev) in sorted(PROVEN.items()):
         if ev.startswith("PRIOR:"):
             manifest["probe_runs"][cid] = {"source": ev, "note": "verified in the 2026-09-07 Codex run"}
@@ -116,12 +118,30 @@ def main(argv: list[str] | None = None) -> None:
                 entry[suffix] = {"path": str(path), "sha256": sha256(path)}
         if "json" not in entry:
             raise SystemExit(f"missing probe evidence for {cid}: {ev}")
+        descriptor_path = Path(entry["json"]["path"])
+        descriptor = json.loads(descriptor_path.read_text())
+        if not isinstance(descriptor, dict):
+            raise SystemExit(f"invalid probe descriptor for {cid}: {ev}")
+        if "verdict" not in descriptor:
+            print(f"warning: legacy evidence (verdict=unknown): {cid}: {ev}")
+        elif descriptor["verdict"] != "pass":
+            unproven.append({
+                "config_id": cid,
+                "verdict_reason": descriptor.get("verdict_reason") or f"verdict: {descriptor['verdict']}",
+                "observed_model": descriptor.get("observed_model"),
+                "probed_at": descriptor.get("probed_at") or datetime.fromtimestamp(
+                    descriptor_path.stat().st_mtime, timezone.utc).isoformat(),
+            })
+            # Visibility only: failed evidence must not enter the signed manifest.
+            continue
         manifest["probe_runs"][cid] = entry
     manifest_path = root / "probe-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
     mappings = []
     for cid, (selector, runtime_model, _) in sorted(PROVEN.items()):
+        if cid not in manifest["probe_runs"]:
+            continue
         row = ROWS[cid]
         mapping = {
             "config_id": cid,
@@ -149,6 +169,7 @@ def main(argv: list[str] | None = None) -> None:
                    "gemini selectors re-probed 2026-09-09 after agy 1.1.27 -> 1.1.28"),
         "evidence": evidence,
         "mappings": mappings,
+        "unproven": unproven,
     }
     out = root / "transport-contracts.local.json"
     out.write_text(json.dumps(overlay, indent=2, ensure_ascii=False) + "\n")

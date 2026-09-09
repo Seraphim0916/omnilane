@@ -528,6 +528,14 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 
 ## 📜 릴리스 기록
 
+## v0.42.5 새 기능
+
+- **CLI 하나를 업그레이드해도 모든 벤더가 막히지 않습니다.** overlay evidence 항목에 `vendor` 태그를 붙일 수 있으며, 태그가 있는 항목의 해시가 바뀌거나 파일이 사라지면 해당 벤더만 `unknown-target-runtime`으로 강등됩니다. 태그가 없는 evidence는 기존처럼 전체 fail-closed입니다.
+- **`omnilane doctor`가 overlay를 로드합니다.** 새 `transport-overlay` 검사는 실패 시 문제가 된 파일과 벤더를 지목하고, 성공 시 벤더별 검증된 매핑 수를 보고합니다.
+- **프로브가 판정을 기록합니다.** `probe.py`는 청구된 `modelUsage`로 Claude 응답을 판정하며, CLI가 알 수 없는 `--effort`를 기본값으로 조용히 대체한 경우를 실패로 처리합니다. `build_overlay.py`는 통과하지 못한 프로브에 서명하지 않고 overlay의 `unproven[]`에 기록합니다.
+- **재빌드 도구를 버전 관리로.** `build_overlay.py`와 `probe.py`는 `scripts/lib/`로 옮겼고 `--root`를 받습니다.
+- **업그레이드.** npm 게시 후 `npm i -g omnilane@0.42.5`를 실행하세요.
+
 ## v0.42.4 새 기능
 
 - **퀵스타트가 실제로 동작합니다.** `omnilane route` 는 «누가 요청하는지»를 알아야 하지만 60초 시작에 그 내용이 없어, 새 설치에서는 안내 없이 `missing-caller-context` 로 거부되었습니다. 이제 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 로 사람 운영자를 한 번 선언하며, 모델 호출자가 대신 전달할 것도 설명합니다.

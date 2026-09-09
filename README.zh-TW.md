@@ -544,6 +544,14 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 
 ## 📜 版本歷程
 
+## v0.42.5 新功能
+
+- **升級一支 CLI 不再擋掉所有廠商。** overlay 的證據項目可帶 `vendor` 標籤；帶標籤的項目雜湊漂移或檔案消失時，只讓該廠商降級為 `unknown-target-runtime`。未標籤的證據維持全域 fail-closed。
+- **`omnilane doctor` 會載入 overlay。** 新增 `transport-overlay` 檢查，失敗時指名是哪個檔案、哪一家廠商，成功時回報各廠商的已驗證映射數——先前 doctor 全綠可以和「閘門拒絕所有派工」同時成立。
+- **探測會記錄判定。** `probe.py` 以計費的 `modelUsage` 判斷 Claude 回應，並在 CLI 靜默改用預設強度時判為失敗。`build_overlay.py` 拒簽未通過的探測，改記進 overlay 的 `unproven[]`，不再無聲丟棄。
+- **重建工具納入版控。** `build_overlay.py` 與 `probe.py` 移入 `scripts/lib/`，並接受 `--root`。
+- **升級。** npm 發布後執行 `npm i -g omnilane@0.42.5`。既有的 repo symlink 安裝更新檢出後確認 `omnilane --version` 即可，不需重跑安裝。
+
 ## v0.42.4 新功能
 
 - **快速上手現在真的跑得起來。** `omnilane route` 必須知道「是誰在問」,但 60 秒上手漏了這件事,新安裝照抄會直接吃到 `missing-caller-context` 且沒有任何指引。現在會先用 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 表明操作者身分,並說明模型主控該改用什麼。

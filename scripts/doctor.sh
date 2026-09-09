@@ -33,6 +33,7 @@ REPO="${OMNILANE_DOCTOR_REPO:-$SCRIPT_ROOT}"
 OMNILANE_HOME="${OMNILANE_HOME:-$HOME/.omnilane}"
 PROBE_SCRIPT="${OMNILANE_PROVIDER_PROBE_SCRIPT:-$REPO/scripts/provider-probe.sh}"
 GOAL_LOOP="${OMNILANE_DOCTOR_GOAL_LOOP:-$REPO/scripts/lib/goal-loop.sh}"
+OVERLAY_HEALTH="${OMNILANE_DOCTOR_OVERLAY_HEALTH:-$REPO/scripts/lib/overlay_health.py}"
 # shellcheck disable=SC1091
 source "$SCRIPT_ROOT/scripts/lib/live-protocol.sh"
 PASS_COUNT=0
@@ -407,6 +408,31 @@ if [[ -n "$live_unavailable_present" ]]; then
   report PASS live-unavailable "${live_unavailable_present# }"
 else
   report PASS live-unavailable "none"
+fi
+
+# live-capable above answers "does this CLI support a live session", which stays
+# true while the AA gate refuses every dispatch. Nothing else loads the overlay,
+# so one drifted evidence hash used to go unreported by an all-green doctor.
+overlay_path="$(
+  set +u
+  [[ -f "$OMNILANE_HOME/local.sh" ]] && . "$OMNILANE_HOME/local.sh" 2>/dev/null
+  printf '%s' "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"
+)"
+if [[ -z "$overlay_path" ]]; then
+  report PASS transport-overlay "no overlay configured; every runtime mapping stays unverified"
+elif ! command -v python3 >/dev/null 2>&1; then
+  report WARN transport-overlay "python3 is absent; cannot load the AA transport overlay"
+elif [[ ! -r "$OVERLAY_HEALTH" ]]; then
+  report WARN transport-overlay "$OVERLAY_HEALTH is missing"
+else
+  overlay_line="$(OMNILANE_AA_TRANSPORT_OVERLAY="$overlay_path" \
+    python3 "$OVERLAY_HEALTH" "$REPO" 2>&1)"
+  overlay_level="${overlay_line%%	*}"
+  overlay_message="${overlay_line#*	}"
+  case "$overlay_level" in
+    PASS|WARN|FAIL) report "$overlay_level" transport-overlay "$overlay_message" ;;
+    *) report WARN transport-overlay "unreadable overlay health output: $overlay_line" ;;
+  esac
 fi
 
 if [[ -n "$PROBE_VENDOR" ]]; then

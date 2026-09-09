@@ -6,6 +6,38 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.5] - 2026-09-09
+
+### Fixed
+
+- One vendor's CLI upgrade refused every vendor's dispatch. Overlay evidence
+  compared in a single loop raised on the first mismatch, so an `agy`
+  1.1.27 -> 1.1.28 upgrade failed `load_registry` and returned
+  `invalid-policy-input` for codex, claude, and grok as well, although only the
+  seven gemini mappings depended on that binary. Evidence entries now take a
+  `vendor` tag; a tagged entry that drifts or disappears degrades only its own
+  vendor to `unknown-target-runtime`. Untagged evidence stays globally
+  fail-closed, and structural overlay checks stay hard failures.
+- `omnilane doctor` reported 19 passed, 0 failed while every dispatch was
+  refused. A new `transport-overlay` check loads the configured overlay, names
+  the offending file and vendor on failure, reports per-vendor verified counts,
+  and warns when a vendor has degraded.
+- `build_overlay.py` signed probes it never read. Six `claude-fable-5-1`
+  configurations had been unusable since 2026-09-07 because their probes hit a
+  quota refusal and were silently omitted. Probes now carry a per-vendor
+  `verdict`, non-passing probes are refused and recorded in the overlay's
+  `unproven[]`, and evidence predating the field is signed with a warning.
+- A Claude CLI probe that requested an unknown `--effort` returned exit 0, no
+  error, the right `modelUsage`, and the expected token while silently using the
+  default effort. The verdict now fails that case, so a mapping cannot be
+  certified at the wrong effort tier.
+
+### Changed
+
+- `build_overlay.py` and `probe.py` moved from an untracked `.rollback` sweep
+  directory into `scripts/lib/` and take `--root`, so overlay rebuilds survive a
+  cleanup of that directory.
+
 ## [0.42.4] - 2026-09-07
 
 ### Fixed
@@ -886,7 +918,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.4...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.5...HEAD
+[0.42.5]: https://github.com/Seraphim0916/omnilane/compare/v0.42.4...v0.42.5
 [0.42.4]: https://github.com/Seraphim0916/omnilane/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...v0.42.3
 [0.42.2]: https://github.com/Seraphim0916/omnilane/compare/v0.42.1...v0.42.2

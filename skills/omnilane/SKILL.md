@@ -371,12 +371,46 @@ closes lanes and pushes the question back onto the operator. Never raise the
 declared effort to unblock a refused target, and never assert
 `--operator-asserted-human` on your own behalf.
 
-Two refusal codes mean different things and need different fixes.
+Three refusal codes mean different things and need different fixes.
 `missing-caller-context` means you passed no file — write one.
 `runtime-mapping-unverified` means the file is fine but the *target* has no proven
 host-local request selector; that is fixed by a `--transport-overlay` entry backed
 by real evidence, never by editing the frozen registry (its sha256 is pinned in
 `scripts/lib/aa_policy.py`, so any edit fails the whole gate closed).
+`invalid-policy-input` with "transport contract evidence changed" is neither: the
+overlay itself will not load, so nothing about your caller or your target is wrong.
+Run `omnilane doctor` first — its `transport-overlay` check names the offending
+file and the vendor it belongs to. Do not go hunting by hand.
+
+Upgrading a vendor CLI is the usual cause. The overlay pins the sha256 of each
+vendor's executable and runner script, so a new release invalidates that vendor's
+selector evidence. Evidence entries carry a `vendor` tag: a tagged entry that
+drifts marks only its own vendor stale, and the other three keep dispatching.
+Untagged evidence — `probe-manifest.json`, and any overlay built before the tags
+existed — still fails the whole gate closed, which is what an unpatched host
+looks like. Codex and Claude evidence paths embed version directories
+(`releases/0.153.4-…`, `versions/2.1.263`), so their upgrades remove the file
+rather than change its digest; both are treated as staleness, not corruption.
+
+Re-signing is a probe, a rebuild, and an install, in that order. Back up
+`~/.omnilane/transport-contracts.local.json` first; restoring it is the rollback.
+`scripts/lib/probe.py --expect TOKEN [--vendor V] NAME COMMAND…` invokes the CLI
+directly through `subprocess`, so it works while the gate is refusing everything —
+this is what breaks the deadlock. `scripts/provider-probe.sh` goes through
+`dispatch.sh` and therefore through the gate, so it is useless in this state.
+Then `scripts/lib/build_overlay.py --root DIR` rebuilds, and you copy the result
+over the live overlay. Verify with a real dispatch on a lane belonging to the
+vendor you re-probed; loading the registry in Python is not the runtime surface.
+
+Never sign a probe you did not read. `probe.py` records a `verdict` because exit
+status alone is not evidence: the Claude CLI answers a quota refusal with a JSON
+body carrying `is_error`, and it accepts an unknown `--effort` by silently using
+the default, returning exit 0, the right `modelUsage`, and the expected token
+with only a stderr warning to show for it. Effort is half of a scored identity,
+so that path would certify a mapping at the wrong tier. Configurations whose
+probes failed are recorded in the overlay's `unproven[]` and surfaced by doctor
+instead of vanishing — six Fable rows sat unusable for two days in September
+2026 because a transient quota error left no trace anywhere.
 
 A `--transport-overlay /absolute/overlay.json` may prove a small set of host-local
 request selectors using exact identities and hashed local contract evidence. It does

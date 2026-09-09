@@ -4434,6 +4434,17 @@ test_aa_policy() {
 }
 test_aa_policy
 
+test_overlay_health() {
+ local name="doctor transport-overlay check (offline fixtures)" out rc=0
+ out="$(python3 "$ROOT/tests/test_overlay_health.py" 2>&1)" || rc=$?
+ if [[ "$rc" -ne 0 ]]; then
+  fail "$name" "$out"
+ else
+  pass "$name"
+ fi
+}
+test_overlay_health
+
 test_aa_lineage() {
   local name="AA lineage and model-caller provider spies (offline)" out rc=0
   out="$(python3 "$ROOT/tests/test_aa_lineage.py" 2>&1)" || rc=$?

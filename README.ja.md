@@ -543,6 +543,14 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.42.5 の新機能
+
+- **1 つの CLI 更新が全ベンダーを止めることはなくなりました。** overlay の evidence に `vendor` タグを付与でき、タグ付きエントリのハッシュ差異やファイル消失は当該ベンダーのみを `unknown-target-runtime` に降格させます。タグなしの evidence は従来どおり全体を fail-closed にします。
+- **`omnilane doctor` が overlay を読み込みます。** 新しい `transport-overlay` チェックは失敗時に該当ファイルとベンダーを示し、成功時はベンダーごとの検証済みマッピング数を報告します。
+- **プローブが判定を記録します。** `probe.py` は課金された `modelUsage` で Claude の応答を判定し、CLI が不明な `--effort` を既定値へ黙って置き換えた場合を失敗とします。`build_overlay.py` は不合格のプローブに署名せず、overlay の `unproven[]` に記録します。
+- **再構築ツールをバージョン管理下へ。** `build_overlay.py` と `probe.py` は `scripts/lib/` に移り、`--root` を受け取ります。
+- **アップグレード。** npm 公開後は `npm i -g omnilane@0.42.5` を実行してください。
+
 ## v0.42.4 の新機能
 
 - **クイックスタートが実際に動くようになりました。** `omnilane route` は「誰が依頼しているか」を必要としますが、60 秒クイックスタートにその記載が無く、新規インストールでは案内無しに `missing-caller-context` で拒否されていました。今は `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` で人間の操作者を一度宣言し、モデル呼び出し元が代わりに渡すものも説明します。

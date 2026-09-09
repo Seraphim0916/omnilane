@@ -638,6 +638,14 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.42.5
+
+- **One CLI upgrade no longer refuses every vendor.** Overlay evidence entries take a `vendor` tag; a tagged entry whose hash drifts or whose file has disappeared degrades only that vendor to `unknown-target-runtime`. Untagged evidence stays globally fail-closed.
+- **`omnilane doctor` loads the overlay.** A new `transport-overlay` check names the offending file and vendor on failure and reports per-vendor verified counts on success — an all-green doctor could previously coexist with a gate refusing every dispatch.
+- **Probes record a verdict.** `probe.py` judges Claude responses on the billed `modelUsage` and fails a run where the CLI silently substituted the default effort for an unknown `--effort`. `build_overlay.py` refuses to sign a non-passing probe and records it in the overlay's `unproven[]` instead of dropping it silently.
+- **Rebuild tooling is versioned.** `build_overlay.py` and `probe.py` live in `scripts/lib/` and take `--root`.
+- **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.5`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
+
 ## What's new in v0.42.4
 
 - **The quickstart actually runs now.** `omnilane route` needs to know who is asking; the 60-second start omitted that, so a fresh install hit `missing-caller-context` with no guidance. It now asserts the human operator once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, and explains what a model caller passes instead.
