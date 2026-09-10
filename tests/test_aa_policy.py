@@ -21,6 +21,11 @@ aa_policy = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(aa_policy)
 
+BUILDER_SPEC = importlib.util.spec_from_file_location(
+    "build_overlay", ROOT / "scripts/lib/build_overlay.py")
+builder = importlib.util.module_from_spec(BUILDER_SPEC)
+BUILDER_SPEC.loader.exec_module(builder)
+
 
 class ExactAAPolicyTests(unittest.TestCase):
     @classmethod
@@ -415,7 +420,11 @@ class TransportOverlayEvidenceTests(unittest.TestCase):
         if not live_overlay.is_file():
             self.skipTest("host-local transport overlay is unavailable")
         overlay = json.loads(live_overlay.read_text())
-        self.assertEqual(len(overlay["mappings"]), 49)
+        # Every probed configuration is either signed or recorded as unproven.
+        # A count of signed mappings alone would drop silently when a model goes
+        # away upstream, which is how the gate stops noticing.
+        self.assertEqual(len(overlay["mappings"]) + len(overlay["unproven"]),
+                         len(builder.PROVEN))
 
         with patch.dict(os.environ, self._environment(live_overlay), clear=True):
             registry, _ = aa_policy.load_registry(REGISTRY_PATH)

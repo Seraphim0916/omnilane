@@ -98,16 +98,19 @@ def cli_path(name: str) -> Path:
     return Path(found).resolve()
 
 
-CORE_EVIDENCE = [
-    (cli_path("grok"), "grok"),
-    (REPO / "scripts/runners/run-grok.sh", "grok"),
-    (cli_path("codex"), "codex"),
-    (REPO / "scripts/runners/run-codex.sh", "codex"),
-    (cli_path("claude"), "claude"),
-    (REPO / "scripts/runners/run-claude.sh", "claude"),
-    (cli_path("agy"), "gemini"),
-    (REPO / "scripts/runners/run-gemini.sh", "gemini"),
-]
+def core_evidence() -> list[tuple[Path, str]]:
+    """Resolved when a build runs, not at import: a host missing one CLI can
+    still load this module to read PROVEN."""
+    return [
+        (cli_path("grok"), "grok"),
+        (REPO / "scripts/runners/run-grok.sh", "grok"),
+        (cli_path("codex"), "codex"),
+        (REPO / "scripts/runners/run-codex.sh", "codex"),
+        (cli_path("claude"), "claude"),
+        (REPO / "scripts/runners/run-claude.sh", "claude"),
+        (cli_path("agy"), "gemini"),
+        (REPO / "scripts/runners/run-gemini.sh", "gemini"),
+    ]
 
 
 def sha256(path: Path) -> str:
@@ -186,7 +189,7 @@ def main(argv: list[str] | None = None) -> None:
 
     evidence = [
         {"path": str(path), "sha256": sha256(path), "vendor": vendor}
-        for path, vendor in CORE_EVIDENCE
+        for path, vendor in core_evidence()
     ]
     evidence.append({"path": str(manifest_path), "sha256": sha256(manifest_path)})
 
