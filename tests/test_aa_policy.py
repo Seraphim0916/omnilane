@@ -403,20 +403,36 @@ class TransportOverlayEvidenceTests(unittest.TestCase):
             present = mapping["config_id"] in reported
             self.assertEqual(present, mapping["identity"]["vendor"] != "codex")
 
-    def test_live_overlay_still_verifies_all_49_mappings(self) -> None:
+    def test_live_overlay_loads_and_verifies_every_unstale_mapping(self) -> None:
+        """Assert the signed file, and only the host state omnilane controls.
+
+        A fixed live count would go red whenever a vendor CLI updates itself,
+        which agy and grok do in the background on invocation. The file's own
+        mapping count is deterministic; how many of them a given minute's
+        binaries still match is not, so staleness is reported, not failed.
+        """
         live_overlay = Path.home() / ".omnilane" / "transport-contracts.local.json"
         if not live_overlay.is_file():
             self.skipTest("host-local transport overlay is unavailable")
+        overlay = json.loads(live_overlay.read_text())
+        self.assertEqual(len(overlay["mappings"]), 49)
 
         with patch.dict(os.environ, self._environment(live_overlay), clear=True):
             registry, _ = aa_policy.load_registry(REGISTRY_PATH)
 
+        stale = registry["_stale_transport_vendors"]
+        expected = sum(1 for mapping in overlay["mappings"]
+                       if mapping["identity"]["vendor"] not in stale)
         verified = sum(
             1
             for row in registry["scored_configs"]
             if row["transport_mapping"].get("runtime_verified") is True
         )
-        self.assertEqual(verified, 49)
+        self.assertEqual(verified, expected,
+                         f"stale vendors {stale} should degrade only themselves")
+        if stale:
+            print(f"\nnote: {', '.join(stale)} evidence has drifted since the last "
+                  f"sweep; {verified}/49 mappings still dispatch")
 
 
 if __name__ == "__main__":
