@@ -647,6 +647,35 @@ vendor; the dispatch skill carries the re-signing runbook.
 
 </details>
 
+<details>
+<summary><b>What does my mapping's evidence tier mean?</b></summary>
+
+<br/>
+
+It says how strongly the probe pinned down who answered. It does not affect
+whether you can dispatch.
+
+`billed-model` — the provider named the model it charged for. Claude reports it
+in `modelUsage`; grok reports it the same way under `--output-format json`. This
+is the provider's receipt.
+
+`client-echo` — the CLI wrote down the model it asked for, and that record
+matches your request. Codex keeps it in the session rollout; agy writes it to
+`cli.log`. This is the CLI's copy of your order, not the provider's receipt: it
+proves the request left as intended, not who served it.
+
+`selector-only` — the CLI accepted the selector and reported nothing further.
+Every mapping probed before v0.42.6 reads this way. It still dispatches; it is
+simply the weakest of the three, and `omnilane doctor` names the vendors worth
+re-probing.
+
+None of the three certifies upstream provider identity, and none of them can
+refuse a lane. The tier is derived from what a probe produced rather than from
+the vendor, so a CLI that starts reporting a billed model is promoted on its
+next sweep with no change to omnilane.
+
+</details>
+
 ## 📊 Defaults and provenance
 
 Default lane assignments follow Artificial Analysis coding/intelligence data
@@ -669,6 +698,15 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.42.6
+
+- **A verified mapping now says how it was verified.** Each overlay mapping carries an `evidence_tier`: `billed-model` when the provider named the model it charged for (Claude, grok), `client-echo` when the CLI recorded the model it asked for (codex, agy), `selector-only` when the CLI accepted the selector and said nothing more. `client-echo` is the CLI's copy of your order; `billed-model` is the provider's receipt.
+- **Reported, never enforced.** Dispatch still turns on `runtime_verified` alone, so a weaker tier never refuses a lane that used to run. A test asserts every decision is unchanged under all three tiers.
+- **The tier follows the evidence, not the vendor.** A sweep predating this release re-judges as `selector-only`, and a CLI that begins reporting a billed model is promoted with no code change.
+- **`omnilane doctor` shows the spread** and names the vendors worth re-probing.
+- **Overlay evidence anchors the binary that runs.** Paths were written into `build_overlay.py` and drifted out of use silently — the live overlay hashed claude `2.1.263` while every dispatch ran `2.1.266`. Core evidence now resolves the executable the runners resolve.
+- **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.6`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
 
 ## What's new in v0.42.5
 

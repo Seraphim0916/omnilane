@@ -388,9 +388,24 @@ selector evidence. Evidence entries carry a `vendor` tag: a tagged entry that
 drifts marks only its own vendor stale, and the other three keep dispatching.
 Untagged evidence — `probe-manifest.json`, and any overlay built before the tags
 existed — still fails the whole gate closed, which is what an unpatched host
-looks like. Codex and Claude evidence paths embed version directories
-(`releases/0.153.4-…`, `versions/2.1.263`), so their upgrades remove the file
-rather than change its digest; both are treated as staleness, not corruption.
+looks like. Codex and Claude resolve through version directories
+(`releases/0.153.4-…`, `versions/2.1.266`), so their upgrades remove the anchored
+file rather than change its digest; both are treated as staleness, not corruption.
+
+Do not expect these upgrades to be operator actions. agy and grok update
+themselves in the background when invoked — agy's own `cli.log` records
+`auto_updater.go: Spawned background update process`, and both binaries changed
+under a probing session on 2026-09-10, minutes after their first call. Overlay
+drift is therefore a routine consequence of using a vendor, not an occasional
+maintenance event, which is why per-vendor degradation matters more than it
+looks. It also means any test asserting a fixed number of verified live
+mappings will go red on its own schedule.
+
+Because of that, `build_overlay.py` anchors the executable `shutil.which` resolves
+rather than a version written into the script. A pinned path drifts out of use
+silently: before 0.42.6 the overlay hashed claude `2.1.263` while every dispatch
+ran `2.1.266`, so eleven mappings were "verified" against a binary that had not
+run for a day.
 
 Re-signing is a probe, a rebuild, and an install, in that order. Back up
 `~/.omnilane/transport-contracts.local.json` first; restoring it is the rollback.
@@ -407,6 +422,30 @@ Keep the sweep where its default `--root` puts it,
 `probe-manifest.json` by absolute path as untagged evidence, so a sweep parked
 inside a repository is one `git clean -fdx` away from taking every vendor down
 at once — the same global refusal a re-signing session is usually trying to end.
+
+Every mapping carries an `evidence_tier` saying how strongly its probe pinned the
+responder. `billed-model` means the provider named the model it charged for —
+Claude's `modelUsage`, grok's under `--output-format json`. `client-echo` means
+the CLI wrote down the model it asked for — codex's session rollout, agy's
+`cli.log` resolver line. `selector-only` means the CLI accepted the selector and
+said nothing more. Put plainly: `client-echo` is the CLI's copy of your order,
+`billed-model` is the provider's receipt. Neither certifies upstream identity,
+but only one of them was written by the party that answered.
+
+The tier is reported, never enforced. Dispatch still turns on `runtime_verified`
+alone, so a mapping that drops to `selector-only` keeps working and simply shows
+up in doctor as worth re-probing. Do not add a tier check to the gate: that would
+rebuild the failure 0.42.5 removed, where evidence quality could refuse a lane
+that runs. The tier is read off the evidence a run produced rather than assigned
+per vendor, so a sweep predating 0.42.6 re-judges as `selector-only` and a CLI
+that starts reporting a billed model is promoted with no code change.
+
+Two probe details follow from this. Codex needs `exec --json` (the thread id that
+locates the rollout) and must *not* use `--ephemeral`, which suppresses the very
+rollout the tier reads. agy needs its own app data directory, prepared exactly
+the way `run-gemini.sh` does it — `prepare-agy-mode.py --mode advise` returns a
+path relative to `~/.gemini` that is passed as `--app_data_dir=`; the environment
+variables that look like they would do this are ignored.
 
 Never sign a probe you did not read. `probe.py` records a `verdict` because exit
 status alone is not evidence: the Claude CLI answers a quota refusal with a JSON

@@ -39,13 +39,13 @@ for effort in ["xhigh", "medium"]:
     PROVEN[f"codex/gpt-5-4-mini" + ("" if effort == "xhigh" else f"-{effort}")] = (
         "model_and_effort", "gpt-5.4-mini", f"cx-gpt-5_4-mini-{effort}")
 
-PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "PRIOR:grok-effort-2026-09-07")
+PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "gk-grok-4_6-high")
 for effort in ["xhigh", "medium", "low"]:
     PROVEN[f"grok/grok-4-6-{effort}"] = ("cli_reasoning_effort", "grok-4.6", f"gk-grok-4_6-{effort}")
 PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high")
 
 for cid, rid, ev in [
-    ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "PRIOR:gemini-flash-high"),
+    ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
     ("gemini/gemini-3-8-flash-medium", "gemini-3.8-flash-medium", "agy-gemini-3_8-flash-medium"),
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),
     ("gemini/gemini-3-7-flash", "gemini-3.7-flash-high", "agy-gemini-3_7-flash-high"),
@@ -135,9 +135,6 @@ def main(argv: list[str] | None = None) -> None:
     # nothing about who answered, which is exactly what selector-only records.
     tiers: dict[str, str] = {}
     for cid, (_, _, ev) in sorted(PROVEN.items()):
-        if ev.startswith("PRIOR:"):
-            manifest["probe_runs"][cid] = {"source": ev, "note": "verified in the 2026-09-07 Codex run"}
-            continue
         entry = {}
         for suffix in ("json", "stdout", "stderr", "rollout", "cli_log"):
             path = root / "evidence" / f"{ev}.{suffix}"

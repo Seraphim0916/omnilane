@@ -6,6 +6,55 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.6] - 2026-09-10
+
+### Added
+
+- Every transport overlay mapping now records an `evidence_tier` saying how
+  strongly its probe identified the responder. `billed-model` is the provider
+  naming the model it charged for (Claude's `modelUsage`, grok's under
+  `--output-format json`); `client-echo` is the CLI recording the model it asked
+  for (codex's session rollout, agy's `cli.log` resolver line); `selector-only`
+  is a CLI accepting the selector and reporting nothing further. A verified
+  mapping previously flattened these into one word, which overstated two of the
+  four vendors in the same way the gate itself did before 0.42.5.
+- `omnilane doctor` reports the tier alongside each vendor's verified count and
+  names the vendors worth re-probing.
+
+### Changed
+
+- The tier is derived from what a run produced rather than assigned per vendor,
+  so evidence written before this release re-judges as `selector-only` and a CLI
+  that begins reporting a billed model is promoted with no code change.
+- `probe.py` gathers each CLI's own on-disk record of the request — codex through
+  the `thread.started` id that names its rollout, agy through the app data
+  directory prepared the way `run-gemini.sh` prepares it — and stores a digest of
+  the model-bearing lines beside the streams, so the judgement stays a pure
+  function that can re-judge an old sweep offline.
+- Grok probes accept the billed model only as an exact match or with the single
+  `-build` suffix the provider adds; a prefix test would let `grok-4.6-anything`
+  pass as `grok-4.6`.
+
+### Fixed
+
+- The overlay anchored vendor executables by paths written into
+  `build_overlay.py`, which drift out of use without failing: the live overlay
+  hashed claude `2.1.263` while every dispatch ran `2.1.266`, so eleven mappings
+  were verified against a binary that had not run in a day. Core evidence now
+  anchors the executable the runners resolve.
+- The last two mappings carrying `PRIOR:` references instead of probe evidence
+  were re-probed, so every signed mapping now has a descriptor a reader can open.
+
+### Notes
+
+- The tier is reported and never enforced. Dispatch continues to turn on
+  `runtime_verified` alone, covered by a test asserting every decision is
+  byte-identical under all three tiers.
+- agy and grok update themselves in the background when invoked; agy's `cli.log`
+  records `auto_updater.go: Spawned background update process`. Overlay evidence
+  drift is a routine consequence of using a vendor rather than an operator
+  action, and per-vendor degradation is what keeps that from stopping work.
+
 ## [0.42.5] - 2026-09-09
 
 ### Fixed

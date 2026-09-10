@@ -552,6 +552,30 @@ overlay 釘住每家的執行檔與 runner 腳本雜湊，而 Codex 與 Claude �
 
 </details>
 
+<details>
+<summary><b>映射上的證據等級是什麼意思？</b></summary>
+
+<br/>
+
+它說明這次探測把「誰回答的」釘到多緊。它**不影響**你能不能派工。
+
+`billed-model`——供應商自己說出它計費的模型。claude 放在 `modelUsage`；
+grok 在 `--output-format json` 下也一樣。這是供應商開的收據。
+
+`client-echo`——CLI 記下自己送出的模型，而且那筆紀錄與你的請求相符。
+codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂單，
+不是收據：它證明請求照原樣送出去了，不能證明是誰接的。
+
+`selector-only`——CLI 收下選擇器，其餘不表態。v0.42.6 之前探測的每一條映射
+都是這一級。它照樣能派工，只是三級裡最弱的一級；`omnilane doctor` 會點名
+哪幾家值得重探。
+
+三者都不能證明上游供應商身分，也都不會讓任何車道被拒。等級是從探測產出的
+東西推導出來的，不是按廠商指定，所以哪支 CLI 開始回報計費模型，下一次重探
+就會自動升級，omnilane 不用改。
+
+</details>
+
 ## 📊 預設值與資料來源
 
 預設通道配置依據 Artificial Analysis 2026-07 快照(已對 AA 站上原始紀錄與
@@ -570,6 +594,15 @@ overlay 釘住每家的執行檔與 runner 腳本雜湊，而 Codex 與 Claude �
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.42.6 新功能
+
+- **「已驗證」現在會說明是怎麼驗的。** 每條 overlay 映射帶一個 `evidence_tier`：`billed-model` 是供應商自己說出計費的模型（claude、grok），`client-echo` 是 CLI 記下自己送出的模型（codex、agy），`selector-only` 是 CLI 收下選擇器、其餘不表態。白話說：`client-echo` 是 CLI 自己抄的訂單，`billed-model` 是供應商開的收據。
+- **只回報，不擋人。** 派工照舊只看 `runtime_verified`，等級低不會讓原本跑得動的車道被拒。已有測試確認三種等級下每個判定都不變。
+- **等級跟著證據走，不跟著廠商走。** 本次發布之前的探測會重判為 `selector-only`；哪天某支 CLI 開始回報計費模型，不改程式就自動升級。
+- **`omnilane doctor` 顯示分佈**，並點名哪幾家值得重探。
+- **overlay 錨定的是真正在跑的執行檔。** 過去路徑寫死在 `build_overlay.py` 裡，會無聲地錨到沒在用的版本——線上 overlay 雜湊的是 claude `2.1.263`，但每次派工跑的都是 `2.1.266`。現在改用 runner 實際解析到的執行檔。
+- **升級。** npm 發布後執行 `npm i -g omnilane@0.42.6`。既有的 repo symlink 安裝更新檢出後確認 `omnilane --version` 即可，不需重跑安裝。
 
 ## v0.42.5 新功能
 
