@@ -29,6 +29,10 @@ APPROVED_REGISTRY_SHA256 = "0782c87de123c02738c3ff60e4bc3c1cc10d110113e872b8f862
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))
+# How strongly a mapping's probe identified the responder. Reported, never
+# enforced: dispatch turns on runtime_verified alone, as it did before the field
+# existed, so a weaker tier can never refuse a lane that used to run.
+TRANSPORT_EVIDENCE_TIERS = frozenset(("billed-model", "client-echo", "selector-only"))
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}\Z")
 
 
@@ -178,6 +182,7 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
                 _check(False, "transport contract evidence changed")
             stale_vendors.add(vendor)
     _check(bool(overlay.get("evidence")), "transport overlay requires local evidence")
+    tiers: dict[str, str] = {}
     for mapping in overlay.get("mappings", []):
         rows = [row for row in registry["scored_configs"] if row["id"] == mapping.get("config_id")]
         _check(len(rows) == 1, "unknown overlay config")
@@ -197,8 +202,11 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             _check(mapping["runtime_model"].endswith("-" + row["effort"]), "encoded effort does not match exact tuple")
         else:
             _check(mapping.get("runtime_model") == row["model"], "overlay model mismatch")
+        tier = mapping.get("evidence_tier", "selector-only")
+        _check(tier in TRANSPORT_EVIDENCE_TIERS, "unknown transport evidence tier")
         if row["vendor"] in stale_vendors:
             continue
+        tiers[row["id"]] = tier
         row["transport_mapping"].update(
             status="verified", runtime_verified=True,
             runtime_model=mapping["runtime_model"], runtime_effort=mapping["runtime_effort"],
@@ -208,6 +216,7 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             overlay_sha256=digest, overlay_host=overlay["host"],
         )
     registry["_stale_transport_vendors"] = sorted(stale_vendors)
+    registry["_transport_evidence_tiers"] = tiers
 
 
 def load_registry(path: str | Path, expected_sha256: str | None = None) -> tuple[dict[str, Any], str]:

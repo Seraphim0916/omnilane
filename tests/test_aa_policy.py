@@ -370,6 +370,39 @@ class TransportOverlayEvidenceTests(unittest.TestCase):
         with self.assertRaises(aa_policy.PolicyError):
             self._load_overlay()
 
+    def test_evidence_tier_never_changes_a_decision(self) -> None:
+        registry, _ = self._load_overlay()
+        baseline = {vendor: self._decision(registry, vendor) for vendor in TARGETS}
+
+        for tier in ("billed-model", "client-echo", "selector-only"):
+            with self.subTest(tier=tier):
+                for mapping in self.overlay["mappings"]:
+                    mapping["evidence_tier"] = tier
+                registry, _ = self._load_overlay()
+                for vendor in TARGETS:
+                    self.assertEqual(self._decision(registry, vendor), baseline[vendor])
+                self.assertEqual(
+                    set(registry["_transport_evidence_tiers"].values()), {tier})
+
+    def test_unknown_evidence_tier_is_refused(self) -> None:
+        self.overlay["mappings"][0]["evidence_tier"] = "upstream-attested"
+
+        with self.assertRaises(aa_policy.PolicyError):
+            self._load_overlay()
+
+    def test_stale_vendor_reports_no_tier(self) -> None:
+        codex_evidence = next(item for item in self.overlay["evidence"] if item.get("vendor") == "codex")
+        codex_evidence["sha256"] = "0" * 64
+        for mapping in self.overlay["mappings"]:
+            mapping["evidence_tier"] = "billed-model"
+
+        registry, _ = self._load_overlay()
+
+        reported = registry["_transport_evidence_tiers"]
+        for mapping in self.overlay["mappings"]:
+            present = mapping["config_id"] in reported
+            self.assertEqual(present, mapping["identity"]["vendor"] != "codex")
+
     def test_live_overlay_still_verifies_all_49_mappings(self) -> None:
         live_overlay = Path.home() / ".omnilane" / "transport-contracts.local.json"
         if not live_overlay.is_file():

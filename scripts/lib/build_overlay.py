@@ -10,7 +10,9 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import socket
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -83,14 +85,27 @@ for effort in ["max", "xhigh", "high", "medium", "low"]:
 PROVEN["claude/claude-fable-5"] = (
     "model_and_effort", "claude-fable-5", "cl-claude-fable-5-max")
 
+def cli_path(name: str) -> Path:
+    """Anchor the executable the runners resolve, not a version pinned here.
+
+    The runners invoke bare names, so a pinned path can name a binary that has
+    not run since the last self-update; the overlay must hash what answers.
+    aa_policy opens evidence with O_NOFOLLOW, so this resolves past the symlink.
+    """
+    found = shutil.which(name)
+    if not found:
+        raise SystemExit(f"cannot resolve the {name} CLI to anchor its evidence")
+    return Path(found).resolve()
+
+
 CORE_EVIDENCE = [
-    (HOME / ".grok/downloads/grok-1.0.13-macos-aarch64", "grok"),
+    (cli_path("grok"), "grok"),
     (REPO / "scripts/runners/run-grok.sh", "grok"),
-    (HOME / ".codex/packages/standalone/releases/0.153.4-aarch64-apple-darwin/bin/codex", "codex"),
+    (cli_path("codex"), "codex"),
     (REPO / "scripts/runners/run-codex.sh", "codex"),
-    (HOME / ".local/share/claude/versions/2.1.263", "claude"),
+    (cli_path("claude"), "claude"),
     (REPO / "scripts/runners/run-claude.sh", "claude"),
-    (HOME / ".local/bin/agy", "gemini"),
+    (cli_path("agy"), "gemini"),
     (REPO / "scripts/runners/run-gemini.sh", "gemini"),
 ]
 
@@ -116,12 +131,15 @@ def main(argv: list[str] | None = None) -> None:
 
     manifest = {"probe_runs": {}}
     unproven = []
+    # Evidence written before 0.42.6 carries no tier; it proved the selector and
+    # nothing about who answered, which is exactly what selector-only records.
+    tiers: dict[str, str] = {}
     for cid, (_, _, ev) in sorted(PROVEN.items()):
         if ev.startswith("PRIOR:"):
             manifest["probe_runs"][cid] = {"source": ev, "note": "verified in the 2026-09-07 Codex run"}
             continue
         entry = {}
-        for suffix in ("json", "stdout", "stderr"):
+        for suffix in ("json", "stdout", "stderr", "rollout", "cli_log"):
             path = root / "evidence" / f"{ev}.{suffix}"
             if path.exists():
                 entry[suffix] = {"path": str(path), "sha256": sha256(path)}
@@ -143,6 +161,10 @@ def main(argv: list[str] | None = None) -> None:
             })
             # Visibility only: failed evidence must not enter the signed manifest.
             continue
+        tier = descriptor.get("evidence_tier", "selector-only")
+        if tier not in ("billed-model", "client-echo", "selector-only"):
+            raise SystemExit(f"unknown evidence tier for {cid}: {tier}")
+        tiers[cid] = tier
         manifest["probe_runs"][cid] = entry
     manifest_path = root / "probe-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -159,6 +181,7 @@ def main(argv: list[str] | None = None) -> None:
             "runtime_effort": row["effort"],
             "selector_type": selector,
             "verification": "request-selector-contract",
+            "evidence_tier": tiers.get(cid, "selector-only"),
         }
         if selector == "cli_reasoning_effort":
             mapping["cli_flag"] = "--reasoning-effort"
@@ -182,7 +205,9 @@ def main(argv: list[str] | None = None) -> None:
     }
     out = root / "transport-contracts.local.json"
     out.write_text(json.dumps(overlay, indent=2, ensure_ascii=False) + "\n")
+    spread = Counter(m["evidence_tier"] for m in mappings)
     print(f"wrote {out} with {len(mappings)} mappings and {len(evidence)} evidence anchors")
+    print("  evidence tiers: " + ", ".join(f"{tier} {count}" for tier, count in sorted(spread.items())))
 
 
 if __name__ == "__main__":

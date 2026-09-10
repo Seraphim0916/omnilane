@@ -54,10 +54,10 @@ class VerdictTests(unittest.TestCase):
 
     def test_claude_validates_actual_model_and_requested_token(self):
         self.assertEqual(probe.verdict(self.evidence(), self.stdout(), "", "claude", "CUSTOM_OK"),
-                         ("pass", "expected-token-and-model-matched", "requested"))
+                         ("pass", "expected-token-and-model-matched", "requested", "billed-model"))
         result = probe.verdict(self.evidence(), self.stdout(modelUsage={"different": {}}),
                                "", "claude", "CUSTOM_OK")
-        self.assertEqual(result, ("fail", "model-mismatch", "different"))
+        self.assertEqual(result, ("fail", "model-mismatch", "different", "selector-only"))
 
     def test_claude_failures(self):
         cases = [
@@ -117,6 +117,156 @@ class VerdictTests(unittest.TestCase):
                 result = probe.verdict(record, stdout, stderr, vendor, token)
                 self.assertEqual(result[0], expected)
                 self.assertIn(reason, result[1])
+
+    @unittest.skipUnless(EVIDENCE.is_dir(), "historical evidence is host-local and read-only")
+    def test_evidence_predating_the_tier_field_reads_as_selector_only(self):
+        for name, vendor, token, expected, _ in REGRESSION_CASES:
+            with self.subTest(evidence=name):
+                record = json.loads((EVIDENCE / f"{name}.json").read_text())
+                stdout = (EVIDENCE / f"{name}.stdout").read_text()
+                stderr = (EVIDENCE / f"{name}.stderr").read_text()
+                result = probe.verdict(record, stdout, stderr, vendor, token)
+                expected_tier = "billed-model" if vendor == "claude" and expected == "pass" \
+                    else "selector-only"
+                self.assertEqual(result[3], expected_tier)
+
+
+class EvidenceTierTests(unittest.TestCase):
+    """The tier follows the evidence a run produced, never the vendor name."""
+
+    def grok_evidence(self, model="grok-4.6"):
+        return {"command": ["grok", "-m", model, "--output-format", "json"],
+                "exit_code": 0, "timed_out": False}
+
+    def grok_stdout(self, *billed):
+        return json.dumps({"text": "CUSTOM_OK",
+                           "modelUsage": {name: {"costUSD": 0.1} for name in billed}})
+
+    def test_grok_accepts_the_exact_model_and_its_build_suffix_only(self):
+        for billed, expected in (("grok-4.6", "pass"), ("grok-4.6-build", "pass"),
+                                 ("grok-4.6-anything", "fail"), ("grok-4", "fail"),
+                                 ("grok-4.6-build-extra", "fail")):
+            with self.subTest(billed=billed):
+                result = probe.verdict(self.grok_evidence(), self.grok_stdout(billed),
+                                       "", "grok", "CUSTOM_OK")
+                self.assertEqual(result[0], expected)
+                self.assertEqual(result[3], "billed-model" if expected == "pass" else "selector-only")
+
+    def test_grok_two_billed_models_is_a_mismatch(self):
+        result = probe.verdict(self.grok_evidence(),
+                               self.grok_stdout("grok-4.6", "grok-4.5"),
+                               "", "grok", "CUSTOM_OK")
+        self.assertEqual(result[:2], ("fail", "model-mismatch"))
+        self.assertEqual(result[3], "selector-only")
+
+    def test_grok_plain_output_still_passes_at_the_lower_tier(self):
+        result = probe.verdict(self.grok_evidence(), "CUSTOM_OK", "", "grok", "CUSTOM_OK")
+        self.assertEqual(result[0], "pass")
+        self.assertIn("no-billed-model", result[1])
+        self.assertEqual(result[3], "selector-only")
+
+    def test_codex_rollout_promotes_matching_and_fails_contradicting(self):
+        record = {"command": ["codex", "exec", "-m", "gpt-5.6-luna"],
+                  "exit_code": 0, "timed_out": False}
+        matching = "# source\t/x/rollout.jsonl\npayload.model\tgpt-5.6-luna\n"
+        result = probe.verdict(record, "CUSTOM_OK", "", "codex", "CUSTOM_OK",
+                               {"rollout": matching})
+        self.assertEqual(result[0], "pass")
+        self.assertEqual(result[2], "gpt-5.6-luna")
+        self.assertEqual(result[3], "client-echo")
+
+        other = "payload.model\tgpt-5.6-terra\n"
+        result = probe.verdict(record, "CUSTOM_OK", "", "codex", "CUSTOM_OK",
+                               {"rollout": other})
+        self.assertEqual(result[0], "fail")
+        self.assertIn("client-record-mismatch", result[1])
+        self.assertEqual(result[3], "selector-only")
+
+    def test_codex_without_a_rollout_stays_a_selector_only_pass(self):
+        record = {"command": ["codex", "exec", "-m", "gpt-5.6-luna"],
+                  "exit_code": 0, "timed_out": False}
+        for rollout in ("", "# source\t/x/rollout.jsonl\n"):
+            with self.subTest(rollout=rollout):
+                result = probe.verdict(record, "CUSTOM_OK", "", "codex", "CUSTOM_OK",
+                                       {"rollout": rollout})
+                self.assertEqual(result[0], "pass")
+                self.assertIn("no-client-record", result[1])
+                self.assertEqual(result[3], "selector-only")
+
+    def test_codex_stderr_review_survives_the_tier_judgement(self):
+        record = {"command": ["codex", "exec", "-m", "gpt-5.6-luna"],
+                  "exit_code": 0, "timed_out": False}
+        result = probe.verdict(record, "CUSTOM_OK", "WARNING: under development", "codex",
+                               "CUSTOM_OK", {"rollout": "payload.model\tgpt-5.6-luna\n"})
+        self.assertEqual(result[0], "pass")
+        self.assertIn("WARNING: under development", result[1])
+        self.assertEqual(result[3], "client-echo")
+
+    def test_agy_compares_the_resolved_model_and_never_the_display_label(self):
+        record = {"command": ["agy", "--model", "gemini-3.8-flash-low"],
+                  "exit_code": 0, "timed_out": False}
+        digest = ("# source\t/x/cli.log\n# label\tGemini 3.8 Flash (Low)\n"
+                  "cli.log:resolved-model:gemini-3.8-flash-low\tgemini-3.8-flash-low\n")
+        result = probe.verdict(record, "CUSTOM_OK", "", "agy", "CUSTOM_OK", {"cli_log": digest})
+        self.assertEqual(result[0], "pass")
+        self.assertEqual(result[3], "client-echo")
+
+        label_only = "# source\t/x/cli.log\n# label\tGemini 3.8 Flash (Low)\n"
+        result = probe.verdict(record, "CUSTOM_OK", "", "agy", "CUSTOM_OK",
+                               {"cli_log": label_only})
+        self.assertEqual(result[0], "pass")
+        self.assertEqual(result[3], "selector-only")
+
+    def test_agy_resolving_a_different_model_fails(self):
+        record = {"command": ["agy", "--model", "gemini-3.8-flash-low"],
+                  "exit_code": 0, "timed_out": False}
+        digest = "cli.log:resolved-model:x\tgemini-3.8-flash-high\n"
+        result = probe.verdict(record, "CUSTOM_OK", "", "agy", "CUSTOM_OK", {"cli_log": digest})
+        self.assertEqual(result[0], "fail")
+        self.assertIn("client-record-mismatch", result[1])
+
+    def test_every_reported_tier_is_a_known_tier(self):
+        cases = [
+            ({"command": [], "timed_out": True}, "", "", "claude", "T", {}),
+            ({"command": [], "exit_code": 1}, "", "", "grok", "T", {}),
+            ({"command": [], "exit_code": 0}, "T", "", "agy", "T", {}),
+            ({"command": [], "exit_code": 0}, "T", "", "codex", "T", {}),
+            ({"command": [], "exit_code": 0}, "T", "", "nope", "T", {}),
+        ]
+        for record, out, err, vendor, token, extra in cases:
+            with self.subTest(vendor=vendor):
+                self.assertIn(probe.verdict(record, out, err, vendor, token, extra)[3],
+                              probe.EVIDENCE_TIERS)
+
+    def test_codex_record_reads_the_rollout_named_by_the_thread_id(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp") as tmp:
+            sessions = Path(tmp) / "2026/09/10"
+            sessions.mkdir(parents=True)
+            thread = "01a08774-0fb5-7fd0-aba3-77489839d1c9"
+            rollout = sessions / f"rollout-2026-09-10T02-35-25-{thread}.jsonl"
+            rollout.write_text(json.dumps({"payload": {"model": "gpt-5.6-luna"}}) + "\n"
+                               + "not json\n"
+                               + json.dumps({"items": [{"model": "gpt-5.6-luna"}]}) + "\n")
+            stdout = json.dumps({"type": "thread.started", "thread_id": thread}) + "\n"
+            digest = probe.codex_record(stdout, Path(tmp))
+            self.assertIn(f"# thread_id\t{thread}", digest)
+            self.assertEqual(probe.record_values(digest), ["gpt-5.6-luna", "gpt-5.6-luna"])
+            self.assertEqual(probe.codex_record("no events here", Path(tmp)), "")
+            self.assertEqual(probe.codex_record(
+                json.dumps({"thread_id": "absent-thread"}), Path(tmp)), "")
+
+    def test_agy_record_ignores_logs_written_before_this_run(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp") as tmp:
+            app_root = Path(tmp)
+            log = app_root / "cli.log"
+            log.write_text('model_resolver.go] Resolving model gemini-3.8-flash-low\n'
+                           'model_config_manager.go] Propagating selected model override to '
+                           'backend: label="Gemini 3.8 Flash (Low)"\n')
+            digest = probe.agy_record(app_root, log.stat().st_mtime)
+            self.assertEqual(probe.record_values(digest), ["gemini-3.8-flash-low"])
+            self.assertIn('# label\tGemini 3.8 Flash (Low)', digest)
+            self.assertEqual(probe.agy_record(app_root, log.stat().st_mtime + 600), "")
+            self.assertEqual(probe.agy_record(app_root / "absent", 0), "")
 
 
 class ProbeAndOverlayTests(unittest.TestCase):

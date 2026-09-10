@@ -68,17 +68,23 @@ def main() -> None:
         detail = "; ".join(offenders(Path(overlay_path))) or str(error)
         emit("FAIL", f"overlay rejected, every dispatch is refused: {error} ({detail})")
 
+    tiers = registry.get("_transport_evidence_tiers", {})
     verified = Counter()
     for row in registry["scored_configs"]:
         if row["transport_mapping"].get("runtime_verified") is True:
-            verified[row["vendor"]] += 1
-    summary = ", ".join(f"{v} {n}" for v, n in sorted(verified.items())) or "none"
+            verified[row["vendor"], tiers.get(row["id"], "selector-only")] += 1
+    summary = ", ".join(f"{vendor} {count} {tier}"
+                        for (vendor, tier), count in sorted(verified.items())) or "none"
 
     import json
 
     overlay = json.loads(Path(overlay_path).read_text())
     unproven = overlay.get("unproven", [])
     extra = f"; {len(unproven)} config(s) recorded unproven" if unproven else ""
+    weak = sorted({vendor for (vendor, tier) in verified if tier == "selector-only"})
+    if weak:
+        extra += (f"; {', '.join(weak)} prove only the request selector, re-probe to "
+                  "record who answered")
 
     stale = registry.get("_stale_transport_vendors", [])
     if stale:
