@@ -28,6 +28,34 @@ TIER_SELECTOR = "selector-only"    # the CLI accepted the selector and said no m
 EVIDENCE_TIERS = (TIER_BILLED, TIER_ECHO, TIER_SELECTOR)
 
 
+def codex_failure(stdout_text: str) -> str:
+    """The last thing codex's event stream said went wrong, if anything.
+
+    Later events supersede earlier ones: a retry notice is progress, the message
+    on `turn.failed` is the outcome.
+    """
+    latest = ""
+    for line in stdout_text.splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "turn.failed":
+            message = (event.get("error") or {}).get("message")
+        elif event.get("type") == "error":
+            message = event.get("message")
+        else:
+            continue
+        if isinstance(message, str) and message:
+            latest = message
+    return f"; codex-event: {latest[:200]}" if latest else ""
+
+
 def _requested_model(command: list) -> str | None:
     requested = None
     for index, argument in enumerate(command):
@@ -170,10 +198,14 @@ def verdict(
         diagnostics = [line[:120] for line in stderr_text.splitlines()
                        if "error" in line.lower() or "warning" in line.lower()]
         review = "; stderr-review: " + " | ".join(diagnostics) if diagnostics else ""
+        # Under `--json` the refusal that ended the run is an stdout event, not
+        # a stderr line, so a failure would otherwise be recorded as a bare exit
+        # code and leave unproven[] saying nothing a reader can act on.
+        why = codex_failure(stdout_text)
         if exit_code != 0:
-            return "fail", f"exit-code: {exit_code}{review}", None, TIER_SELECTOR
+            return "fail", f"exit-code: {exit_code}{why}{review}", None, TIER_SELECTOR
         if expected_token not in stdout_text:
-            return "fail", f"missing-expected-token{review}", None, TIER_SELECTOR
+            return "fail", f"missing-expected-token{why}{review}", None, TIER_SELECTOR
         result, reason, observed, tier = _client_record(
             evidence_json, extra.get("rollout", ""), "expected-token-matched")
         return result, f"{reason}{review}", observed, tier

@@ -193,6 +193,21 @@ class EvidenceTierTests(unittest.TestCase):
                 self.assertIn("no-client-record", result[1])
                 self.assertEqual(result[3], "selector-only")
 
+    def test_codex_failure_reason_names_the_event_that_ended_the_run(self):
+        record = {"command": ["codex", "exec", "-m", "gpt-5.4-mini"],
+                  "exit_code": 1, "timed_out": False}
+        stdout = "\n".join(json.dumps(event) for event in (
+            {"type": "thread.started", "thread_id": "abc"},
+            {"type": "error", "message": "Reconnecting... 1/5"},
+            {"type": "turn.failed",
+             "error": {"message": "upstream 400: model is not supported"}},
+        ))
+        result = probe.verdict(record, stdout, "", "codex", "CUSTOM_OK")
+        self.assertEqual(result[0], "fail")
+        self.assertIn("upstream 400: model is not supported", result[1])
+        self.assertNotIn("Reconnecting", result[1])
+        self.assertEqual(probe.codex_failure("not json\n{}\n"), "")
+
     def test_codex_stderr_review_survives_the_tier_judgement(self):
         record = {"command": ["codex", "exec", "-m", "gpt-5.6-luna"],
                   "exit_code": 0, "timed_out": False}
@@ -291,7 +306,8 @@ class ProbeAndOverlayTests(unittest.TestCase):
 
     def build(self, proven):
         output = StringIO()
-        with patch.object(builder, "PROVEN", proven), patch.object(builder, "CORE_EVIDENCE", []), redirect_stdout(output):
+        with patch.object(builder, "PROVEN", proven), \
+                patch.object(builder, "core_evidence", list), redirect_stdout(output):
             builder.main(["--root", str(self.root)])
         overlay = json.loads((self.root / "transport-contracts.local.json").read_text())
         manifest = json.loads((self.root / "probe-manifest.json").read_text())
