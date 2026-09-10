@@ -44,6 +44,17 @@ semantic version tags.
   anchors the executable the runners resolve.
 - The last two mappings carrying `PRIOR:` references instead of probe evidence
   were re-probed, so every signed mapping now has a descriptor a reader can open.
+- A failing codex probe recorded `exit-code: 1` and nothing else. Under
+  `exec --json` the refusal that ends a run is an stdout event, so the reason
+  never reached `unproven[]`.
+
+### Removed
+
+- The three `gpt-5.4-mini` mappings. The model passed its probe on 2026-09-07
+  and now returns HTTP 400 — "not supported when using Codex with a ChatGPT
+  account" — so those configurations move to `unproven[]` carrying that reason.
+  A signed overlay does not notice a lane dying upstream; only a re-probe does.
+  The overlay now holds 46 mappings and 9 unproven configurations.
 
 ### Notes
 

@@ -602,6 +602,7 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 - **等級跟著證據走，不跟著廠商走。** 本次發布之前的探測會重判為 `selector-only`；哪天某支 CLI 開始回報計費模型，不改程式就自動升級。
 - **`omnilane doctor` 顯示分佈**，並點名哪幾家值得重探。
 - **overlay 錨定的是真正在跑的執行檔。** 過去路徑寫死在 `build_overlay.py` 裡，會無聲地錨到沒在用的版本——線上 overlay 雜湊的是 claude `2.1.263`，但每次派工跑的都是 `2.1.266`。現在改用 runner 實際解析到的執行檔。
+- **抓到三條已死的車道。** `gpt-5.4-mini` 在 2026-09-07 探測還會過，現在回 HTTP 400——「ChatGPT 帳號使用 Codex 時不支援此模型」。簽好的 overlay 永遠不會發現某條車道在上游死掉，重探才會。那三條移進 `unproven[]` 並附上原因，映射剩 46 條。
 - **升級。** npm 發布後執行 `npm i -g omnilane@0.42.6`。既有的 repo symlink 安裝更新檢出後確認 `omnilane --version` 即可，不需重跑安裝。
 
 ## v0.42.5 新功能

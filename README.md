@@ -706,6 +706,7 @@ working notes, including per-benchmark caveats, live in
 - **The tier follows the evidence, not the vendor.** A sweep predating this release re-judges as `selector-only`, and a CLI that begins reporting a billed model is promoted with no code change.
 - **`omnilane doctor` shows the spread** and names the vendors worth re-probing.
 - **Overlay evidence anchors the binary that runs.** Paths were written into `build_overlay.py` and drifted out of use silently — the live overlay hashed claude `2.1.263` while every dispatch ran `2.1.266`. Core evidence now resolves the executable the runners resolve.
+- **Three dead lanes found.** `gpt-5.4-mini` passed its probe on 2026-09-07 and now returns HTTP 400 — "not supported when using Codex with a ChatGPT account". A signed overlay never notices a lane dying upstream; the re-probe did. Those three configurations move to `unproven[]` with that reason attached, leaving 46 mappings.
 - **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.6`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
 
 ## What's new in v0.42.5
