@@ -71,8 +71,10 @@ omnilane route hardest-coding "auth トークン更新テストの不安定さ�
 > ゲートするため、「誰が依頼しているか」を必ず示す必要があります。端末の前にいる人間は
 > `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` を一度設定するか、呼び出しごとに
 > `--operator-asserted-human` を付けます。omnilane を動かすモデルは**自分でこれを主張
-> できません**。代わりに正確なベンダー・モデル・effort を持つ `--caller-context FILE` を
-> 渡します。どちらも無い場合、ジョブ生成前に `missing-caller-context` で拒否されます。
+> できません**。モデルの識別情報は、それを起動した CLI のモデル・effort フラグから自動で
+> 読み取られるため、通常のセッションは何も渡す必要がありません。`omnilane whoami` はその
+> 識別情報を `--caller-context FILE` として出力します。主張も読み取れる識別情報も無い場合、
+> ジョブ生成前に `missing-caller-context` で拒否されます。
 
 > はじめての方は、まず `omnilane doctor` を実行してください。omnilane が今どのモデル CLI と
 > API キーに接続できるかがわかり、実際に何が動くか把握できます。
@@ -530,10 +532,12 @@ work の別名ではありません。サービス管理など、work の境界�
 ください。その `transport-overlay` チェックが、問題はこのマシンの設定なのか
 リクエストなのかをすぐに示します。
 
-`missing-caller-context` — 呼び出し元の識別情報がありません。人間は
+`missing-caller-context` — 識別情報がゲートに届いていません。人間は
 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` または `--operator-asserted-human` を
-使います。omnilane を動かすモデルは、正確なベンダー・モデル・effort を含む
-`--caller-context FILE` を渡し、人間向けの免除を自称してはいけません。
+使います。モデルは通常何もしなくてよく、dispatch が起動元の CLI から識別情報を
+読み取ります。読み取れない場合は `omnilane whoami` を実行してください。渡すべき
+`--caller-context FILE` を出力するか、読み取れない理由（`--effort` 未指定、モデル
+エイリアス、スコア行なし）を示します。モデルは人間向けの免除を自称してはいけません。
 
 `runtime-mapping-unverified` — 識別情報は正しく、**ターゲット**にホストローカルの
 リクエストセレクタの証明がありません。未プローブか、プローブが失敗しています。
@@ -572,6 +576,16 @@ work の別名ではありません。サービス管理など、work の境界�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.42.7 の新機能
+
+- **モデルのセッションは識別ファイルなしでディスパッチできます。** `--caller-context` が無い場合、dispatch はプロセスツリーを遡って最も近いベンダー CLI を見つけ、その起動時のモデルと effort を読み取ります。これまで omnilane のチェックアウト外のセッションは `missing-caller-context` で止まり、判断をオペレーターに差し戻していました（2026-09-08 と 2026-09-10 に 3 件）。
+- **`omnilane whoami`** はその識別情報を caller-context ファイルとして出力し、読み取れない場合は理由（`--effort` 未指定、モデルエイリアス、Claude のその effort に non-reasoning 行しか無い）を示します。推測はしません。
+- **手書きファイルより偽りにくい。** ゲートは caller-context ファイルの形式しか確認せず、実際に動いているモデルと一致するかは見ていません。起動フラグはモデルではなくハーネスが設定し、セッションごとに判定されます。同じモデルでも `high` と `max` なら上限は 52 と 54 です。
+- **明示指定が優先。** `--caller-context` ファイル、ワーカーが継承する環境、`--operator-asserted-human` はいずれも自動読み取りより優先します。`OMNILANE_AA_CALLER_FROM_PROCESS=0` でファイルのみの契約に戻せます。
+- **拒否メッセージが出口を示します。** `missing-caller-context` と再試行の拒否は `omnilane whoami` を案内します。
+- **`omnilane --version` が正しくなりました。** 0.42.6 では `VERSION` が 0.42.5 のままでした。
+- **アップグレード。** npm 公開後は `npm i -g omnilane@0.42.7` を実行してください。
 
 ## v0.42.6 の新機能
 

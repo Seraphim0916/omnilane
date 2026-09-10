@@ -796,6 +796,17 @@ if [[ -n "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]]; then
   OMNILANE_AA_OVERLAY_SHA256="$(file_sha256 "$OMNILANE_AA_TRANSPORT_OVERLAY")"
   export OMNILANE_AA_OVERLAY_SHA256
 fi
+# A model caller that passed no identity is read from the CLI that launched it:
+# the harness sets those flags and the model cannot. An explicit file or the
+# human assertion still wins; OMNILANE_AA_CALLER_FROM_PROCESS=0 keeps the
+# file-only contract.
+if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "0" && -z "$AA_CALLER_CONTEXT" \
+      && "${OMNILANE_AA_CALLER_FROM_PROCESS:-1}" != "0" ]]; then
+  if derived_caller="$(python3 "$OMNILANE_REPO/scripts/lib/caller_identity.py" \
+      --registry "$AA_POLICY_FILE")"; then
+    AA_CALLER_CONTEXT="$derived_caller"
+  fi
+fi
 AA_POLICY_ACTIVE=1
 if [[ -n "$OVERRIDE_VENDOR" || -n "$OVERRIDE_MODEL" || -n "$OVERRIDE_EFFORT" || -n "$AA_TARGET_CONFIG" ]]; then
   AA_EXPLICIT_TARGET=1

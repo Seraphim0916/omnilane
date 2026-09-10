@@ -53,6 +53,13 @@ case "$cmd" in
     ;;
   release-audit) exec bash "$REPO/scripts/release-audit.sh" "$@" ;;
   doctor)    exec bash "$REPO/scripts/doctor.sh" "$@" ;;
+  whoami)
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: whoami requires Python 3.9 or newer" >&2
+      exit 1
+    }
+    exec python3 "$REPO/scripts/lib/caller_identity.py" "$@"
+    ;;
   benchmark)
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: benchmark requires Python 3.9 or newer" >&2
@@ -89,6 +96,7 @@ omnilane — one routing table, every harness
   omnilane completion bash|zsh|fish      print a shell completion script
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json] [--strict] [--probe V]  local health / opt-in live probe
+  omnilane whoami                       caller-context file for the CLI this runs under
   omnilane benchmark [--json] [--run] [--vendor V] fixed quality/cost comparison
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu

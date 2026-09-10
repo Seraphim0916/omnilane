@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "One routing table, native-first or CLI delegation, supervised completion workflows.",
-    "version": "0.42.6"
+    "version": "0.42.7"
   },
   "plugins": [
     {
       "name": "omnilane",
       "source": "./",
       "description": "Route each subtask to the model that fits, then delegate through a compatible caller-owned native agent or vendor CLI.",
-      "version": "0.42.6",
+      "version": "0.42.7",
       "category": "development",
       "keywords": [
         "routing",

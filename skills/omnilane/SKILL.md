@@ -19,10 +19,13 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    Read-only work uses advise; edits require `--mode work --workdir <repo>`.
    `<repo>/scripts/dispatch.sh --caller-context FILE [--executor auto|native|cli] [--native-context FILE] [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
 
-   A model caller MUST pass `--caller-context`; without it every dispatch is
-   refused with `missing-caller-context` before a job exists. Build that file
-   before the first dispatch — see **Frozen exact-AA downward gate** for the
-   schema, a worked example, and what to do when your own effort is unverifiable.
+   A model caller needs a caller identity. Dispatch reads it from the CLI that
+   launched you when that CLI names its model and effort, so an ordinary session
+   passes nothing. When it cannot, dispatch is refused with
+   `missing-caller-context` before a job exists: run `omnilane whoami` (or
+   `<repo>/bin/omnilane whoami`) and pass the file it prints as
+   `--caller-context`. See **Frozen exact-AA downward gate** for the schema and
+   what to do when your effort is genuinely unverifiable.
 
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    Use `--thread NAME` when later claude, codex, grok or gemini dispatches
@@ -355,15 +358,23 @@ and `snapshot_id` must equal the registry's own `snapshot.id`.
 Set `inherited_ceiling` to your own row's score when you are the root caller, or
 to the ceiling you were handed when you are a child.
 
-**When your harness names a model but no effort, look before you guess.** The
-launching process usually carries the exact flags. Walk your own ancestor chain
-(`ps -o ppid=,comm= -p <pid>` upward, then `ps -o args= -p <ancestor>`) and read
-its `--model` / `--effort`. Match the ancestor chain rather than the first
-matching process on the host — a second session of the same CLI is common and
-its flags are not yours. This is request-selector evidence, the same class the
-transport overlay carries, and it does not certify upstream identity.
+**Your identity is read from the CLI that launched you.** When no
+`--caller-context` is given, dispatch walks up the process tree to the nearest
+vendor CLI and reads the selector it was started with: `--model` / `--effort`
+for claude, `-m` and `-c model_reasoning_effort` for codex, `--reasoning-effort`
+for grok, the effort-encoded model id for agy. `omnilane whoami` runs the same
+walk and prints the resulting caller-context file, for a retry or to see what
+you will be held to. Nearest wins, so a codex worker started by a Claude session
+is a codex caller, and another session of the same CLI elsewhere on the host is
+never consulted. It does not guess: a missing flag, a model alias, or a Claude
+effort whose only scored row is non-reasoning is refused with the reason. This
+is request-selector evidence, the same class the transport overlay carries; it
+does not certify upstream identity, but unlike a hand-written file the model
+cannot edit it. An explicit `--caller-context` or `--operator-asserted-human`
+still wins, and `OMNILANE_AA_CALLER_FROM_PROCESS=0` restores the file-only
+contract.
 
-Only when that genuinely yields nothing: ask the operator, or declare the
+Only when `omnilane whoami` refuses: ask the operator, or declare the
 lowest-scoring row of your model and say so in your report. Understating only
 narrows what you may dispatch to, so it fails in the safe direction — but it is
 the fallback, not the first move, and an unnecessarily low ceiling silently
@@ -372,7 +383,9 @@ declared effort to unblock a refused target, and never assert
 `--operator-asserted-human` on your own behalf.
 
 Three refusal codes mean different things and need different fixes.
-`missing-caller-context` means you passed no file — write one.
+`missing-caller-context` means no identity reached the gate: you passed no file
+and dispatch could not read one from your launching CLI. Run `omnilane whoami`;
+its refusal says exactly why, and that reason is what to fix or report.
 `runtime-mapping-unverified` means the file is fine but the *target* has no proven
 host-local request selector; that is fixed by a `--transport-overlay` entry backed
 by real evidence, never by editing the frozen registry (its sha256 is pinned in

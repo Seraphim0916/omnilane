@@ -71,8 +71,10 @@ omnilane route hardest-coding "fix the flaky auth token refresh"
 > capability score, so a dispatch has to say who is asking. A human at a terminal
 > asserts that once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, or per call with
 > `--operator-asserted-human`. A model driving omnilane cannot assert it for
-> itself — it passes `--caller-context FILE` carrying its exact vendor, model and
-> effort instead. With neither, the dispatch is refused with
+> itself. Its identity is read from the CLI that launched it — the model and
+> effort flags that CLI was started with — so an ordinary session passes nothing,
+> and `omnilane whoami` prints that identity as a `--caller-context FILE`. With
+> neither an assertion nor a readable identity, the dispatch is refused with
 > `missing-caller-context` before any job is created.
 
 > New to this? Run `omnilane doctor` first — it tells you which model CLIs and
@@ -625,10 +627,13 @@ Three codes, three different fixes. Run `omnilane doctor` first — its
 `transport-overlay` check tells you immediately whether the problem is your
 machine's configuration or your request.
 
-`missing-caller-context` — you passed no identity. A human adds
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`; a model
-driving omnilane writes a `--caller-context FILE` with its exact vendor, model,
-and effort, and must not assert the human exemption for itself.
+`missing-caller-context` — no identity reached the gate. A human adds
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`. A model
+normally needs nothing: dispatch reads its identity from the CLI that launched
+it. When that fails, run `omnilane whoami` — it either prints a
+`--caller-context FILE` to pass, or says exactly why it cannot (a missing
+`--effort`, a model alias, no scored row). A model must not assert the human
+exemption for itself.
 
 `runtime-mapping-unverified` — your identity is fine, but the *target* has no
 proven host-local request selector. Either it was never probed, or its probe
@@ -698,6 +703,16 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.42.7
+
+- **A model session no longer needs an identity file to dispatch.** When no `--caller-context` is given, dispatch walks up the process tree to the nearest vendor CLI and reads the model and effort it was launched with. Sessions outside the omnilane checkout used to stop on `missing-caller-context` and hand the question back to the operator; three did so on 2026-09-08 and 2026-09-10.
+- **`omnilane whoami`** prints that identity as a caller-context file, or says exactly why it cannot — a missing `--effort`, a model alias, or a Claude effort whose only scored row is non-reasoning. It never guesses.
+- **Harder to overstate than a hand-written file.** The gate checks a caller-context file's shape, not whether it matches the model actually running. Launch flags are set by the harness, not the model, and each session is held to its own: the same model at `high` and at `max` gets ceilings 52 and 54.
+- **Explicit still wins.** A `--caller-context` file, the context a worker inherits, and `--operator-asserted-human` all take precedence. `OMNILANE_AA_CALLER_FROM_PROCESS=0` restores the file-only contract.
+- **The refusal names the way out.** `missing-caller-context` and the retry refusal now point to `omnilane whoami` instead of offering a model two options it cannot take.
+- **`omnilane --version` is right again.** The 0.42.6 release left `VERSION` at 0.42.5.
+- **Upgrade.** After npm publication, run `npm i -g omnilane@0.42.7`. Existing repo-symlink installations can update their checkout and verify `omnilane --version` without rerunning installation.
 
 ## What's new in v0.42.6
 

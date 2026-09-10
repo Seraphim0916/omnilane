@@ -70,8 +70,10 @@ omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 �
 > 게이트하므로, 디스패치는 «누가 요청하는지»를 반드시 밝혀야 합니다. 터미널 앞의 사람은
 > `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 을 한 번 설정하거나 호출마다
 > `--operator-asserted-human` 을 붙입니다. omnilane 을 구동하는 모델은 **스스로 이를 주장할
-> 수 없으며**, 대신 정확한 벤더·모델·effort 를 담은 `--caller-context FILE` 을 전달합니다.
-> 둘 다 없으면 잡 생성 전에 `missing-caller-context` 로 거부됩니다.
+> 수 없습니다**. 모델의 신원은 그것을 실행한 CLI 의 모델·effort 플래그에서 자동으로 읽히므로,
+> 일반 세션은 아무것도 전달할 필요가 없습니다. `omnilane whoami` 는 그 신원을
+> `--caller-context FILE` 로 출력합니다. 주장도 읽을 수 있는 신원도 없으면 잡 생성 전에
+> `missing-caller-context` 로 거부됩니다.
 
 > 처음이신가요? 먼저 `omnilane doctor` 를 실행하세요. omnilane 이 지금 어떤 모델 CLI 와
 > API 키에 접근할 수 있는지 알려 주어, 실제로 무엇이 실행될지 파악할 수 있습니다.
@@ -516,10 +518,12 @@ work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 �
 `transport-overlay` 검사가 문제의 원인이 이 머신의 설정인지 요청인지 바로
 알려줍니다.
 
-`missing-caller-context` — 호출자 신원을 전달하지 않았습니다. 사람은
+`missing-caller-context` — 게이트에 신원이 전달되지 않았습니다. 사람은
 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 또는 `--operator-asserted-human`을
-사용합니다. omnilane을 구동하는 모델은 정확한 벤더·모델·effort가 담긴
-`--caller-context FILE`을 전달해야 하며, 사람용 면제를 스스로 주장해서는 안 됩니다.
+사용합니다. 모델은 보통 아무것도 할 필요가 없으며, dispatch 가 실행한 CLI 에서 신원을
+읽습니다. 읽지 못하면 `omnilane whoami` 를 실행하세요. 전달할 `--caller-context FILE`
+을 출력하거나, 읽지 못한 정확한 이유(`--effort` 누락, 모델 별칭, 점수 행 없음)를 알려줍니다.
+모델은 사람용 면제를 스스로 주장해서는 안 됩니다.
 
 `runtime-mapping-unverified` — 신원은 정상이지만 **대상**에 검증된 호스트 로컬
 요청 셀렉터가 없습니다. 프로브를 한 적이 없거나 프로브가 실패한 경우입니다.
@@ -557,6 +561,16 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.42.7 새 기능
+
+- **모델 세션은 신원 파일 없이 디스패치할 수 있습니다.** `--caller-context` 가 없으면 dispatch 가 프로세스 트리를 거슬러 올라가 가장 가까운 벤더 CLI 를 찾고, 그 CLI 가 실행될 때의 모델과 effort 를 읽습니다. 지금까지 omnilane 체크아웃 밖의 세션은 `missing-caller-context` 에서 멈추고 판단을 운영자에게 되돌렸습니다(2026-09-08, 2026-09-10 에 3건).
+- **`omnilane whoami`** 는 그 신원을 caller-context 파일로 출력하고, 읽지 못하면 정확한 이유(`--effort` 누락, 모델 별칭, 해당 effort 에 Claude 의 non-reasoning 행만 있음)를 알려줍니다. 추측하지 않습니다.
+- **손으로 쓴 파일보다 속이기 어렵습니다.** 게이트는 caller-context 파일의 형식만 확인하고 실제로 실행 중인 모델과 일치하는지는 보지 않습니다. 실행 플래그는 모델이 아니라 하네스가 설정하며, 세션마다 따로 판정됩니다. 같은 모델이라도 `high` 와 `max` 면 상한은 52 와 54 입니다.
+- **명시 지정이 우선합니다.** `--caller-context` 파일, 워커가 물려받는 환경, `--operator-asserted-human` 은 모두 자동 읽기보다 우선합니다. `OMNILANE_AA_CALLER_FROM_PROCESS=0` 으로 파일 전용 계약으로 되돌릴 수 있습니다.
+- **거부 메시지가 해결책을 알려줍니다.** `missing-caller-context` 와 재시도 거부는 `omnilane whoami` 를 안내합니다.
+- **`omnilane --version` 이 다시 정확해졌습니다.** 0.42.6 에서는 `VERSION` 이 0.42.5 로 남아 있었습니다.
+- **업그레이드.** npm 게시 후 `npm i -g omnilane@0.42.7`를 실행하세요.
 
 ## v0.42.6 새 기능
 

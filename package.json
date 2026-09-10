@@ -1,6 +1,6 @@
 {
   "name": "omnilane",
-  "version": "0.42.6",
+  "version": "0.42.7",
   "description": "One routing table, every harness — classify subtasks into lanes and delegate each lane through a compatible caller-owned native agent or vendor CLI.",
   "bin": {
     "omnilane": "bin/omnilane"

@@ -6,6 +6,41 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.7] - 2026-09-10
+
+### Added
+
+- `omnilane whoami` prints a caller-context file for the CLI it runs under. It
+  walks up the process tree to the nearest vendor CLI, reads the model and
+  effort that CLI was launched with, and maps them onto the one scored
+  configuration they select, or exits 3 with the reason: a missing `--effort`,
+  a model alias, or a Claude effort whose only scored row is non-reasoning. It
+  never guesses.
+
+### Changed
+
+- A dispatch that carries no `--caller-context` and no human assertion reads
+  the caller's identity from its launching CLI. Model sessions outside the
+  omnilane checkout used to stop on `missing-caller-context` and hand the
+  question back to the operator — three did on 2026-09-08 and 2026-09-10 —
+  because the refusal offered a model two options it could not take, and the
+  instructions for a third lived where those sessions never looked.
+- Launch flags are set by the harness rather than the model, so an identity
+  read from them is harder to overstate than a hand-written file, which the
+  gate checks for shape but not against what is running. Each session is held
+  to its own flags: the same model at `high` and at `max` gets 52 and 54.
+- An explicit `--caller-context`, the context a worker inherits, and
+  `--operator-asserted-human` all take precedence.
+  `OMNILANE_AA_CALLER_FROM_PROCESS=0` restores the file-only contract.
+- The `missing-caller-context` and retry refusals name `omnilane whoami`.
+  Retries still require an explicit current identity; they are not read
+  automatically.
+
+### Fixed
+
+- `omnilane --version` reported 0.42.5 in the 0.42.6 release, whose `VERSION`
+  file was not bumped with the package manifests.
+
 ## [0.42.6] - 2026-09-10
 
 ### Added
@@ -981,7 +1016,9 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.5...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...HEAD
+[0.42.7]: https://github.com/Seraphim0916/omnilane/compare/v0.42.6...v0.42.7
+[0.42.6]: https://github.com/Seraphim0916/omnilane/compare/v0.42.5...v0.42.6
 [0.42.5]: https://github.com/Seraphim0916/omnilane/compare/v0.42.4...v0.42.5
 [0.42.4]: https://github.com/Seraphim0916/omnilane/compare/v0.42.3...v0.42.4
 [0.42.3]: https://github.com/Seraphim0916/omnilane/compare/v0.42.2...v0.42.3

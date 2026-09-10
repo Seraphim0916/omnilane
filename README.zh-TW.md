@@ -65,8 +65,9 @@ omnilane route hardest-coding "修掉會間歇失敗的 auth token 更新測試"
 > **那個 export 是做什麼的?** omnilane 會用呼叫者自己的能力分數來把關每一次派工,
 > 所以派工必須表明「是誰在問」。人類在終端機前只要設一次
 > `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`,或每次帶 `--operator-asserted-human`。
-> 模型驅動 omnilane 時**不能替自己主張**這個旗標,它要改用 `--caller-context FILE`
-> 提供確切的廠商、模型與強度。兩者都沒有的話,派工會在建立工作前就被
+> 模型驅動 omnilane 時**不能替自己主張**這個旗標。它的身分會從啟動它的 CLI 旗標
+> (模型與強度)自動讀取,一般 session 什麼都不用帶;`omnilane whoami` 會把這個身分
+> 印成 `--caller-context FILE`。既沒主張、又讀不到身分的話,派工會在建立工作前就被
 > `missing-caller-context` 拒絕。
 
 > 第一次用?先跑 `omnilane doctor`——它會告訴你 omnilane 現在能接到哪些模型 CLI 與
@@ -533,10 +534,11 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 三個代碼，三種不同的修法。先跑 `omnilane doctor`——它的 `transport-overlay`
 檢查會直接告訴你問題出在本機設定還是你的請求。
 
-`missing-caller-context`——你沒帶身分。真人加上
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 或 `--operator-asserted-human`；
-模型驅動 omnilane 時要寫一份 `--caller-context FILE`，內含它精確的廠商、模型與
-強度，且不得替自己主張真人豁免。
+`missing-caller-context`——沒有身分送到閘門。真人加上
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 或 `--operator-asserted-human`。
+模型通常什麼都不用做：dispatch 會從啟動它的 CLI 讀取身分。讀不到時跑
+`omnilane whoami`，它會印出可以帶的 `--caller-context FILE`，或說明讀不到的確切原因
+（缺 `--effort`、模型別名、查無評分列）。模型不得替自己主張真人豁免。
 
 `runtime-mapping-unverified`——你的身分沒問題，但**目標**沒有已驗證的本機請求
 選擇器。可能從未探測過，也可能探測失敗；`omnilane doctor` 會回報這類設定的數量，
@@ -594,6 +596,16 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.42.7 新功能
+
+- **模型 session 派工不再需要身分檔。** 沒給 `--caller-context` 時，dispatch 會沿行程樹往上找到最近的廠商 CLI，讀它啟動時帶的模型與強度。以前不在 omnilane 目錄下的 session 會卡在 `missing-caller-context`，把問題丟回給操作者——2026-09-08 與 2026-09-10 就有三個 session 這樣停下來。
+- **`omnilane whoami`** 會把這個身分印成 caller-context 檔，讀不到時說明確切原因（缺 `--effort`、模型別名、claude 那個強度只剩 non-reasoning 列），絕不猜。
+- **比手寫的檔案更難作假。** 閘門只檢查身分檔的格式，不核對它和實際在跑的模型是否一致。啟動旗標是 harness 設的，模型改不了，而且每個 session 各算各的：同一個模型分別開 `high` 和 `max`，上限就是 52 和 54。
+- **明確指定仍然優先。** `--caller-context` 檔、worker 繼承的環境、`--operator-asserted-human` 都優先於自動讀取。`OMNILANE_AA_CALLER_FROM_PROCESS=0` 可以恢復「只認檔案」的規則。
+- **被拒時會告訴你出路。** `missing-caller-context` 和重試被拒的訊息都改成指向 `omnilane whoami`，不再只給模型兩條走不通的路。
+- **`omnilane --version` 恢復正確。** 0.42.6 發版時漏改了 `VERSION`，會回報 0.42.5。
+- **升級。** npm 發布後執行 `npm i -g omnilane@0.42.7`。既有的 repo symlink 安裝更新檢出後確認 `omnilane --version` 即可，不需重跑安裝。
 
 ## v0.42.6 新功能
 

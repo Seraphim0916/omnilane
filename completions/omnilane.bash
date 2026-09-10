@@ -58,7 +58,7 @@ _omnilane() {
   prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   command="${COMP_WORDS[1]:-}"
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-      words="version list route dispatch jobs doctor benchmark release-audit ui configure completion help"
+      words="version list route dispatch jobs doctor whoami benchmark release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)

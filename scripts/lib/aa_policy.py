@@ -341,7 +341,10 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
     if caller is None:
         base.update(
             code="missing-caller-context",
-            message="provide --caller-context FILE or explicitly assert --operator-asserted-human",
+            message=("no caller identity: a model caller runs `omnilane whoami` and passes the "
+                     "file it prints as --caller-context, which dispatch does itself when the "
+                     "launching CLI names its model and effort; a human operator passes "
+                     "--operator-asserted-human"),
         )
         return base
     base["caller_context_sha256"] = caller_sha256

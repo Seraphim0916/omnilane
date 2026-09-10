@@ -4452,5 +4452,12 @@ test_aa_lineage() {
 }
 test_aa_lineage
 
+test_caller_identity() {
+  local name="caller identity read from the launching CLI (offline)" out rc=0
+  out="$(python3 "$ROOT/tests/test_caller_identity.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "$out"; else pass "$name"; fi
+}
+test_caller_identity
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

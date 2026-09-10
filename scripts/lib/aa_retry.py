@@ -27,7 +27,9 @@ def retry_args(directory):
         original_limit = min(rows[0]["score"], original["inherited_ceiling"])
     current_path = os.environ.get("OMNILANE_AA_CALLER_CONTEXT")
     current_human = os.environ.get("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN") == "1"
-    aa_policy._check(bool(current_path) != current_human, "retry requires one current caller context or explicit current human assertion")
+    aa_policy._check(bool(current_path) != current_human,
+                     "retry requires one current caller context or explicit current human "
+                     "assertion; a model caller gets one from `omnilane whoami`")
     if current_path:
         current, _ = aa_policy.load_caller(current_path, registry)
         rows = aa_policy._matching_rows(registry, current["caller"])
