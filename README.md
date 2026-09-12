@@ -71,8 +71,9 @@ omnilane route hardest-coding "fix the flaky auth token refresh"
 > capability score, so a dispatch has to say who is asking. A human at a terminal
 > asserts that once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, or per call with
 > `--operator-asserted-human`. A model driving omnilane cannot assert it for
-> itself. Its identity is read from the CLI that launched it — the model and
-> effort flags that CLI was started with — so an ordinary session passes nothing,
+> itself. Its identity is read from the nearest launching CLI: explicit model and
+> effort flags, or for Codex app-server/no-model launches, a bound current-turn
+> rollout (never app-server startup defaults). An ordinary session passes nothing,
 > and `omnilane whoami` prints that identity as a `--caller-context FILE`. With
 > neither an assertion nor a readable identity, the dispatch is refused with
 > `missing-caller-context` before any job is created.
@@ -629,8 +630,9 @@ machine's configuration or your request.
 
 `missing-caller-context` — no identity reached the gate. A human adds
 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`. A model
-normally needs nothing: dispatch reads its identity from the CLI that launched
-it. When that fails, run `omnilane whoami` — it either prints a
+normally needs nothing: dispatch reads its identity from the nearest launching
+CLI, using a bound current-turn rollout for Codex app-server/no-model launches.
+When that fails, run `omnilane whoami` — it either prints a
 `--caller-context FILE` to pass, or says exactly why it cannot (a missing
 `--effort`, a model alias, no scored row). A model must not assert the human
 exemption for itself.
@@ -703,6 +705,32 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.42.8
+
+- **Codex current-turn identity.** `app-server` always ignores startup model and
+  effort defaults. Other Codex launches keep explicit `-m` / `--model` or
+  `-c model=...` / `--config` selectors (TOML model overrides require Python 3.11+);
+  no model, including profile-only launches, uses the rollout path.
+- **Bound, fail-closed evidence.** The current process environment and the codex
+  direct-child initial environment must carry the same UUID-shaped
+  `CODEX_THREAD_ID`. The rollout is looked up under `$CODEX_HOME/sessions`
+  (default `~/.codex`) as `rollout-*-<thread>.jsonl` and, after a resume,
+  `rollout-*-<thread>_<session>.jsonl`; the most recently written match is read
+  and its `session_meta.id` must match. Its latest `turn_context` needs model,
+  effort and turn id; a later `task_complete`, `turn_complete` (read alias) or
+  `turn_aborted` carrying that same turn id refuses stale identity, and the
+  refusal names both turn ids and how long ago the rollout was written. No config,
+  model-list, archive or other-session fallback; JSONL is streamed and message
+  content is never included in diagnostics. `whoami` reports thread and turn ids.
+- **Codex sandbox refusal.** Ancestor lookup still runs first. If it fails under
+  `CODEX_SANDBOX=seatbelt`, `whoami` explains that process inspection,
+  `~/.omnilane` writes and networking require rerunning outside the sandbox.
+- **Compatibility.** Other vendors, explicit/inherited caller identity and human
+  assertion precedence are unchanged. `OMNILANE_AA_CALLER_FROM_PROCESS=0` disables
+  both argv and rollout reading. Real app-server acceptance of this candidate
+  remains separate from unit tests and the existing 0.153.4 source probes.
+- **Upgrade.** After publication, run `npm i -g omnilane@0.42.8`.
 
 ## What's new in v0.42.7
 

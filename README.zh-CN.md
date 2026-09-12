@@ -556,6 +556,25 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.42.8 新功能
+
+- **Codex 当前轮次身份。** `app-server` 始终忽略启动参数中的模型和强度默认值。
+  其他 Codex 启动保留明确的 `-m` / `--model` / `-c model=...` / `--config`；
+  未指定模型（包括只指定 profile）时读取当前轮次记录。TOML 模型覆盖需要 Python 3.11+。
+- **证据不明就拒绝。** 本进程的当前环境与 Codex 直属子进程的初始环境必须有相同、符合 UUID 格式的
+  `CODEX_THREAD_ID`。记录文件在 `$CODEX_HOME/sessions`（默认 `~/.codex`）下按
+  `rollout-*-<对话串>.jsonl` 查找，对话串续用后还会有 `rollout-*-<对话串>_<会话>.jsonl`；
+  取最后写入的那一个，`session_meta.id` 必须一致。最后一个 `turn_context` 必须包含模型、强度和轮次 ID；
+  后面若出现**同一个轮次 ID** 的 `task_complete` / `turn_complete`（读取别名）/ `turn_aborted`，
+  就拒绝使用过期身份，并在消息里写出两个轮次 ID，以及该记录多久没有被写入。
+- **Codex 沙箱拒绝。** 仍会先查询祖先进程；若在 `CODEX_SANDBOX=seatbelt` 下查询失败，
+  `whoami` 会说明进程查询、写入 `~/.omnilane` 和联网都需要在沙箱外重新执行命令。
+- **隐私与兼容。** 逐行读取 JSONL，诊断不含消息正文；`whoami` 会报告对话串和轮次 ID。
+  不从配置默认值、模型列表、归档或其他对话推断。其他供应商、明确或继承的身份、人类声明
+  的优先级不变；`OMNILANE_AA_CALLER_FROM_PROCESS=0` 同时关闭两种读取路径。
+- **验证边界。** 合成单元测试与既有的 0.153.4 来源探测，不代表修改后的真实 app-server
+  轮次已经验收。发布后升级：`npm i -g omnilane@0.42.8`。
+
 ## v0.42.7 新功能
 
 - **模型 session 派工不再需要身份文件。** 没给 `--caller-context` 时，dispatch 会沿进程树往上找到最近的厂商 CLI，读取它启动时带的模型与强度。以前不在 omnilane 目录下的 session 会卡在 `missing-caller-context`，把问题丢回给操作者——2026-09-08 与 2026-09-10 就有三个 session 这样停下来。

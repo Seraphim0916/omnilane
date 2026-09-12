@@ -142,7 +142,13 @@ if [[ "$RC" -eq 142 || "$RC" -eq 124 ]]; then
     thread_id="$(head -1 "${OUTPUT_FILE}.progress.log" 2>/dev/null |
       sed -n 's/.*"thread_id":"\([^"]*\)".*/\1/p')"
     if [[ -n "$thread_id" ]]; then
-      rollout="$(find "${CODEX_HOME:-$HOME/.codex}/sessions" -name "rollout-*-${thread_id}.jsonl" 2>/dev/null | head -1)"
+      # A resumed thread writes rollout-*-<thread>_<session>.jsonl, so match both names and keep the newest.
+      rollout=""
+      while IFS= read -r candidate; do
+        [[ -z "$candidate" ]] && continue
+        if [[ -z "$rollout" || "$candidate" -nt "$rollout" ]]; then rollout="$candidate"; fi
+      done < <(find "${CODEX_HOME:-$HOME/.codex}/sessions" \
+        \( -name "rollout-*-${thread_id}.jsonl" -o -name "rollout-*-${thread_id}_*.jsonl" \) 2>/dev/null)
       echo "omnilane: rollout: ${rollout:-not found (thread ${thread_id})}"
     else
       echo "omnilane: rollout: unknown — no thread_id in the progress log, so codex died before its first event"

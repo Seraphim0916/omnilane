@@ -6,6 +6,41 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.8] - 2026-09-11
+
+### Fixed
+
+- When ancestor inspection fails under `CODEX_SANDBOX=seatbelt`, `whoami` now explains that Codex blocked process inspection and that dispatch must be rerun outside the sandbox because omnilane also needs `~/.omnilane` writes and network access; non-sandbox refusals are unchanged.
+
+- Codex `app-server` caller identity always comes from the latest host-written
+  `turn_context`, never its startup defaults. Other Codex launches use rollout
+  evidence only when no explicit model was selected (profiles are not selectors).
+- Bind `CODEX_THREAD_ID` in the current process to the codex direct child's
+  initial environment. macOS reads argv and environment separately through
+  `KERN_PROCARGS2`; Linux reads `/proc`. Look the rollout up as
+  `rollout-*-<thread>.jsonl` and, for a resumed thread,
+  `rollout-*-<thread>_<session>.jsonl`, read the most recently written match, and
+  require a matching `session_meta.id`, non-empty model/effort/turn id, and no
+  later `task_complete`, its `turn_complete` read alias, or `turn_aborted`
+  carrying that same turn id. A refusal names both turn ids and how long ago the
+  rollout was last written. Missing, malformed or stale evidence refuses.
+- Stream JSONL records and retain only identity metadata and event types;
+  diagnostics never include message content. `whoami` reports thread and turn ids.
+- Accept Codex `-c model=...` / `--config` overrides, including attached/equals
+  forms and TOML strings (Python 3.11+); explicit `-m` / `--model` still wins
+  outside app-server. Other vendors and caller-context/inherited/human priority
+  remain unchanged. `OMNILANE_AA_CALLER_FROM_PROCESS=0` disables both readers.
+
+### Verification boundary
+
+- Source contract verified in five real turns with bundled app-server 0.153.4;
+  this candidate's real app-server acceptance is a separate follow-up, not claimed
+  by its synthetic unit tests. 已在內附 0.153.4 驗證；較新版本若延後寫檔，過期保護會讓它拒絕，而不是讀到舊的一輪。
+- Metadata-only check of the two 0.154.0 worker rollouts: thread
+  `01a08f9e-6450-7f82-85e9-af534954b4ac` was absent from both active and archived
+  directories; `01a08fb4-fd1a-7811-a457-c21a4a6ff4d8` existed in active sessions,
+  created 2026-09-11 17:03:18 Asia/Taipei. Neither file's contents were opened.
+
 ## [0.42.7] - 2026-09-10
 
 ### Added
@@ -1016,7 +1051,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...HEAD
+[0.42.8]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...v0.42.8
 [0.42.7]: https://github.com/Seraphim0916/omnilane/compare/v0.42.6...v0.42.7
 [0.42.6]: https://github.com/Seraphim0916/omnilane/compare/v0.42.5...v0.42.6
 [0.42.5]: https://github.com/Seraphim0916/omnilane/compare/v0.42.4...v0.42.5

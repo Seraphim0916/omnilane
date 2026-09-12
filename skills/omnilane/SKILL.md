@@ -19,13 +19,14 @@ You (the main loop) may be Claude, GPT, Grok, or Gemini. The procedure is identi
    Read-only work uses advise; edits require `--mode work --workdir <repo>`.
    `<repo>/scripts/dispatch.sh --caller-context FILE [--executor auto|native|cli] [--native-context FILE] [--vendor V] [--mode work] [--workdir DIR] <lane> "<task>"`
 
-   A model caller needs a caller identity. Dispatch reads it from the CLI that
-   launched you when that CLI names its model and effort, so an ordinary session
-   passes nothing. When it cannot, dispatch is refused with
-   `missing-caller-context` before a job exists: run `omnilane whoami` (or
-   `<repo>/bin/omnilane whoami`) and pass the file it prints as
-   `--caller-context`. See **Frozen exact-AA downward gate** for the schema and
-   what to do when your effort is genuinely unverifiable.
+   A model caller needs a verifiable caller identity. Codex app-server reads the
+   current turn from its rollout; other launches read the model and effort from
+   the CLI that launched you, so an ordinary session passes nothing. When that
+   identity cannot be read, dispatch is refused with `missing-caller-context`
+   before a job exists: run `omnilane whoami` (or `<repo>/bin/omnilane whoami`)
+   and pass the file it prints as `--caller-context`. See **Frozen exact-AA
+   downward gate** for the schema and what to do when effort is genuinely
+   unverifiable.
 
    Add `--background` for long tasks; poll with `scripts/jobs.sh status|result <id>`.
    Use `--thread NAME` when later claude, codex, grok or gemini dispatches
@@ -358,21 +359,35 @@ and `snapshot_id` must equal the registry's own `snapshot.id`.
 Set `inherited_ceiling` to your own row's score when you are the root caller, or
 to the ceiling you were handed when you are a child.
 
-**Your identity is read from the CLI that launched you.** When no
-`--caller-context` is given, dispatch walks up the process tree to the nearest
-vendor CLI and reads the selector it was started with: `--model` / `--effort`
-for claude, `-m` and `-c model_reasoning_effort` for codex, `--reasoning-effort`
-for grok, the effort-encoded model id for agy. `omnilane whoami` runs the same
-walk and prints the resulting caller-context file, for a retry or to see what
-you will be held to. Nearest wins, so a codex worker started by a Claude session
-is a codex caller, and another session of the same CLI elsewhere on the host is
-never consulted. It does not guess: a missing flag, a model alias, or a Claude
-effort whose only scored row is non-reasoning is refused with the reason. This
-is request-selector evidence, the same class the transport overlay carries; it
-does not certify upstream identity, but unlike a hand-written file the model
-cannot edit it. An explicit `--caller-context` or `--operator-asserted-human`
-still wins, and `OMNILANE_AA_CALLER_FROM_PROCESS=0` restores the file-only
-contract.
+**Your identity is read from the CLI that launched you.** Without explicit or
+inherited caller-context, dispatch finds the nearest vendor CLI. Claude, Grok
+and Agy retain their launch selectors. Codex outside app-server retains explicit
+`-m` / `--model` or `-c model=...` / `--config` selectors; TOML model overrides
+require Python 3.11+. A profile is not an explicit model selector.
+
+Codex app-server always ignores startup selectors, even explicit model flags;
+other Codex launches without a model use the same current-turn rollout reader.
+It requires matching UUID-shaped `CODEX_THREAD_ID` values in this process and the
+codex direct child's initial environment (not text embedded in argv). Exactly
+one active rollout under `$CODEX_HOME/sessions` (default `~/.codex`) must have
+matching `session_meta.id`. The last `turn_context` must provide non-empty model,
+effort and turn id, with no later `task_complete`, `turn_complete` or
+`turn_aborted` event.
+Missing, ambiguous, malformed or stale evidence refuses: no config defaults,
+model-list, archive or other-thread fallback. JSONL is streamed; only identity
+metadata and event types reach diagnostics, never message content.
+
+`omnilane whoami` prints the resulting caller-context path and reports thread
+and turn ids for rollout evidence. The existing scored-row resolver still makes
+the decision; this is host request-selector evidence, not proof of upstream
+provider identity. Nearest wins, including workers launched by another vendor.
+Explicit `--caller-context`, inherited identity and `--operator-asserted-human`
+retain their precedence; `OMNILANE_AA_CALLER_FROM_PROCESS=0` disables both readers.
+
+Ancestor lookup still runs first. If it fails under `CODEX_SANDBOX=seatbelt`,
+`whoami` explains that process inspection, `~/.omnilane` writes and networking
+require rerunning the command outside the Codex sandbox; do not retry with a
+caller-context inside that sandbox.
 
 Only when `omnilane whoami` refuses: ask the operator, or declare the
 lowest-scoring row of your model and say so in your report. Understating only
