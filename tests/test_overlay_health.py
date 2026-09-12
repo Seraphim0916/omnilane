@@ -19,7 +19,7 @@ REGISTRY = json.loads((ROOT / "config" / "aa-model-policy.json").read_text())
 
 
 def run(overlay_path):
-    env = dict(os.environ)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
     if overlay_path is None:
         env.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
     else:
