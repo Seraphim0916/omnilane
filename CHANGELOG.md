@@ -6,7 +6,7 @@ semantic version tags.
 
 ## [Unreleased]
 
-## [0.42.8] - 2026-09-11
+## [0.42.8] - 2026-09-12
 
 ### Fixed
 
@@ -30,12 +30,19 @@ semantic version tags.
   forms and TOML strings (Python 3.11+); explicit `-m` / `--model` still wins
   outside app-server. Other vendors and caller-context/inherited/human priority
   remain unchanged. `OMNILANE_AA_CALLER_FROM_PROCESS=0` disables both readers.
+- The test suite no longer inherits the dispatcher's AA environment. Run inside
+  an omnilane worker it kept the exported `OMNILANE_AA_*`, so the authorizer
+  identity and the transport overlay hash pin outranked each fixture's own human
+  exemption and six tests failed for that reason alone.
 
-### Verification boundary
+### Verification
 
-- Source contract verified in five real turns with bundled app-server 0.153.4;
-  this candidate's real app-server acceptance is a separate follow-up, not claimed
-  by its synthetic unit tests. 已在內附 0.153.4 驗證；較新版本若延後寫檔，過期保護會讓它拒絕，而不是讀到舊的一輪。
+- Accepted on real Codex desktop threads on 2026-09-12: `whoami` and
+  `dispatch.sh --dry-run` both exited 0 in a fresh thread and in a resumed thread
+  whose original rollout had stopped the previous day, reporting
+  `codex/gpt-6-astra-xhigh (score 54)` and `"allowed":true` with no job created.
+- Source contract verified earlier in five real turns with bundled app-server
+  0.153.4. 較新版本若延後寫檔，過期保護會讓它拒絕，而不是讀到舊的一輪。
 - Metadata-only check of the two 0.154.0 worker rollouts: thread
   `01a08f9e-6450-7f82-85e9-af534954b4ac` was absent from both active and archived
   directories; `01a08fb4-fd1a-7811-a457-c21a4a6ff4d8` existed in active sessions,

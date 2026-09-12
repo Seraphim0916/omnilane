@@ -726,11 +726,17 @@ working notes, including per-benchmark caveats, live in
 - **Codex sandbox refusal.** Ancestor lookup still runs first. If it fails under
   `CODEX_SANDBOX=seatbelt`, `whoami` explains that process inspection,
   `~/.omnilane` writes and networking require rerunning outside the sandbox.
+- **Hermetic tests.** The suite no longer inherits `OMNILANE_AA_*` from a
+  dispatching worker, where the authorizer identity and the overlay hash pin used
+  to outrank each fixture's own human exemption and fail six tests.
 - **Compatibility.** Other vendors, explicit/inherited caller identity and human
   assertion precedence are unchanged. `OMNILANE_AA_CALLER_FROM_PROCESS=0` disables
-  both argv and rollout reading. Real app-server acceptance of this candidate
-  remains separate from unit tests and the existing 0.153.4 source probes.
-- **Upgrade.** After publication, run `npm i -g omnilane@0.42.8`.
+  both argv and rollout reading.
+- **Accepted on a real desktop thread.** On 2026-09-12 `whoami` and
+  `dispatch.sh --dry-run` both exited 0 from the Codex desktop app — in a fresh
+  thread and in a resumed one whose original rollout had stopped the day before,
+  reporting `codex/gpt-6-astra-xhigh (score 54)` and `"allowed":true`.
+- **Upgrade.** Run `npm i -g omnilane@0.42.8`.
 
 ## What's new in v0.42.7
 
