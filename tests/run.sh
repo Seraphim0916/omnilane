@@ -9,6 +9,11 @@ unset OMNILANE_IDLE_TIMEOUT OMNILANE_SESSION_MODE
 # Existing behavioral fixtures exercise routing mechanics rather than model
 # hierarchy.  Their explicit operator assertion preserves that scope; focused
 # exact-AA tests below cover model-caller fail-closed behavior.
+# Dispatch workers inherit the launcher's AA pins; fixtures must not be compared against them.
+for inherited_aa in "${!OMNILANE_AA_@}"; do
+  unset "$inherited_aa"
+done
+unset inherited_aa
 export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
 unset OMNILANE_AA_CALLER_CONTEXT OMNILANE_AA_POLICY_FILE
 for inherited_timeout in "${!OMNILANE_TIMEOUT_@}"; do

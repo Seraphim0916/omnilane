@@ -111,7 +111,8 @@ try:
         job.mkdir(parents=True)
         (case / 'prompt').write_text('initial\n')
         (job / 'meta.json').write_text('{"lane":"hardest-coding","vendor":"codex","session_mode":"live"}')
-        env = dict(os.environ, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_HOME=str(home), OMNILANE_REPO=str(fixture),
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
+        env = dict(clean, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_HOME=str(home), OMNILANE_REPO=str(fixture),
                    OMNILANE_SESSION_MODE='live', OMNILANE_LIVE_REQUIRED='1',
                    OMNILANE_IDLE_TIMEOUT='0', CASE_DIR=str(case), CASE_MODE=mode)
         for key in ('OMNILANE_JOB_WORKER_REPO', 'OMNILANE_JOB_WORKER_EXPECTED_SHA256'):

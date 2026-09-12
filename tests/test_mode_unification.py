@@ -171,7 +171,7 @@ printf 'grok mode fixture\n'
         prompt = tmp / "prompt.txt"
         prompt.write_text("mode fixture\n")
         output = tmp / "out.txt"
-        env = os.environ.copy()
+        env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
         env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             GROK_BIN=str(fake),
