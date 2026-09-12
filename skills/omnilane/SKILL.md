@@ -368,11 +368,14 @@ require Python 3.11+. A profile is not an explicit model selector.
 Codex app-server always ignores startup selectors, even explicit model flags;
 other Codex launches without a model use the same current-turn rollout reader.
 It requires matching UUID-shaped `CODEX_THREAD_ID` values in this process and the
-codex direct child's initial environment (not text embedded in argv). Exactly
-one active rollout under `$CODEX_HOME/sessions` (default `~/.codex`) must have
-matching `session_meta.id`. The last `turn_context` must provide non-empty model,
-effort and turn id, with no later `task_complete`, `turn_complete` or
-`turn_aborted` event.
+codex direct child's initial environment (not text embedded in argv). The rollout
+is looked up under `$CODEX_HOME/sessions` (default `~/.codex`) as
+`rollout-*-<thread>.jsonl` and, once a thread has been resumed,
+`rollout-*-<thread>_<session>.jsonl`; the most recently written match is read and
+must have matching `session_meta.id`. The last `turn_context` must provide
+non-empty model, effort and turn id, with no later `task_complete`,
+`turn_complete` or `turn_aborted` carrying that same turn id. A refusal names
+both turn ids and how long ago that rollout was last written.
 Missing, ambiguous, malformed or stale evidence refuses: no config defaults,
 model-list, archive or other-thread fallback. JSONL is streamed; only identity
 metadata and event types reach diagnostics, never message content.
