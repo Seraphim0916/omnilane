@@ -58,7 +58,9 @@ def _vendor(executable: str) -> str | None:
     name = path.name
     if name == "claude" or (path.parent.name == "versions" and path.parent.parent.name == "claude"):
         return "claude"
-    if name == "codex":
+    # codex-profile-switch launches the desktop app-server as `codex-modified`; its sibling
+    # `codex-code-mode-host` is a tool host, not the CLI, so the match stays exact.
+    if name in ("codex", "codex-modified"):
         return "codex"
     if name == "grok" or (name.startswith("grok-") and path.parent.name == "downloads"):
         return "grok"
