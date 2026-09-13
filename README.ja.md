@@ -577,6 +577,17 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.42.9 の新機能
+
+- **ランチャー経由の Codex デスクトップ。** ChatGPT.app が codex-profile-switch 経由で
+  app-server を起動するとプロセス名は `codex-modified` になります。0.42.8 は `codex` という名前
+  だけを探していたためこれを素通りし、そのスレッドからの dispatch はすべて
+  `missing-caller-context` で拒否されていました。この名前を認識するようになりました。
+  同じディレクトリの `codex-code-mode-host` は引き続き CLI とは見なしません。
+- **実機での受け入れ。** 2026-09-13、ランチャー経由の Codex デスクトップのスレッドで `whoami` が
+  終了コード 0 で `codex/gpt-5-6-sol-medium (score 46)` を `codex-modified` プロセスから読み取りました。
+  更新は `npm i -g omnilane@0.42.9`。
+
 ## v0.42.8 の新機能
 
 - **Codex の現在ターンの身元。** `app-server` は起動時のモデル・強度を常に無視します。

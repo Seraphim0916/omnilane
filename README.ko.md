@@ -562,6 +562,16 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.42.9 새 기능
+
+- **런처를 거치는 Codex 데스크톱.** ChatGPT.app이 codex-profile-switch를 통해 app-server를
+  시작하면 프로세스 이름이 `codex-modified`가 됩니다. 0.42.8은 `codex`라는 이름만 찾았기 때문에
+  이를 지나쳤고, 그 스레드의 모든 dispatch가 `missing-caller-context`로 거부되었습니다.
+  이제 이 이름을 인식합니다. 같은 디렉터리의 `codex-code-mode-host`는 여전히 CLI로 취급하지 않습니다.
+- **실기기 검수.** 2026-09-13 런처를 거치는 Codex 데스크톱 스레드에서 `whoami`가 종료 코드 0으로
+  `codex/gpt-5-6-sol-medium (score 46)`을 `codex-modified` 프로세스에서 읽었습니다.
+  업데이트: `npm i -g omnilane@0.42.9`.
+
 ## v0.42.8 새 기능
 
 - **Codex 현재 턴 신원.** `app-server`는 시작 시 모델·강도 기본값을 항상 무시합니다.

@@ -556,6 +556,15 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.42.9 新功能
+
+- **经启动器带起的 Codex 桌面版。** ChatGPT.app 若通过 codex-profile-switch 启动 app-server，
+  进程名是 `codex-modified`；0.42.8 只找名为 `codex` 的进程，会直接跳过它，该会话的每一次派发
+  都被拒为 `missing-caller-context`。现在能识别这个名称；同目录的 `codex-code-mode-host` 仍不视为 CLI。
+- **实机验收。** 2026-09-13 在经启动器带起的 Codex 桌面版会话执行 `whoami`，退出 0，
+  读出 `codex/gpt-5-6-sol-medium (score 46)`，来源是 `codex-modified` 进程。
+  升级：`npm i -g omnilane@0.42.9`。
+
 ## v0.42.8 新功能
 
 - **Codex 当前轮次身份。** `app-server` 始终忽略启动参数中的模型和强度默认值。

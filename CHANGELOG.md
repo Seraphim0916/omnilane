@@ -6,12 +6,16 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.42.9] - 2026-09-13
+
 ### Fixed
 
 - Caller identity now recognises a Codex app-server launched as `codex-modified`
   (the codex-profile-switch desktop launcher), so Codex desktop threads running
   through it are no longer refused with `missing-caller-context`. The sibling
-  `codex-code-mode-host` process is still not treated as a CLI.
+  `codex-code-mode-host` process is still not treated as a CLI. Accepted on a
+  real desktop thread on 2026-09-13: `whoami` exited 0 and reported
+  `codex/gpt-5-6-sol-medium (score 46)` read from the `codex-modified` process.
 
 ## [0.42.8] - 2026-09-12
 
@@ -1065,7 +1069,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...HEAD
+[0.42.9]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...v0.42.9
 [0.42.8]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...v0.42.8
 [0.42.7]: https://github.com/Seraphim0916/omnilane/compare/v0.42.6...v0.42.7
 [0.42.6]: https://github.com/Seraphim0916/omnilane/compare/v0.42.5...v0.42.6

@@ -706,6 +706,18 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.42.9
+
+- **Codex desktop behind a launcher.** When ChatGPT.app starts its app-server
+  through codex-profile-switch, the process is named `codex-modified`, and 0.42.8
+  walked past it looking for one named `codex`, so every dispatch from such a
+  thread was refused with `missing-caller-context`. The name is now recognised;
+  the launcher's sibling `codex-code-mode-host` is still not treated as a CLI.
+- **Accepted on a real desktop thread.** On 2026-09-13 `whoami` exited 0 from a
+  Codex desktop thread running through the launcher, reporting
+  `codex/gpt-5-6-sol-medium (score 46)` read from the `codex-modified` process.
+- **Upgrade.** Run `npm i -g omnilane@0.42.9`.
+
 ## What's new in v0.42.8
 
 - **Codex current-turn identity.** `app-server` always ignores startup model and
