@@ -77,10 +77,16 @@ class ReadSelectorTests(unittest.TestCase):
         self.assertEqual(caller_identity.read_selector(["agy", "--model", "gemini-3.8-flash-low"]),
                          ("gemini", "gemini-3.8-flash-low", None))
 
+    def test_profile_switch_app_server_is_codex(self):
+        argv = ["/Users/x/.local/share/codex-profile-switch/releases/auto-0.154.0/bin/codex-modified",
+                "-c", "features.code_mode_host=true", "app-server"]
+        self.assertEqual(caller_identity.read_selector(argv), ("codex", None, None))
+
     def test_processes_that_are_not_a_vendor_cli(self):
         for argv in (["/Applications/Claude.app/Contents/MacOS/Claude", "--proxy-server=x"],
                      ["/Applications/Claude.app/Contents/Helpers/disclaimer", "--", DESKTOP_CLAUDE],
                      ["/bin/zsh", "-c", "claude --model claude-opus-5"],
+                     ["/Users/x/.local/share/codex-profile-switch/releases/auto-0.154.0/bin/codex-code-mode-host"],
                      ["python3", "claude.py"], []):
             with self.subTest(argv=argv[:1]):
                 self.assertIsNone(caller_identity.read_selector(argv))

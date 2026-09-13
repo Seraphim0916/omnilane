@@ -6,6 +6,13 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Caller identity now recognises a Codex app-server launched as `codex-modified`
+  (the codex-profile-switch desktop launcher), so Codex desktop threads running
+  through it are no longer refused with `missing-caller-context`. The sibling
+  `codex-code-mode-host` process is still not treated as a CLI.
+
 ## [0.42.8] - 2026-09-12
 
 ### Fixed
