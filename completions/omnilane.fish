@@ -11,6 +11,7 @@ complete -c omnilane -f -n __fish_use_subcommand -a jobs          -d 'inspect ba
 complete -c omnilane -f -n __fish_use_subcommand -a mcp           -d 'MCP stdio server'
 complete -c omnilane -f -n __fish_use_subcommand -a doctor        -d 'read-only health report'
 complete -c omnilane -f -n __fish_use_subcommand -a whoami        -d 'caller-context file for the launching CLI'
+complete -c omnilane -f -n __fish_use_subcommand -a resign        -d 're-probe and re-sign the transport overlay'
 complete -c omnilane -f -n __fish_use_subcommand -a benchmark     -d 'fixed quality/cost comparison'
 complete -c omnilane -f -n __fish_use_subcommand -a release-audit -d 'offline release gate'
 complete -c omnilane -f -n __fish_use_subcommand -a ui            -d 'Live Board server'

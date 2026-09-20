@@ -815,6 +815,61 @@ class DegradedCallerTests(unittest.TestCase):
                          ("target-transport", "omnilane resign --check"))
 
 
+class EligibleLanesTests(unittest.TestCase):
+    ROUTING = ("# comment\n"
+               "hardest: codex gpt-6-astra xhigh | claude claude-fable-5-1 max\n"
+               "cheap: codex gpt-5.6-luna high | gemini gemini-3.8-flash-low -\n"
+               "panel: vote codex,claude -\n"
+               "closed: off - -\n")
+
+    def annotate(self, decision, lane=None, routing=None):
+        SCRATCH.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+            path = Path(tmp) / "routing.yaml"
+            path.write_text(self.ROUTING if routing is None else routing)
+            command = [sys.executable, str(ROOT / "scripts/lib/aa_lanes.py"),
+                       "--registry", str(REGISTRY_PATH), "--routing", str(Path(tmp) / "absent.yaml"),
+                       "--routing", str(path)]
+            if lane:
+                command += ["--lane", lane]
+            env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_")}
+            result = subprocess.run(command, input=decision, capture_output=True, text=True, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    def refusal(self, **extra):
+        value = {"allowed": False, "code": "target-above-effective-ceiling", "effective_ceiling": 48,
+                 "inherited_ceiling": 48, "caller_score": 48, "caller_degraded": True,
+                 "caller": {"vendor": "codex", "model": "gpt-6-astra"}}
+        value.update(extra)
+        return json.dumps(value)
+
+    def test_lists_only_lanes_at_or_below_the_ceiling(self):
+        value = json.loads(self.annotate(self.refusal(), lane="hardest"))
+        self.assertEqual([entry["lane"] for entry in value["eligible_lanes"]], ["cheap"])
+        self.assertEqual(value["eligible_lanes"][0]["target"], "codex/gpt-5-6-luna-high")
+        self.assertIs(value["eligible_lanes"][0]["transport_verified"], False)
+
+    def test_names_the_effort_that_reaches_the_lanes_cheapest_target(self):
+        value = json.loads(self.annotate(self.refusal(), lane="hardest"))
+        self.assertEqual(value["lane_requirement"],
+                         {"lane": "hardest", "target": "codex/gpt-6-astra-xhigh", "score": 54,
+                          "required_caller_effort": "xhigh"})
+        self.assertEqual(value["required_caller_effort"], "xhigh")
+        self.assertIn("recorded no effort", value["reason"])
+
+    def test_an_inherited_ceiling_is_not_told_to_relaunch(self):
+        value = json.loads(self.annotate(
+            self.refusal(inherited_ceiling=40, effective_ceiling=40, required_caller_effort=None),
+            lane="hardest"))
+        self.assertIsNone(value["required_caller_effort"])
+
+    def test_an_allowed_decision_and_garbage_pass_through_untouched(self):
+        allowed = json.dumps({"allowed": True, "effective_ceiling": 48})
+        self.assertNotIn("eligible_lanes", self.annotate(allowed))
+        self.assertEqual(self.annotate("not json"), "not json\n")
+
+
 class WhoamiCommandTests(unittest.TestCase):
     def setUp(self):
         SCRATCH.mkdir(exist_ok=True)

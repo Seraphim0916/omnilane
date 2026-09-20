@@ -53,7 +53,7 @@ def offenders(overlay_path: Path) -> list[str]:
 def main() -> None:
     overlay_path = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY", "")
     if not overlay_path:
-        emit("PASS", "no overlay configured; every runtime mapping stays unverified")
+        emit("WARN", "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see README 'First install'")
     if not Path(overlay_path).exists():
         emit("FAIL", f"configured overlay is missing: {overlay_path}")
 
@@ -87,10 +87,29 @@ def main() -> None:
                   "record who answered")
 
     stale = registry.get("_stale_transport_vendors", [])
+    # The gate hashes the path the overlay recorded. An update that installs beside
+    # the old executable leaves that path intact, so only this comparison sees it.
+    moved = []
+    try:
+        import resign
+        report = resign.detect(overlay, resign.current_anchors())
+        for vendor, entry in report.items():
+            # Only what the overlay actually pinned can have moved.
+            reasons = [reason for reason in entry["reasons"]
+                       if reason.startswith("runs ") or reason.endswith(" changed")]
+            if reasons and entry["recorded_cli_path"] and vendor not in stale:
+                moved.append(f"{vendor}: {'; '.join(reasons)}")
+    except Exception:  # noqa: BLE001 - a health line must never raise
+        moved = []
+    if moved and not stale:
+        emit("WARN", f"the runners no longer execute what the overlay pinned ({' | '.join(moved)}); "
+                     f"run `omnilane resign`; still loading: {summary}{extra}")
     if stale:
         detail = "; ".join(o for o in offenders(Path(overlay_path))) or "unknown cause"
+        if moved:
+            detail += "; also moved without going stale: " + " | ".join(moved)
         emit("WARN", f"stale vendor(s) {', '.join(stale)} degraded to unverified "
-                     f"({detail}); still verified: {summary}{extra}")
+                     f"({detail}); run `omnilane resign`; still verified: {summary}{extra}")
     emit("PASS", f"verified mappings: {summary}{extra}")
 
 

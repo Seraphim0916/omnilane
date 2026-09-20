@@ -14,9 +14,13 @@ import shutil
 import socket
 from collections import Counter
 from datetime import datetime, timezone
+import sys
 from pathlib import Path
 
-REPO = Path(os.environ.get("OMNILANE_REPO", "/Users/vincentw/dev/omnilane"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_provenance  # noqa: E402
+
+REPO = Path(os.environ.get("OMNILANE_REPO") or Path(__file__).resolve().parents[2])
 HOME = Path.home()
 SWEEP_ID = os.environ.get("OMNILANE_TRANSPORT_SWEEP_ID", "overlay-reprobe-20260909")
 DEFAULT_ROOT = HOME / ".omnilane" / "transport-evidence" / SWEEP_ID
@@ -98,6 +102,11 @@ def cli_path(name: str) -> Path:
     return Path(found).resolve()
 
 
+RUNNERS = {"grok": "run-grok.sh", "codex": "run-codex.sh", "claude": "run-claude.sh",
+           "gemini": "run-gemini.sh"}
+CLI_NAMES = {"grok": "grok", "codex": "codex", "claude": "claude", "gemini": "agy"}
+
+
 def core_evidence() -> list[tuple[Path, str]]:
     """Resolved when a build runs, not at import: a host missing one CLI can
     still load this module to read PROVEN."""
@@ -128,6 +137,12 @@ def main(argv: list[str] | None = None) -> None:
         type=Path,
         default=DEFAULT_ROOT,
         help=f"probe sweep root (default: {DEFAULT_ROOT})",
+    )
+    parser.add_argument(
+        "--source",
+        default=os.environ.get("OMNILANE_TRANSPORT_SOURCE")
+        or f"{socket.gethostname()} / build_overlay {datetime.now(timezone.utc).date().isoformat()}",
+        help="free-text provenance recorded in the overlay",
     )
     args = parser.parse_args(argv)
     root = args.root.expanduser()
@@ -187,18 +202,20 @@ def main(argv: list[str] | None = None) -> None:
             mapping["cli_flag"] = "--reasoning-effort"
         mappings.append(mapping)
 
-    evidence = [
-        {"path": str(path), "sha256": sha256(path), "vendor": vendor}
-        for path, vendor in core_evidence()
-    ]
+    evidence = []
+    for path, vendor in core_evidence():
+        anchor = {"path": str(path), "sha256": sha256(path), "vendor": vendor}
+        if path.name != RUNNERS[vendor]:
+            # The signer an unattended re-sign is later held to; see cli_provenance.
+            anchor["codesign"] = cli_provenance.facts(path)
+        evidence.append(anchor)
     evidence.append({"path": str(manifest_path), "sha256": sha256(manifest_path)})
 
     overlay = {
         "schema_version": 1,
         "snapshot_id": REGISTRY["snapshot"]["id"],
         "host": socket.gethostname(),
-        "source": ("claude-code / MacStudio / operator-directed full sweep 2026-09-07; "
-                   "gemini selectors re-probed 2026-09-09 after agy 1.1.27 -> 1.1.28"),
+        "source": args.source,
         "evidence": evidence,
         "mappings": mappings,
         "unproven": unproven,

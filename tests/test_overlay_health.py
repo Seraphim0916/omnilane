@@ -57,11 +57,12 @@ class OverlayHealthTests(unittest.TestCase):
         path.write_text(json.dumps(value))
         return path
 
-    def test_absent_configuration_is_not_a_failure(self):
+    def test_absent_configuration_warns_and_names_the_first_install_steps(self):
         rc, level, message = run(None)
         self.assertEqual(rc, 0)
-        self.assertEqual(level, "PASS")
+        self.assertEqual(level, "WARN")
         self.assertIn("no overlay configured", message)
+        self.assertIn("build_overlay.py", message)
 
     def test_configured_but_missing_file_fails(self):
         rc, level, message = run(self.base / "not-here.json")

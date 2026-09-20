@@ -60,6 +60,23 @@ case "$cmd" in
     }
     exec python3 "$REPO/scripts/lib/caller_identity.py" "$@"
     ;;
+  resign)
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: resign requires Python 3.9 or newer" >&2
+      exit 1
+    }
+    if [[ -z "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]]; then
+      # local.sh is where a host records its overlay; dispatch reads it the same way.
+      OMNILANE_AA_TRANSPORT_OVERLAY="$(
+        set +u
+        home="${OMNILANE_HOME:-$HOME/.omnilane}"
+        [[ -f "$home/local.sh" ]] && . "$home/local.sh" 2>/dev/null
+        printf '%s' "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"
+      )"
+      export OMNILANE_AA_TRANSPORT_OVERLAY
+    fi
+    exec python3 "$REPO/scripts/lib/resign.py" "$@"
+    ;;
   benchmark)
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: benchmark requires Python 3.9 or newer" >&2
@@ -97,6 +114,8 @@ omnilane — one routing table, every harness
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json] [--strict] [--probe V]  local health / opt-in live probe
   omnilane whoami                       caller-context file for the CLI this runs under
+  omnilane resign [--check] [--vendor V] [--approve V]
+                                         re-probe and re-sign the transport overlay after a CLI update
   omnilane benchmark [--json] [--run] [--vendor V] fixed quality/cost comparison
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu
