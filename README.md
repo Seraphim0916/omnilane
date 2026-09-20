@@ -145,6 +145,14 @@ same install location. So tell it once which signers you accept:
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
+If you patch a vendor CLI yourself after every update and re-sign it adhoc,
+tell omnilane that too, once per vendor; an adhoc update in the same install
+directory is then re-signed unattended as well:
+
+```bash
+omnilane resign --trust-adhoc claude   # only if you re-sign claude adhoc yourself
+```
+
 Then let it run every day. Any scheduler works as long as it runs **inside your
 desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:
 

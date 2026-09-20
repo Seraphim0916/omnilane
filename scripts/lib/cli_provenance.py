@@ -16,6 +16,10 @@ from pathlib import Path
 
 ADHOC = "adhoc"
 UNSIGNED = "unsigned"
+# The operator's statement that this vendor's executable is expected to be adhoc
+# here (a local patch step re-signs it), so an adhoc update in the same install
+# location may be re-probed unattended. Nothing else is waived.
+TRUST_ADHOC = "adhoc-in-install-location"
 # 1.0.25 -> 1.0.30 inside a path is an update; a different directory is not.
 VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)*")
 
@@ -55,9 +59,17 @@ def family(path: Path | str) -> str:
 def verdict(recorded: dict | None, recorded_path: str | None, current: dict,
             current_path: Path | str) -> tuple[bool, str]:
     """May this changed executable be re-probed unattended? And the reason either way."""
-    if current["signer"] in (ADHOC, UNSIGNED):
-        return False, (f"the executable is {current['signer']}, so nothing ties it to the vendor; "
-                       "an operator has to approve it")
+    if current["signer"] == UNSIGNED:
+        return False, "the executable is unsigned, so nothing ties it to the vendor; an operator has to approve it"
+    if current["signer"] == ADHOC:
+        if (recorded or {}).get("operator_trust") == TRUST_ADHOC and recorded_path \
+                and family(recorded_path) == family(current_path):
+            return True, "adhoc, which the operator trusts in this install location"
+        if (recorded or {}).get("operator_trust") == TRUST_ADHOC:
+            return False, (f"adhoc and installed at {current_path}, outside the location the operator "
+                           f"trusts, {family(recorded_path)}")
+        return False, ("the executable is adhoc, so nothing ties it to the vendor; an operator has to "
+                       "approve it (or, for a local patch step, trust it here: omnilane resign --trust-adhoc VENDOR)")
     if not recorded or not recorded.get("signer"):
         return False, ("the live overlay recorded no signer for this vendor, so there is nothing "
                        "to compare against; an operator approves the first signer")

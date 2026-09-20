@@ -57,8 +57,15 @@ the CLI still answer. An adhoc or unsigned executable (a locally patched
 never recorded a signer all stop at exit 20 with the exact
 `omnilane resign --vendor V --approve V` line for the operator to run after
 looking. `--record-signers` is the operator adopting the signers of the
-executables an older overlay already pins. A model never passes `--approve` or
-`--record-signers`. Keychain-backed CLIs (claude, grok, agy) cannot authenticate
+executables an older overlay already pins. An operator who re-signs a vendor's
+executable adhoc on purpose (a local post-update patch step, for instance) runs
+`omnilane resign --trust-adhoc VENDOR` once; from then on an adhoc update of that
+vendor **in the same install directory** is re-probed unattended like a
+same-signer one, while an unsigned executable, an adhoc one in another
+directory, or a different vendor still stops at exit 20. The trust is recorded
+on the vendor's overlay entry (`operator_trust`), survives later re-signs, and
+is per vendor. A model never passes `--approve`, `--record-signers` or
+`--trust-adhoc`. Keychain-backed CLIs (claude, grok, agy) cannot authenticate
 from an ssh login, so a sweep there reports `unprobeable` instead of writing "not
 logged in" into the evidence; run it from the GUI session. Doctor now also
 reports a CLI that was updated *beside* its old executable (codex and grok

@@ -125,6 +125,12 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
+更新のたびにベンダー CLI を自分でパッチして adhoc で再署名しているなら、それもベンダーごとに一度だけ伝えます。以後は同じインストールディレクトリ内の adhoc な更新も無人で再署名されます。
+
+```bash
+omnilane resign --trust-adhoc claude   # 自分で claude を adhoc 署名している場合のみ
+```
+
 あとは毎日実行させます。スケジューラーは何でも構いませんが、必ず**デスクトップのログインセッション内**で動かしてください（CLI にはキーチェーンが必要です）。macOS なら LaunchAgent が使えます。
 
 ```bash

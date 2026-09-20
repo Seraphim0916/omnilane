@@ -260,8 +260,8 @@ operator's rules say a reroute needs their approval.
 | `invalid-policy-input` "transport contract evidence changed" | the overlay will not load; nothing is wrong with you or your target | `omnilane doctor`, then the operator runs `omnilane resign` |
 | `inherit-requires-model-caller` | a human has no runtime to inherit | dispatch a lane |
 
-`omnilane resign --approve …` and `--record-signers` are operator actions. A
-model never runs them. After two failed attempts at a task, reassess the scope;
+`omnilane resign --approve …`, `--record-signers` and `--trust-adhoc …` are
+operator actions. A model never runs them. After two failed attempts at a task, reassess the scope;
 an upward move needs the human. On vendor quota exhaustion (429, "stream
 disconnected", usage limit) send mid-tier coding through `coding-overflow`;
 never silently downgrade `hardest-coding` — wait or escalate.

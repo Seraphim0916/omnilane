@@ -124,6 +124,12 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
+업데이트 때마다 벤더 CLI 를 직접 패치하고 adhoc 으로 다시 서명한다면, 그것도 벤더별로 한 번 알려 줍니다. 이후 같은 설치 디렉터리 안의 adhoc 업데이트도 무인으로 재서명됩니다.
+
+```bash
+omnilane resign --trust-adhoc claude   # 직접 claude 를 adhoc 서명하는 경우에만
+```
+
 그다음 매일 실행되게 합니다. 스케줄러는 무엇이든 좋지만 반드시 **데스크톱 로그인 세션 안에서** 실행되어야 합니다(CLI 에 키체인이 필요합니다). macOS 에서는 LaunchAgent 를 쓸 수 있습니다.
 
 ```bash

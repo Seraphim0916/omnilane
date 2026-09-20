@@ -52,6 +52,18 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(cli_provenance.facts("/x", codesign(self.ADHOC))["signer"], "adhoc")
         self.assertEqual(cli_provenance.facts("/x", codesign(self.TEAM, 1))["signer"], "unsigned")
 
+    def test_a_trusted_adhoc_update_passes_only_in_its_install_location(self):
+        adhoc = {"signer": "adhoc", "identifier": "x", "valid": True}
+        trusted = {**adhoc, "operator_trust": cli_provenance.TRUST_ADHOC}
+        old = "/u/.local/share/claude/versions/2.1.276"
+        self.assertTrue(cli_provenance.verdict(trusted, old, adhoc, "/u/.local/share/claude/versions/2.1.278")[0])
+        allowed, reason = cli_provenance.verdict(trusted, old, adhoc, "/tmp/elsewhere/2.1.278")
+        self.assertFalse(allowed); self.assertIn("outside the location", reason)
+        allowed, reason = cli_provenance.verdict(adhoc, old, adhoc, "/u/.local/share/claude/versions/2.1.278")
+        self.assertFalse(allowed); self.assertIn("--trust-adhoc", reason)
+        unsigned = {"signer": "unsigned", "identifier": None, "valid": False}
+        self.assertFalse(cli_provenance.verdict(trusted, old, unsigned, "/u/.local/share/claude/versions/2.1.278")[0])
+
     def test_a_version_bump_stays_in_the_family_and_a_new_directory_does_not(self):
         old = "/Users/u/.grok/downloads/grok-1.0.25-macos-aarch64"
         self.assertEqual(cli_provenance.family(old),
@@ -257,7 +269,7 @@ class ResignTests(unittest.TestCase):
             return {"vendor": vendor, "outcome": outcome, "detail": "stub",
                     "passed": [e["config_id"] for e in entries if e["config_id"] not in failing],
                     "failed": [e["config_id"] for e in entries if e["config_id"] in failing]}
-        args = Namespace(check=False, vendor=None, approve=None, no_smoke=False, json=False,
+        args = Namespace(check=False, vendor=None, approve=None, trust_adhoc=None, no_smoke=False, json=False,
                          record_signers=False, allow_shrink=False)
         for key, value in flags.items():
             setattr(args, key, value)
@@ -326,6 +338,43 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.sweeps, [])
         self.assertEqual(self.run_resign(approve=["claude"]), resign.EXIT_OK, self.lines)
         self.assertEqual((self.sweeps, self.pinned("claude")), (["claude"], str(new)))
+
+    def test_trust_adhoc_lets_a_local_patch_step_update_unattended(self):
+        self.assertEqual(self.run_resign(trust_adhoc=["claude"]), resign.EXIT_OK, self.lines)
+        entry = next(e for e in json.loads(self.live.read_text())["evidence"]
+                     if e.get("vendor") == "claude" and "codesign" in e)
+        self.assertEqual(entry["operator_trust"], cli_provenance.TRUST_ADHOC)
+        self.assertEqual(len(list(self.home.glob("transport-contracts.local.json.before-trust-adhoc-*"))), 1)
+        new = self.update("claude")
+        self.signers["claude"] = "adhoc"
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual((self.sweeps, self.pinned("claude")), (["claude"], str(new)))
+        # The waiver outlives the re-sign, so the next adhoc update is unattended too.
+        entry = next(e for e in json.loads(self.live.read_text())["evidence"]
+                     if e.get("vendor") == "claude" and "codesign" in e)
+        self.assertEqual(entry["operator_trust"], cli_provenance.TRUST_ADHOC)
+        self.sweeps.clear()
+        self.update("claude", version="1.2.0")
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.sweeps, ["claude"])
+
+    def test_trust_adhoc_does_not_cover_a_new_directory_or_an_unsigned_binary(self):
+        self.run_resign(trust_adhoc=["claude"])
+        self.update("claude", directory=self.base / "tmp" / "elsewhere" / "1.1.0")
+        self.signers["claude"] = "adhoc"
+        self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+        self.assertEqual(self.sweeps, [])
+        self.update("claude", version="1.2.0")
+        self.signers["claude"] = "unsigned"
+        self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+        self.assertEqual(self.sweeps, [])
+
+    def test_trust_adhoc_is_per_vendor_and_repeatable(self):
+        self.assertEqual(self.run_resign(trust_adhoc=["grok", "codex"]), resign.EXIT_OK, self.lines)
+        trusted = {e["vendor"] for e in json.loads(self.live.read_text())["evidence"] if e.get("operator_trust")}
+        self.assertEqual(trusted, {"grok", "codex"})
+        self.assertEqual(self.run_resign(trust_adhoc=["grok"]), resign.EXIT_OK)
+        self.assertTrue(any("nothing to record" in l for l in self.lines), self.lines)
 
     def test_an_install_outside_the_recorded_location_is_held(self):
         self.update("grok", directory=self.base / "tmp" / "elsewhere" / "1.1.0")

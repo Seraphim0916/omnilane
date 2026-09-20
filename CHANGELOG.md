@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- `omnilane resign --trust-adhoc VENDOR`. An operator who re-signs a vendor's
+  executable adhoc on purpose (a local post-update patch step) records that
+  once; from then on an adhoc update of that vendor in the same install
+  directory is re-probed unattended, like a same-signer update. An unsigned
+  executable, an adhoc one in another directory, and every other vendor still
+  stop at exit 20. The trust lives on the vendor's overlay entry
+  (`operator_trust`), is carried over by later re-signs, and is a per-vendor
+  operator action a model never runs. Works for all four vendors.
+
 ### Fixed
 
 - An expired login is reported as "not logged in", not as a transient failure.

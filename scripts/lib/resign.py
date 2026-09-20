@@ -12,7 +12,9 @@ drift and, when it is safe to, repairs it without an operator:
 A changed executable is re-probed unattended only when it still carries the
 signer the live overlay recorded and still sits in the same install location.
 Anything else stops at a notification; `--approve VENDOR` is the operator saying
-they looked.
+they looked. `--trust-adhoc VENDOR` is the operator saying an adhoc signature in
+that install location is their own local step, so those updates count as
+same-signer.
 
 Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check);
 20 drift needs an operator; 30 attempted and rolled back; 2 not configured.
@@ -85,9 +87,19 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             "cli": str(cli) if cli else None,
             "cli_changed": any(runner_name not in reason for reason in reasons),
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
-            "recorded_codesign": recorded_cli.get("codesign") if recorded_cli else None,
+            "recorded_codesign": recorded_signer(recorded_cli),
         }
     return report
+
+
+def recorded_signer(entry: dict | None) -> dict | None:
+    """The signer the overlay recorded for a CLI, with any waiver the operator attached."""
+    if not entry:
+        return None
+    signer = dict(entry.get("codesign") or {})
+    if entry.get("operator_trust"):
+        signer["operator_trust"] = entry["operator_trust"]
+    return signer or None
 
 
 def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
@@ -229,6 +241,40 @@ def record_signers(live: Path, overlay: dict, report: dict, wanted: list[str], l
     return EXIT_OK
 
 
+def trust_adhoc(live: Path, overlay: dict, report: dict, wanted: list[str], log) -> int:
+    """Operator action: an adhoc executable of this vendor, in its current install
+    location, may be re-probed unattended from now on.
+
+    The operator is saying a local step re-signs this CLI on every update, so the
+    vendor's team will never be on it. The waiver is bound to the install location
+    the overlay pins; a new directory or an unsigned executable still stops.
+    """
+    changed = []
+    for entry in overlay.get("evidence", []):
+        vendor = entry.get("vendor")
+        if vendor not in wanted or Path(entry["path"]).name == build_overlay.RUNNERS[vendor]:
+            continue
+        if entry.get("operator_trust") == cli_provenance.TRUST_ADHOC:
+            continue
+        entry["operator_trust"] = cli_provenance.TRUST_ADHOC
+        entry["operator_trust_recorded_at"] = datetime.now(timezone.utc).isoformat()
+        changed.append(f"{vendor} in {cli_provenance.family(entry['path'])}")
+    if not changed:
+        log("omnilane: nothing to record; that vendor is already trusted adhoc, or the overlay pins no executable for it")
+        return EXIT_OK
+    backup = live.with_name(live.name + ".before-trust-adhoc-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    shutil.copy2(live, backup)
+    aa_policy.atomic_bytes(live, (json.dumps(overlay, indent=2, ensure_ascii=False) + "\n").encode())
+    try:
+        verified(live)
+    except (aa_policy.PolicyError, OSError, ValueError) as error:
+        aa_policy.atomic_bytes(live, backup.read_bytes())
+        log(f"omnilane: the overlay stopped loading ({error}); restored {backup}")
+        return EXIT_ROLLED_BACK
+    log(f"omnilane: trusting adhoc {', '.join(changed)} (backup {backup})")
+    return EXIT_OK
+
+
 def resign(args, log=print) -> int:
     overlay_env = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY")
     if not overlay_env:
@@ -245,6 +291,8 @@ def resign(args, log=print) -> int:
     wanted = args.vendor or list(VENDORS)
     if args.record_signers:
         return record_signers(live, overlay, report, wanted, log)
+    if args.trust_adhoc:
+        return trust_adhoc(live, overlay, report, args.trust_adhoc, log)
     drifted = [vendor for vendor in wanted if report[vendor]["drifted"]]
     summary = {"host": overlay.get("host"), "checked_at": datetime.now(timezone.utc).isoformat(),
                "live_overlay": str(live), "live_sha256": sha256(live), "vendors": report}
@@ -274,6 +322,8 @@ def resign(args, log=print) -> int:
 
     sweep_id = "resign-" + datetime.now().strftime("%Y%m%d-%H%M%S")
     home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
+    if (home / "transport-evidence" / sweep_id).exists():
+        sweep_id += "-" + os.urandom(2).hex()  # two runs in one second
     root = home / "transport-evidence" / sweep_id
     outcome = EXIT_OK
     if proceed:
@@ -321,6 +371,13 @@ def resign(args, log=print) -> int:
         # pin it had, because its new executable was never probed.
         unprobed = [vendor for vendor in VENDORS if report[vendor]["drifted"] and vendor not in proceed]
         for index, entry in enumerate(staged["evidence"]):
+            if entry.get("vendor") in proceed and entry.get("codesign") is not None:
+                # A fresh anchor knows the signer but not what the operator decided about it.
+                old = next((e for e in overlay["evidence"] if e.get("vendor") == entry["vendor"]
+                            and e.get("operator_trust")), None)
+                if old is not None:
+                    entry["operator_trust"] = old["operator_trust"]
+                    entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
             if entry.get("vendor") in unprobed:
                 name = Path(entry["path"]).name
                 is_runner = name == build_overlay.RUNNERS[entry["vendor"]]
@@ -394,6 +451,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="limit to this vendor; may repeat")
     parser.add_argument("--approve", action="append", choices=VENDORS,
                         help="operator approval to re-probe this vendor despite its signer check")
+    parser.add_argument("--trust-adhoc", action="append", choices=VENDORS, metavar="VENDOR",
+                        help="operator action: this vendor's executable is re-signed adhoc by a local "
+                             "step, so an adhoc update in the same install location may be re-probed "
+                             "unattended; may repeat")
     parser.add_argument("--record-signers", action="store_true",
                         help="operator action: adopt the signers of the executables already pinned")
     parser.add_argument("--allow-shrink", action="store_true",

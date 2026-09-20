@@ -120,6 +120,12 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
+如果你每次更新后都会自己修补某家 CLI、再用 adhoc 重新签署，也要告诉它一次（每家各一次）；之后同一个安装目录里的 adhoc 新版也会无人值守地重新签署：
+
+```bash
+omnilane resign --trust-adhoc claude   # 只有你自己会把 claude 签成 adhoc 时才需要
+```
+
 然后让它每天运行一次。用什么调度器都行，但必须运行在**你的桌面登录会话里**（CLI 需要钥匙串）。macOS 可以用 LaunchAgent：
 
 ```bash
