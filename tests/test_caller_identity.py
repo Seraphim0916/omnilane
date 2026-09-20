@@ -201,6 +201,35 @@ class RolloutCallerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "direct child.*CODEX_THREAD_ID"):
             self.read()
 
+    def with_tool_host(self):
+        # The desktop app-server runs commands through one host shared by every conversation.
+        host = "/Users/x/.local/share/codex-profile-switch/releases/auto-0.155.0/bin/codex-code-mode-host"
+        self.tree = {40: (30, ["python3"]), 30: (25, ["zsh", "-lc", "omnilane whoami"]),
+                     25: (20, [host]), 20: (1, ["codex-modified", "app-server"])}
+
+    def test_a_tool_host_is_not_the_thread_anchor(self):
+        self.with_tool_host()
+        pid, selector, source = self.read()
+        self.assertEqual((pid, selector), (20, ("codex", "gpt-5.6-sol", "high")))
+        self.assertIn(self.thread, source)
+
+    def test_a_stale_thread_below_a_tool_host_still_refuses(self):
+        self.with_tool_host()
+        self.environ["CODEX_THREAD_ID"] = self.other
+        with self.assertRaisesRegex(ValueError, "mismatch"):
+            self.read()
+
+    def test_a_tool_host_with_nothing_below_it_refuses(self):
+        self.tree = {25: (20, ["/opt/codex/bin/codex-code-mode-host"]), 20: (1, ["codex", "app-server"])}
+        with self.assertRaisesRegex(ValueError, "cannot find the codex direct child"):
+            caller_identity.read_caller(25, self.tree.get, self.env_lookup)
+
+    def test_a_lookalike_host_name_is_still_the_anchor(self):
+        self.tree = {40: (30, ["python3"]), 30: (25, ["bash"]),
+                     25: (20, ["/tmp/my-codex-code-mode-host-wrapper"]), 20: (1, ["codex", "app-server"])}
+        with self.assertRaisesRegex(ValueError, "direct child.*CODEX_THREAD_ID"):
+            self.read()
+
     def test_malformed_thread_refuses(self):
         for where in (os.environ, self.environ):
             with self.subTest(where=where is os.environ):

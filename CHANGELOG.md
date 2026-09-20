@@ -57,6 +57,15 @@ semantic version tags.
 - `build_overlay.py` resolves the repository from its own location and takes
   `--source`; it no longer embeds one host's checkout path or sweep history.
 
+### Fixed
+
+- A Codex desktop session started with `features.code_mode_host=true` could not be
+  identified: codex's direct child is then `codex-code-mode-host`, one tool host
+  shared by every conversation, which carries no `CODEX_THREAD_ID`. The thread
+  check now anchors on the process that host starts for the command; a stale or
+  missing thread id there is still refused, and the refusal names the process it
+  read.
+
 ## [0.42.9] - 2026-09-13
 
 ### Fixed

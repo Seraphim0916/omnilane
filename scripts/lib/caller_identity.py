@@ -40,6 +40,7 @@ Selector = tuple[str, Optional[str], Optional[str]]
 Lookup = Callable[[int], Optional[tuple[int, list[str]]]]
 EnvironmentLookup = Callable[[int], dict[str, str]]
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
+CODEX_TOOL_HOSTS = frozenset(("codex-code-mode-host",))
 TURN_END_EVENTS = frozenset(("task_complete", "turn_complete", "turn_aborted"))
 CODEX_SANDBOX_REFUSAL = (
     "Codex sandbox (CODEX_SANDBOX=seatbelt) blocked process inspection; omnilane also "
@@ -292,7 +293,7 @@ def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | No
     Nearest wins: a codex worker started by a Claude session is a codex caller.
     """
     seen: set[int] = set()
-    child = None
+    below: list[tuple[int, list[str]]] = []
     for _ in range(MAX_DEPTH):
         if pid <= 0 or pid in seen:
             return None
@@ -303,9 +304,22 @@ def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | No
         ppid, argv = entry
         selector = read_selector(argv)
         if selector is not None:
-            return pid, selector, child
-        child = pid
+            return pid, selector, _thread_anchor(below)
+        below.append((pid, argv))
         pid = ppid
+    return None
+
+
+def _thread_anchor(below: list[tuple[int, list[str]]]) -> int | None:
+    """The process whose initial environment codex wrote for this conversation.
+
+    That is codex's direct child, unless codex runs commands through its own tool
+    host: one host serves every conversation of an app-server, so it carries no
+    thread id and the process it starts for the command does.
+    """
+    for pid, argv in reversed(below):
+        if not (argv and Path(argv[0]).name in CODEX_TOOL_HOSTS):
+            return pid
     return None
 
 
@@ -464,7 +478,10 @@ def read_caller(pid: int, lookup: Lookup = _process,
         detail = f"errno {error.errno}" if isinstance(error, OSError) else "invalid environment block"
         raise ValueError(f"cannot read codex direct child initial environment ({detail})") from None
     if not inherited or not UUID_PATTERN.fullmatch(inherited):
-        raise ValueError("codex direct child CODEX_THREAD_ID is missing or not a UUID")
+        entry = lookup(child)
+        name = Path(entry[1][0]).name if entry and entry[1] else "unknown"
+        raise ValueError(f"codex direct child CODEX_THREAD_ID is missing or not a UUID "
+                         f"(read from pid {child}, {name})")
     if inherited != thread:
         raise ValueError("CODEX_THREAD_ID mismatch between current process and codex direct child")
     selector, source = _rollout_selector(thread, current_environment, now)
