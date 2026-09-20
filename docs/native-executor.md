@@ -127,6 +127,20 @@ the `omnilane native-context` command. The plan carries `inherit: true`,
 file must set `inherits_caller_runtime: true`, name the caller's vendor and
 model, and hold a new-agent row for that model matching mode, workdir, tools,
 `shared-inherited` and `single-shot`; effort is deliberately not matched.
+
+When no caller identity reaches the gate, the file's `vendor` and `current_model`
+stand as the host's statement and the decision is
+`native-inherited-unverified-caller` (`caller_kind: "model-unverified"`,
+`caller_identity_verified: false`, `caller_identity_source: "host-asserted"`). It
+has no `effective_ceiling`, publishes neither `aa-authorizer.json` nor
+`aa-child-context.json`, and `jobs status` shows `caller_identity_verified: false`
+and `satisfies_lane_target: false`. A file with no `current_model` is refused as
+`missing-caller-context`. `omnilane native-context --vendor V --model M` writes
+such a file only when the identity cannot be read or resolved, marks it
+`caller_identity_verified: false`, and exits 2 if the statement contradicts an
+identity it can read. This exists for hosts such as Codex desktop 0.155, where
+`CODEX_THREAD_ID` is in the command's own environment only and no ancestor's
+initial environment carries it; lane dispatch from such a host is still refused.
 Completion checks vendor, model and harness; `runtime.effort` is whatever the
 host observed. A human operator, an unidentified caller, `--vendor`/`--model`/
 `--effort`/`--target-config`, and every CLI-only lifecycle are refused.

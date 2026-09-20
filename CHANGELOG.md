@@ -31,6 +31,15 @@ semantic version tags.
   refuses a human, an unidentified caller, any model/effort override and every
   CLI-only lifecycle. Dispatch now says when a same-vendor target goes through an
   external CLI only because no capability file was given.
+- `--inherit` no longer depends on reading the caller. When no identity reaches
+  the gate, the capability file's `vendor` and `current_model` stand as the host's
+  statement: decision `native-inherited-unverified-caller`, `caller_kind:
+  "model-unverified"`, no ceiling, no child context, and
+  `caller_identity_verified: false` on the handoff and in `jobs status`. Completion
+  is still checked against that vendor and model. `omnilane native-context --vendor
+  V --model M` writes such a file when the identity cannot be read, and refuses a
+  statement that contradicts an identity it can read. Lane dispatch and
+  non-inherited native work are unchanged: without an identity they are refused.
 - `scripts/lib/probe_sweep.py` derives every probe command from `build_overlay.py`
   and the frozen registry, classifies an unauthenticated CLI as `unprobeable`,
   refuses keychain-backed CLIs outside an Aqua session, and retries one transient
@@ -59,12 +68,19 @@ semantic version tags.
 
 ### Fixed
 
-- A Codex desktop session started with `features.code_mode_host=true` could not be
-  identified: codex's direct child is then `codex-code-mode-host`, one tool host
-  shared by every conversation, which carries no `CODEX_THREAD_ID`. The thread
-  check now anchors on the process that host starts for the command; a stale or
-  missing thread id there is still refused, and the refusal names the process it
-  read.
+- A `codex-code-mode-host` between codex and the command is skipped when finding
+  the process whose initial environment carries `CODEX_THREAD_ID`; one host serves
+  every conversation of an app-server and carries none. A stale or missing thread
+  id is still refused, and the refusal now names the process it read.
+
+### Known limitation
+
+- Codex desktop 0.155 starts a fresh `zsh` per command and puts `CODEX_THREAD_ID`
+  in the command's own environment only; no ancestor's initial environment carries
+  it (observed chain: `codex-modified` → `zsh` → command). `omnilane whoami`
+  therefore refuses there, and so does every lane dispatch. The host-skip above
+  does not help that chain. `--inherit` still works, on the host's statement; see
+  Added.
 
 ## [0.42.9] - 2026-09-13
 

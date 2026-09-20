@@ -106,6 +106,18 @@ and refuses background, live, thread, sysops and watchdog lifecycles. The child
 context carries your ceiling (and `effort_unverified` if you had it); the worker
 still never dispatches.
 
+**When `omnilane whoami` cannot read you at all** (Codex desktop 0.155 puts
+`CODEX_THREAD_ID` only in the command's own environment, so nothing above the
+command vouches for it), `--inherit` is the one path that still works, because
+its safety never rested on who you are. State what you are:
+`omnilane native-context --workdir DIR --vendor codex --model YOUR_MODEL --inherits-caller-runtime`,
+then `omnilane route --inherit --native-context FILE ...` as above. The handoff
+says `caller_identity_verified: false` and carries no ceiling and no child
+context; completion is checked against the vendor and model you stated, so state
+the model you actually run. Lane dispatch stays refused for you, and this is not
+a way around that: report it to the operator instead of retrying with a guessed
+identity.
+
 ```sh
 omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review the change"
 omnilane jobs --json complete-native JOB_ID /absolute/completion.json
