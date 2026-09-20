@@ -41,6 +41,7 @@ Lookup = Callable[[int], Optional[tuple[int, list[str]]]]
 EnvironmentLookup = Callable[[int], dict[str, str]]
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 CODEX_TOOL_HOSTS = frozenset(("codex-code-mode-host",))
+SHELLS = frozenset(("zsh", "bash", "sh", "dash", "fish"))
 TURN_END_EVENTS = frozenset(("task_complete", "turn_complete", "turn_aborted"))
 CODEX_SANDBOX_REFUSAL = (
     "Codex sandbox (CODEX_SANDBOX=seatbelt) blocked process inspection; omnilane also "
@@ -480,8 +481,15 @@ def read_caller(pid: int, lookup: Lookup = _process,
     if not inherited or not UUID_PATTERN.fullmatch(inherited):
         entry = lookup(child)
         name = Path(entry[1][0]).name if entry and entry[1] else "unknown"
+        hint = ""
+        if name.lstrip("-") in SHELLS:
+            # codex starts `zsh -lc '<command>'`; the shell sets the thread id and, for one
+            # simple command, execs into it, so that command is the direct child. With
+            # `;`, `&&`, `|` or a subshell the shell stays, and its own start had no id.
+            hint = ("; run the omnilane command as the only command of the tool call, "
+                    "with no `;`, `&&`, `|` or subshell around it")
         raise ValueError(f"codex direct child CODEX_THREAD_ID is missing or not a UUID "
-                         f"(read from pid {child}, {name})")
+                         f"(read from pid {child}, {name}){hint}")
     if inherited != thread:
         raise ValueError("CODEX_THREAD_ID mismatch between current process and codex direct child")
     selector, source = _rollout_selector(thread, current_environment, now)

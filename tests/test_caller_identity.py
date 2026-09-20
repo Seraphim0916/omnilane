@@ -230,6 +230,21 @@ class RolloutCallerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "direct child.*CODEX_THREAD_ID"):
             self.read()
 
+    def test_a_shell_left_by_a_compound_command_says_how_to_be_read(self):
+        # `zsh -lc 'a; b'` keeps the shell as codex's direct child; its own start had no thread id.
+        self.tree = {40: (30, ["python3"]), 30: (20, ["/bin/zsh", "-lc", "omnilane whoami; echo $?"]),
+                     20: (1, ["codex-modified", "app-server"])}
+        self.environ.clear()
+        with self.assertRaisesRegex(ValueError, r"read from pid 30, zsh\); run the omnilane command as the only"):
+            self.read()
+
+    def test_a_non_shell_direct_child_gets_no_shell_advice(self):
+        self.tree = {40: (30, ["python3"]), 30: (20, ["node", "tool.js"]), 20: (1, ["codex", "app-server"])}
+        self.environ.clear()
+        with self.assertRaises(ValueError) as caught:
+            self.read()
+        self.assertNotIn("only command", str(caught.exception))
+
     def test_malformed_thread_refuses(self):
         for where in (os.environ, self.environ):
             with self.subTest(where=where is os.environ):
