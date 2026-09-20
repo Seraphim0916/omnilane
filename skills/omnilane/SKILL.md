@@ -85,6 +85,11 @@ from what `whoami` reads (vendor, current model, current effort) and prints its
 path; pass it as `--native-context FILE`. Add `--inherits-caller-runtime` only if
 your sub-agent tool, given no model override, really runs your own model and
 effort — that is a statement about your tool, which omnilane cannot observe.
+In Claude Code that holds only when you call `Agent` with no `model` argument,
+the agent type's definition sets neither `model` (other than `inherit`) nor
+`effort`, and `CLAUDE_CODE_SUBAGENT_MODEL` is unset; the built-in
+general-purpose agent qualifies, a custom or plugin agent with its own
+frontmatter does not.
 When a same-vendor target goes out through the CLI for want of that file,
 dispatch now says so on stderr instead of switching silently.
 
