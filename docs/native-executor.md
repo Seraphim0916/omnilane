@@ -88,6 +88,49 @@ workdir is task context, not an OS boundary. Requests for hard `read-only`,
 native jobs: `auto` stays on the same resolved model through CLI, while forced
 native fails closed.
 
+### Generating the capability file
+
+`omnilane native-context [--workdir DIR]... [--mode advise|work]... [--harness NAME]
+[--inherits-caller-runtime] [--out FILE]` writes a capability file for the
+harness it runs under and prints the path. Vendor, current model and current
+effort are read the way `omnilane whoami` reads them; nothing is inferred from
+installed CLIs. It emits one capability row: the caller's own model at its own
+effort. A caller whose effort is unrecorded gets `efforts: ["unverified"]`, which
+matches no lane target, so that file serves `--inherit` only. Rows for other
+models are the host's to add, from its real agent-tool contract.
+
+`inherits_caller_runtime: true` is written only when the host passes
+`--inherits-caller-runtime`. It is the host's statement that its sub-agent tool,
+given no model override, runs the caller's model and effort.
+
+What this release has and has not verified about each harness's sub-agent tool:
+
+| Harness | Sub-agent tool | Status |
+|---|---|---|
+| Codex | `collaboration.spawn_agent`; a model override requires `fork_turns: "none"` or a bounded count | documented above from the tool contract; inheritance without an override is host-asserted |
+| Claude Code | `Agent` tool | not verified in this release: whether a sub-agent without a model argument keeps the parent's effort |
+| Grok Build, Antigravity | — | not verified; no capability is generated beyond the caller's own row |
+
+### Inherited worker (`--inherit`)
+
+`dispatch.sh --inherit --native-context FILE <lane> "<task>"` plans a native
+worker spawned with no model override. `aa_policy.decide_inherited` allows it
+with code `native-inherited-allowed`: the worker runs the caller's runtime, so
+its score equals the caller's and the downward rule holds by construction, with
+or without a recorded effort. No target configuration is resolved
+(`target_config_id: null`, `target: {"inherit": true, ...}`), the transport
+overlay is not consulted, and there is no CLI fallback: a host that cannot take
+it gets `native-inherit-unavailable` with `failed_gate: "native-capability"` and
+the `omnilane native-context` command. The plan carries `inherit: true`,
+`effort: "inherited"`, `worker_contract.model_override: false`,
+`inherit_caller_runtime: true` and `satisfies_lane_target: false`. The capability
+file must set `inherits_caller_runtime: true`, name the caller's vendor and
+model, and hold a new-agent row for that model matching mode, workdir, tools,
+`shared-inherited` and `single-shot`; effort is deliberately not matched.
+Completion checks vendor, model and harness; `runtime.effort` is whatever the
+host observed. A human operator, an unidentified caller, `--vendor`/`--model`/
+`--effort`/`--target-config`, and every CLI-only lifecycle are refused.
+
 Native supports only a caller-supervised single task. `--background`, explicit
 `--live` / `--single-shot`, `--thread`, `sysops`, explicit/environment whole-job
 or idle watchdogs, vote/multi-round and `exec` arbitration paths stay CLI or

@@ -607,6 +607,7 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 - **`omnilane resign`。** 找出與 overlay 不符的廠商，只重探那一家，建到暫存目錄、載入驗證、原子替換、每家一條真實派工，
   失敗自動還原。不是自動蓋章：執行檔必須仍是 overlay 記錄的程式碼簽署團隊、仍在同一安裝位置才會無人值守重簽；
   adhoc／未簽署、換簽署者、換目錄或沒有簽署紀錄都停在結束碼 20，並印出給操作者的 `--approve` 指令。
+- **同一個容器就用自己的子代理。** `omnilane native-context` 依 `whoami` 讀到的身分寫出能力聲明檔；同廠商目標因為沒有聲明檔而走外部 CLI 時，派工會明說。`--inherit` 規劃一個不覆寫模型的原生工人：跑的就是主控自己的模型與強度，定義上不可能往上派（強度沒記錄也成立），不經廠商 CLI、不看 transport overlay，且明確標示不代表該車道的目標模型做了這件事。
 - **doctor 看得到「搬家」的 CLI。** codex 與 grok 每版裝成新檔、舊檔留著，釘住的雜湊一直相符但實際執行的是別的檔。
   沒有 overlay 時改為 WARN 並列出首次安裝步驟。
 - **探測可重現、發版閘會檢查 runner。** `scripts/lib/probe_sweep.py` 由 `build_overlay.py` 推導全部 55 條探測指令，

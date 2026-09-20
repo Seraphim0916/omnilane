@@ -572,6 +572,7 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 - **`omnilane resign`.** 변경된 벤더만 다시 프로브하고, 스테이징에서 빌드·로드 검증 후 원자적으로 교체하며,
   벤더마다 실제 디스패치를 한 번 실행하고 실패하면 자동 복원합니다. overlay 에 기록된 코드 서명 팀과 같은 설치 위치일
   때만 무인으로 재서명하고, 그 외에는 종료 코드 20 과 `--approve` 명령을 출력하고 멈춥니다.
+- **같은 하네스 안에서는 자체 서브에이전트로.** `omnilane native-context` 가 `whoami` 가 읽은 신원으로 capability 파일을 만듭니다. `--inherit` 는 모델을 덮어쓰지 않는 네이티브 워커를 계획합니다. 호출자와 같은 모델·effort 로 실행되므로 상향 위임이 될 수 없고, 벤더 CLI 와 transport overlay 를 거치지 않으며, 레인의 목표 모델이 수행했다고 보고되지 않습니다.
 - **doctor 가 별도 파일로 업데이트된 CLI 를 감지**하고, overlay 가 없으면 첫 설치 절차와 함께 WARN 을 냅니다.
   `release-audit` 는 runner 핀도 검사합니다.
   업데이트: `npm i -g omnilane@0.43.0`, 이후 한 번 `omnilane resign --record-signers`.

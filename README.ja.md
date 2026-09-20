@@ -587,6 +587,7 @@ work の別名ではありません。サービス管理など、work の境界�
 - **`omnilane resign`。** 変化したベンダーだけを再プローブし、ステージングで構築・読み込み検証、アトミックに置換、
   ベンダーごとに実ディスパッチを 1 回、失敗時は自動復元。overlay に記録されたコード署名チームと同じインストール場所の
   場合のみ無人で再署名し、それ以外は終了コード 20 と `--approve` コマンドを示して停止します。
+- **同じハーネス内は自前のサブエージェントで。** `omnilane native-context` が `whoami` の識別情報から capability ファイルを生成します。`--inherit` はモデルを上書きしないネイティブワーカーを計画します。呼び出し元と同じモデル・effort で動くため上位への派遣にはならず、ベンダー CLI も transport overlay も使いません。レーンの目標モデルが実行したとは報告されません。
 - **doctor は別ファイルとして更新された CLI を検出**し、overlay 未設定時は初回手順つきの WARN を出します。
   `release-audit` は runner のピンも検査します。
   更新は `npm i -g omnilane@0.43.0`、その後一度 `omnilane resign --record-signers`。

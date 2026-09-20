@@ -565,6 +565,7 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 - **`omnilane resign`。** 只重探发生变化的厂商，暂存构建、加载验证、原子替换、每家一次真实派工，失败自动还原。
   可执行文件必须仍是 overlay 记录的代码签名团队且位于同一安装位置才会无人值守重签；否则以退出码 20 停下并给出
   `--approve` 命令。
+- **同一个容器就用自己的子代理。** `omnilane native-context` 按 `whoami` 读到的身份写出能力声明文件；`--inherit` 规划一个不覆盖模型的原生工人：运行的就是主控自己的模型与强度，不可能越级，不经厂商 CLI，也不看 transport overlay，并明确标注不代表该车道的目标模型完成了工作。
 - **doctor 能发现"搬家"的 CLI**，没有 overlay 时改为 WARN 并列出首次安装步骤；`release-audit` 检查 runner 钉值。
   升级：`npm i -g omnilane@0.43.0`，之后执行一次 `omnilane resign --record-signers`。
 

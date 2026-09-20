@@ -21,6 +21,16 @@ semantic version tags.
   team the overlay recorded and the same install location; anything else exits
   20 with the operator command. Exit codes: 0, 10 (drift, `--check`), 20
   (operator needed), 30 (rolled back), 2 (no overlay configured).
+- `omnilane native-context` writes the native capability file for the harness it
+  runs under from the identity `whoami` reads; `--inherits-caller-runtime` records
+  the host's statement that an un-overridden sub-agent runs the caller's runtime.
+- `dispatch.sh --inherit` (with `aa_policy.decide_inherited`, code
+  `native-inherited-allowed`) plans a native worker on the caller's own model and
+  effort: no lane target, no vendor CLI, no transport overlay, no CLI fallback,
+  `satisfies_lane_target: false`. It works for an effort-unverified caller and
+  refuses a human, an unidentified caller, any model/effort override and every
+  CLI-only lifecycle. Dispatch now says when a same-vendor target goes through an
+  external CLI only because no capability file was given.
 - `scripts/lib/probe_sweep.py` derives every probe command from `build_overlay.py`
   and the frozen registry, classifies an unauthenticated CLI as `unprobeable`,
   refuses keychain-backed CLIs outside an Aqua session, and retries one transient

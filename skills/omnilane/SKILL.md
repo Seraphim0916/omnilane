@@ -78,6 +78,34 @@ CLI-only. Same vendor is not same model. Unknown capabilities do not match.
 Never inspect credentials or infer support from installed CLIs. Explicit
 vendor/model/effort survive native fallback; no next-vendor substitution.
 
+**When the target is your own harness, use your own sub-agent tool.** Sending a
+same-harness target out through an external CLI is the fallback, not the plan.
+`omnilane native-context --workdir DIR [--mode work]` writes the capability file
+from what `whoami` reads (vendor, current model, current effort) and prints its
+path; pass it as `--native-context FILE`. Add `--inherits-caller-runtime` only if
+your sub-agent tool, given no model override, really runs your own model and
+effort — that is a statement about your tool, which omnilane cannot observe.
+When a same-vendor target goes out through the CLI for want of that file,
+dispatch now says so on stderr instead of switching silently.
+
+**`--inherit`: a worker on your own runtime.**
+`omnilane route --inherit --native-context FILE [--mode work --workdir DIR] <lane> "<task>"`
+asks for a native sub-agent spawned with **no model override**. It runs what you
+run, so it scores what you score and cannot be an upward dispatch — even when
+your effort is unrecorded (a Codex heartbeat turn). No lane target is resolved,
+no vendor CLI runs, and the transport overlay is not consulted, so a stale
+overlay does not stop it. The handoff says `effort: "inherited"`,
+`worker_contract.model_override: false` and `satisfies_lane_target: false`: the
+lane is a label for the work, **not** a claim that the lane's target did it. Use
+it for diagnosis, evidence gathering and low-risk work; a lane that requires a
+stronger model than yours is still refused on the normal path, and `--inherit`
+does not change that. Spawn the agent without model or effort arguments, then
+ingest the completion as usual, reporting the effort you observed (or
+`"unknown"`). It takes no `--vendor`/`--model`/`--effort`, has no CLI fallback,
+and refuses background, live, thread, sysops and watchdog lifecycles. The child
+context carries your ceiling (and `effort_unverified` if you had it); the worker
+still never dispatches.
+
 ```sh
 omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review the change"
 omnilane jobs --json complete-native JOB_ID /absolute/completion.json

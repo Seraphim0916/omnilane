@@ -769,6 +769,15 @@ every week. This release stops treating each of those as a total refusal.
   new signer, a new directory, or an overlay with no signer on record stop at
   exit 20 with the `--approve` command for an operator. `--check` only reports;
   `--record-signers` adopts the signers of what an older overlay already pins.
+- **Your own harness, your own sub-agents.** A target inside the caller's own
+  harness used to go out through an external CLI unless the caller hand-wrote a
+  capability file, so in practice it always did. `omnilane native-context` now
+  writes that file from the identity `whoami` reads, and dispatch says so when a
+  same-vendor target still goes through the CLI. `--inherit` plans a native
+  worker with no model override: it runs the caller's own model and effort, so it
+  cannot be an upward dispatch even when the effort is unrecorded, needs no
+  vendor CLI and no transport overlay, and is explicitly not reported as
+  satisfying the lane's target.
 - **Doctor sees a CLI that moved.** Codex and grok install each version as a new
   file and leave the old one behind, so the pinned hash kept matching while the
   runners executed something else. Doctor now compares what `PATH` resolves with
