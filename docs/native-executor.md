@@ -108,7 +108,7 @@ What this release has and has not verified about each harness's sub-agent tool:
 | Harness | Sub-agent tool | Status |
 |---|---|---|
 | Codex | `collaboration.spawn_agent`; a model override requires `fork_turns: "none"` or a bounded count | documented above from the tool contract; inheritance without an override is host-asserted |
-| Claude Code | `Agent` tool | not verified in this release: whether a sub-agent without a model argument keeps the parent's effort |
+| Claude Code | `Agent` tool; optional `model` override | model: the tool contract says an omitted `model` inherits the parent unless the agent definition or a configured default subagent model says otherwise, and one full `--inherit` cycle on 2026-09-20 (general-purpose agent, no `model` argument) reported the parent's exact model. Effort: not verified — the contract does not state it and the worker cannot see its own; report `runtime.effort: "unknown"` |
 | Grok Build, Antigravity | — | not verified; no capability is generated beyond the caller's own row |
 
 ### Inherited worker (`--inherit`)
