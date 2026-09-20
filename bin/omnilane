@@ -60,6 +60,13 @@ case "$cmd" in
     }
     exec python3 "$REPO/scripts/lib/caller_identity.py" "$@"
     ;;
+  native-context)
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: native-context requires Python 3.9 or newer" >&2
+      exit 1
+    }
+    exec python3 "$REPO/scripts/lib/native_context.py" "$@"
+    ;;
   resign)
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: resign requires Python 3.9 or newer" >&2
@@ -114,6 +121,8 @@ omnilane — one routing table, every harness
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json] [--strict] [--probe V]  local health / opt-in live probe
   omnilane whoami                       caller-context file for the CLI this runs under
+  omnilane native-context [--workdir DIR] [--mode M] [--inherits-caller-runtime]
+                                         capability file that lets dispatch use this harness's own sub-agents
   omnilane resign [--check] [--vendor V] [--approve V]
                                          re-probe and re-sign the transport overlay after a CLI update
   omnilane benchmark [--json] [--run] [--vendor V] fixed quality/cost comparison

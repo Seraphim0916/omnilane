@@ -456,6 +456,85 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
     return base
 
 
+def decide_inherited(registry: dict[str, Any], registry_sha256: str, *,
+                     caller: dict[str, Any] | None, caller_sha256: str | None,
+                     operator_asserted_human: bool = False) -> dict[str, Any]:
+    """A native worker that inherits the caller's own model and effort unchanged.
+
+    It runs what the caller runs, so it scores what the caller scores and cannot
+    be an upward dispatch, whether or not the caller's effort is known. There is
+    no external CLI, so no transport mapping is involved. It is nobody's lane
+    target: the decision names no target configuration and must not be reported
+    as satisfying one.
+    """
+    base: dict[str, Any] = {
+        "schema_version": 1,
+        "snapshot_id": registry["snapshot"]["id"],
+        "registry_sha256": registry_sha256,
+        "allowed": False,
+        "code": "deny",
+        "message": "AA policy denied dispatch",
+        "caller_kind": "operator-asserted-human" if operator_asserted_human else "model",
+        "target_request": {"vendor": None, "model": None, "effort": None, "inherit": True},
+        "target_config_id": None,
+        "caller_score": None,
+        "inherited_ceiling": None,
+        "effective_ceiling": None,
+        "target_score": None,
+        "target_estimated": None,
+        "child_context": None,
+        "evidence_limit": ("the host asserts that a sub-agent spawned without a model override "
+                           "inherits the caller's runtime; omnilane cannot observe it"),
+    }
+    if operator_asserted_human:
+        base.update(code="inherit-requires-model-caller",
+                    message="only a model running inside a harness has a runtime to inherit",
+                    failed_gate="caller-identity",
+                    reason="a human operator has no sub-agent tool; dispatch a lane instead",
+                    next_command="omnilane list")
+        return base
+    if caller is None:
+        base.update(code="missing-caller-context",
+                    message="no caller identity: an inherited worker still has to know whose runtime it inherits",
+                    failed_gate="caller-identity", reason="no caller identity reached the gate",
+                    next_command="omnilane whoami")
+        return base
+    base["caller_context_sha256"] = caller_sha256
+    identity = caller["caller"]
+    degraded = caller.get("effort_unverified") is True
+    rows = _matching_rows(registry, identity)
+    if len(rows) != 1:
+        base.update(code="unknown-caller-config" if not rows else "ambiguous-caller-config",
+                    message=_unknown_reason(registry, identity)
+                    or "caller exact vendor/model/effort/reasoning/fallback is not uniquely scored",
+                    caller=identity, failed_gate="caller-identity",
+                    reason="the caller context names a configuration the frozen registry does not score exactly once",
+                    next_command="omnilane whoami")
+        return base
+    row = rows[0]
+    floor = min(r["score"] for r in registry["scored_configs"]
+                if r["vendor"] == row["vendor"] and r["model"] == row["model"])
+    if degraded and row["score"] != floor:
+        base.update(code="invalid-degraded-caller",
+                    message="an effort-unverified caller must name its model's lowest-scored row",
+                    caller=identity, failed_gate="caller-identity",
+                    reason="effort_unverified was set on a row above the model's floor",
+                    next_command="omnilane whoami")
+        return base
+    effective = min(row["score"], caller["inherited_ceiling"])
+    child = {"schema_version": 1, "snapshot_id": registry["snapshot"]["id"], "kind": "model",
+             "caller": identity, "inherited_ceiling": effective}
+    if degraded:
+        child["effort_unverified"] = True
+    base.update(allowed=True, code="native-inherited-allowed",
+                message="the worker inherits the caller's own runtime, so it cannot score above it",
+                caller=identity, caller_degraded=degraded, caller_score=row["score"],
+                inherited_ceiling=caller["inherited_ceiling"], effective_ceiling=effective,
+                target={"inherit": True, "vendor": row["vendor"], "model": row["model"]},
+                child_context=child)
+    return base
+
+
 def _normalized_effort(value: str) -> str | None:
     return None if value in ("", "-") else value
 

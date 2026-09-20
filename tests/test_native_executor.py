@@ -656,5 +656,122 @@ class NativeExecutorTests(unittest.TestCase):
         self.ingest(plan)
 
 
+class InheritedWorkerTests(unittest.TestCase):
+    """A worker on the caller's own runtime: no lane target, no CLI, no transport overlay."""
+
+    # The fixture host and its helpers, without re-running the parent's tests here.
+    save_context = NativeExecutorTests.save_context
+    run_cli = NativeExecutorTests.run_cli
+    route = NativeExecutorTests.route
+    job = NativeExecutorTests.job
+    completion = NativeExecutorTests.completion
+    ingest = NativeExecutorTests.ingest
+    assert_no_jobs = NativeExecutorTests.assert_no_jobs
+
+    def setUp(self):
+        NativeExecutorTests.setUp(self)
+        self.env.pop("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN")
+        self.env["OMNILANE_AA_CALLER_FROM_PROCESS"] = "0"
+        registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
+        rows = [r for r in registry["scored_configs"]
+                if r["vendor"] == "codex" and r["model"] == "gpt-6-astra"]
+        self.floor = min(rows, key=lambda r: (r["score"], r["id"]))
+        self.snapshot = registry["snapshot"]["id"]
+        self.ctx.update(inherits_caller_runtime=True, current_model="gpt-6-astra")
+        self.ctx["capabilities"][0]["model"] = "gpt-6-astra"
+        self.save_context()
+        self.caller = self.base / "caller.json"
+        self.write_caller(self.floor, degraded=True)
+
+    def write_caller(self, row, degraded=False, ceiling=None):
+        value = {"schema_version": 1, "snapshot_id": self.snapshot, "kind": "model",
+                 "caller": {k: row[k] for k in ("vendor", "model", "effort", "reasoning", "fallback")},
+                 "inherited_ceiling": row["score"] if ceiling is None else ceiling}
+        if degraded:
+            value["effort_unverified"] = True
+        self.caller.write_text(json.dumps(value))
+
+    def inherit(self, *flags, expected=0, context=True):
+        return self.route("--inherit", "--caller-context", str(self.caller), *flags,
+                          expected=expected, context=context)
+
+    def refusal(self, result):
+        return json.loads(next(l for l in result.stderr.splitlines() if l.startswith("{")))
+
+    def test_a_degraded_caller_gets_an_inherited_worker(self):
+        plan = json.loads(self.inherit().stdout)
+        self.assertEqual((plan["executor"], plan["executor_reason"], plan["state"]),
+                         ("native", "inherited-caller-runtime", "pending"))
+        self.assertEqual((plan["vendor"], plan["model"], plan["effort"]),
+                         ("codex", "gpt-6-astra", "inherited"))
+        contract = plan["worker_contract"]
+        self.assertIs(contract["model_override"], False)
+        self.assertIs(contract["satisfies_lane_target"], False)
+        self.assertEqual(contract["caller_context"]["inherited_ceiling"], self.floor["score"])
+        self.assertIs(contract["caller_context"]["effort_unverified"], True)
+        decision = plan["aa_policy"]
+        self.assertEqual((decision["code"], decision["target_config_id"]),
+                         ("native-inherited-allowed", None))
+        self.assertFalse(self.marker.exists())
+
+    def test_the_child_never_outranks_an_inherited_ceiling(self):
+        top = dict(self.floor)
+        registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
+        top = max((r for r in registry["scored_configs"]
+                   if r["vendor"] == "codex" and r["model"] == "gpt-6-astra"), key=lambda r: r["score"])
+        self.write_caller(top, ceiling=40)
+        plan = json.loads(self.inherit("--dry-run").stdout)
+        self.assertEqual(plan["aa_policy"]["effective_ceiling"], 40)
+        self.assertEqual(plan["aa_policy"]["child_context"]["inherited_ceiling"], 40)
+
+    def test_completion_reports_the_observed_effort(self):
+        plan = json.loads(self.inherit().stdout)
+        value = self.completion(plan)
+        value["runtime"]["effort"] = "unknown"
+        self.ingest(plan, value)
+        result = json.loads(self.job("result", plan["job_id"]).stdout)
+        self.assertEqual(result["job"]["completion"]["runtime"]["effort"], "unknown")
+        wrong = self.completion(json.loads(self.inherit().stdout))
+        wrong["runtime"]["model"] = "gpt-5.6-sol"
+        self.ingest({"job_id": wrong["job_id"]}, wrong, expected=2)
+
+    def test_needs_a_host_that_asserts_inheritance(self):
+        del self.ctx["inherits_caller_runtime"]
+        self.save_context()
+        refusal = self.refusal(self.inherit(expected=3))
+        self.assertEqual((refusal["code"], refusal["failed_gate"]),
+                         ("native-inherit-unavailable", "native-capability"))
+        self.assertEqual(refusal["reason"], "host-does-not-assert-runtime-inheritance")
+        self.assertIn("omnilane native-context", refusal["next_command"])
+        self.assert_no_jobs()
+
+    def test_there_is_no_cli_fallback(self):
+        refusal = self.refusal(self.inherit(expected=3, context=False))
+        self.assertEqual(refusal["reason"], "no-native-context")
+        self.assert_no_jobs()
+
+    def test_other_harness_and_cli_only_lifecycles_are_refused(self):
+        self.assertEqual(self.refusal(self.inherit("--background", expected=3))["reason"],
+                         "cli-session-lifecycle")
+        self.assertEqual(self.refusal(self.inherit("--mode", "sysops", expected=3))["reason"],
+                         "sysops-requires-cli")
+        self.ctx["vendor"] = "claude"
+        self.save_context()
+        self.assertEqual(self.refusal(self.inherit(expected=3))["reason"], "vendor-mismatch")
+        self.assert_no_jobs()
+
+    def test_a_human_or_an_unidentified_caller_has_nothing_to_inherit(self):
+        result = self.route("--inherit", "--operator-asserted-human", expected=3)
+        self.assertEqual(self.refusal(result)["code"], "inherit-requires-model-caller")
+        result = self.route("--inherit", expected=3)
+        self.assertEqual(self.refusal(result)["code"], "missing-caller-context")
+        self.assert_no_jobs()
+
+    def test_inherit_overrides_nothing(self):
+        for flag in (("--vendor", "codex"), ("--model", "gpt-6-astra"), ("--effort", "xhigh")):
+            with self.subTest(flag=flag):
+                self.assertIn("overrides nothing", self.inherit(*flag, expected=2).stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

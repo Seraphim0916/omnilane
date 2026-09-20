@@ -91,7 +91,9 @@ def capability_context(path):
     ctx = read_json(path)
     fields(ctx, ("schema_version", "harness", "vendor", "capabilities", "requirements"),
            ("current_model", "current_effort", "agent_strategy", "existing_agent",
-            "preserve_existing_context", "new_agent_capacity"))
+            "preserve_existing_context", "new_agent_capacity", "inherits_caller_runtime"))
+    if "inherits_caller_runtime" in ctx:
+        check(type(ctx["inherits_caller_runtime"]) is bool, "invalid inherits_caller_runtime")
     check(type(ctx["schema_version"]) is int and ctx["schema_version"] == 1, "unsupported context version")
     identifier(ctx["harness"], "harness")
     identifier(ctx["vendor"], "vendor")
@@ -210,6 +212,85 @@ def choose(args, ctx):
     return "native", "exact-idle-reuse-match" if strategy == "reuse" else "exact-capability-match", model
 
 
+def choose_inherited(args, ctx, caller):
+    """A worker spawned with no model override. There is no CLI to fall back to."""
+    identity = caller["caller"]
+    if ctx is None:
+        return None, "no-native-context"
+    if ctx.get("inherits_caller_runtime") is not True:
+        return None, "host-does-not-assert-runtime-inheritance"
+    if args.background or args.session != "auto" or args.thread:
+        return None, "cli-session-lifecycle"
+    if args.job_timeout or args.idle_timeout:
+        return None, "cli-watchdog-required"
+    if args.mode == "sysops":
+        return None, "sysops-requires-cli"
+    if ctx["vendor"] != identity["vendor"]:
+        return None, "vendor-mismatch"
+    if ctx.get("current_model", identity["model"]) != identity["model"]:
+        return None, "current-model-mismatch"
+    if ctx.get("agent_strategy", "new") != "new" or "existing_agent" in ctx:
+        return None, "inherit-spawns-a-new-agent"
+    if ctx.get("new_agent_capacity") == "exhausted":
+        return None, "new-agent-capacity-exhausted"
+    req = ctx["requirements"]
+    if req["isolation"] != "shared-inherited" or req["lifecycle"] != "single-shot":
+        return None, "unsupported-isolation-or-lifecycle"
+    # Effort is deliberately not matched: inheriting it is the whole point.
+    caps = [cap for cap in ctx["capabilities"]
+            if cap["model"] == identity["model"] and cap.get("agent_strategy", "new") == "new"
+            and args.mode in cap["modes"] and args.workdir in cap["workdirs"]
+            and set(req["tools"]) <= set(cap["tools"])
+            and "shared-inherited" in cap["isolations"] and "single-shot" in cap["lifecycles"]]
+    if not caps:
+        return None, "no-capability-row-for-caller-model-mode-and-workdir"
+    return "native", "inherited-caller-runtime"
+
+
+def route_inherited(args, ctx, registry, registry_sha):
+    caller = caller_sha = None
+    if args.caller_context:
+        caller, caller_sha = aa_policy.load_caller(
+            args.caller_context, registry, args.expected_caller_sha256)
+    decision = aa_policy.decide_inherited(
+        registry, registry_sha, caller=caller, caller_sha256=caller_sha,
+        operator_asserted_human=args.operator_asserted_human)
+    if not decision["allowed"]:
+        print(aa_policy._json_line(decision), end="", file=sys.stderr)
+        return 3
+    executor, reason = choose_inherited(args, ctx, caller)
+    if executor is None:
+        # An inherited worker exists only inside the harness; the CLI is not a fallback for it.
+        decision.update(allowed=False, code="native-inherit-unavailable",
+                        message="this harness cannot take an inherited native worker: " + reason,
+                        failed_gate="native-capability", reason=reason, child_context=None,
+                        next_command="omnilane native-context --workdir " + args.workdir)
+        print(aa_policy._json_line(decision), end="", file=sys.stderr)
+        return 3
+    identity = caller["caller"]
+    plan = {"schema_version": 1, "executor": executor, "executor_reason": reason, "inherit": True,
+            "vendor": identity["vendor"], "model": identity["model"], "effort": "inherited",
+            "harness": ctx["harness"], "lane": args.lane, "mode": args.mode,
+            "workdir": args.workdir, "task": args.task,
+            "requirements": ctx["requirements"], "timeout": args.timeout,
+            "worker_contract": {
+                "no_nested_dispatch": True,
+                "isolation": ctx["requirements"]["isolation"],
+                "mode_is_task_intent": True,
+                "caller_enforces_deadline": True,
+                "model_override": False,
+                "inherit_caller_runtime": True,
+                "satisfies_lane_target": False,
+            },
+            "aa_policy": decision,
+            "state": "planned" if args.dry_run else "pending",
+            "job_id": None, "task_id": None, "agent_id": None,
+            "provider_invoked": False, "job_state_created": False,
+            "agent_strategy": "new", "existing_agent_id": None, "preserve_existing_context": False,
+            "new_agent_capacity": ctx.get("new_agent_capacity", "unknown")}
+    return publish_plan(args, plan, decision, registry, caller)
+
+
 def stamp():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -302,6 +383,8 @@ def route(args):
     registry, registry_sha = aa_policy.load_registry(
         args.policy, args.expected_registry_sha256
     )
+    if getattr(args, "inherit", False):
+        return route_inherited(args, ctx, registry, registry_sha)
     caller = None
     caller_sha = None
     if args.caller_context:
@@ -355,6 +438,10 @@ def route(args):
         plan["worker_contract"].update(backend="collaboration.followup_task",
                                        preserve_existing_context=True,
                                        caller_rechecks_idle_before_followup=True)
+    return publish_plan(args, plan, policy_decision, registry, caller)
+
+
+def publish_plan(args, plan, policy_decision, registry, caller):
     if args.dry_run:
         print(json_text(plan), end="")
         return 0
@@ -393,6 +480,8 @@ def validate_completion(value, state):
     for key in ("vendor", "model", "effort", "harness", "backend"):
         text_value(runtime[key], "runtime " + key, 256)
     for key in ("vendor", "model", "effort", "harness"):
+        if key == "effort" and state.get("inherit") is True:
+            continue  # the host reports what it observed; nothing was requested
         check(runtime[key] == state[key], "runtime " + key + " mismatch")
     strategy = state.get("agent_strategy", "new")
     if strategy == "reuse":
@@ -463,8 +552,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("route")
-    for key in ("home", "lane", "vendor", "model", "effort", "workdir", "task"):
+    for key in ("home", "lane", "workdir", "task"):
         p.add_argument("--" + key, required=True)
+    for key in ("vendor", "model", "effort"):
+        p.add_argument("--" + key, default="")
+    p.add_argument("--inherit", action="store_true",
+                   help="spawn a worker that inherits the caller's own model and effort")
     p.add_argument("--executor", choices=("auto", "native", "cli"), required=True)
     p.add_argument("--mode", choices=("advise", "work", "sysops"), required=True)
     p.add_argument("--context")
@@ -488,6 +581,8 @@ def main():
     p.add_argument("job_id")
     p.add_argument("input", nargs="?")
     args = parser.parse_args()
+    if args.command == "route" and not args.inherit and not args.vendor:
+        parser.error("--vendor is required unless --inherit is given")
     try:
         return route(args) if args.command == "route" else job_command(args)
     except (ValueError, OSError, RecursionError, TypeError, KeyError) as error:

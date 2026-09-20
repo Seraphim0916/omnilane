@@ -917,6 +917,38 @@ class WhoamiCommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertEqual(result.stdout, "")
 
+    def native_context(self, *launcher, flags=()):
+        command = (f"bash {shlex.quote(str(ROOT / 'bin/omnilane'))} native-context "
+                   f"--workdir {shlex.quote(str(ROOT))} " + " ".join(flags))
+        return under_launcher(list(launcher), command, self.env)
+
+    def test_native_context_describes_the_launching_harness(self):
+        result = self.native_context("claude", "--model", "claude-opus-5", "--effort", "high")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        path = Path(result.stdout.strip())
+        self.assertEqual(path.parent, Path(self.tmp.name) / "native-context")
+        value = json.loads(path.read_text())
+        self.assertEqual((value["harness"], value["vendor"], value["current_model"],
+                          value["current_effort"]), ("claude-code", "claude", "claude-opus-5", "high"))
+        self.assertEqual(value["capabilities"][0]["efforts"], ["high"])
+        self.assertEqual(value["capabilities"][0]["workdirs"], [str(ROOT.resolve())])
+        self.assertNotIn("inherits_caller_runtime", value)
+        self.assertIn("--inherits-caller-runtime", result.stderr)
+
+    def test_native_context_for_an_unrecorded_effort_only_serves_inherit(self):
+        result = self.native_context("codex", "exec", "-m", "gpt-6-astra",
+                                     flags=("--inherits-caller-runtime", "--mode", "work"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(Path(result.stdout.strip()).read_text())
+        self.assertIs(value["inherits_caller_runtime"], True)
+        self.assertNotIn("current_effort", value)
+        self.assertEqual(value["capabilities"][0]["efforts"], ["unverified"])
+        self.assertEqual(value["capabilities"][0]["modes"], ["work"])
+
+    def test_native_context_refuses_an_unreadable_caller(self):
+        result = self.native_context("claude", "--model", "claude-opus-5")
+        self.assertEqual((result.returncode, result.stdout), (3, ""))
+
     def test_refuses_rather_than_guessing(self):
         result = self.run_whoami("claude", "--model", "claude-opus-5")
         self.assertEqual(result.returncode, 3)

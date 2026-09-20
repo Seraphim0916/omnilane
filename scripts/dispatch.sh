@@ -35,7 +35,7 @@ MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""; OVERRIDE_IDLE_TIMEOUT=""; SESSION_REQUEST="auto"
 THREAD_NAME=""; THREAD_MODE=""; THREAD_ID=""; THREAD_TURN=""; THREAD_CREATED=""
-EXECUTOR="auto"; NATIVE_CONTEXT=""; RESOLVE_WITH_CONTEXT=0
+EXECUTOR="auto"; NATIVE_CONTEXT=""; RESOLVE_WITH_CONTEXT=0; INHERIT=0
 SELECTED_EXECUTOR="cli"; EXECUTOR_REASON="no-native-context"
 AA_POLICY_FILE="${OMNILANE_AA_POLICY_FILE:-$OMNILANE_REPO/config/aa-model-policy.json}"
 AA_CALLER_CONTEXT="${OMNILANE_AA_CALLER_CONTEXT:-}"
@@ -67,6 +67,8 @@ flags:
                          before any provider call or job state
   --executor auto|native|cli  caller-owned native handoff or legacy CLI
   --native-context FILE      explicit JSON capabilities; native is not a binary
+  --inherit                  native worker on the caller's own model and effort; resolves no
+                             lane target, needs --native-context with inherits_caller_runtime
   --caller-context FILE      exact model caller identity plus inherited ceiling
   --operator-asserted-human  explicit AA model-ceiling exemption; assertion only
   --aa-policy FILE           frozen AA policy registry (default: repo config)
@@ -724,6 +726,7 @@ while [[ $# -gt 0 ]]; do
       }
       SESSION_REQUEST="single-shot"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --inherit) INHERIT=1; shift ;;
     --operator-asserted-human)
       AA_OPERATOR_ASSERTED_HUMAN=1; shift ;;
     --mode|--workdir|--vendor|--model|--effort|--timeout|--job-timeout|--idle-timeout|--thread|--executor|--native-context|--caller-context|--aa-policy|--target-config|--transport-overlay)
@@ -835,6 +838,34 @@ case "$EXECUTOR" in
 esac
 
 CHAIN="$(raw_lane_line "$LANE")" || { echo "omnilane: unknown lane '$LANE' (try --list)" >&2; exit 2; }
+if [[ "$INHERIT" -eq 1 ]]; then
+  # A worker that inherits this caller's own model and effort runs inside the
+  # harness: no lane target is resolved, no vendor CLI or transport overlay is
+  # involved, and the lane is only a label for what the work is.
+  [[ -z "$OVERRIDE_VENDOR$OVERRIDE_MODEL$OVERRIDE_EFFORT$AA_TARGET_CONFIG" ]] || {
+    echo "omnilane: --inherit takes no --vendor, --model, --effort or --target-config; it overrides nothing" >&2
+    exit 2
+  }
+  [[ "$EXECUTOR" != "cli" ]] || { echo "omnilane: --inherit is native only" >&2; exit 2; }
+  command -v python3 >/dev/null 2>&1 || { echo "omnilane: native protocol requires Python 3" >&2; exit 2; }
+  INHERIT_TIMEOUT="${OVERRIDE_TIMEOUT:-${OMNILANE_TIMEOUT:-600}}"
+  [[ "$INHERIT_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || {
+    echo "omnilane: invalid timeout (want a positive integer of seconds)" >&2; exit 2
+  }
+  INHERIT_ARGS=(route --inherit --home "$OMNILANE_HOME" --executor native --lane "$LANE"
+    --workdir "$WORKDIR" --mode "$MODE" --task="$TASK" --session "$SESSION_REQUEST"
+    --thread "$THREAD_NAME" --policy "$AA_POLICY_FILE" --timeout "$INHERIT_TIMEOUT"
+    --job-timeout "${OVERRIDE_JOB_TIMEOUT:-}" --idle-timeout "${OVERRIDE_IDLE_TIMEOUT:-}")
+  [[ -z "$NATIVE_CONTEXT" ]] || INHERIT_ARGS+=(--context "$NATIVE_CONTEXT")
+  if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "1" ]]; then
+    INHERIT_ARGS+=(--operator-asserted-human)
+  elif [[ -n "$AA_CALLER_CONTEXT" ]]; then
+    INHERIT_ARGS+=(--caller-context "$AA_CALLER_CONTEXT")
+  fi
+  [[ "$BACKGROUND" -eq 0 ]] || INHERIT_ARGS+=(--background)
+  [[ "$DRY_RUN" -eq 0 ]] || INHERIT_ARGS+=(--dry-run)
+  exec python3 "$OMNILANE_REPO/scripts/lib/native.py" "${INHERIT_ARGS[@]}"
+fi
 if [[ -n "$OVERRIDE_VENDOR" ]]; then
   if resolve_chain "$CHAIN" "$OVERRIDE_VENDOR"; then
     :
@@ -1122,6 +1153,13 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 printf 'omnilane: executor=cli reason=%s\n' "$EXECUTOR_REASON" >&2
+if [[ "$EXECUTOR_REASON" == "no-native-context" && -n "$AA_CALLER_CONTEXT" && -r "$AA_CALLER_CONTEXT" ]]; then
+  CALLER_VENDOR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["caller"]["vendor"])' "$AA_CALLER_CONTEXT" 2>/dev/null || true)"
+  if [[ -n "$CALLER_VENDOR" && "$CALLER_VENDOR" == "$VENDOR" ]]; then
+    # Same vendor is not same model, so this is an offer, never a silent switch.
+    echo "omnilane: the target is this harness's own vendor, yet it goes out through an external CLI because no capability file was given. To use your own sub-agent tool: omnilane native-context --workdir \"$WORKDIR\", then pass --native-context FILE (or --inherit for a worker on your own model and effort)" >&2
+  fi
+fi
 mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
