@@ -368,6 +368,18 @@ routing_candidate_available() {
   fi
 }
 
+aa_print_refusal() {
+  # Refusal JSON on stderr, with the lanes this caller can still reach appended.
+  local helper="$OMNILANE_REPO/scripts/lib/aa_lanes.py"
+  if [[ -n "$AA_LAST_DECISION" && -r "$helper" ]] && command -v python3 >/dev/null 2>&1; then
+    printf '%s\n' "$AA_LAST_DECISION" | python3 "$helper" --registry "$AA_POLICY_FILE" --lane "${LANE:-}" \
+      --routing "$OMNILANE_HOME/routing.local.yaml" --routing "$OMNILANE_REPO/routing.yaml" >&2 \
+      || printf '%s\n' "$AA_LAST_DECISION" >&2
+  else
+    printf '%s\n' "$AA_LAST_DECISION" >&2
+  fi
+}
+
 aa_policy_decide() {
   # vendor model effort [target-config] -> structured JSON in AA_LAST_DECISION
   local vendor="$1" model="$2" effort="$3" target_config="${4:-}" rc=0
@@ -835,7 +847,7 @@ if [[ -n "$OVERRIDE_VENDOR" ]]; then
         exit 4
         ;;
     6)
-      printf '%s\n' "$AA_LAST_DECISION" >&2
+      aa_print_refusal
       exit 3
       ;;
     5)
@@ -852,11 +864,11 @@ else
   resolve_rc=0
   resolve_chain "$CHAIN" || resolve_rc=$?
   if [[ "$resolve_rc" -eq 6 ]]; then
-    printf '%s\n' "$AA_LAST_DECISION" >&2
+    aa_print_refusal
     exit 3
   elif [[ "$resolve_rc" -ne 0 ]]; then
     echo "omnilane: no eligible available target for lane '$LANE' (chain:$CHAIN)." >&2
-    [[ -z "$AA_LAST_DECISION" ]] || printf '%s\n' "$AA_LAST_DECISION" >&2
+    [[ -z "$AA_LAST_DECISION" ]] || aa_print_refusal
     exit 4
   fi
 fi

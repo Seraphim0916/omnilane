@@ -186,6 +186,17 @@ def resolve(registry: dict, vendor: str, model: str | None,
     return None, f"no scored configuration for {vendor} {model} at effort {effort}"
 
 
+def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
+    """The lowest-scored row of a known model, for a caller whose effort is unrecorded.
+
+    Whatever effort actually ran scores at least this much, so the floor can only
+    narrow what the caller may dispatch; it never widens it.
+    """
+    rows = [row for row in registry["scored_configs"]
+            if row["vendor"] == vendor and row["model"] == model]
+    return min(rows, key=lambda row: (row["score"], row["id"])) if rows else None
+
+
 def _thread_environment(entries: list[bytes]) -> dict[str, str]:
     values = [entry.partition(b"=")[2] for entry in entries
               if entry.partition(b"=")[0] == b"CODEX_THREAD_ID"]
@@ -402,11 +413,20 @@ def _rollout_selector(thread: str,
         event, context_turn, event_turn = ended
         raise ValueError(f"latest turn_context turn {context_turn} has already ended "
                          f"({event}, turn {event_turn})" + _rollout_age_hint(last_timestamp, now))
-    for key, value in latest.items():
+    for key in ("turn_id", "model"):
+        value = latest[key]
         if not isinstance(value, str) or not value.strip():
             detail = " (turn unknown)" if key == "turn_id" else ""
             raise ValueError(f"latest turn_context {key} must be a non-empty string{detail}")
-    return ("codex", latest["model"], latest["effort"]), f"thread {thread}, turn {latest['turn_id']}"
+    effort = latest["effort"]
+    source = f"thread {thread}, turn {latest['turn_id']}"
+    if effort is None:
+        # Heartbeat automations wake a thread without recording an effort. The
+        # model is still known, so the caller degrades instead of going blind.
+        return ("codex", latest["model"], None), source + ", turn_context records no effort"
+    if not isinstance(effort, str) or not effort.strip():
+        raise ValueError("latest turn_context effort must be a non-empty string")
+    return ("codex", latest["model"], effort), source
 
 
 def read_caller(pid: int, lookup: Lookup = _process,
@@ -463,18 +483,25 @@ def load_registry(path: str | Path) -> tuple[dict, str]:
         os.environ.update(saved)
 
 
-def write_context(row: dict, registry: dict, home: Path) -> Path:
+def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool = False) -> Path:
     """One file per identity: every session launched the same way is the same caller."""
     directory = Path(home) / "caller-context"
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / (row["id"].replace("/", "--") + ".json")
-    text = json.dumps({
+    stem = row["id"].replace("/", "--")
+    if effort_unverified:
+        # Not the same caller as one that really launched at the floor effort.
+        stem = f"{row['vendor']}--{row['model'].replace('.', '-')}--effort-unverified"
+    path = directory / (stem + ".json")
+    value = {
         "schema_version": 1,
         "snapshot_id": registry["snapshot"]["id"],
         "kind": "model",
         "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
         "inherited_ceiling": row["score"],
-    }, indent=2, sort_keys=True) + "\n"
+    }
+    if effort_unverified:
+        value["effort_unverified"] = True
+    text = json.dumps(value, indent=2, sort_keys=True) + "\n"
     try:
         if path.read_text() == text:
             return path
@@ -507,14 +534,24 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         print(f"omnilane: cannot read the caller identity: {error}", file=sys.stderr)
         return 3
     row, reason = resolve(registry, vendor, model, effort)
+    degraded = False
+    if row is None and vendor == "codex" and model and effort is None:
+        row = floor_row(registry, vendor, model)
+        degraded = row is not None
     if row is None:
         print(f"omnilane: cannot read the caller identity from pid {pid}: {reason}", file=sys.stderr)
         return 3
     home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
-    path = write_context(row, registry, home)
+    path = write_context(row, registry, home, effort_unverified=degraded)
     provenance = f", {source}" if source else ""
-    print(f"omnilane: caller is {row['id']} (score {row['score']}), read from pid {pid}{provenance}",
-          file=sys.stderr)
+    if degraded:
+        print(f"omnilane: caller is {vendor}/{model} at an unrecorded effort; degraded to its "
+              f"lowest-scored row {row['id']} (ceiling {row['score']}), read from pid {pid}"
+              f"{provenance}. Lanes above that ceiling need a session launched with an "
+              f"explicit effort.", file=sys.stderr)
+    else:
+        print(f"omnilane: caller is {row['id']} (score {row['score']}), read from pid {pid}"
+              f"{provenance}", file=sys.stderr)
     print(path)
     return 0
 

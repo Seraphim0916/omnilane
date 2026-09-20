@@ -239,7 +239,13 @@ def load_caller(path: str | Path, registry: dict[str, Any],
     _check(value.get("snapshot_id") == registry["snapshot"]["id"],
            "caller-context snapshot does not match frozen registry")
     _check(value.get("kind") == "model", "unsupported caller-context kind")
+    # effort_unverified marks a caller degraded to its model's lowest-scored row
+    # because the launching harness recorded no effort; it may only be true.
+    unverified = value.pop("effort_unverified", None)
+    _check(unverified is None or unverified is True, "invalid caller-context effort_unverified")
     _exact_fields(value, {"schema_version", "snapshot_id", "kind", "caller", "inherited_ceiling"})
+    if unverified:
+        value["effort_unverified"] = True
     value["caller"] = _identity(value["caller"], "caller")
     ceiling = value["inherited_ceiling"]
     _check(type(ceiling) is int and 0 <= ceiling <= 100,
@@ -345,10 +351,15 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
                      "file it prints as --caller-context, which dispatch does itself when the "
                      "launching CLI names its model and effort; a human operator passes "
                      "--operator-asserted-human"),
+            failed_gate="caller-identity",
+            reason="no caller identity reached the gate",
+            next_command="omnilane whoami",
         )
         return base
     base["caller_context_sha256"] = caller_sha256
     caller_identity = caller["caller"]
+    degraded = caller.get("effort_unverified") is True
+    base["caller_degraded"] = degraded
     caller_rows = _matching_rows(registry, caller_identity)
     if len(caller_rows) != 1:
         detail = _unknown_reason(registry, caller_identity)
@@ -356,9 +367,24 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
             code="unknown-caller-config" if not caller_rows else "ambiguous-caller-config",
             message=detail or "caller exact vendor/model/effort/reasoning/fallback is not uniquely scored",
             caller=caller_identity,
+            failed_gate="caller-identity",
+            reason="the caller context names a configuration the frozen registry does not score exactly once",
+            next_command="omnilane whoami",
         )
         return base
     caller_row = caller_rows[0]
+    model_rows = [row for row in registry["scored_configs"]
+                  if row["vendor"] == caller_row["vendor"] and row["model"] == caller_row["model"]]
+    if degraded and caller_row["score"] != min(row["score"] for row in model_rows):
+        base.update(
+            code="invalid-degraded-caller",
+            message="an effort-unverified caller must name its model's lowest-scored row",
+            caller=caller_identity,
+            failed_gate="caller-identity",
+            reason="effort_unverified was set on a row above the model's floor",
+            next_command="omnilane whoami",
+        )
+        return base
     effective = min(caller_row["score"], caller["inherited_ceiling"])
     base.update(
         caller=caller_identity,
@@ -370,7 +396,14 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         registry, vendor, model, effort, target_config
     )
     if target_row is None:
-        base.update(code=mapping_code, message="target runtime cannot be mapped to one verified exact AA configuration", **detail)
+        base.update(
+            code=mapping_code,
+            message="target runtime cannot be mapped to one verified exact AA configuration",
+            failed_gate="target-transport",
+            reason=("the caller is identified; this host's transport overlay does not currently "
+                    f"verify {vendor} {model} at effort {effort}"),
+            next_command="omnilane resign --check",
+            **detail)
         return base
     target_score = target_row["score"]
     target_identity = _row_identity(target_row)
@@ -381,9 +414,30 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         target_estimated=target_row["estimated"],
     )
     if target_score > effective:
+        reaching = sorted((row for row in model_rows if row["score"] >= target_score),
+                          key=lambda row: (row["score"], row["id"]))
+        required = reaching[0]["effort"] or "none" if reaching else None
+        if caller["inherited_ceiling"] < caller_row["score"]:
+            reason = ("this worker inherited a ceiling below the target; only the session that "
+                      "dispatched it, or a human operator, can reach this target")
+            required = None
+        elif required is None:
+            reason = (f"no scored effort of {caller_row['model']} reaches {target_score}; a "
+                      "stronger caller model or a human operator has to dispatch this target")
+        elif degraded:
+            reason = (f"the launching harness recorded no effort, so the caller was held to "
+                      f"{caller_row['model']}'s floor of {effective}; relaunch the session with an "
+                      f"explicit effort of {required} or higher")
+        else:
+            reason = (f"relaunch the calling session at effort {required} or higher, or have a "
+                      "human operator dispatch this target")
         base.update(
             code="target-above-effective-ceiling",
             message=f"target score {target_score} exceeds effective caller ceiling {effective}",
+            failed_gate="downward-ceiling",
+            reason=reason,
+            required_caller_effort=required,
+            next_command="omnilane list",
         )
         return base
     child_context = {

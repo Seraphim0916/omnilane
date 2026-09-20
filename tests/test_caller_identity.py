@@ -159,16 +159,31 @@ class RolloutCallerTests(unittest.TestCase):
         self.assertIn(self.thread, source)
         self.assertIn("turn-2", source)
 
-    def test_null_effort_refuses(self):
+    def test_null_effort_is_an_unrecorded_effort(self):
         self.records[-1]["payload"]["effort"] = None
         self.write_records()
-        with self.assertRaisesRegex(ValueError, "effort"):
-            self.read()
+        pid, selector, source = self.read()
+        self.assertEqual((pid, selector), (20, ("codex", "gpt-5.6-sol", None)))
+        self.assertIn("records no effort", source)
 
-    def test_missing_effort_refuses(self):
+    def test_missing_effort_is_an_unrecorded_effort(self):
+        # A heartbeat automation wakes a thread with no effort key at all.
         del self.records[-1]["payload"]["effort"]
         self.write_records()
-        with self.assertRaisesRegex(ValueError, "effort"):
+        self.assertEqual(self.read()[1], ("codex", "gpt-5.6-sol", None))
+
+    def test_malformed_effort_still_refuses(self):
+        for value in ("", "  ", 3, ["high"]):
+            with self.subTest(value=value):
+                self.records[-1]["payload"]["effort"] = value
+                self.write_records()
+                with self.assertRaisesRegex(ValueError, "effort"):
+                    self.read()
+
+    def test_missing_model_still_refuses(self):
+        del self.records[-1]["payload"]["model"]
+        self.write_records()
+        with self.assertRaisesRegex(ValueError, "model"):
             self.read()
 
     def test_thread_mismatch_refuses(self):
@@ -718,6 +733,88 @@ class WriteContextTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mtime_ns, first)
 
 
+class DegradedCallerTests(unittest.TestCase):
+    def test_the_floor_is_the_lowest_scored_row_of_the_model(self):
+        reg = registry()
+        row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
+        scores = [r["score"] for r in reg["scored_configs"]
+                  if r["vendor"] == "codex" and r["model"] == "gpt-6-astra"]
+        self.assertEqual(row["score"], min(scores))
+        self.assertIsNone(caller_identity.floor_row(reg, "codex", "no-such-model"))
+
+    def test_the_degraded_context_is_marked_and_kept_apart(self):
+        reg = registry()
+        row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
+        SCRATCH.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+            exact = caller_identity.write_context(row, reg, Path(tmp))
+            degraded = caller_identity.write_context(row, reg, Path(tmp), effort_unverified=True)
+            self.assertNotEqual(exact, degraded)
+            self.assertIn("effort-unverified", degraded.name)
+            value, _ = aa_policy.load_caller(degraded, reg)
+            self.assertIs(value["effort_unverified"], True)
+            self.assertNotIn("effort_unverified", aa_policy.load_caller(exact, reg)[0])
+
+    def test_the_gate_holds_a_degraded_caller_to_the_floor(self):
+        reg = registry()
+        row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
+        caller = {"schema_version": 1, "snapshot_id": reg["snapshot"]["id"], "kind": "model",
+                  "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
+                  "inherited_ceiling": row["score"], "effort_unverified": True}
+        target = next(r for r in reg["scored_configs"] if r["id"] == "codex/gpt-6-astra-xhigh")
+        target["transport_mapping"].update(status="verified", runtime_verified=True,
+                                           runtime_model="gpt-6-astra", runtime_effort="xhigh")
+        decision = aa_policy.decide(reg, "0" * 64, vendor="codex", model="gpt-6-astra",
+                                    effort="xhigh", caller=caller, caller_sha256="1" * 64)
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["code"], "target-above-effective-ceiling")
+        self.assertIs(decision["caller_degraded"], True)
+        self.assertEqual(decision["failed_gate"], "downward-ceiling")
+        self.assertEqual(decision["required_caller_effort"], "xhigh")
+        self.assertIn("recorded no effort", decision["reason"])
+
+    def test_a_degraded_marker_above_the_floor_is_refused(self):
+        reg = registry()
+        row = next(r for r in reg["scored_configs"] if r["id"] == "codex/gpt-6-astra-xhigh")
+        caller = {"schema_version": 1, "snapshot_id": reg["snapshot"]["id"], "kind": "model",
+                  "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
+                  "inherited_ceiling": row["score"], "effort_unverified": True}
+        decision = aa_policy.decide(reg, "0" * 64, vendor="codex", model="gpt-5.6-luna",
+                                    effort="high", caller=caller, caller_sha256="1" * 64)
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["code"], "invalid-degraded-caller")
+
+    def test_effort_unverified_may_only_be_true(self):
+        reg = registry()
+        row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
+        SCRATCH.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+            path = caller_identity.write_context(row, reg, Path(tmp), effort_unverified=True)
+            for bad in (False, 1, "true"):
+                with self.subTest(bad=bad):
+                    value = json.loads(path.read_text())
+                    value["effort_unverified"] = bad
+                    path.write_text(json.dumps(value))
+                    with self.assertRaises(aa_policy.PolicyError):
+                        aa_policy.load_caller(path, reg)
+
+    def test_refusals_name_the_gate_and_the_next_command(self):
+        reg = registry()
+        missing = aa_policy.decide(reg, "0" * 64, vendor="codex", model="gpt-5.6-luna",
+                                   effort="high", caller=None, caller_sha256=None)
+        self.assertEqual((missing["failed_gate"], missing["next_command"]),
+                         ("caller-identity", "omnilane whoami"))
+        row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
+        caller = {"schema_version": 1, "snapshot_id": reg["snapshot"]["id"], "kind": "model",
+                  "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
+                  "inherited_ceiling": row["score"]}
+        unverified = aa_policy.decide(reg, "0" * 64, vendor="codex", model="gpt-5.6-luna",
+                                      effort="high", caller=caller, caller_sha256="1" * 64)
+        self.assertEqual(unverified["code"], "runtime-mapping-unverified")
+        self.assertEqual((unverified["failed_gate"], unverified["next_command"]),
+                         ("target-transport", "omnilane resign --check"))
+
+
 class WhoamiCommandTests(unittest.TestCase):
     def setUp(self):
         SCRATCH.mkdir(exist_ok=True)
@@ -748,6 +845,22 @@ class WhoamiCommandTests(unittest.TestCase):
         result = self.run_whoami("claude", "--model", "claude-opus-5", "--effort", "max", via_cli=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(Path(result.stdout.strip()).read_text())["inherited_ceiling"], 54)
+
+    def test_a_codex_launch_without_an_effort_degrades_to_the_floor(self):
+        result = self.run_whoami("codex", "exec", "-m", "gpt-6-astra")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        path = Path(result.stdout.strip())
+        self.assertEqual(path.name, "codex--gpt-6-astra--effort-unverified.json")
+        value = json.loads(path.read_text())
+        self.assertIs(value["effort_unverified"], True)
+        self.assertEqual(value["inherited_ceiling"], 48)
+        self.assertIn("unrecorded effort", result.stderr)
+        self.assertIn("ceiling 48", result.stderr)
+
+    def test_an_unscored_codex_model_without_an_effort_still_refuses(self):
+        result = self.run_whoami("codex", "exec", "-m", "gpt-0-nothing")
+        self.assertEqual(result.returncode, 3)
+        self.assertEqual(result.stdout, "")
 
     def test_refuses_rather_than_guessing(self):
         result = self.run_whoami("claude", "--model", "claude-opus-5")
