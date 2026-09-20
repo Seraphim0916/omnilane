@@ -47,7 +47,8 @@ jobs:
           done
           python -c 'import json,pathlib,sys; pathlib.Path(sys.argv[1]).write_text(json.dumps({"enabledPlugins":{"omnilane@omnilane":True},"extraKnownMarketplaces":{"omnilane":{"source":{"source":"directory","path":sys.argv[2]}}}}))' \
             "$acceptance/claude/settings.json" "$(pwd -P)"
-          if ! CLAUDE_CONFIG_DIR="$acceptance/claude" \
+          # A host with no transport overlay passes --strict only where a human is the operator.
+          if ! CLAUDE_CONFIG_DIR="$acceptance/claude" OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 \
             OMNILANE_HOME="$acceptance/home" PATH="$acceptance/bin:$PATH" \
             bin/omnilane doctor --strict --json > "$acceptance/doctor.json"; then
             cat "$acceptance/doctor.json"
