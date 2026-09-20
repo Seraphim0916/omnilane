@@ -43,35 +43,127 @@ Gemini CLI** 之類。每一個都只接一個模型家族,所以你交代的每
 
 ## ⚡ 60 秒上手
 
-**最快的方式——用 npm 裝:**
+你本人坐在終端機前，現在就可以派工。
+
+**1. 安裝。**
 
 ```bash
-npm i -g omnilane                                    # 裝 CLI
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
-omnilane route hardest-coding "修掉會間歇失敗的 auth token 更新測試"
-omnilane doctor                                      # 看你手上有哪些 AI CLI / 金鑰
-omnilane ui start                                    # 選配:在瀏覽器即時看派工
+npm i -g omnilane
 ```
 
-**或 clone 整包**(拿到路由表與可自訂的技能):
+或是把專案抓下來，順便拿到可以自訂的路由表與技能檔：
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # 偵測你的 CLI、接好技能、說你的語言
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 你是操作者本人,不是模型
-omnilane route hardest-coding "修掉會間歇失敗的 auth token 更新測試"
+./install.sh          # finds your CLIs, links the skill, speaks your language
 ```
 
-> **那個 export 是做什麼的?** omnilane 會用呼叫者自己的能力分數來把關每一次派工,
-> 所以派工必須表明「是誰在問」。人類在終端機前只要設一次
-> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`,或每次帶 `--operator-asserted-human`。
-> 模型驅動 omnilane 時**不能替自己主張**這個旗標。它的身分會從啟動它的 CLI 旗標
-> (模型與強度)自動讀取,一般 session 什麼都不用帶;`omnilane whoami` 會把這個身分
-> 印成 `--caller-context FILE`。既沒主張、又讀不到身分的話,派工會在建立工作前就被
-> `missing-caller-context` 拒絕。
+**2. 看看手上有什麼。** `doctor` 會列出 omnilane 找得到哪些模型 CLI 與 API 金鑰，讓你知道實際會跑哪一個。它不會改任何東西。
 
-> 第一次用?先跑 `omnilane doctor`——它會告訴你 omnilane 現在能接到哪些模型 CLI 與
-> API 金鑰,你就知道實際會跑什麼。
+```bash
+omnilane doctor
+omnilane list         # the routing table this machine resolves
+```
+
+**3. 表明你是操作者，然後派工。**
+
+```bash
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+omnilane route hardest-coding "fix the flaky auth token refresh"
+omnilane ui start     # optional: watch jobs live in your browser
+```
+
+> **為什麼要那行 export?** omnilane 每次派工都會拿「發問者的能力分數」去比對，所以派工時得說清楚是誰在問。真人說一次就好：`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`（或每次帶 `--operator-asserted-human`）。模型不能替自己這樣宣稱，它的身分是從啟動它的 CLI 讀出來的。兩者都沒有的話，派工會在建立任何工作之前就被拒絕，代碼是 `missing-caller-context`。
+
+真人用到這裡就夠了。下面這一節講更實用的用法：讓你的 AI 助理自己派工。
+
+## 🤖 讓你的 AI 助理來開 omnilane
+
+助理（Claude Code、Codex、Grok Build 或 Antigravity）會讀一份技能檔，裡面教它怎麼選通道、怎麼派工。每台機器做一次，共四步。
+
+### 第 1 步：把技能交給助理
+
+`./install.sh` 會替它找到的每個 CLI 建好連結。要手動的話：
+
+| 助理 | 做法 |
+|---|---|
+| Claude Code | `claude plugin marketplace add <本專案路徑>`，再 `claude plugin install omnilane@omnilane`（同時附上 `/route`、`/route-jobs` 與完工收件匣）；或把 `skills/omnilane` 連結進 `~/.claude/skills/` |
+| Codex | 把 `skills/omnilane` 連結進 `~/.codex/skills/` |
+| Grok Build | `grok plugin install <本專案路徑> --trust` |
+| Antigravity | `agy plugin install <本專案路徑>`（先用 `agy plugin validate <本專案路徑>` 檢查） |
+
+### 第 2 步：證明一次「每個 CLI 真的會選到你指定的模型」
+
+模型來派工時，只能派給這台機器**證明過**的目標：例如 `codex -m gpt-5.6-sol` 真的跑的是 Sol。這份證明是一個本機檔案，叫**傳輸覆蓋檔（transport overlay）**。安裝包裡不會附。沒有它，每條通道都會用 `runtime-mapping-unverified` 拒絕模型呼叫者，`omnilane doctor` 也會警告 `no overlay configured`。
+
+請在一般的桌面終端機裡建立。（用 ssh 登入的工作階段讀不到 CLI 登入用的鑰匙圈，會把每一家都報成沒登入。）
+
+```bash
+cd "$(npm root -g)/omnilane"            # or your clone
+ROOT=~/.omnilane/transport-evidence/first-sweep
+python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
+python3 scripts/lib/build_overlay.py --root "$ROOT"
+cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
+echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
+omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+```
+
+沒登入的那一家會被標成 `unprobeable`，就只是維持未驗證，其他家照常可用。
+
+### 第 3 步：讓這份證明自己保持最新，不用你動手
+
+覆蓋檔是用雜湊值釘住每個 CLI 執行檔的，而**這些 CLI 會自己更新**，常常一週一次。更新之後，那一家的通道就會被拒，直到覆蓋檔重簽為止。`omnilane resign` 一個指令做完全部：找出哪裡變了、只重新探測那一家、檢查結果、換上新檔、送一筆真實派工確認，失敗就自動還原舊檔。
+
+它不是什麼都簽。變動過的 CLI 只有在「簽署者跟紀錄上的相同、而且裝在同一類位置」時，才會**無人值守**地重簽。所以先告訴它一次你接受哪些簽署者：
+
+```bash
+omnilane resign --record-signers     # once, right after Step 2
+```
+
+接著讓它每天跑一次。用什麼排程器都行，但一定要跑在**你的桌面登入工作階段裡**（CLI 需要鑰匙圈）。macOS 可以用 LaunchAgent：
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+本版實測過從桌面終端機執行 `omnilane resign`，包含一次真實的、無人值守的 Codex 自動升級重簽；上面這個 LaunchAgent 包裝只是範例，本身沒有實測過。請在你的機器上用 `launchctl kickstart gui/$(id -u)/dev.omnilane.resign` 確認。
+
+`omnilane resign` 的結束碼：
+
+| 結束碼 | 意思 | 你要做的事 |
+|---|---|---|
+| 0 | 沒有東西變動，或變動的都已重簽 | 不用做 |
+| 10 | 只有 `--check` 會出現：有東西變了 | 執行 `omnilane resign` |
+| 20 | 有一家需要你：簽署者是新的或沒紀錄、執行檔沒簽章或在本機被改過、換了安裝目錄，或供應商這次拒絕了上次通過的探測 | 讀訊息。它會印「稍後重試」，或印出你看過之後該執行的那一行 `omnilane resign --vendor V --approve V` |
+| 30 | 重簽後的覆蓋檔沒通過真實派工，已還原成前一份 | 沒有東西壞掉，讀紀錄即可 |
+| 2 | 沒有設定覆蓋檔 | 做第 2 步 |
+
+兩個限制要知道。簽署者檢查用的是 macOS 的程式碼簽章，所以在 Linux 上，每次 CLI 變動都會停在結束碼 20 等你 `--approve`。另外，沒有真正簽章的執行檔（例如在本機修補過的 CLI）一定會停下來等核准：沒有任何東西能證明它來自原廠，而這正是這項檢查存在的理由。
+
+### 第 4 步：在助理裡面試試看
+
+請你的助理執行 `omnilane whoami`。它應該回報自己是哪個模型、哪個強度，以及一個分數。接著請它派一件小事：「用 omnilane 讓 triage 通道數一數這個專案裡有幾個 TODO 註解」。
+
+如果被拒絕，拒絕訊息會說是哪一關沒過、該怎麼辦：
+
+| `failed_gate` | 白話 | 怎麼修 |
+|---|---|---|
+| `caller-identity` | omnilane 看不出是哪個模型在問 | 讓它把 `omnilane whoami` 當成那次工具呼叫裡的**唯一一條指令**。Codex 尤其如此：後面接了 `; echo $?`、`&&` 或管線就讀不到 |
+| `target-transport` | 這台機器還沒證明過那個目標，或 CLI 之後更新過 | `omnilane resign`（第 3 步） |
+| `downward-ceiling` | 目標模型的分數比發問的模型高；模型只能平派或往下派 | 從拒絕訊息列出的 `eligible_lanes` 挑一條，或用更高的強度啟動助理 |
+
+Codex 的排程喚醒既有對話串時不會記錄強度。omnilane 這時會把該呼叫者限制在它那個模型的最低分，而不是直接拒絕：便宜的通道照常可用，貴的通道會告訴你要哪個強度才派得動。
 
 ## 🧭 運作方式
 
@@ -141,37 +233,33 @@ flowchart LR
 - 點標準模型別名(例如 Opus)時,會鎖定技能表裡的確切模型家族。明確目標
   不存在或 CLI 不可用時會清楚失敗,不會暗中換廠商或模型家族。
 
-## 原生優先派工，保留終端相容性
+## 用助理自己的子代理
 
-模型路由與執行器（executor）分開判定。`--executor auto` 是預設：只有呼叫端明示的
-結構化能力全部相符，才選原生子代理（native agent）；一般終端沒有能力脈絡，
-就保留既有 CLI。`--executor cli` 強制原流程；`--executor native` 遇到能力缺漏或不符就報錯。
-同廠商不代表同模型；明確指定的廠商、模型及推理強度都保留。原生不符時，
-自動模式會說明 CLI 原因，只使用同一個已解析目標，不換廠商或模型。
+omnilane 預設把工作交給廠商的命令列工具。當該做這件事的模型就是助理**自己那一家**的時候，再繞出去叫另一個 CLI 是多走一趟：多一次登入、多一個程序，那個 CLI 一更新又多一個會壞的地方。多數助理自己就能開子代理，omnilane 可以改成替它規劃這種工作。有兩種做法。
+
+**跟助理跑一模一樣東西的工人（`--inherit`）。** 助理開子代理時*不指定模型、也不指定強度*，工人就是呼叫者的分身。分身不可能比本尊強，而 omnilane 的分數檢查要防的就只有這件事，所以這條路不需要廠商 CLI、不需要傳輸覆蓋檔；呼叫者的強度讀不到、或覆蓋檔過期時，它照樣能用。
 
 ```sh
-# 一般終端的預覽：不建立工作，也不呼叫供應商。
-omnilane route --executor auto --dry-run hardest-coding "檢查這次變更"
-
-# 呼叫端依工具契約準備共享繼承能力 JSON；完整格式見下方文件。
-omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "檢查這次變更"
-# 接著由呼叫端啟動原生代理、等待結果，再登錄真實證據。
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
 omnilane jobs --json complete-native JOB_ID /absolute/completion.json
 omnilane jobs --json status JOB_ID
-omnilane jobs --json result JOB_ID
-omnilane jobs --json list --status pending
 ```
 
-原生路由輸出的是「等待執行」交接 JSON，不會從 shell 啟動原生代理，也不代表任務成功。
-Codex `collaboration.spawn_agent` 沒有沙箱、工具或工作目錄限制參數，會繼承父代理的工具與檔案系統權限。要求與同一能力列都必須明示 `shared-inherited`，工具陣列留空；`advise`／`work` 與工作目錄只是任務意圖，不是作業系統隔離。要求硬隔離時，自動模式保留同模型 CLI，強制原生則失敗。
+老實的部分：交接單上標著 `satisfies_lane_target: false`。通道在這裡只是「這是哪一類工作」的標籤。這樣做出來的結果是「助理自己的子代理」做的，絕不是「hardest-coding 那個模型」做的；需要比呼叫者更強模型的通道，照樣會被拒。`--inherits-caller-runtime` 是助理自己聲明「我的子代理工具就是這樣運作」，omnilane 觀察不到。各家目前已知的狀況：
 
-呼叫端以精確模型與推理強度啟動工作，最後登錄實際代理 ID、模型／推理強度／廠商／框架／後端、成敗、公開結果與證據。明示模型覆寫時使用 `fork_turns: "none"` 或有限的正整數歷史，不得搭配 `fork_turns: "all"`。路由已明示選中能力列中的精確模型時，可省略未知的呼叫端目前模型。重複登錄會被擋下；原生取消只改工作狀態，不發程序訊號，已啟動的代理由呼叫端另外停止。
+| 助理 | 不帶模型參數的子代理 |
+|---|---|
+| Claude Code | 官方文件寫明會用主對話的模型，強度沿用工作階段（除非代理定義另有設定）。內建 general-purpose 代理、且沒設 `CLAUDE_CODE_SUBAGENT_MODEL` 時成立。本版完整跑通過 |
+| Codex | `collaboration.spawn_agent` 不帶模型、不帶強度。本版完整跑通過 |
+| Grok Build | 文件寫明沿用上層的模型（內建 `general-purpose` 代理是 `model: inherit`）；強度沒有文件說明。本版沒跑過 |
+| Antigravity | `agy` 1.2.7 找不到子代理工具。不適用 |
 
-背景、持久、即時、具名 CLI 工作階段、sysops、不支援的隔離、投票／仲裁及多輪路徑
-仍走 CLI。原生只整合清單、狀態、結果、取消與完成登錄，未接 CLI 等待、重試、
-信箱或目標迴圈。原生協定需要 Python 3.9+；一般終端 CLI 保留相容。
-測試替身不等於真實原生驗收；主機 AGENTS 管理區塊只由父代理審查後同步。
-詳見[能力與完成格式、完整範例及限制](docs/native-executor.md)。
+**助理的工具能指定的特定模型。** 把工具真正接受的東西寫進能力聲明檔（從 `omnilane native-context` 產生的檔開始，每組確切的模型與強度加一列），再用一般的 `omnilane route` 帶上 `--native-context FILE`。只有某一列完全相符時 omnilane 才會用子代理：模型、強度、模式、工作目錄、工具、隔離方式、生命週期都要對上。同一家廠商不等於同一個模型，也不會從你裝了哪些 CLI 去猜。`--executor native` 不符就失敗、不回退；`--executor cli` 強制走外部 CLI。如果同廠商的目標只因為沒給檔案而走了 CLI，派工現在會明說。
+
+不管哪一種，子代理都共用助理的工具與檔案系統：沒有作業系統層級的沙箱，`advise`／`work` 是意圖，不是強制。背景、常駐、具名對話串、多輪、投票與 `sysops` 工作仍走 CLI。協定處理需要 Python 3.9 以上。結構定義、完成檔、代理重用與取消：見 [docs/native-executor.md](docs/native-executor.md)。
 
 <details>
 <summary><b>模型角色指引：仍須派工</b></summary>
@@ -599,20 +687,17 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## v0.43.0 新功能
 
-- **沒記錄強度改為降級，不再整個拒絕。** Codex 心跳排程喚醒既有對話串時不寫強度，0.42.9 會讓每條車道都回
-  `missing-caller-context`。現在把呼叫者壓在該模型最低分那一列並標記 `effort_unverified`：只會少派、不會越級，
-  低分車道照常可用；高於底線的車道會被拒，並告知需要的強度。強度格式錯誤或缺模型仍然拒絕。
-- **拒絕會說清楚是哪一道門。** 拒絕結果帶 `failed_gate`（`caller-identity`／`target-transport`／
-  `downward-ceiling`）、`reason`、`next_command`、`required_caller_effort` 與 `eligible_lanes`（還能派的車道）。
-- **`omnilane resign`。** 找出與 overlay 不符的廠商，只重探那一家，建到暫存目錄、載入驗證、原子替換、每家一條真實派工，
-  失敗自動還原。不是自動蓋章：執行檔必須仍是 overlay 記錄的程式碼簽署團隊、仍在同一安裝位置才會無人值守重簽；
-  adhoc／未簽署、換簽署者、換目錄或沒有簽署紀錄都停在結束碼 20，並印出給操作者的 `--approve` 指令。
-- **同一個容器就用自己的子代理。** `omnilane native-context` 依 `whoami` 讀到的身分寫出能力聲明檔；同廠商目標因為沒有聲明檔而走外部 CLI 時，派工會明說。`--inherit` 規劃一個不覆寫模型的原生工人：跑的就是主控自己的模型與強度，定義上不可能往上派（強度沒記錄也成立），不經廠商 CLI、不看 transport overlay，且明確標示不代表該車道的目標模型做了這件事。
-- **doctor 看得到「搬家」的 CLI。** codex 與 grok 每版裝成新檔、舊檔留著，釘住的雜湊一直相符但實際執行的是別的檔。
-  沒有 overlay 時改為 WARN 並列出首次安裝步驟。
-- **探測可重現、發版閘會檢查 runner。** `scripts/lib/probe_sweep.py` 由 `build_overlay.py` 推導全部 55 條探測指令，
-  未登入的廠商記為 `unprobeable`；`release-audit` 在 `scripts/runners/*.sh` 與本機 overlay 不符時失敗。
-  升級：`npm i -g omnilane@0.43.0`，之後執行一次 `omnilane resign --record-signers`。
+十天之內，0.42.x 有四次把所有模型呼叫者全部拒絕，每一次都是因為 omnilane 管不到的事實：啟動器改了名、runner 腳本改了卻沒重簽、四家廠商 CLI 在同一週各自更新、Codex 排程不記錄強度。每一件都變成「什麼都派不出去」。這一版把它們各自縮小成講得清楚的結果，最常見的那一種還會自己修好。
+
+- **廠商 CLI 更新了？`omnilane resign`。** 它會找出哪裡變了、只重探那一家、檢查結果、換上去、用一筆真實派工確認，失敗就還原舊的覆蓋檔。只有新執行檔的簽署者相同、位置也相同時，才會**無人值守**地重簽；其他情況會停下來，印出你該執行的那一行 `--approve` 指令。先跑一次 `omnilane resign --record-signers`，再把 `omnilane resign` 排成每天執行，之後 CLI 更新就不再是你的事。已用一次真實的 Codex 自動升級（0.155.0 → 0.155.1）驗證：不需核准、映射全數保留、結束碼 0。
+- **拒絕訊息會告訴模型該怎麼辦。** 每一筆被拒的派工都帶著 `failed_gate`、`reason`、`next_command`、`required_caller_effort`，以及 `eligible_lanes`（這個呼叫者現在*派得動*的通道）。
+- **沒記錄強度改成縮小範圍，不再全拒。** Codex 心跳排程會被限制在它那個模型的最低分，而不是每條通道都拒。便宜的通道照常可用，貴的會說需要哪個強度。
+- **助理自己的子代理。** `omnilane native-context` 會寫出以前得手寫的能力聲明檔；`omnilane route --inherit` 規劃一個「呼叫者分身」工人：不經外部 CLI、不看覆蓋檔、連呼叫者身分讀不到時也能用，而且老實標明*不是*該通道的目標模型。已在 Claude Code 與 Codex 桌面版完整跑通。
+- **Codex：每次工具呼叫只下一條 omnilane 指令。** `omnilane whoami; echo $?` 讀不到身分，單獨的 `omnilane whoami` 讀得到。拒絕訊息現在會直接這樣提示。
+- **doctor 看得到搬了家的 CLI**（新版裝在舊檔旁邊），完全沒有覆蓋檔時會警告並附上步驟。
+- **技能檔與教學重寫。** 技能檔現在是模型照著走的五個步驟；這份 README 一步步帶你讓助理來開 omnilane。
+- **限制。** 無人值守重簽靠的是 macOS 程式碼簽章；在 Linux 上，以及任何沒簽章或在本機改過的 CLI，每次更新都會要你 `--approve`。`--inherit` 還沒在 Grok Build 裡跑過，Antigravity 沒有提供子代理工具。完整細節見 [CHANGELOG](CHANGELOG.md)。
+- **升級。** `npm i -g omnilane@0.43.0`，然後執行一次：`omnilane resign --record-signers`。
 
 ## v0.42.9 新功能
 
