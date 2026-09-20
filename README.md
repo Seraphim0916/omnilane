@@ -44,52 +44,77 @@ CLI or seven — dispatch picks the first candidate you actually have, and a lan
 with nothing available simply turns off. The default table works on a single
 subscription.
 
-**[⬇ Jump to the 60-second start](#-60-second-start)** · **[❓ Read the FAQ](#-faq)**
+**[⬇ 60-second start](#-60-second-start)** · **[🤖 Let your AI assistant drive it](#-let-your-ai-assistant-drive-omnilane)** · **[❓ FAQ](#-faq)**
 
 ## ⚡ 60-second start
 
-**The quick way — install from npm:**
+You, a person at a terminal, can dispatch right away.
+
+**1. Install.**
 
 ```bash
-npm i -g omnilane                                    # install the CLI
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # you are the operator, not a model
-omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane doctor                                      # see which AI CLIs / keys you have
-omnilane ui start                                    # optional: watch jobs live in your browser
+npm i -g omnilane
 ```
 
-**Or clone the repo** (gets you the routing table and skill to customise):
+Or clone it, which also gives you the routing table and the skill to customise:
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
 ./install.sh          # finds your CLIs, links the skill, speaks your language
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # you are the operator, not a model
-omnilane route hardest-coding "fix the flaky auth token refresh"
 ```
 
-> **Why that export?** Omnilane gates every delegation against the caller's own
-> capability score, so a dispatch has to say who is asking. A human at a terminal
-> asserts that once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`, or per call with
-> `--operator-asserted-human`. A model driving omnilane cannot assert it for
-> itself. Its identity is read from the nearest launching CLI: explicit model and
-> effort flags, or for Codex app-server/no-model launches, a bound current-turn
-> rollout (never app-server startup defaults). An ordinary session passes nothing,
-> and `omnilane whoami` prints that identity as a `--caller-context FILE`. With
-> neither an assertion nor a readable identity, the dispatch is refused with
-> `missing-caller-context` before any job is created.
+**2. See what you have.** `doctor` lists which model CLIs and API keys omnilane
+can reach, so you know what will actually run. It changes nothing.
 
-> New to this? Run `omnilane doctor` first — it tells you which model CLIs and
-> API keys omnilane can already reach, so you know what will actually run.
+```bash
+omnilane doctor
+omnilane list         # the routing table this machine resolves
+```
 
-### First install: let a model drive omnilane
+**3. Say you are the operator, then dispatch.**
 
-A human at a terminal can dispatch straight away. A **model** caller (Claude Code,
-Codex, Grok or Antigravity delegating on its own) additionally needs this host to
-have proven that each CLI really selects the model a lane names. That proof is a
-host-local file, the *transport overlay*; nothing ships with one, and without it
-every lane refuses a model caller with `runtime-mapping-unverified` while
-`omnilane doctor` warns `no overlay configured`. Build it once, from a normal
-desktop terminal (an ssh login cannot read the keychain the CLIs log in with):
+```bash
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+omnilane route hardest-coding "fix the flaky auth token refresh"
+omnilane ui start     # optional: watch jobs live in your browser
+```
+
+> **Why the export?** omnilane checks every delegation against the capability
+> score of whoever is asking, so a dispatch has to say who that is. A human says
+> it once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` (or `--operator-asserted-human`
+> per call). A model cannot say it for itself: its identity is read from the CLI
+> that launched it. With neither, the dispatch is refused with
+> `missing-caller-context` before any job exists.
+
+That is all a human needs. The rest of this section is for the more useful
+setup: your AI assistant dispatching on its own.
+
+## 🤖 Let your AI assistant drive omnilane
+
+The assistant (Claude Code, Codex, Grok Build or Antigravity) reads a skill file
+that tells it how to pick a lane and dispatch. Four steps, once per machine.
+
+### Step 1 — Give the assistant the skill
+
+`./install.sh` links it for every CLI it finds. By hand:
+
+| Assistant | How |
+|---|---|
+| Claude Code | `claude plugin marketplace add <this repo>` then `claude plugin install omnilane@omnilane` (also gives `/route`, `/route-jobs` and the completion inbox), or link `skills/omnilane` into `~/.claude/skills/` |
+| Codex | link `skills/omnilane` into `~/.codex/skills/` |
+| Grok Build | `grok plugin install <this repo> --trust` |
+| Antigravity | `agy plugin install <this repo>` (check first with `agy plugin validate <this repo>`) |
+
+### Step 2 — Prove, once, that each CLI selects the model it is asked for
+
+A model caller is only allowed to dispatch to a target this machine has *proven*:
+that `codex -m gpt-5.6-sol` really runs Sol, and so on. The proof is a local file,
+the **transport overlay**. Nothing ships with one. Without it every lane refuses
+a model caller with `runtime-mapping-unverified`, and `omnilane doctor` warns
+`no overlay configured`.
+
+Build it from a normal desktop terminal. (An ssh login cannot read the keychain
+the CLIs log in with, so it would report them all as not logged in.)
 
 ```bash
 cd "$(npm root -g)/omnilane"            # or your clone
@@ -102,9 +127,79 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 ```
 
 A vendor you are not logged in to is reported `unprobeable` and simply stays
-unverified. The overlay pins each CLI executable by hash, and the CLIs update
-themselves, so expect it to go stale within days: `omnilane resign` re-probes
-what changed and re-signs, and is safe to run daily from your desktop session.
+unverified; the others work.
+
+### Step 3 — Keep the proof current without doing it by hand
+
+The overlay pins each CLI executable by hash, and **the CLIs update themselves**,
+often weekly. After an update that vendor's lanes are refused until the overlay
+is re-signed. `omnilane resign` does the whole job: finds what changed, re-probes
+only that vendor, checks the result, swaps it in, sends one real dispatch to
+confirm, and restores the old file if that fails.
+
+It will not re-sign just anything. A changed CLI is re-signed **unattended** only
+when it carries the same code-signing team as the one on record and sits in the
+same install location. So tell it once which signers you accept:
+
+```bash
+omnilane resign --record-signers     # once, right after Step 2
+```
+
+Then let it run every day. Any scheduler works as long as it runs **inside your
+desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+This release verified `omnilane resign` from a desktop terminal session, including
+a real unattended re-sign of a Codex self-update; the LaunchAgent wrapper above is
+an example and was not itself exercised. Check it on your machine with
+`launchctl kickstart gui/$(id -u)/dev.omnilane.resign`.
+
+What `omnilane resign` exits with:
+
+| Exit | Meaning | You do |
+|---|---|---|
+| 0 | nothing had changed, or everything that changed was re-signed | nothing |
+| 10 | `--check` only: something changed | run `omnilane resign` |
+| 20 | a vendor needs you: new or missing signer, unsigned or locally patched binary, new install directory, or the provider refused probes that passed last time | read the message. It prints either "retry later" or the exact `omnilane resign --vendor V --approve V` to run after you have looked |
+| 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
+| 2 | no overlay is configured | do Step 2 |
+
+Two limits to know. Signer checks use macOS code signatures, so on Linux every
+changed CLI stops at exit 20 for your `--approve`. And a binary with no real
+signature (a locally patched CLI, for example) always stops for approval: nothing
+ties it to its vendor, which is the point of the check.
+
+### Step 4 — Try it from inside the assistant
+
+Ask your assistant to run `omnilane whoami`. It should answer with the model and
+effort it is running as, and a score. Then ask it to delegate something small:
+"use omnilane to have the triage lane count the TODO comments in this repo".
+
+If it is refused, the refusal says which check failed and what to do:
+
+| `failed_gate` | In plain words | Fix |
+|---|---|---|
+| `caller-identity` | omnilane could not tell which model is asking | have it run `omnilane whoami` **as the only command** in that tool call. Codex in particular is unreadable behind `; echo $?`, `&&` or a pipe |
+| `target-transport` | this machine has not proven that target, or a CLI updated since | `omnilane resign` (Step 3) |
+| `downward-ceiling` | the target model scores higher than the model asking; a model may only delegate sideways or down | pick one of the `eligible_lanes` the refusal lists, or start the assistant at a higher effort |
+
+A Codex automation that wakes an existing thread records no effort. omnilane
+then holds that caller to its model's lowest score instead of refusing it: cheap
+lanes keep working, expensive ones say which effort would reach them.
 
 ## 🧭 How it works
 
@@ -185,52 +280,59 @@ request; this is not a free-form shell parser in `dispatch.sh`.
   table. If an explicit target is absent or unavailable, the command fails
   clearly instead of falling back to another vendor or family.
 
-## Native-first delegation, terminal-compatible
+## Using the assistant's own sub-agents
 
-Model routing and execution are separate. `--executor auto` (default) selects
-a caller-owned native tool only from explicit structured capabilities. Without
-that context a standalone terminal uses legacy CLI. `--executor cli` forces
-the old behavior; `--executor native` rejects missing/incompatible capability.
-Same vendor is not same model; explicit model/vendor/effort are preserved.
-On native rejection, auto reports a CLI reason and keeps the exact resolved
-target rather than substituting another vendor/model.
+By default omnilane hands work to a vendor's command-line tool. When the model
+that should do the work belongs to the assistant's **own** vendor, going out
+through a second CLI is a detour: another login, another process, another thing
+that breaks when that CLI updates. Most assistants can start a sub-agent
+themselves, and omnilane can plan the work for that instead. Two ways.
+
+**A worker that runs exactly what the assistant runs (`--inherit`).** The
+assistant starts its sub-agent *without choosing a model or an effort*, so the
+worker is a copy of the caller. A copy cannot be stronger than the original,
+which is the only thing omnilane's score check is there to prevent, so this path
+needs no vendor CLI and no transport overlay, and it keeps working when the
+caller's effort is unknown or an overlay has gone stale.
 
 ```sh
-# Standalone terminal: CLI dry run, no jobs or provider calls.
-omnilane route --executor auto --dry-run hardest-coding "Review this change"
-
-# Host supplies honest shared/inherited capability JSON; inspect the linked schema.
-omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review this change"
-# The host now spawns its native agent tool, waits and writes actual evidence.
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
 omnilane jobs --json complete-native JOB_ID /absolute/completion.json
 omnilane jobs --json status JOB_ID
-omnilane jobs --json result JOB_ID
-omnilane jobs --json list --status pending
 ```
 
-Native route emits **pending handoff JSON**, not a shell-native invocation or
-completed job. Codex `collaboration.spawn_agent` has no sandbox/tool/workdir
-restriction parameters and inherits parent tools/filesystem. Its honest request
-and matching capability row explicitly use `shared-inherited` with empty tool
-arrays; `advise`/`work` and workdir are task intent, not an OS boundary. Hard
-isolation remains same-model CLI in auto and rejects forced native.
+The honest part: the handoff is marked `satisfies_lane_target: false`. The lane
+is only a label for the kind of work. A result produced this way was made by
+"the assistant's own sub-agent", never by "the hardest-coding model", and a lane
+that needs a stronger model than the caller is still refused.
+`--inherits-caller-runtime` is the assistant's own statement that its sub-agent
+tool behaves this way; omnilane cannot observe it. What is known per assistant:
 
-The caller spawns the real agent with the exact resolved model/effort, then
-ingests the actual agent ID, runtime model/effort/vendor/harness/backend,
-outcome, public result, and evidence. An explicit model override uses
-`fork_turns: "none"` or bounded positive history, never `fork_turns: "all"`.
-Unknown caller current model may be omitted when the route explicitly selects
-an exact model declared by the matching capability row. Duplicate completion is
-rejected. Native cancellation never signals PIDs; the caller separately stops
-any spawned agent.
+| Assistant | Sub-agent without a model argument |
+|---|---|
+| Claude Code | documented to use the main conversation's model, and the session's effort unless the agent definition sets one. True for the built-in general-purpose agent with `CLAUDE_CODE_SUBAGENT_MODEL` unset. Run end to end in this release |
+| Codex | `collaboration.spawn_agent` with no model and no effort. Run end to end in this release |
+| Grok Build | documented to inherit the parent's model (the bundled `general-purpose` agent is `model: inherit`); effort not documented. Not run in this release |
+| Antigravity | no sub-agent tool found in `agy` 1.2.7. Not available |
 
-Background/durable/live/named CLI sessions, sysops, unsupported isolation,
-vote/arbitration and multi-round paths remain CLI-only. Native integration is
-limited to list/status/result/cancel/completion, not CLI wait/retry/mailbox or
-goal-loop. Protocol handling needs Python 3.9+; legacy terminal CLI remains
-compatible. Tests are fixtures, not live native acceptance. The parent alone
-syncs the host AGENTS managed block after review.
-See [schemas, complete examples and limitations](docs/native-executor.md).
+**A specific model the assistant's tool can select.** Describe what the tool
+really accepts in a capability file (start from `omnilane native-context`, add a
+row per exact model and effort) and pass `--native-context FILE` to an ordinary
+`omnilane route`. omnilane uses the sub-agent only when a row matches exactly:
+model, effort, mode, workdir, tools, isolation and lifecycle. Same vendor is not
+same model, and nothing is guessed from the CLIs you have installed.
+`--executor native` fails instead of falling back; `--executor cli` forces the
+external CLI. When a same-vendor target goes out through the CLI only because no
+file was given, dispatch now says so.
+
+Either way the sub-agent shares the assistant's tools and filesystem: there is no
+operating-system sandbox, and `advise`/`work` are intent, not enforcement.
+Background, live, named-thread, multi-round, vote and `sysops` work stays on the
+CLI path. Protocol handling needs Python 3.9+. Schemas, the completion file,
+agent reuse and cancellation: [docs/native-executor.md](docs/native-executor.md).
 
 <details>
 <summary><b>Model-role guidance (delegation still required)</b></summary>
@@ -742,57 +844,42 @@ working notes, including per-benchmark caveats, live in
 
 ## What's new in v0.43.0
 
-0.42.x was refused four times in ten days by facts it does not control: a renamed
-launcher, a harness that records no effort, and vendor CLIs that update themselves
-every week. This release stops treating each of those as a total refusal.
+In ten days 0.42.x refused every model caller four times, each time over a fact
+omnilane does not control: a renamed launcher, a runner script changed without a
+re-sign, four vendor CLIs updating themselves in one week, and a Codex automation
+that records no effort. Each became "nothing can be dispatched". This release
+turns each into a narrower, explained outcome, and repairs the common one itself.
 
-- **No recorded effort degrades instead of refusing.** A Codex heartbeat
-  automation wakes a thread without writing an effort, and 0.42.9 answered with
-  `missing-caller-context` on every lane. The caller is now held to its model's
-  lowest-scored row, marked `effort_unverified`. That can only narrow what it may
-  dispatch: low lanes work, and a lane above the floor is refused with the
-  effort that would reach it. A malformed effort, or a missing model, still refuses.
-- **A refusal says which gate, why, and what next.** Refused decisions carry
-  `failed_gate` (`caller-identity`, `target-transport` or `downward-ceiling`),
-  `reason`, `next_command`, `required_caller_effort`, and `eligible_lanes` — the
-  lanes that caller can still reach. A model no longer has to guess that a
-  transport problem is "an identity problem".
-- **`omnilane resign`.** Finds what no longer matches the overlay, re-probes only
-  that vendor into a staging root, loads the staged overlay, replaces the live
-  one atomically, runs one real dispatch per re-probed vendor, and restores the
-  backup if that fails. Loading the staged overlay proves the mapping gate; the
-  dispatch, sent under the human assertion, proves the transport. If a provider
-  refuses probes that passed last time, the old pin is kept rather than shrinking
-  the overlay. It is not a rubber stamp: a changed executable is
-  re-probed unattended only if it still carries the code-signing team the overlay
-  recorded and sits in the same install location. Adhoc or unsigned binaries, a
-  new signer, a new directory, or an overlay with no signer on record stop at
-  exit 20 with the `--approve` command for an operator. `--check` only reports;
-  `--record-signers` adopts the signers of what an older overlay already pins.
-- **Your own harness, your own sub-agents.** A target inside the caller's own
-  harness used to go out through an external CLI unless the caller hand-wrote a
-  capability file, so in practice it always did. `omnilane native-context` now
-  writes that file from the identity `whoami` reads, and dispatch says so when a
-  same-vendor target still goes through the CLI. `--inherit` plans a native
-  worker with no model override: it runs the caller's own model and effort, so it
-  cannot be an upward dispatch even when the effort is unrecorded, needs no
-  vendor CLI and no transport overlay, and is explicitly not reported as
-  satisfying the lane's target.
-- **Doctor sees a CLI that moved.** Codex and grok install each version as a new
-  file and leave the old one behind, so the pinned hash kept matching while the
-  runners executed something else. Doctor now compares what `PATH` resolves with
-  what the overlay pinned. With no overlay at all it warns, with the first-install
-  steps, instead of passing.
-- **A sweep is reproducible.** `scripts/lib/probe_sweep.py` derives all 55 probe
-  commands from `build_overlay.py`, reports a vendor nobody is logged in to as
-  `unprobeable` rather than recording "not logged in" as a finding, refuses
-  keychain-backed CLIs from an ssh session, and retries one transient provider
-  error once. `build_overlay.py` no longer assumes the author's checkout path.
-- **The release gate checks runner pins.** `release-audit` fails when a
-  `scripts/runners/*.sh` no longer matches the releasing host's overlay — the
-  mistake 0.42.8 shipped with.
-- **Upgrade.** Run `npm i -g omnilane@0.43.0`, then once:
-  `omnilane resign --record-signers`.
+- **Vendor CLI updated? `omnilane resign`.** It finds what changed, re-probes only
+  that vendor, checks the result, swaps it in, confirms with one real dispatch,
+  and restores the old overlay if that fails. It re-signs **unattended** only when
+  the new executable carries the same code-signing team and sits in the same
+  place; anything else stops with the exact `--approve` command for you. Run
+  `omnilane resign --record-signers` once, schedule `omnilane resign` daily, and
+  updates stop being your problem. Verified on a real Codex self-update
+  (0.155.0 → 0.155.1): no approval, every mapping kept, exit 0.
+- **A refusal tells the model what to do.** Every refused dispatch now carries
+  `failed_gate`, `reason`, `next_command`, `required_caller_effort`, and
+  `eligible_lanes` — the lanes that caller *can* reach right now.
+- **No recorded effort narrows instead of refusing.** A Codex heartbeat
+  automation is held to its model's lowest score rather than being refused on
+  every lane. Cheap lanes keep working; expensive ones say which effort is needed.
+- **The assistant's own sub-agents.** `omnilane native-context` writes the
+  capability file that used to be hand-made, and `omnilane route --inherit` plans
+  a worker that is a copy of the caller: no external CLI, no overlay, works even
+  when the caller cannot be identified, and is honestly marked as *not* the
+  lane's target model. Run end to end in Claude Code and Codex desktop.
+- **Codex: one omnilane command per tool call.** `omnilane whoami; echo $?`
+  cannot be identified, `omnilane whoami` alone can. The refusal now says so.
+- **Doctor sees a CLI that moved** beside its old file, and warns, with the
+  steps, when no overlay exists at all.
+- **Rewritten skill and tutorial.** The skill is now a five-step procedure a
+  model follows; this README walks through letting an assistant drive omnilane.
+- **Limits.** Unattended re-signing relies on macOS code signatures; on Linux, and
+  for any unsigned or locally patched CLI, every update asks for `--approve`.
+  `--inherit` has not been run inside Grok Build, and Antigravity exposes no
+  sub-agent tool. Full detail: [CHANGELOG](CHANGELOG.md).
+- **Upgrade.** `npm i -g omnilane@0.43.0`, then once: `omnilane resign --record-signers`.
 
 ## What's new in v0.42.9
 

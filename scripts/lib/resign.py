@@ -233,7 +233,7 @@ def resign(args, log=print) -> int:
     overlay_env = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY")
     if not overlay_env:
         log("omnilane: no transport overlay is configured (OMNILANE_AA_TRANSPORT_OVERLAY); "
-            "there is nothing to re-sign. See the README's first-install section.")
+            "there is nothing to re-sign. See the README, 'Let your AI assistant drive omnilane', Step 2.")
         return EXIT_UNCONFIGURED
     live = Path(overlay_env).expanduser()
     try:

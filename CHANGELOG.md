@@ -6,81 +6,129 @@ semantic version tags.
 
 ## [Unreleased]
 
-## [0.43.0] - 2026-09-20
+## [0.43.0] - 2026-09-21
+
+**Why this release exists.** In ten days 0.42.x refused every model caller four
+times, each time because of a fact omnilane does not control: a launcher was
+renamed, a runner script changed without the overlay being re-signed, all four
+vendor CLIs updated themselves within a week, and a Codex automation recorded no
+effort. Each one turned into "nothing can be dispatched". 0.43.0 makes each of
+those a narrower, explained outcome, and repairs the common one by itself.
+
+**Upgrading.** `npm i -g omnilane@0.43.0`. If a model drives omnilane on this
+machine, run once: `omnilane resign --record-signers`, then schedule
+`omnilane resign` daily inside your desktop login session (README, "Let your AI
+assistant drive omnilane", Step 3). Hosts where only a human dispatches need
+nothing. The skill file was rewritten; re-run `./install.sh`, or reinstall the
+plugin, wherever you installed a copy rather than a link.
+
+### What you will notice
+
+- **A caller with no recorded effort is narrowed, not refused.** A Codex
+  heartbeat automation wakes a thread without writing an effort, and a `codex`
+  launched without `model_reasoning_effort` is the same case. 0.42.9 refused it on
+  every lane with `missing-caller-context`. It is now held to its model's
+  lowest-scored row (`effort_unverified: true` in the context file,
+  `caller_degraded: true` in the decision). Whatever effort really ran scores at
+  least that much, so this can only narrow what it may dispatch. A malformed
+  effort or a missing model still refuses.
+- **A refusal says which check failed and what to do.** Refused decisions carry
+  `failed_gate` (`caller-identity`, `target-transport`, `downward-ceiling`,
+  `native-capability`), `reason`, `next_command`, `required_caller_effort`,
+  `caller_degraded`, and from dispatch `eligible_lanes` (every lane this caller
+  can reach now, with `transport_verified`) and `lane_requirement`.
+- **`omnilane resign` re-signs the overlay after a CLI update.**
+  `omnilane resign [--check] [--vendor V] [--approve V] [--record-signers] [--allow-shrink] [--no-smoke] [--json]`
+  finds what changed (including a CLI installed *beside* its old file, which the
+  hash check never saw), re-probes only that vendor into a staging root, loads
+  the staged overlay the way dispatch does, replaces the live file atomically
+  with a backup, sends one real dispatch per re-probed vendor, and restores the
+  backup if that fails. It is not a rubber stamp: a changed executable is
+  re-probed **unattended** only when it carries the code-signing team the overlay
+  recorded and sits in the same install location. An adhoc or unsigned binary, a
+  new signer, a new directory, or an overlay that recorded no signer stop at exit
+  20 with the exact `--approve` line for the operator. A selector that was
+  verified and fails this time keeps its old pin unless `--allow-shrink`.
+  `--record-signers` is the operator adopting the signers of what the overlay
+  already pins. Exit codes: 0 done or nothing to do, 10 drift (`--check`), 20
+  operator needed or a vendor held, 30 rolled back, 2 no overlay configured.
+- **The assistant's own sub-agents, without an external CLI.**
+  `omnilane native-context` writes the capability file for the harness it runs
+  under from the identity `whoami` reads, so the native path no longer needs a
+  hand-written file. `omnilane route --inherit` plans a worker that the host
+  spawns with no model and no effort argument: it runs the caller's own runtime,
+  so it cannot be an upward dispatch, needs no vendor CLI and no overlay, works
+  for an effort-unverified caller, has no CLI fallback, refuses every CLI-only
+  lifecycle, and is marked `satisfies_lane_target: false` — never reported as the
+  lane's target model. When no identity reaches the gate at all, the capability
+  file's `vendor` and `current_model` stand as the host's statement
+  (`native-inherited-unverified-caller`, `caller_identity_verified: false`, no
+  ceiling, no child context; `omnilane native-context --vendor V --model M`);
+  completion is still checked against them. Lane dispatch is unchanged: without
+  an identity it is refused. Dispatch now says when a same-vendor target went out
+  through the CLI only because no capability file was given.
+- **Codex: run each omnilane command alone.** Codex starts `zsh -lc '<command>'`;
+  the shell sets `CODEX_THREAD_ID` and, for one simple command, becomes it. With
+  `; echo $?`, `&&`, a pipe or `$(…)` the shell stays between codex and the
+  command and the caller cannot be read. The gate is unchanged; the refusal now
+  names the process it read and says to run the command by itself. Reproduced
+  with `codex exec` 0.155.0 and observed in Codex desktop.
+- **Doctor sees more.** It reports a vendor CLI updated beside its pinned
+  executable, names `omnilane resign` as the fix, and with no overlay at all
+  warns with the first-install steps instead of passing (it still passes where
+  the operator set `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`).
+- **The skill was rewritten** as a five-step procedure a model follows (who am
+  I, pick a lane, dispatch, if refused, collect and verify), with every refusal
+  mapped to an action. Overlay maintenance moved to `docs/transport-overlay.md`.
+  The README gained a full "let your AI assistant drive omnilane" walkthrough.
 
 ### Added
 
-- `omnilane resign [--check] [--vendor V] [--approve V] [--record-signers]`
-  re-probes a drifted vendor and re-signs the transport overlay: staging root,
-  staged-overlay load, atomic replace, one real dispatch per re-probed vendor,
-  automatic restore on failure. The staged-overlay load is what exercises the
-  mapping gate; the dispatch runs under the human assertion and proves the
-  transport, so no model identity is impersonated. A selector the live overlay
-  verifies that fails this time keeps the old pin unless `--allow-shrink`.
-  Unattended re-signing requires the code-signing
-  team the overlay recorded and the same install location; anything else exits
-  20 with the operator command. Exit codes: 0, 10 (drift, `--check`), 20
-  (operator needed), 30 (rolled back), 2 (no overlay configured).
-- `omnilane native-context` writes the native capability file for the harness it
-  runs under from the identity `whoami` reads; `--inherits-caller-runtime` records
-  the host's statement that an un-overridden sub-agent runs the caller's runtime.
-- `dispatch.sh --inherit` (with `aa_policy.decide_inherited`, code
-  `native-inherited-allowed`) plans a native worker on the caller's own model and
-  effort: no lane target, no vendor CLI, no transport overlay, no CLI fallback,
-  `satisfies_lane_target: false`. It works for an effort-unverified caller and
-  refuses a human, an unidentified caller, any model/effort override and every
-  CLI-only lifecycle. Dispatch now says when a same-vendor target goes through an
-  external CLI only because no capability file was given.
-- `--inherit` no longer depends on reading the caller. When no identity reaches
-  the gate, the capability file's `vendor` and `current_model` stand as the host's
-  statement: decision `native-inherited-unverified-caller`, `caller_kind:
-  "model-unverified"`, no ceiling, no child context, and
-  `caller_identity_verified: false` on the handoff and in `jobs status`. Completion
-  is still checked against that vendor and model. `omnilane native-context --vendor
-  V --model M` writes such a file when the identity cannot be read, and refuses a
-  statement that contradicts an identity it can read. Lane dispatch and
-  non-inherited native work are unchanged: without an identity they are refused.
-- `scripts/lib/probe_sweep.py` derives every probe command from `build_overlay.py`
-  and the frozen registry, classifies an unauthenticated CLI as `unprobeable`,
-  refuses keychain-backed CLIs outside an Aqua session, and retries one transient
-  provider error once. `scripts/lib/cli_provenance.py` holds the signer check.
-- Refused decisions carry `failed_gate`, `reason`, `next_command`,
-  `required_caller_effort`, `caller_degraded`, and (from dispatch) `eligible_lanes`
-  and `lane_requirement`.
-- Overlay evidence anchors for CLI executables record `codesign` facts.
-- `release-audit` check `runner-pins-current` / `runner-pins-stale`.
-- README "First install" section for building the first transport overlay.
+- `omnilane resign`, `omnilane native-context`, `omnilane route --inherit`.
+- `scripts/lib/resign.py`, `scripts/lib/cli_provenance.py` (the signer check),
+  `scripts/lib/aa_lanes.py` (`eligible_lanes`), `scripts/lib/native_context.py`.
+- `scripts/lib/probe_sweep.py` derives all 55 probe commands from
+  `build_overlay.py` and the frozen registry, reports an unauthenticated CLI as
+  `unprobeable` instead of recording "not logged in" as a finding, refuses
+  keychain-backed CLIs outside a desktop session, and retries one transient
+  provider error once.
+- Decision codes `native-inherited-allowed`, `native-inherited-unverified-caller`,
+  `native-inherit-unavailable`, `inherit-requires-model-caller`,
+  `invalid-degraded-caller`.
+- Overlay evidence for CLI executables records `codesign` facts.
+- `release-audit` checks `runner-pins-current` / `runner-pins-stale`: a release
+  whose `scripts/runners/*.sh` no longer match the releasing host's overlay fails,
+  which is the mistake 0.42.8 shipped with.
+- `docs/transport-overlay.md`.
 
 ### Changed
 
-- A Codex caller whose `turn_context` records no effort (heartbeat automations),
-  or that was launched without `model_reasoning_effort`, is degraded to its
-  model's lowest-scored row and marked `effort_unverified` instead of being
-  refused with `missing-caller-context`. A malformed effort or a missing model
-  still refuses. Caller-context files accept the optional key
-  `effort_unverified: true`; the gate refuses it on any row above the floor.
-- `omnilane doctor` reports a vendor CLI that was updated beside its pinned
-  executable, names `omnilane resign` as the fix, and warns (with the first
-  install steps) when no overlay is configured instead of passing, unless the
-  operator asserts the human exemption (`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`).
-- `build_overlay.py` resolves the repository from its own location and takes
-  `--source`; it no longer embeds one host's checkout path or sweep history.
+- Caller-context files accept the optional key `effort_unverified: true`; the
+  gate refuses it on any row above the model's floor.
+- Native capability files accept the optional keys `inherits_caller_runtime` and
+  `caller_identity_verified`. `omnilane jobs status` shows `inherit`,
+  `caller_identity_verified` and `satisfies_lane_target` for inherited jobs.
+- `build_overlay.py` resolves the repository from its own location, takes
+  `--source`, and lists a vendor with no evidence as unproven instead of aborting.
+- A `codex-code-mode-host` between codex and a command is skipped when looking
+  for the process that carries `CODEX_THREAD_ID`.
 
-### Fixed
+### Verified, and not
 
-- A `codex-code-mode-host` between codex and the command is skipped when finding
-  the process whose initial environment carries `CODEX_THREAD_ID`; one host serves
-  every conversation of an app-server and carries none. A stale or missing thread
-  id is still refused, and the refusal now names the process it read.
-
-- The refusal for a codex caller whose direct child is a shell now says how to be
-  read. Codex runs `zsh -lc '<command>'`; the shell sets `CODEX_THREAD_ID` and, for
-  one simple command, execs into it, so that command is codex's direct child and
-  carries the id. With `;`, `&&`, `|` or a subshell the shell stays, and its own
-  start had no id, so `omnilane whoami; echo $?` is refused where `omnilane whoami`
-  alone is read. Reproduced with `codex exec` 0.155.0 and observed in Codex desktop.
-  The gate is unchanged; the message now names the process it read and tells the
-  caller to run the omnilane command as the only command of the tool call.
+- 127 test groups pass; `release-audit --target 0.43.0` passes.
+- Real runs on macOS: re-signing with an automatic rollback; a provider refusing
+  probes (old pins kept); **an unattended re-sign of a genuine Codex self-update
+  0.155.0 → 0.155.1** (same signer, no `--approve`, 23 of 23 mappings kept, real
+  dispatch answered, exit 0); full `--inherit` cycles in Claude Code and in Codex
+  desktop, with a verified and with an unverified caller.
+- Not verified: `--inherit` inside Grok Build; effort inheritance in Grok Build;
+  any sub-agent tool in Antigravity (`agy` 1.2.7 shows none); the example macOS
+  LaunchAgent in the README. In Claude Code, effort inheritance rests on Anthropic's
+  documentation, because a sub-agent cannot see its own effort.
+- Limits: the signer check uses macOS code signatures, so on Linux every changed
+  CLI stops for `--approve`. A binary with no real signature, such as a locally
+  patched CLI, always stops for `--approve`. Degrading a caller lets it dispatch
+  what it may; it does not make an expensive lane reachable.
 
 ## [0.42.9] - 2026-09-13
 

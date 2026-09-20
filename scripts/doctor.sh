@@ -422,7 +422,7 @@ if [[ -z "$overlay_path" ]]; then
   # Only a model caller needs the overlay; a host whose operator asserts the human
   # exemption is complete without one, and --strict must not fail it.
   if [[ "${OMNILANE_AA_OPERATOR_ASSERTED_HUMAN:-0}" == "1" ]]; then
-    report PASS transport-overlay "no overlay configured; fine for a human operator, but a model caller would be refused on every lane (README 'First install')"
+    report PASS transport-overlay "no overlay configured; fine for a human operator, but a model caller would be refused on every lane (README, 'Let your AI assistant drive omnilane')"
   else
     report WARN transport-overlay "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see README 'First install'"
   fi
