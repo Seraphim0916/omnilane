@@ -123,6 +123,7 @@ omnilane — one routing table, every harness
   omnilane whoami                       caller-context file for the CLI this runs under
   omnilane native-context [--workdir DIR] [--mode M] [--inherits-caller-runtime]
                                          capability file that lets dispatch use this harness's own sub-agents
+                                         (--vendor V --model M: the host's statement when whoami cannot read it)
   omnilane resign [--check] [--vendor V] [--approve V]
                                          re-probe and re-sign the transport overlay after a CLI update
   omnilane benchmark [--json] [--run] [--vendor V] fixed quality/cost comparison

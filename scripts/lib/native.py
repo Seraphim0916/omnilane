@@ -91,9 +91,11 @@ def capability_context(path):
     ctx = read_json(path)
     fields(ctx, ("schema_version", "harness", "vendor", "capabilities", "requirements"),
            ("current_model", "current_effort", "agent_strategy", "existing_agent",
-            "preserve_existing_context", "new_agent_capacity", "inherits_caller_runtime"))
-    if "inherits_caller_runtime" in ctx:
-        check(type(ctx["inherits_caller_runtime"]) is bool, "invalid inherits_caller_runtime")
+            "preserve_existing_context", "new_agent_capacity", "inherits_caller_runtime",
+            "caller_identity_verified"))
+    for flag in ("inherits_caller_runtime", "caller_identity_verified"):
+        if flag in ctx:
+            check(type(ctx[flag]) is bool, "invalid " + flag)
     check(type(ctx["schema_version"]) is int and ctx["schema_version"] == 1, "unsupported context version")
     identifier(ctx["harness"], "harness")
     identifier(ctx["vendor"], "vendor")
@@ -212,9 +214,8 @@ def choose(args, ctx):
     return "native", "exact-idle-reuse-match" if strategy == "reuse" else "exact-capability-match", model
 
 
-def choose_inherited(args, ctx, caller):
+def choose_inherited(args, ctx, identity):
     """A worker spawned with no model override. There is no CLI to fall back to."""
-    identity = caller["caller"]
     if ctx is None:
         return None, "no-native-context"
     if ctx.get("inherits_caller_runtime") is not True:
@@ -252,13 +253,17 @@ def route_inherited(args, ctx, registry, registry_sha):
     if args.caller_context:
         caller, caller_sha = aa_policy.load_caller(
             args.caller_context, registry, args.expected_caller_sha256)
+    host = None
+    if caller is None and ctx is not None and "current_model" in ctx:
+        host = {"vendor": ctx["vendor"], "model": ctx["current_model"]}
     decision = aa_policy.decide_inherited(
         registry, registry_sha, caller=caller, caller_sha256=caller_sha,
-        operator_asserted_human=args.operator_asserted_human)
+        operator_asserted_human=args.operator_asserted_human, host_asserted=host)
     if not decision["allowed"]:
         print(aa_policy._json_line(decision), end="", file=sys.stderr)
         return 3
-    executor, reason = choose_inherited(args, ctx, caller)
+    identity = caller["caller"] if caller is not None else host
+    executor, reason = choose_inherited(args, ctx, identity)
     if executor is None:
         # An inherited worker exists only inside the harness; the CLI is not a fallback for it.
         decision.update(allowed=False, code="native-inherit-unavailable",
@@ -267,8 +272,9 @@ def route_inherited(args, ctx, registry, registry_sha):
                         next_command="omnilane native-context --workdir " + args.workdir)
         print(aa_policy._json_line(decision), end="", file=sys.stderr)
         return 3
-    identity = caller["caller"]
     plan = {"schema_version": 1, "executor": executor, "executor_reason": reason, "inherit": True,
+            "caller_identity_verified": decision["caller_identity_verified"],
+            "caller_identity_source": decision["caller_identity_source"],
             "vendor": identity["vendor"], "model": identity["model"], "effort": "inherited",
             "harness": ctx["harness"], "lane": args.lane, "mode": args.mode,
             "workdir": args.workdir, "task": args.task,
@@ -537,6 +543,10 @@ def job_command(args):
         summary.update(agent_strategy=state.get("agent_strategy", "new"),
                        existing_agent_id=state.get("existing_agent_id"),
                        preserve_existing_context=state.get("preserve_existing_context", False))
+        if state.get("inherit"):
+            summary.update(inherit=True,
+                           caller_identity_verified=state.get("caller_identity_verified", True),
+                           satisfies_lane_target=False)
         if args.action == "result":
             summary["completion"] = state.get("completion")
         if args.json:

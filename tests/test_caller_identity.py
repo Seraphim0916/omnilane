@@ -977,6 +977,24 @@ class WhoamiCommandTests(unittest.TestCase):
     def test_native_context_refuses_an_unreadable_caller(self):
         result = self.native_context("claude", "--model", "claude-opus-5")
         self.assertEqual((result.returncode, result.stdout), (3, ""))
+        self.assertIn("--vendor VENDOR --model MODEL", result.stderr)
+
+    def test_native_context_takes_the_hosts_word_for_an_unreadable_caller(self):
+        result = self.native_context("claude", "--model", "claude-opus-5", flags=(
+            "--vendor", "claude", "--model", "claude-opus-5", "--inherits-caller-runtime"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(Path(result.stdout.strip()).read_text())
+        self.assertIs(value["caller_identity_verified"], False)
+        self.assertEqual((value["vendor"], value["current_model"]), ("claude", "claude-opus-5"))
+        self.assertNotIn("current_effort", value)
+        self.assertEqual(value["capabilities"][0]["efforts"], ["unverified"])
+        self.assertIn("not verified", result.stderr)
+
+    def test_native_context_does_not_let_the_host_contradict_a_readable_caller(self):
+        result = self.native_context("claude", "--model", "claude-opus-5", "--effort", "high",
+                                     flags=("--vendor", "claude", "--model", "claude-fable-5-1"))
+        self.assertEqual((result.returncode, result.stdout), (2, ""))
+        self.assertIn("reads as claude/claude-opus-5", result.stderr)
 
     def test_refuses_rather_than_guessing(self):
         result = self.run_whoami("claude", "--model", "claude-opus-5")

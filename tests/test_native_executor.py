@@ -760,12 +760,56 @@ class InheritedWorkerTests(unittest.TestCase):
         self.assertEqual(self.refusal(self.inherit(expected=3))["reason"], "vendor-mismatch")
         self.assert_no_jobs()
 
-    def test_a_human_or_an_unidentified_caller_has_nothing_to_inherit(self):
+    def test_a_human_has_nothing_to_inherit(self):
         result = self.route("--inherit", "--operator-asserted-human", expected=3)
         self.assertEqual(self.refusal(result)["code"], "inherit-requires-model-caller")
-        result = self.route("--inherit", expected=3)
+        self.assert_no_jobs()
+
+    def test_an_unreadable_caller_inherits_on_the_hosts_word(self):
+        # Codex desktop 0.155 puts CODEX_THREAD_ID in the command's own environment only.
+        plan = json.loads(self.route("--inherit").stdout)
+        decision = plan["aa_policy"]
+        self.assertEqual((decision["code"], decision["caller_kind"], decision["effective_ceiling"]),
+                         ("native-inherited-unverified-caller", "model-unverified", None))
+        self.assertIs(plan["caller_identity_verified"], False)
+        self.assertEqual(plan["caller_identity_source"], "host-asserted")
+        self.assertEqual((plan["vendor"], plan["model"], plan["effort"]),
+                         ("codex", "gpt-6-astra", "inherited"))
+        self.assertIs(plan["worker_contract"]["satisfies_lane_target"], False)
+        self.assertNotIn("caller_context", plan["worker_contract"])
+        job = self.home / "jobs" / plan["job_id"]
+        self.assertFalse((job / "aa-child-context.json").exists())
+        self.assertFalse((job / "aa-authorizer.json").exists())
+        done = self.completion(plan)
+        done["runtime"]["effort"] = "unknown"
+        self.ingest(plan, done)
+        status = json.loads(self.job("status", plan["job_id"]).stdout)["job"]
+        self.assertEqual((status["state"], status["caller_identity_verified"],
+                          status["satisfies_lane_target"]), ("done", False, False))
+
+    def test_an_unreadable_caller_cannot_claim_another_model_at_completion(self):
+        plan = json.loads(self.route("--inherit").stdout)
+        done = self.completion(plan)
+        done["runtime"]["model"] = "gpt-5.6-sol"
+        self.ingest(plan, done, expected=2)
+
+    def test_an_unreadable_caller_needs_the_host_to_name_its_model(self):
+        del self.ctx["current_model"]
+        self.save_context()
+        self.assertEqual(self.refusal(self.route("--inherit", expected=3))["code"],
+                         "missing-caller-context")
+        self.assert_no_jobs()
+
+    def test_an_unreadable_caller_still_cannot_dispatch_a_lane(self):
+        # Every candidate of the lane is refused, so the lane itself has no target: exit 4.
+        result = self.route(expected=4)
         self.assertEqual(self.refusal(result)["code"], "missing-caller-context")
         self.assert_no_jobs()
+
+    def test_a_verified_caller_is_marked_verified(self):
+        plan = json.loads(self.inherit().stdout)
+        self.assertIs(plan["caller_identity_verified"], True)
+        self.assertEqual(plan["aa_policy"]["code"], "native-inherited-allowed")
 
     def test_inherit_overrides_nothing(self):
         for flag in (("--vendor", "codex"), ("--model", "gpt-6-astra"), ("--effort", "xhigh")):
