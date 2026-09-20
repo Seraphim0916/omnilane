@@ -256,6 +256,10 @@ def trust_adhoc(live: Path, overlay: dict, report: dict, wanted: list[str], log)
             continue
         if entry.get("operator_trust") == cli_provenance.TRUST_ADHOC:
             continue
+        if not entry.get("codesign"):
+            log(f"omnilane: {vendor} has no recorded signer to bind the trust to; "
+                "run omnilane resign --record-signers first")
+            continue
         entry["operator_trust"] = cli_provenance.TRUST_ADHOC
         entry["operator_trust_recorded_at"] = datetime.now(timezone.utc).isoformat()
         changed.append(f"{vendor} in {cli_provenance.family(entry['path'])}")
@@ -371,8 +375,9 @@ def resign(args, log=print) -> int:
         # pin it had, because its new executable was never probed.
         unprobed = [vendor for vendor in VENDORS if report[vendor]["drifted"] and vendor not in proceed]
         for index, entry in enumerate(staged["evidence"]):
-            if entry.get("vendor") in proceed and entry.get("codesign") is not None:
-                # A fresh anchor knows the signer but not what the operator decided about it.
+            if entry.get("codesign") is not None:
+                # build_overlay anchors every vendor afresh, so a trust recorded on an
+                # untouched vendor would vanish with a re-sign of another one.
                 old = next((e for e in overlay["evidence"] if e.get("vendor") == entry["vendor"]
                             and e.get("operator_trust")), None)
                 if old is not None:

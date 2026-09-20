@@ -369,6 +369,30 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
         self.assertEqual(self.sweeps, [])
 
+    def test_trust_on_an_untouched_vendor_survives_another_vendors_re_sign(self):
+        self.run_resign(trust_adhoc=["claude"])
+        self.update("codex")
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.sweeps, ["codex"])
+        entry = next(e for e in json.loads(self.live.read_text())["evidence"]
+                     if e.get("vendor") == "claude" and "codesign" in e)
+        self.assertEqual(entry["operator_trust"], cli_provenance.TRUST_ADHOC)
+        self.sweeps.clear()
+        self.update("claude")
+        self.signers["claude"] = "adhoc"
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.sweeps, ["claude"])
+
+    def test_trust_adhoc_needs_a_recorded_signer(self):
+        overlay = json.loads(self.live.read_text())
+        for entry in overlay["evidence"]:
+            entry.pop("codesign", None)
+        self.live.write_text(json.dumps(overlay))
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(trust_adhoc=["claude"]), resign.EXIT_OK)
+        self.assertEqual(digest(self.live), before)
+        self.assertTrue(any("--record-signers first" in l for l in self.lines), self.lines)
+
     def test_trust_adhoc_is_per_vendor_and_repeatable(self):
         self.assertEqual(self.run_resign(trust_adhoc=["grok", "codex"]), resign.EXIT_OK, self.lines)
         trusted = {e["vendor"] for e in json.loads(self.live.read_text())["evidence"] if e.get("operator_trust")}
