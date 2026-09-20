@@ -705,6 +705,8 @@ class SandboxRefusalTests(unittest.TestCase):
                     40, caller_identity._process, current_environment=self.sandbox)
         self.assert_sandbox_refusal(error)
 
+    @unittest.skipIf(Path("/proc/self").is_dir(),
+                     "ps is only the reader where there is no /proc; with one, pid 40 is a real process")
     def test_ps_nonzero_with_parseable_output_still_reads_identity_outside_sandbox(self):
         head = subprocess.CompletedProcess(
             ["ps"], 1, stdout="20 claude\n", stderr="synthetic")
