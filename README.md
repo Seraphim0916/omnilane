@@ -81,6 +81,31 @@ omnilane route hardest-coding "fix the flaky auth token refresh"
 > New to this? Run `omnilane doctor` first — it tells you which model CLIs and
 > API keys omnilane can already reach, so you know what will actually run.
 
+### First install: let a model drive omnilane
+
+A human at a terminal can dispatch straight away. A **model** caller (Claude Code,
+Codex, Grok or Antigravity delegating on its own) additionally needs this host to
+have proven that each CLI really selects the model a lane names. That proof is a
+host-local file, the *transport overlay*; nothing ships with one, and without it
+every lane refuses a model caller with `runtime-mapping-unverified` while
+`omnilane doctor` warns `no overlay configured`. Build it once, from a normal
+desktop terminal (an ssh login cannot read the keychain the CLIs log in with):
+
+```bash
+cd "$(npm root -g)/omnilane"            # or your clone
+ROOT=~/.omnilane/transport-evidence/first-sweep
+python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
+python3 scripts/lib/build_overlay.py --root "$ROOT"
+cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
+echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
+omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+```
+
+A vendor you are not logged in to is reported `unprobeable` and simply stays
+unverified. The overlay pins each CLI executable by hash, and the CLIs update
+themselves, so expect it to go stale within days: `omnilane resign` re-probes
+what changed and re-signs, and is safe to run daily from your desktop session.
+
 ## 🧭 How it works
 
 omnilane lets the main loop of **any** agentic CLI classify subtasks into
@@ -637,6 +662,9 @@ When that fails, run `omnilane whoami` — it either prints a
 `--effort`, a model alias, no scored row). A model must not assert the human
 exemption for itself.
 
+Every refusal is one JSON line on stderr. Read `failed_gate`, `reason` and
+`next_command` first; `eligible_lanes` lists what you can still dispatch.
+
 `runtime-mapping-unverified` — your identity is fine, but the *target* has no
 proven host-local request selector. Either it was never probed, or its probe
 failed; `omnilane doctor` reports the count of such configurations and the
@@ -650,7 +678,13 @@ and runner-script hash, and Codex and Claude evidence paths embed version
 directories, so an upgrade removes the file rather than changing its digest.
 Tagged evidence degrades only its own vendor; untagged evidence, such as the
 probe manifest, still closes the whole gate. Doctor names the file and the
-vendor; the dispatch skill carries the re-signing runbook.
+vendor; `omnilane resign` re-probes and re-signs it, and the dispatch skill
+carries the runbook behind that command.
+
+`target-above-effective-ceiling` — nothing is broken. The target scores above the
+caller. `required_caller_effort` names the effort the calling session would need;
+a caller marked `caller_degraded` was launched by a harness that recorded no
+effort (a Codex heartbeat automation does this) and is held to its model's floor.
 
 </details>
 
@@ -705,6 +739,51 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.43.0
+
+0.42.x was refused four times in ten days by facts it does not control: a renamed
+launcher, a harness that records no effort, and vendor CLIs that update themselves
+every week. This release stops treating each of those as a total refusal.
+
+- **No recorded effort degrades instead of refusing.** A Codex heartbeat
+  automation wakes a thread without writing an effort, and 0.42.9 answered with
+  `missing-caller-context` on every lane. The caller is now held to its model's
+  lowest-scored row, marked `effort_unverified`. That can only narrow what it may
+  dispatch: low lanes work, and a lane above the floor is refused with the
+  effort that would reach it. A malformed effort, or a missing model, still refuses.
+- **A refusal says which gate, why, and what next.** Refused decisions carry
+  `failed_gate` (`caller-identity`, `target-transport` or `downward-ceiling`),
+  `reason`, `next_command`, `required_caller_effort`, and `eligible_lanes` — the
+  lanes that caller can still reach. A model no longer has to guess that a
+  transport problem is "an identity problem".
+- **`omnilane resign`.** Finds what no longer matches the overlay, re-probes only
+  that vendor into a staging root, loads the staged overlay, replaces the live
+  one atomically, runs one real dispatch per re-probed vendor, and restores the
+  backup if that fails. Loading the staged overlay proves the mapping gate; the
+  dispatch, sent under the human assertion, proves the transport. If a provider
+  refuses probes that passed last time, the old pin is kept rather than shrinking
+  the overlay. It is not a rubber stamp: a changed executable is
+  re-probed unattended only if it still carries the code-signing team the overlay
+  recorded and sits in the same install location. Adhoc or unsigned binaries, a
+  new signer, a new directory, or an overlay with no signer on record stop at
+  exit 20 with the `--approve` command for an operator. `--check` only reports;
+  `--record-signers` adopts the signers of what an older overlay already pins.
+- **Doctor sees a CLI that moved.** Codex and grok install each version as a new
+  file and leave the old one behind, so the pinned hash kept matching while the
+  runners executed something else. Doctor now compares what `PATH` resolves with
+  what the overlay pinned. With no overlay at all it warns, with the first-install
+  steps, instead of passing.
+- **A sweep is reproducible.** `scripts/lib/probe_sweep.py` derives all 55 probe
+  commands from `build_overlay.py`, reports a vendor nobody is logged in to as
+  `unprobeable` rather than recording "not logged in" as a finding, refuses
+  keychain-backed CLIs from an ssh session, and retries one transient provider
+  error once. `build_overlay.py` no longer assumes the author's checkout path.
+- **The release gate checks runner pins.** `release-audit` fails when a
+  `scripts/runners/*.sh` no longer matches the releasing host's overlay — the
+  mistake 0.42.8 shipped with.
+- **Upgrade.** Run `npm i -g omnilane@0.43.0`, then once:
+  `omnilane resign --record-signers`.
 
 ## What's new in v0.42.9
 

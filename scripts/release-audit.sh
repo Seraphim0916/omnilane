@@ -305,6 +305,37 @@ else
   fail changelog-release-link
 fi
 
+# A runner script is pinned by this host's transport overlay. Shipping a changed
+# one without re-signing refuses every lane of that vendor on the releasing host
+# (0.42.8 did exactly that), and no offline test notices.
+audit_overlay="${OMNILANE_AA_TRANSPORT_OVERLAY:-}"
+if [[ -z "$audit_overlay" && -f "${OMNILANE_HOME:-$HOME/.omnilane}/local.sh" ]]; then
+  audit_overlay="$(
+    set +u
+    . "${OMNILANE_HOME:-$HOME/.omnilane}/local.sh" 2>/dev/null
+    printf '%s' "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"
+  )"
+fi
+if [[ -z "$audit_overlay" || ! -r "$audit_overlay" ]] || ! command -v python3 >/dev/null 2>&1; then
+  warn runner-pins-unchecked
+else
+  runner_drift="$(python3 - "$audit_overlay" "$ROOT" <<'PYTHON' 2>/dev/null || printf 'unreadable'
+import hashlib, json, sys
+from pathlib import Path
+overlay, root = json.load(open(sys.argv[1])), Path(sys.argv[2])
+pinned = {Path(e["path"]).name: e["sha256"] for e in overlay.get("evidence", []) if e.get("vendor")}
+drift = [p.name for p in sorted((root / "scripts/runners").glob("run-*.sh"))
+         if p.name in pinned and hashlib.sha256(p.read_bytes()).hexdigest() != pinned[p.name]]
+print(",".join(drift))
+PYTHON
+)"
+  if [[ -z "$runner_drift" ]]; then
+    pass runner-pins-current
+  else
+    fail "runner-pins-stale:$runner_drift (run: omnilane resign)"
+  fi
+fi
+
 required=(
   VERSION LICENSE CHANGELOG.md README.md README.zh-TW.md README.zh-CN.md
   README.ja.md README.ko.md install.sh routing.yaml

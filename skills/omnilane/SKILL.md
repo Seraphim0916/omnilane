@@ -359,6 +359,27 @@ and `snapshot_id` must equal the registry's own `snapshot.id`.
 Set `inherited_ceiling` to your own row's score when you are the root caller, or
 to the ceiling you were handed when you are a child.
 
+**A refusal tells you which gate said no.** Every refused decision carries
+`failed_gate`, `reason`, `next_command`, and `eligible_lanes` — the lanes this
+caller can still reach, by registry score. Act on those fields instead of guessing:
+
+| `failed_gate` | What it means | What to do |
+|---|---|---|
+| `caller-identity` | nobody could tell who is asking | run `next_command` (`omnilane whoami`) |
+| `target-transport` | you are identified; this host's overlay does not currently verify the target | an operator runs `omnilane resign`; meanwhile use a lane from `eligible_lanes` whose `transport_verified` is true |
+| `downward-ceiling` | the target scores above your ceiling | dispatch a lane from `eligible_lanes`, or report `required_caller_effort` to the operator; never assert the human exemption for yourself |
+
+**A Codex caller with no recorded effort is degraded, not refused.** A heartbeat
+automation wakes an existing thread and writes a `turn_context` with a model but
+no `effort`; a `codex` launch without `model_reasoning_effort` is the same case.
+The caller is then held to the lowest-scored row of its model
+(`effort_unverified: true` in the context file, `caller_degraded: true` in the
+decision). Whatever effort really ran scores at least that much, so this can
+only narrow what you may dispatch. Low lanes keep working; a lane above the floor
+is refused with the `required_caller_effort` that would reach it. The fix for
+such a lane is a session launched with that explicit effort, or the operator's
+own authorisation — not a guess at the effort.
+
 **Your identity is read from the CLI that launched you.** Without explicit or
 inherited caller-context, dispatch finds the nearest vendor CLI. Claude, Grok
 and Agy retain their launch selectors. Codex outside app-server retains explicit
@@ -438,8 +459,33 @@ silently: before 0.42.6 the overlay hashed claude `2.1.263` while every dispatch
 ran `2.1.266`, so eleven mappings were "verified" against a binary that had not
 run for a day.
 
-Re-signing is a probe, a rebuild, and an install, in that order. Back up
+`omnilane resign` does the re-signing described below in one command, and is what
+an operator (or a daily job in the operator's GUI session) runs when doctor
+reports a stale or moved vendor. `omnilane resign --check` only reports. It
+re-probes a changed executable unattended only when it still carries the signer
+the live overlay recorded and still sits in the same install location; then it
+builds into a staging root, loads the staged overlay, replaces the live one
+atomically, runs one real dispatch per re-probed vendor, and restores the backup
+if that dispatch fails. Two separate things are proven there, and neither
+impersonates a model: loading the staged overlay the way dispatch does proves the
+mapping gate now verifies the vendor, and the dispatch — sent under the human
+assertion, which skips the score ceiling and nothing else — proves the runner and
+the CLI still answer. An adhoc or unsigned executable (a locally patched
+`claude`, for instance), a new signer, a new install directory, or an overlay that
+never recorded a signer all stop at exit 20 with the exact
+`omnilane resign --vendor V --approve V` line for the operator to run after
+looking. `--record-signers` is the operator adopting the signers of the
+executables an older overlay already pins. A model never passes `--approve` or
+`--record-signers`. Keychain-backed CLIs (claude, grok, agy) cannot authenticate
+from an ssh login, so a sweep there reports `unprobeable` instead of writing "not
+logged in" into the evidence; run it from the GUI session. Doctor now also
+reports a CLI that was updated *beside* its old executable (codex and grok
+install per-version files), which the hash check alone never saw.
+
+Re-signing by hand is a probe, a rebuild, and an install, in that order. Back up
 `~/.omnilane/transport-contracts.local.json` first; restoring it is the rollback.
+`scripts/lib/probe_sweep.py --root ROOT [--vendor V]` derives every probe command
+from `build_overlay.py`'s PROVEN table (`--plan` prints them without running).
 `scripts/lib/probe.py --expect TOKEN [--vendor V] NAME COMMAND…` invokes the CLI
 directly through `subprocess`, so it works while the gate is refusing everything —
 this is what breaks the deadlock. `scripts/provider-probe.sh` goes through

@@ -556,6 +556,18 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.43.0 新功能
+
+- **没有记录强度时降级，而不是整体拒绝。** Codex 心跳自动化唤醒既有会话时不写强度，0.42.9 会让每条车道都返回
+  `missing-caller-context`。现在把调用者压在该模型最低分的那一行并标记 `effort_unverified`：只会少派、不会越级。
+- **拒绝会说明是哪一道门。** 拒绝结果带 `failed_gate`、`reason`、`next_command`、`required_caller_effort`
+  与 `eligible_lanes`（仍可派的车道）。
+- **`omnilane resign`。** 只重探发生变化的厂商，暂存构建、加载验证、原子替换、每家一次真实派工，失败自动还原。
+  可执行文件必须仍是 overlay 记录的代码签名团队且位于同一安装位置才会无人值守重签；否则以退出码 20 停下并给出
+  `--approve` 命令。
+- **doctor 能发现"搬家"的 CLI**，没有 overlay 时改为 WARN 并列出首次安装步骤；`release-audit` 检查 runner 钉值。
+  升级：`npm i -g omnilane@0.43.0`，之后执行一次 `omnilane resign --record-signers`。
+
 ## v0.42.9 新功能
 
 - **经启动器带起的 Codex 桌面版。** ChatGPT.app 若通过 codex-profile-switch 启动 app-server，

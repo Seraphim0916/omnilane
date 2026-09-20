@@ -577,6 +577,20 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.43.0 の新機能
+
+- **effort が記録されていない呼び出し元は拒否ではなく降格。** Codex のハートビート自動化は effort を書かずに
+  スレッドを起こすため、0.42.9 では全レーンが `missing-caller-context` で拒否されていました。今後はそのモデルの
+  最低スコア行に固定し `effort_unverified` を付けます。派遣できる範囲が狭まるだけで、上位への派遣は起きません。
+- **拒否理由が構造化されました。** `failed_gate`、`reason`、`next_command`、`required_caller_effort`、
+  まだ使えるレーンを示す `eligible_lanes` を返します。
+- **`omnilane resign`。** 変化したベンダーだけを再プローブし、ステージングで構築・読み込み検証、アトミックに置換、
+  ベンダーごとに実ディスパッチを 1 回、失敗時は自動復元。overlay に記録されたコード署名チームと同じインストール場所の
+  場合のみ無人で再署名し、それ以外は終了コード 20 と `--approve` コマンドを示して停止します。
+- **doctor は別ファイルとして更新された CLI を検出**し、overlay 未設定時は初回手順つきの WARN を出します。
+  `release-audit` は runner のピンも検査します。
+  更新は `npm i -g omnilane@0.43.0`、その後一度 `omnilane resign --record-signers`。
+
 ## v0.42.9 の新機能
 
 - **ランチャー経由の Codex デスクトップ。** ChatGPT.app が codex-profile-switch 経由で

@@ -562,6 +562,20 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.43.0 새 기능
+
+- **effort 기록이 없는 호출자는 거부 대신 강등.** Codex 하트비트 자동화는 effort 없이 스레드를 깨우므로 0.42.9 에서는
+  모든 레인이 `missing-caller-context` 로 거부되었습니다. 이제 해당 모델의 최저 점수 행으로 고정하고
+  `effort_unverified` 로 표시합니다. 보낼 수 있는 범위만 좁아지며 상향 위임은 일어나지 않습니다.
+- **거부 사유가 구조화되었습니다.** `failed_gate`, `reason`, `next_command`, `required_caller_effort`,
+  아직 사용할 수 있는 레인 목록 `eligible_lanes` 를 반환합니다.
+- **`omnilane resign`.** 변경된 벤더만 다시 프로브하고, 스테이징에서 빌드·로드 검증 후 원자적으로 교체하며,
+  벤더마다 실제 디스패치를 한 번 실행하고 실패하면 자동 복원합니다. overlay 에 기록된 코드 서명 팀과 같은 설치 위치일
+  때만 무인으로 재서명하고, 그 외에는 종료 코드 20 과 `--approve` 명령을 출력하고 멈춥니다.
+- **doctor 가 별도 파일로 업데이트된 CLI 를 감지**하고, overlay 가 없으면 첫 설치 절차와 함께 WARN 을 냅니다.
+  `release-audit` 는 runner 핀도 검사합니다.
+  업데이트: `npm i -g omnilane@0.43.0`, 이후 한 번 `omnilane resign --record-signers`.
+
 ## v0.42.9 새 기능
 
 - **런처를 거치는 Codex 데스크톱.** ChatGPT.app이 codex-profile-switch를 통해 app-server를

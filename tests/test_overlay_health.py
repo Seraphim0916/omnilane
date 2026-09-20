@@ -18,8 +18,9 @@ HEALTH = ROOT / "scripts" / "lib" / "overlay_health.py"
 REGISTRY = json.loads((ROOT / "config" / "aa-model-policy.json").read_text())
 
 
-def run(overlay_path):
+def run(overlay_path, **extra):
     env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
+    env.update(extra)
     if overlay_path is None:
         env.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
     else:
@@ -63,6 +64,11 @@ class OverlayHealthTests(unittest.TestCase):
         self.assertEqual(level, "WARN")
         self.assertIn("no overlay configured", message)
         self.assertIn("build_overlay.py", message)
+
+    def test_a_human_operated_host_needs_no_overlay(self):
+        rc, level, message = run(None, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1")
+        self.assertEqual((rc, level), (0, "PASS"))
+        self.assertIn("model caller would be refused", message)
 
     def test_configured_but_missing_file_fails(self):
         rc, level, message = run(self.base / "not-here.json")

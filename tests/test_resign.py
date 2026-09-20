@@ -234,15 +234,19 @@ class ResignTests(unittest.TestCase):
         self.bins[vendor] = path
         return path
 
-    def run_resign(self, *, outcome="done", smoke=(True, "ok"), **flags):
+    def run_resign(self, *, outcome="done", smoke=(True, "ok"), failing=(), **flags):
         def sweep(vendor, root, log=print, **_):
             self.sweeps.append(vendor)
+            entries = probe_sweep.plan(vendor)
             if outcome == "done":
-                for entry in probe_sweep.plan(vendor):
-                    self.descriptor(root, entry["name"], "pass")
+                for entry in entries:
+                    self.descriptor(root, entry["name"],
+                                    "fail" if entry["config_id"] in failing else "pass")
             return {"vendor": vendor, "outcome": outcome, "detail": "stub",
-                    "passed": [e["config_id"] for e in probe_sweep.plan(vendor)], "failed": []}
-        args = Namespace(check=False, vendor=None, approve=None, no_smoke=False, json=False)
+                    "passed": [e["config_id"] for e in entries if e["config_id"] not in failing],
+                    "failed": [e["config_id"] for e in entries if e["config_id"] in failing]}
+        args = Namespace(check=False, vendor=None, approve=None, no_smoke=False, json=False,
+                         record_signers=False, allow_shrink=False)
         for key, value in flags.items():
             setattr(args, key, value)
         self.lines = []
@@ -262,6 +266,17 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(overlay["host"], socket.gethostname())
         recorded = {e["vendor"]: e["codesign"]["signer"] for e in overlay["evidence"] if "codesign" in e}
         self.assertEqual(recorded, self.signers)
+
+    def test_record_signers_adopts_only_unchanged_executables(self):
+        overlay = json.loads(self.live.read_text())
+        for entry in overlay["evidence"]:
+            entry.pop("codesign", None)
+        self.live.write_text(json.dumps(overlay))
+        self.update("grok")
+        self.assertEqual(self.run_resign(record_signers=True), resign.EXIT_OK, self.lines)
+        recorded = {e["vendor"] for e in json.loads(self.live.read_text())["evidence"] if "codesign" in e}
+        self.assertEqual(recorded, {"claude", "codex", "gemini"})
+        self.assertEqual(self.sweeps, [])
 
     def test_nothing_drifted_is_a_no_op(self):
         before = digest(self.live)
@@ -313,6 +328,24 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
         self.assertEqual(self.sweeps, ["grok"])
         self.assertEqual((self.pinned("grok"), self.pinned("codex")), (str(new_grok), old_codex))
+
+    def test_a_provider_bad_hour_does_not_shrink_the_overlay(self):
+        old = self.pinned("grok")
+        self.update("grok")
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(failing=("grok/grok-4-6",)), resign.EXIT_OPERATOR)
+        self.assertEqual((digest(self.live), self.pinned("grok")), (before, old))
+        self.assertTrue(any("--allow-shrink" in line for line in self.lines), self.lines)
+        self.assertFalse(any("--approve grok" in line for line in self.lines), self.lines)
+
+    def test_allow_shrink_installs_the_smaller_overlay(self):
+        new = self.update("grok")
+        self.assertEqual(self.run_resign(failing=("grok/grok-4-6",), allow_shrink=True),
+                         resign.EXIT_OK, self.lines)
+        overlay = json.loads(self.live.read_text())
+        self.assertEqual(self.pinned("grok"), str(new))
+        self.assertNotIn("grok/grok-4-6", {m["config_id"] for m in overlay["mappings"]})
+        self.assertIn("grok/grok-4-6", {u["config_id"] for u in overlay["unproven"]})
 
     def test_an_unprobeable_vendor_is_not_installed(self):
         self.update("grok")

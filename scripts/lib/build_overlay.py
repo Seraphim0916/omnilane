@@ -110,16 +110,13 @@ CLI_NAMES = {"grok": "grok", "codex": "codex", "claude": "claude", "gemini": "ag
 def core_evidence() -> list[tuple[Path, str]]:
     """Resolved when a build runs, not at import: a host missing one CLI can
     still load this module to read PROVEN."""
-    return [
-        (cli_path("grok"), "grok"),
-        (REPO / "scripts/runners/run-grok.sh", "grok"),
-        (cli_path("codex"), "codex"),
-        (REPO / "scripts/runners/run-codex.sh", "codex"),
-        (cli_path("claude"), "claude"),
-        (REPO / "scripts/runners/run-claude.sh", "claude"),
-        (cli_path("agy"), "gemini"),
-        (REPO / "scripts/runners/run-gemini.sh", "gemini"),
-    ]
+    anchors = []
+    for vendor in ("grok", "codex", "claude", "gemini"):
+        if shutil.which(CLI_NAMES[vendor]) is None:
+            continue  # not installed here: main() signs nothing for it
+        anchors += [(cli_path(CLI_NAMES[vendor]), vendor),
+                    (REPO / "scripts/runners" / RUNNERS[vendor], vendor)]
+    return anchors
 
 
 def sha256(path: Path) -> str:
@@ -159,7 +156,11 @@ def main(argv: list[str] | None = None) -> None:
             if path.exists():
                 entry[suffix] = {"path": str(path), "sha256": sha256(path)}
         if "json" not in entry:
-            raise SystemExit(f"missing probe evidence for {cid}: {ev}")
+            # A vendor nobody is logged in to was never probed; that is a gap in this
+            # host's overlay, not a reason to refuse to sign the vendors that were.
+            unproven.append({"config_id": cid, "verdict_reason": "not probed on this host",
+                             "observed_model": None, "probed_at": None})
+            continue
         descriptor_path = Path(entry["json"]["path"])
         descriptor = json.loads(descriptor_path.read_text())
         if not isinstance(descriptor, dict):
@@ -184,11 +185,18 @@ def main(argv: list[str] | None = None) -> None:
     manifest_path = root / "probe-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
+    anchors = core_evidence()
+    anchored = {vendor for _, vendor in anchors}
     mappings = []
     for cid, (selector, runtime_model, _) in sorted(PROVEN.items()):
         if cid not in manifest["probe_runs"]:
             continue
         row = ROWS[cid]
+        if row["vendor"] not in anchored:
+            # Evidence with no executable to pin it to verifies nothing.
+            unproven.append({"config_id": cid, "verdict_reason": "vendor CLI is not installed",
+                             "observed_model": None, "probed_at": None})
+            continue
         mapping = {
             "config_id": cid,
             "identity": {key: row[key] for key in IDENTITY_FIELDS},
@@ -203,7 +211,7 @@ def main(argv: list[str] | None = None) -> None:
         mappings.append(mapping)
 
     evidence = []
-    for path, vendor in core_evidence():
+    for path, vendor in anchors:
         anchor = {"path": str(path), "sha256": sha256(path), "vendor": vendor}
         if path.name != RUNNERS[vendor]:
             # The signer an unattended re-sign is later held to; see cli_provenance.

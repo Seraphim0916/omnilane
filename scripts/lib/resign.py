@@ -20,7 +20,7 @@ Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check)
 from __future__ import annotations
 
 import argparse
-import hashlib
+import contextlib
 import json
 import os
 import shutil
@@ -194,6 +194,41 @@ def smoke(vendor: str, overlay: dict, overlay_path: Path, timeout: int = 300,
     return True, f"job {job} on {row['id']} answered"
 
 
+def record_signers(live: Path, overlay: dict, report: dict, wanted: list[str], log) -> int:
+    """Operator action: adopt the signer of every executable the overlay already pins.
+
+    An overlay signed before 0.43.0 recorded no signer, so its first drift would
+    always stop for an operator. This is that operator decision made ahead of
+    time, and only for an executable whose path and hash still match the pin.
+    """
+    changed = []
+    for entry in overlay.get("evidence", []):
+        vendor = entry.get("vendor")
+        if vendor not in wanted or Path(entry["path"]).name == build_overlay.RUNNERS[vendor]:
+            continue
+        if report[vendor]["cli_changed"]:
+            log(f"omnilane: {vendor}: drifted, so its signer is not adopted; re-sign it instead")
+            continue
+        facts = cli_provenance.facts(entry["path"])
+        if entry.get("codesign") != facts:
+            entry["codesign"] = facts
+            changed.append(f"{vendor}={facts['signer']}")
+    if not changed:
+        log("omnilane: every pinned executable already has its signer recorded")
+        return EXIT_OK
+    backup = live.with_name(live.name + ".before-record-signers-" + datetime.now().strftime("%Y%m%d-%H%M%S"))
+    shutil.copy2(live, backup)
+    aa_policy.atomic_bytes(live, (json.dumps(overlay, indent=2, ensure_ascii=False) + "\n").encode())
+    try:
+        verified(live)
+    except (aa_policy.PolicyError, OSError, ValueError) as error:
+        aa_policy.atomic_bytes(live, backup.read_bytes())
+        log(f"omnilane: the overlay stopped loading ({error}); restored {backup}")
+        return EXIT_ROLLED_BACK
+    log(f"omnilane: recorded signers {', '.join(changed)} (backup {backup})")
+    return EXIT_OK
+
+
 def resign(args, log=print) -> int:
     overlay_env = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY")
     if not overlay_env:
@@ -208,6 +243,8 @@ def resign(args, log=print) -> int:
         return EXIT_UNCONFIGURED
     report = detect(overlay, current_anchors())
     wanted = args.vendor or list(VENDORS)
+    if args.record_signers:
+        return record_signers(live, overlay, report, wanted, log)
     drifted = [vendor for vendor in wanted if report[vendor]["drifted"]]
     summary = {"host": overlay.get("host"), "checked_at": datetime.now(timezone.utc).isoformat(),
                "live_overlay": str(live), "live_sha256": sha256(live), "vendors": report}
@@ -253,6 +290,18 @@ def resign(args, log=print) -> int:
         unfinished = [vendor for vendor, result in sweeps.items() if result["outcome"] != "done"]
         for vendor in unfinished:
             log(f"omnilane: {vendor}: {sweeps[vendor]['outcome']} - {sweeps[vendor]['detail']}")
+        # A selector the live overlay verifies and this sweep could not is more
+        # likely a provider having a bad hour than a selector that stopped working.
+        # Installing that would trade a stale pin for a smaller overlay.
+        was_verified = {mapping["config_id"] for mapping in overlay.get("mappings", [])}
+        for vendor, result in sweeps.items():
+            lost = sorted(was_verified & set(result["failed"]))
+            if lost and vendor not in unfinished and not args.allow_shrink:
+                result["regressed"] = lost
+                unfinished.append(vendor)
+                log(f"omnilane: {vendor}: {len(lost)} selector(s) the live overlay verifies failed "
+                    f"this time ({', '.join(lost)}); keeping the old pin. Retry later, or pass "
+                    "--allow-shrink if they are really gone")
         if unfinished:
             held += unfinished
             proceed = [vendor for vendor in proceed if vendor not in unfinished]
@@ -262,9 +311,10 @@ def resign(args, log=print) -> int:
                     for old in (source / "evidence").glob(entry["name"] + ".*"):
                         shutil.copy2(old, root / "evidence" / old.name)
     if proceed:
-        build_overlay.main(["--root", str(root), "--source",
-                            f"{overlay.get('host')} / omnilane resign {sweep_id} / "
-                            f"re-probed: {', '.join(proceed)}"])
+        with contextlib.redirect_stdout(sys.stderr):  # stdout is reserved for --json
+            build_overlay.main(["--root", str(root), "--source",
+                                f"{overlay.get('host')} / omnilane resign {sweep_id} / "
+                                f"re-probed: {', '.join(proceed)}"])
         staged_path = root / "transport-contracts.local.json"
         staged = json.loads(staged_path.read_text())
         # Only a re-probed vendor gets a new pin; every other drifted one keeps the
@@ -314,8 +364,13 @@ def resign(args, log=print) -> int:
     if held and outcome == EXIT_OK:
         outcome = EXIT_OPERATOR
         for vendor in held:
-            log(f"omnilane: {vendor} still needs an operator. After checking the executable: "
-                f"omnilane resign --vendor {vendor} --approve {vendor}")
+            if report[vendor].get("gate", {}).get("allowed"):
+                # The signer was fine; the probes were not. Approval would change nothing.
+                log(f"omnilane: {vendor} was not re-signed; its old pin stays. Retry later: "
+                    f"omnilane resign --vendor {vendor}")
+            else:
+                log(f"omnilane: {vendor} still needs an operator. After checking the executable: "
+                    f"omnilane resign --vendor {vendor} --approve {vendor}")
     summary.update(re_signed=proceed if outcome != EXIT_ROLLED_BACK else [], held=held,
                    exit_code=outcome, sweep_root=str(root) if root.exists() else None)
     if root.exists():
@@ -334,6 +389,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="limit to this vendor; may repeat")
     parser.add_argument("--approve", action="append", choices=VENDORS,
                         help="operator approval to re-probe this vendor despite its signer check")
+    parser.add_argument("--record-signers", action="store_true",
+                        help="operator action: adopt the signers of the executables already pinned")
+    parser.add_argument("--allow-shrink", action="store_true",
+                        help="install even when a selector the live overlay verifies failed this time")
     parser.add_argument("--no-smoke", action="store_true",
                         help="skip the real dispatch after installing (not for unattended use)")
     parser.add_argument("--json", action="store_true", help="print the full report as JSON")

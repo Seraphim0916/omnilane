@@ -597,6 +597,22 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.43.0 新功能
+
+- **沒記錄強度改為降級，不再整個拒絕。** Codex 心跳排程喚醒既有對話串時不寫強度，0.42.9 會讓每條車道都回
+  `missing-caller-context`。現在把呼叫者壓在該模型最低分那一列並標記 `effort_unverified`：只會少派、不會越級，
+  低分車道照常可用；高於底線的車道會被拒，並告知需要的強度。強度格式錯誤或缺模型仍然拒絕。
+- **拒絕會說清楚是哪一道門。** 拒絕結果帶 `failed_gate`（`caller-identity`／`target-transport`／
+  `downward-ceiling`）、`reason`、`next_command`、`required_caller_effort` 與 `eligible_lanes`（還能派的車道）。
+- **`omnilane resign`。** 找出與 overlay 不符的廠商，只重探那一家，建到暫存目錄、載入驗證、原子替換、每家一條真實派工，
+  失敗自動還原。不是自動蓋章：執行檔必須仍是 overlay 記錄的程式碼簽署團隊、仍在同一安裝位置才會無人值守重簽；
+  adhoc／未簽署、換簽署者、換目錄或沒有簽署紀錄都停在結束碼 20，並印出給操作者的 `--approve` 指令。
+- **doctor 看得到「搬家」的 CLI。** codex 與 grok 每版裝成新檔、舊檔留著，釘住的雜湊一直相符但實際執行的是別的檔。
+  沒有 overlay 時改為 WARN 並列出首次安裝步驟。
+- **探測可重現、發版閘會檢查 runner。** `scripts/lib/probe_sweep.py` 由 `build_overlay.py` 推導全部 55 條探測指令，
+  未登入的廠商記為 `unprobeable`；`release-audit` 在 `scripts/runners/*.sh` 與本機 overlay 不符時失敗。
+  升級：`npm i -g omnilane@0.43.0`，之後執行一次 `omnilane resign --record-signers`。
+
 ## v0.42.9 新功能
 
 - **經啟動器帶起的 Codex 桌面版。** ChatGPT.app 若透過 codex-profile-switch 啟動 app-server，

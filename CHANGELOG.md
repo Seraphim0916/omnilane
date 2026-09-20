@@ -6,6 +6,47 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-09-20
+
+### Added
+
+- `omnilane resign [--check] [--vendor V] [--approve V] [--record-signers]`
+  re-probes a drifted vendor and re-signs the transport overlay: staging root,
+  staged-overlay load, atomic replace, one real dispatch per re-probed vendor,
+  automatic restore on failure. The staged-overlay load is what exercises the
+  mapping gate; the dispatch runs under the human assertion and proves the
+  transport, so no model identity is impersonated. A selector the live overlay
+  verifies that fails this time keeps the old pin unless `--allow-shrink`.
+  Unattended re-signing requires the code-signing
+  team the overlay recorded and the same install location; anything else exits
+  20 with the operator command. Exit codes: 0, 10 (drift, `--check`), 20
+  (operator needed), 30 (rolled back), 2 (no overlay configured).
+- `scripts/lib/probe_sweep.py` derives every probe command from `build_overlay.py`
+  and the frozen registry, classifies an unauthenticated CLI as `unprobeable`,
+  refuses keychain-backed CLIs outside an Aqua session, and retries one transient
+  provider error once. `scripts/lib/cli_provenance.py` holds the signer check.
+- Refused decisions carry `failed_gate`, `reason`, `next_command`,
+  `required_caller_effort`, `caller_degraded`, and (from dispatch) `eligible_lanes`
+  and `lane_requirement`.
+- Overlay evidence anchors for CLI executables record `codesign` facts.
+- `release-audit` check `runner-pins-current` / `runner-pins-stale`.
+- README "First install" section for building the first transport overlay.
+
+### Changed
+
+- A Codex caller whose `turn_context` records no effort (heartbeat automations),
+  or that was launched without `model_reasoning_effort`, is degraded to its
+  model's lowest-scored row and marked `effort_unverified` instead of being
+  refused with `missing-caller-context`. A malformed effort or a missing model
+  still refuses. Caller-context files accept the optional key
+  `effort_unverified: true`; the gate refuses it on any row above the floor.
+- `omnilane doctor` reports a vendor CLI that was updated beside its pinned
+  executable, names `omnilane resign` as the fix, and warns (with the first
+  install steps) when no overlay is configured instead of passing, unless the
+  operator asserts the human exemption (`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`).
+- `build_overlay.py` resolves the repository from its own location and takes
+  `--source`; it no longer embeds one host's checkout path or sweep history.
+
 ## [0.42.9] - 2026-09-13
 
 ### Fixed
@@ -1069,7 +1110,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...v0.43.0
 [0.42.9]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...v0.42.9
 [0.42.8]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...v0.42.8
 [0.42.7]: https://github.com/Seraphim0916/omnilane/compare/v0.42.6...v0.42.7

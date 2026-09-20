@@ -2334,8 +2334,9 @@ EOF
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
 
+  # A human-operated host needs no transport overlay, so --strict stays green.
   json="$(PATH="$fake:$PATH" CLAUDE_CONFIG_DIR="$config" \
-    OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
+    OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 \
     /bin/bash "$ROOT/bin/omnilane" doctor --strict --json 2>&1)"
   rc=$?
   if [[ "$rc" -ne 0 || "$json" != *'"ok":true'* ||
