@@ -90,12 +90,12 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
     return report
 
 
-def gate(vendor_report: dict, approved: bool, facts=cli_provenance.facts) -> tuple[bool, str]:
+def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
     if not vendor_report["cli"]:
         return False, "the CLI is not installed"
     if not vendor_report["cli_changed"]:
         return True, "only omnilane's own runner script changed"
-    current = facts(vendor_report["cli"])
+    current = cli_provenance.facts(vendor_report["cli"])
     vendor_report["codesign"] = current
     allowed, reason = cli_provenance.verdict(
         vendor_report["recorded_codesign"], vendor_report["recorded_cli_path"],
