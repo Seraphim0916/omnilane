@@ -138,9 +138,10 @@ and `satisfies_lane_target: false`. A file with no `current_model` is refused as
 `missing-caller-context`. `omnilane native-context --vendor V --model M` writes
 such a file only when the identity cannot be read or resolved, marks it
 `caller_identity_verified: false`, and exits 2 if the statement contradicts an
-identity it can read. This exists for hosts such as Codex desktop 0.155, where
-`CODEX_THREAD_ID` is in the command's own environment only and no ancestor's
-initial environment carries it; lane dispatch from such a host is still refused.
+identity it can read. This exists for a caller that cannot be read, for example a
+codex command wrapped in `;`, `&&` or a pipe, where the shell codex started stays
+between codex and the command and carries no `CODEX_THREAD_ID` of its own; run
+alone, the same command is read. Lane dispatch from an unread caller is refused.
 Completion checks vendor, model and harness; `runtime.effort` is whatever the
 host observed. A human operator, an unidentified caller, `--vendor`/`--model`/
 `--effort`/`--target-config`, and every CLI-only lifecycle are refused.

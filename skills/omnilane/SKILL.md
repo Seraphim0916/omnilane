@@ -111,17 +111,25 @@ and refuses background, live, thread, sysops and watchdog lifecycles. The child
 context carries your ceiling (and `effort_unverified` if you had it); the worker
 still never dispatches.
 
-**When `omnilane whoami` cannot read you at all** (Codex desktop 0.155 puts
-`CODEX_THREAD_ID` only in the command's own environment, so nothing above the
-command vouches for it), `--inherit` is the one path that still works, because
-its safety never rested on who you are. State what you are:
+**Codex: run every omnilane command alone.** Codex starts `zsh -lc '<command>'`;
+for one simple command the shell execs into it and you are read, but with `;`,
+`&&`, `|` or a subshell the shell stays between codex and the command and
+`whoami`, `native-context` and every dispatch are refused with `codex direct child
+CODEX_THREAD_ID is missing ... (read from pid N, zsh)`. Do not append `; echo $?`,
+pipe the output, or capture it with `F=$(...)`; run `omnilane whoami` or
+`omnilane native-context ...` by itself, read the path and exit code from the
+tool result, and pass the path literally in the next command.
+
+**When `omnilane whoami` still cannot read you**, `--inherit` is the one path
+that works anyway, because its safety never rested on who you are. State what
+you are:
 `omnilane native-context --workdir DIR --vendor codex --model YOUR_MODEL --inherits-caller-runtime`,
 then `omnilane route --inherit --native-context FILE ...` as above. The handoff
 says `caller_identity_verified: false` and carries no ceiling and no child
 context; completion is checked against the vendor and model you stated, so state
-the model you actually run. Lane dispatch stays refused for you, and this is not
-a way around that: report it to the operator instead of retrying with a guessed
-identity.
+the model you actually run. Lane dispatch stays refused while you are unread, and
+this is not a way around that: report it to the operator instead of retrying with
+a guessed identity.
 
 ```sh
 omnilane route --executor native --native-context /absolute/capability.json --workdir /absolute/repo hardest-coding "Review the change"

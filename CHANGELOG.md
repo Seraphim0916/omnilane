@@ -73,14 +73,14 @@ semantic version tags.
   every conversation of an app-server and carries none. A stale or missing thread
   id is still refused, and the refusal now names the process it read.
 
-### Known limitation
-
-- Codex desktop 0.155 starts a fresh `zsh` per command and puts `CODEX_THREAD_ID`
-  in the command's own environment only; no ancestor's initial environment carries
-  it (observed chain: `codex-modified` → `zsh` → command). `omnilane whoami`
-  therefore refuses there, and so does every lane dispatch. The host-skip above
-  does not help that chain. `--inherit` still works, on the host's statement; see
-  Added.
+- The refusal for a codex caller whose direct child is a shell now says how to be
+  read. Codex runs `zsh -lc '<command>'`; the shell sets `CODEX_THREAD_ID` and, for
+  one simple command, execs into it, so that command is codex's direct child and
+  carries the id. With `;`, `&&`, `|` or a subshell the shell stays, and its own
+  start had no id, so `omnilane whoami; echo $?` is refused where `omnilane whoami`
+  alone is read. Reproduced with `codex exec` 0.155.0 and observed in Codex desktop.
+  The gate is unchanged; the message now names the process it read and tells the
+  caller to run the omnilane command as the only command of the tool call.
 
 ## [0.42.9] - 2026-09-13
 
