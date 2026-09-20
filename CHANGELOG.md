@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- An expired login is reported as "not logged in", not as a transient failure.
+  After a `claude` update every probe answered `Failed to authenticate: OAuth
+  session expired and could not be refreshed`; the sweep counted those as
+  selector failures and `omnilane resign` said "Retry later", which cannot help.
+  `Failed to authenticate`, `OAuth session expired`, `could not be refreshed`,
+  `Invalid API key`, `Unauthorized` and `401` now make the vendor `unprobeable`,
+  and the held-vendor message says to log in first.
+
+
 ## [0.43.1] - 2026-09-21
 
 Install this instead of 0.43.0. 0.43.0's first-install scripts do not start on

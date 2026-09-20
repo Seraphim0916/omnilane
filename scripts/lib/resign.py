@@ -364,7 +364,12 @@ def resign(args, log=print) -> int:
     if held and outcome == EXIT_OK:
         outcome = EXIT_OPERATOR
         for vendor in held:
-            if report[vendor].get("gate", {}).get("allowed"):
+            sweep = summary.get("sweeps", {}).get(vendor, {})
+            if sweep.get("outcome") == "unprobeable":
+                # Waiting changes nothing either: the CLI has to be logged in first.
+                log(f"omnilane: {vendor} was not re-signed; its old pin stays. {sweep['detail']}: "
+                    f"omnilane resign --vendor {vendor}")
+            elif report[vendor].get("gate", {}).get("allowed"):
                 # The signer was fine; the probes were not. Approval would change nothing.
                 log(f"omnilane: {vendor} was not re-signed; its old pin stays. Retry later: "
                     f"omnilane resign --vendor {vendor}")

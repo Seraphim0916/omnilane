@@ -132,6 +132,18 @@ class SweepTests(unittest.TestCase):
         self.assertEqual(report["outcome"], "done")
         self.assertEqual(len(calls), len(probe_sweep.plan("codex")))
 
+    def test_an_expired_login_is_not_logged_in(self):
+        # claude 2.1.278 after an update: every probe fails with this, and waiting will not fix it.
+        for text in ("Failed to authenticate: OAuth session expired and could not be refreshed",
+                     "Error: Invalid API key", "HTTP 401 Unauthorized"):
+            with self.subTest(text=text):
+                run, calls = self.prober(lambda *_, t=text: ("fail", "result-error: " + t, ""))
+                report = probe_sweep.sweep("claude", self.root, run_probe=run,
+                                           manager=lambda: "Aqua", log=lambda _: None)
+                self.assertEqual(report["outcome"], "unprobeable")
+                self.assertIn("log in", report["detail"])
+                self.assertEqual(len(calls), 1)
+
     def test_not_logged_in_aborts_and_leaves_no_descriptor(self):
         run, calls = self.prober(lambda *_: ("fail", "exit-code: 1", "Error: Not signed in.\n"))
         report = probe_sweep.sweep("grok", self.root, run_probe=run,
@@ -352,6 +364,11 @@ class ResignTests(unittest.TestCase):
         before = digest(self.live)
         self.assertEqual(self.run_resign(outcome="unprobeable"), resign.EXIT_OPERATOR)
         self.assertEqual(digest(self.live), before)
+        # Not "retry later": nothing changes until the CLI is logged in again.
+        held = [l for l in self.lines if "grok was not re-signed" in l]
+        self.assertEqual(len(held), 1, self.lines)
+        self.assertNotIn("Retry later", held[0])
+        self.assertIn("omnilane resign --vendor grok", held[0])
 
     def test_a_failed_smoke_restores_the_previous_overlay(self):
         self.update("grok")

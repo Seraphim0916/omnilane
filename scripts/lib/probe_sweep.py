@@ -29,7 +29,9 @@ TOKENS = {"claude": "CLAUDE_SELECTOR_OK", "codex": "CODEX_SELECTOR_OK",
 # finding about the selector.
 KEYCHAIN_VENDORS = ("claude", "gemini", "grok")
 NOT_AUTHENTICATED = re.compile(
-    r"not logged in|not signed in|authentication required|please run /login|grok login",
+    r"not logged in|not signed in|authentication required|please run /login|grok login"
+    r"|failed to authenticate|oauth (session|token) (has )?expired|could not be refreshed"
+    r"|invalid api key|unauthorized|\b401\b",
     re.IGNORECASE)
 TRANSIENT = re.compile(r"\b(403|429|500|502|503|529)\b|permission-denied|overloaded|timed? ?out",
                        re.IGNORECASE)
