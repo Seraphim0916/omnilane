@@ -56,7 +56,7 @@ def main() -> None:
         if os.environ.get("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN") == "1":
             emit("PASS", "no overlay configured; fine for a human operator, but a model caller "
                          "would be refused on every lane (README, 'Let your AI assistant drive omnilane')")
-        emit("WARN", "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see README 'First install'")
+        emit("WARN", "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see the README, 'Let your AI assistant drive omnilane'")
     if not Path(overlay_path).exists():
         emit("FAIL", f"configured overlay is missing: {overlay_path}")
 

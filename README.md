@@ -842,6 +842,14 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.43.1
+
+Install this rather than 0.43.0. In 0.43.0, `build_overlay.py` and `probe.py`
+failed to import on Python 3.9, which broke the first-install overlay build and
+`omnilane resign` on that version. Nothing else changed; everything in the 0.43.0
+notes below applies. Upgrade: `npm i -g omnilane@0.43.1`, then once:
+`omnilane resign --record-signers`.
+
 ## What's new in v0.43.0
 
 In ten days 0.42.x refused every model caller four times, each time over a fact

@@ -6,6 +6,8 @@ corresponds to a probe run under the selected evidence root whose raw
 stdout/stderr is hashed into the manifest, so the overlay's evidence[] anchors
 the whole set.
 """
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json

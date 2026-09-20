@@ -306,8 +306,12 @@ class ProbeAndOverlayTests(unittest.TestCase):
 
     def build(self, proven):
         output = StringIO()
+        # Evidence with no executable to pin it to verifies nothing, so the fixture host has a claude.
+        anchor = self.root / "fixture-claude"
+        anchor.write_text("#!/bin/sh\n")
         with patch.object(builder, "PROVEN", proven), \
-                patch.object(builder, "core_evidence", list), redirect_stdout(output):
+                patch.object(builder, "core_evidence", lambda: [(anchor, "claude")]), \
+                redirect_stdout(output):
             builder.main(["--root", str(self.root)])
         overlay = json.loads((self.root / "transport-contracts.local.json").read_text())
         manifest = json.loads((self.root / "probe-manifest.json").read_text())

@@ -6,6 +6,28 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-09-21
+
+Install this instead of 0.43.0. 0.43.0's first-install scripts do not start on
+Python 3.9, which is the version the README promises.
+
+### Fixed
+
+- `scripts/lib/build_overlay.py` and `scripts/lib/probe.py` used `X | None`
+  annotations without `from __future__ import annotations`, so on Python 3.9 they
+  raised `TypeError` on import. That broke the overlay build in the README's
+  first-install steps and `omnilane resign`, which imports both. Every module is
+  now import-checked under a real Python 3.9.
+- Two `test_probe_identity` tests still assumed an overlay could be built with no
+  vendor executable to pin; since 0.43.0 that correctly yields no mappings. The
+  fixture host now has a `claude`. The TOML model-override tests are skipped
+  before Python 3.11, where the reader refuses by design (no `tomllib`).
+- CI: the strict doctor acceptance step runs as a human-operator host, because
+  0.43.0 made a host with no transport overlay a warning for model callers. CI had
+  been red since 0.42.9 on the Python 3.9 unit tests; it runs `unittest discover`,
+  which the local `tests/run.sh` does not cover. Both are now run before a release.
+- Doctor's no-overlay message pointed at a README heading that 0.43.0 renamed.
+
 ## [0.43.0] - 2026-09-21
 
 **Why this release exists.** In ten days 0.42.x refused every model caller four
@@ -1193,7 +1215,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...HEAD
+[0.43.1]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...v0.43.0
 [0.42.9]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...v0.42.9
 [0.42.8]: https://github.com/Seraphim0916/omnilane/compare/v0.42.7...v0.42.8

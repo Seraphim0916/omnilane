@@ -6,6 +6,8 @@ descriptor with the original command/stream fields plus a vendor-specific
 verdict, its reason, the observed model, and the tier of evidence that model
 rests on.
 """
+from __future__ import annotations
+
 import argparse
 import glob
 import json

@@ -676,6 +676,10 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.43.1 新功能
+
+请安装这一版，不要安装 0.43.0。0.43.0 的 `build_overlay.py` 与 `probe.py` 在 Python 3.9 上一导入就会出错，导致该版本上首次安装的覆盖文件创建步骤与 `omnilane resign` 无法执行。其余没有变动，下面 0.43.0 的说明全部适用。升级：`npm i -g omnilane@0.43.1`，然后执行一次 `omnilane resign --record-signers`。
+
 ## v0.43.0 新功能
 
 十天之内，0.42.x 有四次把所有模型调用者全部拒绝，每一次都是因为 omnilane 管不到的事实：启动器改了名、runner 脚本改了却没重签、四家厂商 CLI 在同一周各自更新、Codex 定时任务不记录强度。每一件都变成“什么都派不出去”。这一版把它们各自缩小成讲得清楚的结果，最常见的那一种还会自己修好。

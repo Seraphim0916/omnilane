@@ -424,7 +424,7 @@ if [[ -z "$overlay_path" ]]; then
   if [[ "${OMNILANE_AA_OPERATOR_ASSERTED_HUMAN:-0}" == "1" ]]; then
     report PASS transport-overlay "no overlay configured; fine for a human operator, but a model caller would be refused on every lane (README, 'Let your AI assistant drive omnilane')"
   else
-    report WARN transport-overlay "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see README 'First install'"
+    report WARN transport-overlay "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see the README, 'Let your AI assistant drive omnilane'"
   fi
 elif ! command -v python3 >/dev/null 2>&1; then
   report WARN transport-overlay "python3 is absent; cannot load the AA transport overlay"

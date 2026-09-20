@@ -92,6 +92,8 @@ class ReadSelectorTests(unittest.TestCase):
                 self.assertIsNone(caller_identity.read_selector(argv))
 
 
+@unittest.skipIf(sys.version_info < (3, 11),
+                 "reading a TOML model override needs tomllib; before 3.11 the reader refuses by design")
 class CodexConfigTests(unittest.TestCase):
     def test_exec_config_model_and_effort(self):
         self.assertEqual(caller_identity.read_selector([
