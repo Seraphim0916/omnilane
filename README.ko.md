@@ -47,36 +47,127 @@ Gemini CLI** 같은——를 쓰고 계시죠. 각각은 하나의 모델 계열
 
 ## ⚡ 60초 시작
 
-**가장 빠른 방법——npm 으로 설치:**
+터미널 앞에 앉은 사람이라면 지금 바로 디스패치할 수 있습니다.
+
+**1. 설치.**
 
 ```bash
-npm i -g omnilane                                    # CLI 설치
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 호출자는 모델이 아닌 사람 운영자
-omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 테스트 수정"
-omnilane doctor                                      # 사용 가능한 AI CLI / 키 확인
-omnilane ui start                                    # 선택: 브라우저에서 잡을 실시간 확인
+npm i -g omnilane
 ```
 
-**또는 리포지토리 clone**(라우팅 테이블과 커스터마이즈용 스킬을 얻음):
+또는 저장소를 클론합니다. 사용자 정의할 수 있는 라우팅 테이블과 스킬도 함께 얻습니다.
 
 ```bash
 git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # CLI 감지, 스킬 연결, 당신의 언어로 대화
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1         # 호출자는 모델이 아닌 사람 운영자
-omnilane route hardest-coding "간헐적으로 실패하는 auth 토큰 갱신 테스트 수정"
+./install.sh          # finds your CLIs, links the skill, speaks your language
 ```
 
-> **그 export 는 왜 필요한가요?** omnilane 은 호출자 자신의 능력 점수로 모든 디스패치를
-> 게이트하므로, 디스패치는 «누가 요청하는지»를 반드시 밝혀야 합니다. 터미널 앞의 사람은
-> `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 을 한 번 설정하거나 호출마다
-> `--operator-asserted-human` 을 붙입니다. omnilane 을 구동하는 모델은 **스스로 이를 주장할
-> 수 없습니다**. 모델의 신원은 그것을 실행한 CLI 의 모델·effort 플래그에서 자동으로 읽히므로,
-> 일반 세션은 아무것도 전달할 필요가 없습니다. `omnilane whoami` 는 그 신원을
-> `--caller-context FILE` 로 출력합니다. 주장도 읽을 수 있는 신원도 없으면 잡 생성 전에
-> `missing-caller-context` 로 거부됩니다.
+**2. 무엇이 있는지 확인.** `doctor` 는 omnilane 이 닿을 수 있는 모델 CLI 와 API 키를 나열해 실제로 무엇이 실행될지 알려 줍니다. 아무것도 바꾸지 않습니다.
 
-> 처음이신가요? 먼저 `omnilane doctor` 를 실행하세요. omnilane 이 지금 어떤 모델 CLI 와
-> API 키에 접근할 수 있는지 알려 주어, 실제로 무엇이 실행될지 파악할 수 있습니다.
+```bash
+omnilane doctor
+omnilane list         # the routing table this machine resolves
+```
+
+**3. 자신이 운영자임을 밝히고 디스패치.**
+
+```bash
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+omnilane route hardest-coding "fix the flaky auth token refresh"
+omnilane ui start     # optional: watch jobs live in your browser
+```
+
+> **왜 export 가 필요한가?** omnilane 은 디스패치할 때마다 "요청하는 쪽의 능력 점수"와 대조하므로, 누가 요청하는지 밝혀야 합니다. 사람은 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`(또는 호출마다 `--operator-asserted-human`)로 한 번만 밝히면 됩니다. 모델은 스스로 이렇게 선언할 수 없습니다. 모델의 신원은 그것을 실행한 CLI 에서 읽습니다. 둘 다 없으면 작업이 만들어지기 전에 `missing-caller-context` 로 거부됩니다.
+
+사람이 쓰기에는 여기까지면 충분합니다. 다음 절은 더 유용한 구성, 즉 AI 어시스턴트가 스스로 디스패치하게 하는 방법입니다.
+
+## 🤖 AI 어시스턴트가 omnilane 을 운전하게 하기
+
+어시스턴트(Claude Code, Codex, Grok Build, Antigravity)는 스킬 파일을 읽고 레인을 고르는 법과 디스패치하는 법을 배웁니다. 머신마다 한 번, 네 단계입니다.
+
+### 1단계: 어시스턴트에게 스킬 주기
+
+`./install.sh` 는 찾은 모든 CLI 에 링크를 만듭니다. 수동으로 할 때:
+
+| 어시스턴트 | 방법 |
+|---|---|
+| Claude Code | `claude plugin marketplace add <이 저장소>` 다음 `claude plugin install omnilane@omnilane`(`/route`, `/route-jobs`, 완료 인박스 포함). 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 링크 |
+| Codex | `skills/omnilane` 을 `~/.codex/skills/` 에 링크 |
+| Grok Build | `grok plugin install <이 저장소> --trust` |
+| Antigravity | `agy plugin install <이 저장소>`(먼저 `agy plugin validate <이 저장소>` 로 확인) |
+
+### 2단계: "각 CLI 가 지정한 모델을 정말로 선택한다"는 것을 한 번 증명하기
+
+모델이 호출자일 때는 이 머신이 **증명한** 대상으로만 디스패치할 수 있습니다. 예를 들어 `codex -m gpt-5.6-sol` 이 정말로 Sol 을 실행한다는 것입니다. 이 증명은 로컬 파일이며 **트랜스포트 오버레이(transport overlay)** 라고 부릅니다. 패키지에는 들어 있지 않습니다. 이것이 없으면 모든 레인이 모델 호출자를 `runtime-mapping-unverified` 로 거부하고, `omnilane doctor` 는 `no overlay configured` 라고 경고합니다.
+
+일반 데스크톱 터미널에서 만드세요. (ssh 로그인 세션은 CLI 가 로그인에 쓰는 키체인을 읽지 못해 모두 로그인되지 않았다고 보고합니다.)
+
+```bash
+cd "$(npm root -g)/omnilane"            # or your clone
+ROOT=~/.omnilane/transport-evidence/first-sweep
+python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
+python3 scripts/lib/build_overlay.py --root "$ROOT"
+cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
+echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
+omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+```
+
+로그인하지 않은 벤더는 `unprobeable` 로 보고되고 미검증 상태로 남을 뿐입니다. 나머지는 동작합니다.
+
+### 3단계: 증명을 손대지 않고 최신으로 유지하기
+
+오버레이는 각 CLI 실행 파일을 해시로 고정합니다. 그리고 **CLI 는 스스로 업데이트됩니다**. 일주일에 한 번인 경우도 흔합니다. 업데이트 뒤에는 오버레이가 다시 서명될 때까지 그 벤더의 레인이 거부됩니다. `omnilane resign` 이 이 일을 전부 합니다. 바뀐 것을 찾고, 그 벤더만 다시 프로브하고, 결과를 확인하고, 교체하고, 실제 디스패치 한 건으로 확인하고, 실패하면 이전 파일로 되돌립니다.
+
+아무것이나 다시 서명하지는 않습니다. 바뀐 CLI 가 **무인으로** 재서명되는 것은 기록된 것과 같은 코드 서명 팀을 가지고 같은 종류의 설치 위치에 있을 때뿐입니다. 그래서 어떤 서명자를 받아들일지 한 번 알려 줍니다.
+
+```bash
+omnilane resign --record-signers     # once, right after Step 2
+```
+
+그다음 매일 실행되게 합니다. 스케줄러는 무엇이든 좋지만 반드시 **데스크톱 로그인 세션 안에서** 실행되어야 합니다(CLI 에 키체인이 필요합니다). macOS 에서는 LaunchAgent 를 쓸 수 있습니다.
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+이번 릴리스는 데스크톱 터미널에서의 `omnilane resign` 을 실제로 검증했습니다. Codex 의 실제 자체 업데이트에 대한 무인 재서명도 포함합니다. 위의 LaunchAgent 는 예시이며 그 자체는 검증하지 않았습니다. `launchctl kickstart gui/$(id -u)/dev.omnilane.resign` 으로 여러분의 머신에서 확인하세요.
+
+`omnilane resign` 의 종료 코드:
+
+| 종료 코드 | 의미 | 할 일 |
+|---|---|---|
+| 0 | 바뀐 것이 없거나, 바뀐 것이 모두 재서명됨 | 없음 |
+| 10 | `--check` 전용: 무언가 바뀜 | `omnilane resign` 실행 |
+| 20 | 어떤 벤더에 사람이 필요함: 서명자가 새롭거나 기록이 없음, 실행 파일이 서명되지 않았거나 로컬에서 수정됨, 설치 디렉터리가 바뀜, 또는 지난번 통과한 프로브를 이번에 공급자가 거부함 | 메시지를 읽는다. "나중에 다시 시도" 또는 확인 후 실행할 `omnilane resign --vendor V --approve V` 가 그대로 출력된다 |
+| 30 | 재서명한 오버레이가 실제 디스패치에 실패해 이전 것으로 복원됨 | 망가진 것은 없다. 로그를 읽는다 |
+| 2 | 오버레이가 설정되지 않음 | 2단계를 한다 |
+
+알아 둘 제한이 두 가지 있습니다. 서명자 확인은 macOS 코드 서명을 사용하므로, Linux 에서는 CLI 가 바뀔 때마다 종료 코드 20 에서 멈추고 `--approve` 를 요구합니다. 또한 정식 서명이 없는 바이너리(예: 로컬에서 패치한 CLI)는 항상 승인을 기다리며 멈춥니다. 그것을 벤더와 이어 주는 것이 아무것도 없기 때문이며, 그것이 바로 이 확인의 목적입니다.
+
+### 4단계: 어시스턴트 안에서 시험하기
+
+어시스턴트에게 `omnilane whoami` 를 실행하게 하세요. 자신이 어떤 모델과 어떤 effort 로 실행 중인지, 그리고 점수를 답해야 합니다. 이어서 작은 일을 위임하게 합니다. "omnilane 으로 triage 레인에게 이 저장소의 TODO 주석 수를 세게 해 줘".
+
+거부되면 어느 확인에서 실패했는지, 무엇을 해야 하는지가 거부 메시지에 있습니다.
+
+| `failed_gate` | 쉽게 말하면 | 고치는 법 |
+|---|---|---|
+| `caller-identity` | 어떤 모델이 요청하는지 omnilane 이 알 수 없음 | `omnilane whoami` 를 그 도구 호출의 **유일한 명령**으로 실행하게 한다. 특히 Codex 는 `; echo $?`, `&&`, 파이프 뒤에서는 읽을 수 없다 |
+| `target-transport` | 이 머신이 그 대상을 증명하지 않았거나, 그 뒤 CLI 가 업데이트됨 | `omnilane resign`(3단계) |
+| `downward-ceiling` | 대상 모델의 점수가 요청하는 모델보다 높음. 모델은 옆이나 아래로만 위임할 수 있음 | 거부 메시지의 `eligible_lanes` 중 하나를 고르거나, 더 높은 effort 로 어시스턴트를 시작한다 |
+
+기존 스레드를 깨우는 Codex 자동화는 effort 를 기록하지 않습니다. omnilane 은 그 호출자를 거부하는 대신 해당 모델의 최저 점수로 제한합니다. 저렴한 레인은 계속 동작하고, 비싼 레인은 어떤 effort 면 닿는지 알려 줍니다.
 
 ## 🧭 동작 방식
 
@@ -172,6 +263,34 @@ flowchart LR
 - **Antigravity · Gemini 3.7 Flash**——Medium 의 long-context／빠른 루프, High 의 bulk／overflow, Low 의 triage 를 직접 실행하며, High 로 hardest-coding, taste-final, ui-draft, live-search 의 폴백도 겸합니다. 1순위 후보를 쓸 수 있으면 최고난도 코딩／판단／문장은 Codex, Claude 로 보냅니다.
 
 </details>
+
+## 어시스턴트 자신의 서브에이전트 사용하기
+
+omnilane 은 기본적으로 벤더의 명령줄 도구에 일을 넘깁니다. 일을 해야 할 모델이 어시스턴트 **자신의 벤더** 것일 때 다른 CLI 를 거치는 것은 돌아가는 길입니다. 로그인이 하나 더, 프로세스가 하나 더, 그 CLI 가 업데이트되면 망가질 곳이 하나 더 생깁니다. 대부분의 어시스턴트는 스스로 서브에이전트를 시작할 수 있고, omnilane 은 그에 맞춰 일을 계획할 수 있습니다. 방법은 두 가지입니다.
+
+**어시스턴트와 정확히 같은 것을 실행하는 워커(`--inherit`).** 어시스턴트는 *모델도 effort 도 지정하지 않고* 서브에이전트를 시작하므로 워커는 호출자의 복제입니다. 복제가 원본보다 강할 수는 없고, omnilane 의 점수 확인이 막으려는 것은 그것뿐입니다. 그래서 이 경로에는 벤더 CLI 도 트랜스포트 오버레이도 필요 없고, 호출자의 effort 를 알 수 없거나 오버레이가 오래되었을 때도 동작합니다.
+
+```sh
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+```
+
+정직한 부분: 핸드오프에는 `satisfies_lane_target: false` 가 표시됩니다. 여기서 레인은 일의 종류를 나타내는 라벨일 뿐입니다. 이렇게 얻은 결과는 "어시스턴트 자신의 서브에이전트"가 만든 것이지 결코 "hardest-coding 모델"이 만든 것이 아닙니다. 호출자보다 강한 모델이 필요한 레인은 여전히 거부됩니다. `--inherits-caller-runtime` 은 "내 서브에이전트 도구는 이렇게 동작한다"는 어시스턴트 자신의 진술이며 omnilane 은 이를 관찰할 수 없습니다. 어시스턴트별로 알려진 사항:
+
+| 어시스턴트 | 모델 인자 없는 서브에이전트 |
+|---|---|
+| Claude Code | 메인 대화의 모델을 사용하고 effort 는 세션 것을 이어받는다고 공식 문서에 명시(에이전트 정의가 지정하는 경우 제외). 내장 general-purpose 에이전트이고 `CLAUDE_CODE_SUBAGENT_MODEL` 이 설정되지 않았을 때 성립. 이번 릴리스에서 끝까지 실행함 |
+| Codex | 모델도 effort 도 없는 `collaboration.spawn_agent`. 이번 릴리스에서 끝까지 실행함 |
+| Grok Build | 부모의 모델을 상속한다고 문서에 명시(번들된 `general-purpose` 는 `model: inherit`). effort 는 문서에 없음. 이번 릴리스에서 실행하지 않음 |
+| Antigravity | `agy` 1.2.7 에서 서브에이전트 도구를 찾지 못함. 사용 불가 |
+
+**어시스턴트의 도구가 선택할 수 있는 특정 모델.** 도구가 실제로 받아들이는 것을 capability 파일에 적고(`omnilane native-context` 의 출력에서 시작해 정확한 모델과 effort 쌍마다 행을 추가) 일반 `omnilane route` 에 `--native-context FILE` 을 넘깁니다. omnilane 은 어떤 행이 정확히 일치할 때만 서브에이전트를 사용합니다. 모델, effort, 모드, workdir, 도구, 격리 방식, 수명 주기 모두입니다. 같은 벤더가 같은 모델은 아니며, 설치된 CLI 로부터 추측하지도 않습니다. `--executor native` 는 폴백하지 않고 실패하고, `--executor cli` 는 외부 CLI 를 강제합니다. 파일이 없다는 이유만으로 같은 벤더의 대상이 CLI 를 거친 경우, 디스패치가 이제 그 사실을 알려 줍니다.
+
+어느 쪽이든 서브에이전트는 어시스턴트의 도구와 파일 시스템을 공유합니다. 운영체제 수준의 샌드박스는 없으며 `advise`/`work` 는 의도이지 강제가 아닙니다. 백그라운드, 상주, 이름 있는 스레드, 다중 라운드, 투표, `sysops` 작업은 CLI 경로에 남습니다. 프로토콜 처리에는 Python 3.9 이상이 필요합니다. 스키마, 완료 파일, 에이전트 재사용과 취소: [docs/native-executor.md](docs/native-executor.md).
 
 ## 🖥️ Live Board
 
@@ -564,18 +683,17 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## v0.43.0 새 기능
 
-- **effort 기록이 없는 호출자는 거부 대신 강등.** Codex 하트비트 자동화는 effort 없이 스레드를 깨우므로 0.42.9 에서는
-  모든 레인이 `missing-caller-context` 로 거부되었습니다. 이제 해당 모델의 최저 점수 행으로 고정하고
-  `effort_unverified` 로 표시합니다. 보낼 수 있는 범위만 좁아지며 상향 위임은 일어나지 않습니다.
-- **거부 사유가 구조화되었습니다.** `failed_gate`, `reason`, `next_command`, `required_caller_effort`,
-  아직 사용할 수 있는 레인 목록 `eligible_lanes` 를 반환합니다.
-- **`omnilane resign`.** 변경된 벤더만 다시 프로브하고, 스테이징에서 빌드·로드 검증 후 원자적으로 교체하며,
-  벤더마다 실제 디스패치를 한 번 실행하고 실패하면 자동 복원합니다. overlay 에 기록된 코드 서명 팀과 같은 설치 위치일
-  때만 무인으로 재서명하고, 그 외에는 종료 코드 20 과 `--approve` 명령을 출력하고 멈춥니다.
-- **같은 하네스 안에서는 자체 서브에이전트로.** `omnilane native-context` 가 `whoami` 가 읽은 신원으로 capability 파일을 만듭니다. `--inherit` 는 모델을 덮어쓰지 않는 네이티브 워커를 계획합니다. 호출자와 같은 모델·effort 로 실행되므로 상향 위임이 될 수 없고, 벤더 CLI 와 transport overlay 를 거치지 않으며, 레인의 목표 모델이 수행했다고 보고되지 않습니다.
-- **doctor 가 별도 파일로 업데이트된 CLI 를 감지**하고, overlay 가 없으면 첫 설치 절차와 함께 WARN 을 냅니다.
-  `release-audit` 는 runner 핀도 검사합니다.
-  업데이트: `npm i -g omnilane@0.43.0`, 이후 한 번 `omnilane resign --record-signers`.
+열흘 동안 0.42.x 는 모든 모델 호출자를 네 번 거부했습니다. 매번 omnilane 이 통제하지 못하는 사실 때문이었습니다. 이름이 바뀐 런처, 재서명 없이 변경된 runner 스크립트, 같은 주에 스스로 업데이트된 네 개의 벤더 CLI, effort 를 기록하지 않는 Codex 자동화. 모두 "아무것도 디스패치할 수 없음"이 되었습니다. 이번 릴리스는 각각을 더 좁고 설명 가능한 결과로 바꾸고, 가장 흔한 경우는 스스로 고칩니다.
+
+- **벤더 CLI 가 업데이트되었나요? `omnilane resign`.** 바뀐 것을 찾고, 그 벤더만 다시 프로브하고, 결과를 확인하고, 교체하고, 실제 디스패치 한 건으로 확인하고, 실패하면 이전 오버레이로 되돌립니다. 새 실행 파일이 같은 코드 서명 팀을 가지고 같은 위치에 있을 때만 **무인으로** 재서명하며, 그 외에는 실행할 `--approve` 명령을 출력하고 멈춥니다. `omnilane resign --record-signers` 를 한 번 실행하고 `omnilane resign` 을 매일 예약하면 CLI 업데이트는 더 이상 여러분의 일이 아닙니다. Codex 의 실제 자체 업데이트(0.155.0 → 0.155.1)로 검증함: 승인 없음, 매핑 전부 유지, 종료 코드 0.
+- **거부가 모델에게 다음 행동을 알려 줍니다.** 거부된 모든 디스패치는 `failed_gate`, `reason`, `next_command`, `required_caller_effort`, 그리고 `eligible_lanes`(그 호출자가 지금 *닿을 수 있는* 레인)를 담습니다.
+- **effort 기록이 없으면 거부 대신 범위를 좁힙니다.** Codex 하트비트 자동화는 모든 레인에서 거부되는 대신 해당 모델의 최저 점수로 제한됩니다. 저렴한 레인은 계속 동작하고, 비싼 레인은 필요한 effort 를 알려 줍니다.
+- **어시스턴트 자신의 서브에이전트.** `omnilane native-context` 가 예전에는 손으로 써야 했던 capability 파일을 만들어 줍니다. `omnilane route --inherit` 는 호출자의 복제인 워커를 계획합니다. 외부 CLI 없음, 오버레이 없음, 호출자를 식별할 수 없을 때도 동작하며, 그 레인의 대상 모델이 *아님*을 정직하게 표시합니다. Claude Code 와 Codex 데스크톱에서 끝까지 실행했습니다.
+- **Codex: 도구 호출 한 번에 omnilane 명령 하나.** `omnilane whoami; echo $?` 는 식별할 수 없고, `omnilane whoami` 단독은 식별됩니다. 거부 메시지가 이제 그렇게 안내합니다.
+- **doctor 가 자리를 옮긴 CLI 를 찾아냅니다**(새 버전이 이전 파일 옆에 설치되는 경우). 오버레이가 전혀 없으면 절차와 함께 경고합니다.
+- **스킬과 튜토리얼을 다시 작성.** 스킬은 이제 모델이 순서대로 따르는 다섯 단계 절차이며, 이 README 는 어시스턴트가 omnilane 을 운전하게 하기까지를 차례로 안내합니다.
+- **제한.** 무인 재서명은 macOS 코드 서명에 의존합니다. Linux, 그리고 서명되지 않았거나 로컬에서 수정된 CLI 에서는 업데이트마다 `--approve` 를 요구합니다. `--inherit` 는 Grok Build 안에서 실행해 보지 않았고, Antigravity 는 서브에이전트 도구를 제공하지 않습니다. 자세한 내용은 [CHANGELOG](CHANGELOG.md).
+- **업그레이드.** `npm i -g omnilane@0.43.0` 다음 한 번만: `omnilane resign --record-signers`.
 
 ## v0.42.9 새 기능
 
