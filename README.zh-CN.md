@@ -682,6 +682,12 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.44.0 新功能
+
+- **你自己修补过的 CLI 也能无人值守重新签署。** 如果本机有个步骤会在每次更新后修补某家 CLI、再用 adhoc 重新签署，以前签署者检查会把每一次这种更新都拦下来等 `--approve`。现在对该家运行一次 `omnilane resign --trust-adhoc VENDOR`，同一个安装目录里的 adhoc 新版就会和同签署者的更新一样，走每日 `omnilane resign` 自动重签。未签名的可执行文件、换了目录的 adhoc、其他厂商，仍然会停下来等你。信任记录在覆盖文件上，之后任何一家重签都会保留，而且是操作者动作，模型不会执行。四家都适用。
+- **登录过期会提示“先登录”，不再说“稍后重试”。** `Failed to authenticate`、`OAuth session expired`、`Invalid API key`、`Unauthorized`、`401` 现在都会把该家标为无法探测，被拦下的消息会提示先登录。
+- 升级：`npm i -g omnilane@0.44.0`。若从 0.42.x 升级，另外运行一次 `omnilane resign --record-signers`（见 0.43.0 说明）。
+
 ## v0.43.1 新功能
 
 请安装这一版，不要安装 0.43.0。0.43.0 的 `build_overlay.py` 与 `probe.py` 在 Python 3.9 上一导入就会出错，导致该版本上首次安装的覆盖文件创建步骤与 `omnilane resign` 无法执行。其余没有变动，下面 0.43.0 的说明全部适用。升级：`npm i -g omnilane@0.43.1`，然后执行一次 `omnilane resign --record-signers`。

@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-09-21
+
+The daily `omnilane resign` now also covers a CLI you patch and re-sign
+yourself, and an expired login is reported as what it is.
+
 ### Added
 
 - `omnilane resign --trust-adhoc VENDOR`. An operator who re-signs a vendor's
@@ -1237,7 +1242,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...v0.43.0
 [0.42.9]: https://github.com/Seraphim0916/omnilane/compare/v0.42.8...v0.42.9

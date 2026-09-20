@@ -850,6 +850,24 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.44.0
+
+- **A CLI you patch yourself is re-signed unattended too.** If a local step
+  re-signs a vendor CLI adhoc after every update (a post-update patch, for
+  instance), the signer check used to hold every such update for `--approve`.
+  Run `omnilane resign --trust-adhoc VENDOR` once per vendor and an adhoc update
+  in the same install directory now goes through the daily `omnilane resign`
+  like a same-signer one. An unsigned executable, an adhoc one in another
+  directory, and every other vendor still stop for you. The trust is recorded
+  on the overlay, survives later re-signs of any vendor, and is an operator
+  action a model never runs. Works for all four vendors.
+- **An expired login says "log in", not "retry later".** `Failed to
+  authenticate`, `OAuth session expired`, `Invalid API key`, `Unauthorized` and
+  `401` now mark the vendor unprobeable, and the held-vendor message tells you
+  to log in first.
+- Upgrade: `npm i -g omnilane@0.44.0`. If you are coming from 0.42.x, run
+  `omnilane resign --record-signers` once as well (see the 0.43.0 notes).
+
 ## What's new in v0.43.1
 
 Install this rather than 0.43.0. In 0.43.0, `build_overlay.py` and `probe.py`

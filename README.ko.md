@@ -687,6 +687,12 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.44.0 새 기능
+
+- **직접 패치한 CLI 도 무인으로 재서명됩니다.** 업데이트 때마다 벤더 CLI 를 패치하고 adhoc 으로 다시 서명하는 로컬 단계가 있다면, 지금까지는 서명자 검사가 그런 업데이트를 모두 `--approve` 대기로 막았습니다. 벤더별로 한 번 `omnilane resign --trust-adhoc VENDOR` 를 실행하면 같은 설치 디렉터리 안의 adhoc 업데이트는 같은 서명자의 업데이트처럼 매일의 `omnilane resign` 으로 자동 재서명됩니다. 서명되지 않은 실행 파일, 다른 디렉터리의 adhoc, 다른 벤더는 여전히 멈추고 확인을 기다립니다. 신뢰는 오버레이에 기록되고 이후 어떤 벤더의 재서명에서도 유지되며, 모델이 실행하지 않는 운영자 작업입니다. 네 벤더 모두 지원.
+- **로그인 만료는 "나중에 다시" 가 아니라 "먼저 로그인" 으로 안내합니다.** `Failed to authenticate`, `OAuth session expired`, `Invalid API key`, `Unauthorized`, `401` 은 해당 벤더를 프로브 불가로 표시하고, 보류 메시지는 먼저 로그인하라고 안내합니다.
+- 업그레이드: `npm i -g omnilane@0.44.0`. 0.42.x 에서 올라오는 경우 `omnilane resign --record-signers` 도 한 번 실행하세요(0.43.0 설명 참조).
+
 ## v0.43.1 새 기능
 
 0.43.0 대신 이 버전을 설치하세요. 0.43.0 에서는 `build_overlay.py` 와 `probe.py` 가 Python 3.9 에서 임포트에 실패해, 해당 버전에서 첫 설치의 오버레이 생성과 `omnilane resign` 이 동작하지 않았습니다. 그 밖의 변경은 없으며 아래 0.43.0 설명이 모두 그대로 적용됩니다. 업그레이드: `npm i -g omnilane@0.43.1` 다음 한 번만 `omnilane resign --record-signers`.
