@@ -61,16 +61,16 @@ decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
 | Lane | First choice | Backup | Use for |
 |---|---|---|---|
-| hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; always keep `--vendor` |
 | ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
 | long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-context synthesis; context size alone is not a quality result |
 | fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | Fast multi-step agentic loops and multimodal checks |
-| live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
+| live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
 | coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. The operator enables it with `arbitrate: vote codex,claude,grok -` in routing.local.yaml (1-4 voters; a `2` in place of the final `-` adds a rebuttal round). One quota hit PER VOTER PER ROUND; you chair and own the decision |
 
@@ -318,14 +318,15 @@ lane table; do not assume an older model is equivalent.
 - **Claude Opus 5:** balanced controller and independent reviewer when explicitly
   selected (`high`, or `xhigh` for deeper review); Claude's long-context fallback.
 - **Claude Sonnet:** coordination, tools, mid-tier coding; fallback in
-  bulk-mechanical and live-search. Never self-assign top judgment or hardest coding.
+  live-search. Never self-assign top judgment or hardest coding.
 - **GPT Astra:** controller backup and independent reviewer. Resolve your real
   effort first; an explicit higher-effort request does not bypass the ceiling.
 - **GPT Sol / Terra / Luna:** mechanical work, long context and triage
   respectively, only within your exact ceiling. Do not infer eligibility from the
   family name, and do not promote Luna's low price into correctness-critical work.
-- **Grok 4.6:** live-search and coding-overflow are yours, plus fallback in hard
-  lanes. Verify API signatures and cited facts before shipping.
+- **Grok 4.7 / 4.6:** live-search and coding-overflow are yours, plus fallback in
+  hard lanes. 4.7 leads where the lane lists it; coding lanes and `consult` stay
+  on 4.6. Verify API signatures and cited facts before shipping.
 - **Gemini 3.8 Flash:** long-context at medium, fast-agentic and triage at low,
   bulk/overflow/web fallbacks at high. Do not infer visual taste or controller
   authority from coding benchmarks.
@@ -346,6 +347,7 @@ lane table; do not assume an older model is equivalent.
 | Terra | codex | gpt-5.6-terra | max |
 | Luna | codex | gpt-5.6-luna | high |
 | Astra | codex | gpt-6-astra | xhigh |
+| Grok 4.7 | grok | grok-4.7 | - |
 | Grok 4.6 | grok | grok-4.6 | - |
 | Gemini 3.1 Pro | gemini | Gemini 3.1 Pro (High) | - |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |

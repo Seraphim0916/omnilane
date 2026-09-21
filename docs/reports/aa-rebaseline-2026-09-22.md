@@ -1,8 +1,8 @@
 # AA 政策檔重拍到 Intelligence Index v4.3.2，並重新分配車道（2026-09-22）
 
 來源：claude-code-s／MacStudio，2026-09-22。分支 `feat/aa-v4.3.2-rebaseline`，工作樹 `~/dev/omnilane-wt/aa-v432`。
-狀態：**待 Vincent 審核**。`snapshot.approval.status` 目前是 `proposed`；核准後改成 `approved`，政策檔雜湊會再變一次，
-`scripts/lib/aa_policy.py` 的釘要跟著更新。
+狀態：Vincent 於 2026-09-22 裁示「發新版、路由重寫、加入 Grok 4.7、用新版政策表」，`snapshot.approval.status` 已設為 `approved`，
+雜湊釘已對到核准後的檔案。隨 0.45.0 發版。
 
 ## 為什麼不能只加一列
 
@@ -89,26 +89,21 @@ Opus 5 medium 分數高 13 分、比較快、用的 token 較少，單價是 2.5
 
 ## 合併前後必須由 Vincent 做的事
 
-1. 審核：逐列分數（四份證據表）、上面的車道表。要改哪條直接說。
-2. 核准後我把 `approval.status` 改成 `approved`、重產、更新雜湊釘，再跑一次全部測試。
-3. `grok login`（CLI 目前顯示未登入）。
-4. 合併並安裝到 `~/dev/omnilane` 之後，**在重簽完成前每一次派工都會被拒**（`transport overlay snapshot mismatch`）。
+1. `grok login`（CLI 目前顯示未登入）。沒登入的話重簽探測不到 Grok 4.7，車道會繼續用 4.6。
+2. 合併並安裝到 `~/dev/omnilane` 之後，**在重簽完成前每一次派工都會被拒**（`transport overlay snapshot mismatch`）。
    請緊接著跑 `omnilane resign`；它會沿用舊證據重建 overlay，並探測新加的 Grok 4.7 與 Sonnet 5 各列。
-5. `~/.omnilane/routing.local.yaml` 釘了 `live-search` 與 `hard-judgment` 用 `grok-4.6 high`，本機以它為準；
+3. `~/.omnilane/routing.local.yaml` 釘了 `live-search` 與 `hard-judgment` 用 `grok-4.6 high`，本機以它為準；
    repo 的新車道表在這兩條上不會生效，要不要改由 Vincent 決定。
-6. MacMini 同樣要 pull＋重簽。
+4. MacMini 同樣要 pull＋重簽。
 
-## 尚未做：必須跟這一版一起出，不是後續工作
+## 隨這一版一起出的同步
 
-等車道表定案才動手，免得五語文件改兩次：
-
-- 車道表的文件同步：`skills/omnilane/SKILL.md`（＝六面部署）、五語 README、`docs/model-capabilities-2026-09.md`。
-  `routing.yaml` 檔頭明訂「改排序就要更新該文件」，這是合約不是建議。
-- `CHANGELOG.md`、`VERSION`／`package.json` 升 0.45.0。
-
-刻意沒做：`scripts/configure.sh` 的互動選單沒有加 `grok-4.7`。選單上的每個模型都必須登錄在
-`docs/aa-model-coverage-2026-09-05.json`，那是另一份釘在 v4.2、643 列的盤點，要加就得整份重做，屬於獨立工作項。
-因此政策檔也沒有 `grok-4.7` 的別名（別名只鏡射該選單）。手改 `routing.local.yaml` 不受影響。
+- 車道表：`skills/omnilane/SKILL.md`（車道表、各主控註記、模型別名；＝六面部署）、五語 README、
+  `docs/model-capabilities-2026-09.md`（新增 2026-09-22 一節，含各候選的分項數字與排序理由）。
+- `CHANGELOG.md` 0.45.0、五語 README 的版本說明、`VERSION`／`package.json`／`plugin.json`／`.claude-plugin/*` 升 0.45.0。
+- `scripts/configure.sh` 的 Grok 選單加入 `grok-4.7`，政策檔因此有對應別名。
+  `docs/aa-model-coverage-2026-09-05.json` 以既有的 `no-aa-row` 狀態登錄它：那份盤點拍攝於 v4.2、早於 4.7 上架，
+  643 列裡沒有這個模型，分數另見 v4.3.2 政策檔。盤點本身沒有重做。
 
 已查過不用改：README、`docs/native-executor.md`、`docs/completion-wakeup.md` 裡的 `2026-09-07` 都是歷史敘述或協定版本，與快照無關。
 - `docs/reports/aa-*-2026-09-07.md` 與 `docs/model-governance-proposal.md` 仍未進版控（v4.2 快照的證據）。

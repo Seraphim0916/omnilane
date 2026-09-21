@@ -6,6 +6,63 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-09-22
+
+The score registry moves to Artificial Analysis Intelligence Index v4.3.2, the
+lanes are re-allocated on it, and Grok 4.7 joins. **Every host must run
+`omnilane resign` once after upgrading**: the transport overlay is bound to the
+registry snapshot, and until it is rebuilt a model caller is refused on every
+lane with `transport overlay snapshot mismatch`.
+
+### Changed
+
+- The registry is re-scored from AA v4.3.2 (snapshot `aa-v4.3.2-2026-09-22-v1`).
+  v4.2 and v4.3.2 are different scales and the gaps are uneven (Fable 5.1 max
+  57 → 53, Astra xhigh 54 → 52, Opus 5 medium 50 → 45, Grok 4.6 high 51 → 44,
+  Sol high 48 → 42), so ceilings change: Fable 5.1 max, Fable 5.1 xhigh and
+  Astra max now tie at 53 and may dispatch to each other, and a mid-effort
+  controller that reached nothing in `hard-judgment` under v4.2 now does.
+  25 rows that were estimates are measured; 23 remain estimated. Each row
+  carries `score_raw`, and `schema_notes.score_rounding` records the half-up
+  rule.
+- `hardest-coding`, `hard-judgment` and `taste-final` gain GPT-6 Astra (high)
+  and Claude Opus 5 (high) below Astra xhigh, so a mid-effort controller stays
+  inside the top two families instead of dropping to the cross-vendor tail.
+- `bulk-mechanical` ends on Claude Opus 5 (medium) instead of Claude Sonnet 5
+  (high); `live-search` keeps Sonnet 5 (high) and adds Opus 5 (medium) behind it.
+
+### Added
+
+- Grok 4.7: registry rows at xhigh and high, a catalog entry in
+  `omnilane configure`, and first place in `live-search` plus a place ahead of
+  Grok 4.6 in `hard-judgment` and `taste-final`. A lane skips a candidate whose
+  transport this host has not proven, so Grok 4.6 keeps serving until
+  `omnilane resign` has probed 4.7. `consult` and `coding-overflow` stay on 4.6:
+  `--vendor` takes a vendor's first segment without falling through, and AA has
+  no terminal-coding result for 4.7 yet.
+- Claude Sonnet 5 at xhigh, high, medium and low. AA now scores them; they were
+  `unknown_configs`.
+- `scripts/aa_rebaseline.py` (`fetch`, `build`, `report`, `matrix`) regenerates
+  the registry from a saved extract of one AA page, byte-reproducibly. The
+  extract and per-vendor evidence for this snapshot are tracked under
+  `docs/reports/`.
+
+### Fixed
+
+- `claude claude-sonnet-5 high` was a fallback that could never be dispatched:
+  the v4.2 registry had only a non-reasoning row at that effort, which Claude's
+  `--effort` cannot select. It now resolves to the adaptive row once probed.
+
+### Removed
+
+- `codex/gpt-6-astra-non-reasoning`. AA no longer lists it and Astra rejects
+  effort `none`; it moves to `unknown_configs` and its old score is not kept.
+
+### Known gap until `omnilane resign`
+
+- `--vendor grok` on `hard-judgment`, `taste-final` or `live-search` is refused
+  (`runtime-mapping-unverified`), because the first Grok segment there is 4.7.
+
 ## [0.44.0] - 2026-09-21
 
 The daily `omnilane resign` now also covers a CLI you patch and re-sign
@@ -1242,7 +1299,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...v0.43.1
 [0.43.0]: https://github.com/Seraphim0916/omnilane/compare/v0.42.9...v0.43.0

@@ -50,6 +50,7 @@ NEW_ROWS = [
     ("claude/claude-sonnet-5-low", "claude", "claude-sonnet-5", "low", "adaptive",
      "claude-sonnet-5-low", "claude/claude-sonnet-5"),
 ]
+NEW_ALIASES = {"grok-4.7": "grok-4.6"}  # new catalog model -> alias entry to clone
 
 
 def half_up(value: float) -> int:
@@ -193,8 +194,15 @@ def cmd_build(args) -> int:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
                     and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
-    # aliases mirror scripts/configure.sh's catalog; a model that catalog does not
-    # offer gets no alias here.
+    # aliases mirror scripts/configure.sh's catalog, so a new alias needs the model there too.
+    have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
+    for model, source in NEW_ALIASES.items():
+        template = next(a for a in new["aliases"] if a["catalog_model"] == source)
+        if (template["catalog_vendor"], model) not in have:
+            clone = copy.deepcopy(template)
+            clone["catalog_model"] = model
+            clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS if m == model]
+            new["aliases"].insert(new["aliases"].index(template), clone)
 
     vendors: dict[str, int] = {}
     for row in scored:

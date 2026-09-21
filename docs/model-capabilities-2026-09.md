@@ -1,10 +1,54 @@
 # Model capabilities — September 2026 snapshot
 
-External records are dated per section. The 2026-09-05 decision below is the
-current basis for `routing.yaml`; the earlier 2026-09-02 v4.1.1-era snapshot is
-kept as historical evidence rather than relabelled as v4.2.
+External records are dated per section. The 2026-09-22 decision below is the
+current basis for `routing.yaml`. The 2026-09-05 v4.2 decision and the
+2026-09-02 v4.1.1-era snapshot are kept as historical evidence; their scores
+are on other scales and are not comparable with the v4.3.2 figures.
 
-## Current routing decision — 2026-09-05
+## Current routing decision — 2026-09-22 (AA v4.3.2)
+
+Every figure here comes from one AA model page retrieved 2026-09-22 and saved as
+`docs/reports/aa-v4.3.2-extract-2026-09-22.json` (655 records on the page, page
+sha256 inside the file). `docs/reports/aa-rebaseline-2026-09-22.md` has the
+per-controller reachability tables and the dry-run evidence.
+
+| Configuration | Index | Terminal-Bench 2.1 | SciCode | HLE | Output tokens / task | First answer token | Blended $/M |
+|---|---|---|---|---|---|---|---|
+| Claude Fable 5.1 max | 53.4 | 0.914 | 0.631 | 0.591 | 78,111 | 279.9 s | 7.175 |
+| Claude Fable 5.1 xhigh | 53.2 | 0.910 | 0.609 | 0.587 | 60,538 | 180.0 s | 7.175 |
+| GPT-6 Astra xhigh | 52.4 | 0.891 | 0.557 | 0.546 | 16,901 | 139.5 s | 7.70 |
+| GPT-6 Astra high | 50.9 | 0.899 | 0.554 | 0.531 | 11,813 | 34.4 s | 7.70 |
+| Claude Opus 5 high | 48.1 | 0.876 | 0.554 | 0.528 | 46,239 | 14.4 s | 3.85 |
+| Grok 4.7 high | 46.3 | not published | 0.578 | 0.423 | 65,901 | not published | not published |
+| Claude Opus 5 medium | 44.8 | 0.861 | 0.515 | 0.513 | 28,977 | 4.6 s | 3.85 |
+| Grok 4.6 high | 44.3 | 0.884 | 0.565 | 0.429 | 35,835 | 41.2 s | 1.35 |
+| GPT-5.6 Sol high | 42.3 | 0.873 | 0.578 | 0.460 | 13,250 | 9.6 s | 3.08 |
+| Gemini 3.8 Flash high | 40.9 | 0.876 | 0.566 | 0.478 | 71,003 | 22.7 s | 0.578 |
+| Claude Sonnet 5 high | 31.7 | not published | 0.543 | 0.357 | 44,341 | 11.7 s | 1.54 |
+
+What changed in the lane orderings, and why:
+
+- **Two rungs below Astra xhigh** in `hardest-coding`, `hard-judgment` and
+  `taste-final`: Astra high, then Opus 5 high. Between Astra xhigh and Grok 4.6
+  the old chains were empty, so a controller scoring below Astra xhigh fell
+  straight to the cross-vendor tail. Astra high is the strong rung (its
+  Terminal-Bench result is not below xhigh). Opus 5 high ties Flash high on
+  Terminal-Bench at several times the price; it is there for ceiling coverage.
+- **Grok 4.7 ahead of Grok 4.6** in `hard-judgment`, `taste-final` and
+  `live-search`, on a two-point index lead. It is absent from `hardest-coding`
+  and `coding-overflow` because AA has published no Terminal-Bench result for
+  it, and from `consult` because `--vendor` takes a vendor's first segment
+  without falling through.
+- **Opus 5 medium replaces Sonnet 5 high** at the end of `bulk-mechanical`:
+  thirteen index points higher, faster to a first answer and fewer tokens per
+  task, at 2.5 times the blended price. `live-search` keeps Sonnet 5 high, where
+  the price matters more than the score, with Opus 5 medium behind it.
+- `triage`, `consult`, `ui-draft`, `long-context`, `fast-agentic` and
+  `coding-overflow` are unchanged; the new figures do not reorder them.
+
+The capability boundaries listed under 2026-09-05 still hold.
+
+## Previous routing decision — 2026-09-05 (AA v4.2)
 
 ### Comparable evidence and limits
 

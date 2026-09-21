@@ -211,16 +211,16 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol（high） | Gemini 3.8 Flash（High）→ Claude Sonnet 5（high） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol（high） | Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 重構、搬遷、測試、大面積掃描等耐力工作 |
 | 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Grok 4.6 | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
+| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 | 架構裁決、深度推理、第二意見 |
+| ✒️ taste-final | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
 | 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（Medium） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
 | 🎨 ui-draft | GPT-5.6 Sol（high） | Claude Fable 5.1（xhigh）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
 | 📚 long-context | Gemini 3.8 Flash（Medium） | GPT-5.6 Terra（max）→ Claude Opus 5（medium） | 長文件整合；上下文容量本身不證明任務品質 |
 | ⚡ fast-agentic | Gemini 3.8 Flash（Low） | GPT-5.6 Luna（high）→ Claude Haiku 4.5 | 高速多步驟工具迴圈、多模態檢查 |
-| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash（High）→ Claude Sonnet 5（high） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Sonnet 5（high）→ Claude Opus 5（medium） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 
@@ -282,7 +282,7 @@ omnilane jobs --json status JOB_ID
 - **Codex · Sol**——bulk-mechanical 與有參考限制的 ui-draft 委派並使用 high；最難編碼／判斷升級 Fable 或 Astra，長文／高速工作交 Gemini 3.8 Flash，即時搜尋交 Grok。
 - **Codex · Astra**——提示詞層主控備位與獨立複核者；最難編碼／判斷與 consult／taste 預設用 xhigh，需要時可明確指定 `--vendor codex --effort max`；顯式 model／effort 永遠優先。
 - **Codex · Terra**——用 max 接 Codex 的 long-context 備援；bulk 留給 Sol high，困難工作升級 Fable／Astra。
-- **Grok Build · Grok 4.6**——委派 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
+- **Grok Build · Grok 4.7／4.6**——委派 live-search、coding-overflow，並兼任 hardest-coding、hard-judgment、taste-final 的備援。首選人手在的話，最難的編碼／判斷／文字交給 Codex、Claude、Gemini；仍要驗證 API 簽章與引用事實。
 - **Antigravity · Gemini 3.8 Flash**——long-context 用 Medium，fast-agentic／triage 用 Low，bulk／overflow／網搜備援用 High。不要把代理／編碼評測推論成審美或主控權。
 
 </details>
@@ -690,6 +690,14 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.45.0 新功能
+
+- **升級後請跑一次 `omnilane resign`。** 分數政策檔換了新快照，而傳輸覆蓋檔綁的是快照；覆蓋檔重建之前，模型身分的派工在每條車道都會被拒，訊息是 `transport overlay snapshot mismatch`。
+- **分數改採 Artificial Analysis Intelligence Index v4.3.2。** v4.2 與 v4.3.2 是不同的量尺，各家落差也不一樣（Fable 5.1 max 57 → 53、Grok 4.6 high 51 → 44、Sol high 48 → 42），所以是整份重新計分，不是只加一列。上限跟著變：Fable 5.1 max、Fable 5.1 xhigh、Astra max 現在同為 53 分；以前在 `hard-judgment` 什麼都派不到的中階主控，現在派得到了。`scripts/aa_rebaseline.py` 會從存下來的 AA 抽取檔重建政策檔，下次指數改版重跑即可。
+- **車道重新分配，加入 Grok 4.7。** `hardest-coding`、`hard-judgment`、`taste-final` 多了 Astra（high）與 Opus 5（high）兩階，中階主控不會一掉就到跨廠商的尾段。Grok 4.7 成為 `live-search` 首選，並在 `hard-judgment`、`taste-final` 排在 Grok 4.6 前面；車道會跳過本機尚未驗證的候選，所以在 `resign` 探測過 4.7 之前仍由 4.6 服務。`consult` 與 `coding-overflow` 留在 4.6。`bulk-mechanical` 的末段改為 Opus 5（medium）。
+- **修掉一個失效的備援。** `claude claude-sonnet-5 high` 在舊政策檔下永遠派不出去；現在探測通過後就能解析。
+- 升級：`npm i -g omnilane@0.45.0`，接著 `omnilane resign`。要用 Grok 4.7，重簽時 `grok` CLI 必須是登入狀態。
 
 ## v0.44.0 新功能
 

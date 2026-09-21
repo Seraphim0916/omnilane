@@ -256,16 +256,16 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; keep `--vendor` to prevent fallback |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
 | 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-document synthesis; context size alone does not prove task quality |
 | ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
@@ -358,7 +358,7 @@ The commander orchestrates and validates; workers do not delegate again.
 - **Codex · Sol** — delegate bulk-mechanical and constrained ui-draft at high. Escalate hardest coding and judgment to Fable/Astra; route long/fast work to Gemini 3.8 Flash and live search to Grok.
 - **Codex · Astra** — prompt-level controller backup and independent reviewer. Use xhigh by default for hardest coding/judgment and consult/taste; explicitly select `--vendor codex --effort max` when needed. Explicit model/effort always win.
 - **Codex · Terra** — delegate the Codex long-context fallback at max. Bulk stays on Sol high; escalate hard work to Fable/Astra.
-- **Grok Build · Grok 4.6** — delegate live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
+- **Grok Build · Grok 4.7 / 4.6** — delegate live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
 - **Antigravity · Gemini 3.8 Flash** — delegate long-context Medium, fast-agentic/triage Low, and bulk/overflow/web fallbacks High. Do not infer visual taste or controller authority from agent/coding benchmarks.
 
 </details>
@@ -849,6 +849,30 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.45.0
+
+- **Run `omnilane resign` once after upgrading.** The score registry moved to a
+  new snapshot and the transport overlay is bound to it; until the overlay is
+  rebuilt, a model caller is refused on every lane with
+  `transport overlay snapshot mismatch`.
+- **Scores follow Artificial Analysis Intelligence Index v4.3.2.** v4.2 and
+  v4.3.2 are different scales with uneven gaps (Fable 5.1 max 57 → 53, Grok 4.6
+  high 51 → 44, Sol high 48 → 42), so every row was re-scored rather than one
+  added. Ceilings move with it: Fable 5.1 max, Fable 5.1 xhigh and Astra max now
+  tie at 53, and a mid-effort controller that reached nothing in `hard-judgment`
+  before now does. `scripts/aa_rebaseline.py` rebuilds the registry from a saved
+  AA extract, so the next index revision is a re-run.
+- **Lanes re-allocated, Grok 4.7 added.** `hardest-coding`, `hard-judgment` and
+  `taste-final` gain Astra (high) and Opus 5 (high) as rungs a mid-effort
+  controller can reach. Grok 4.7 leads `live-search` and sits ahead of Grok 4.6
+  in `hard-judgment` and `taste-final`; a lane skips a candidate this host has
+  not proven, so 4.6 keeps serving until `resign` has probed 4.7. `consult` and
+  `coding-overflow` stay on 4.6. `bulk-mechanical` now ends on Opus 5 (medium).
+- **A dead fallback fixed.** `claude claude-sonnet-5 high` could never be
+  dispatched under the old registry; it now resolves once probed.
+- Upgrade: `npm i -g omnilane@0.45.0`, then `omnilane resign`. For Grok 4.7 the
+  `grok` CLI must be logged in when you re-sign.
 
 ## What's new in v0.44.0
 

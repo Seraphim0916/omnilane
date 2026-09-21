@@ -8,10 +8,10 @@
     "timezone": "Asia/Taipei",
     "frozen": true,
     "approval": {
-      "status": "proposed",
+      "status": "approved",
       "scope": "aa-v4.3.2-rebaseline",
       "source": "docs/reports/aa-rebaseline-2026-09-22.md",
-      "estimated_scores": "provisional_pending_review"
+      "estimated_scores": "approved_provisional"
     },
     "automatic_refresh_grants_authority": false,
     "source": {
@@ -3135,6 +3135,21 @@
     },
     {
       "catalog_vendor": "grok",
+      "catalog_model": "grok-4.7",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "grok/grok-4-7",
+        "grok/grok-4-7-high"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "grok",
       "catalog_model": "grok-4.6",
       "status": "unknown",
       "resolved_config_id": null,
@@ -3179,7 +3194,7 @@
     "scored_configs": 83,
     "reference_configs": 1,
     "unknown_configs": 7,
-    "aliases": 47,
+    "aliases": 48,
     "by_vendor": {
       "codex": 34,
       "claude": 31,

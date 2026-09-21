@@ -220,16 +220,16 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
 | 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
 | 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
 | ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.6 | Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) | リアルタイム X／Web 検索とソーシャル文脈 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) | リアルタイム X／Web 検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
@@ -267,7 +267,7 @@ flowchart LR
 - **Claude Code · Opus 5**——自分で実行：hard-judgment(これがデフォルトのレーン)。低いハルシネーション率や価格を優先するときはローカル override で taste-final も担当。最難関コーディング → Fable 5.1 または Sol、bulk → Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
 - **Codex · Sol**——自分で実行：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。ディスパッチ：taste-final → Claude、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
 - **Codex · Terra**——long-context の Codex フォールバックを自分で実行。bulk-mechanical のデフォルトは Sol high に移動。最難関は Sol xhigh、taste → Claude、高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Grok Build · Grok 4.6**——live-search と coding-overflow を自分で実行し、hardest-coding・hard-judgment・taste-final のフォールバックも兼任。第一候補が使えるときは難しいコーディング／判断／文章を Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
+- **Grok Build · Grok 4.7 / 4.6**——live-search と coding-overflow を自分で実行し、hardest-coding・hard-judgment・taste-final のフォールバックも兼任。第一候補が使えるときは難しいコーディング／判断／文章を Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
 - **Antigravity · Gemini 3.7 Flash**——Medium の long-context／高速ループ、High の bulk／overflow、Low の triage を自分で実行し、High で hardest-coding・taste-final・ui-draft・live-search のフォールバックも兼任。第一候補が使えるときは最難関のコーディング／判断／文章を Codex、Claude へ。
 
 </details>
@@ -701,6 +701,14 @@ work の別名ではありません。サービス管理など、work の境界�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.45.0 の新機能
+
+- **アップグレード後に `omnilane resign` を一度実行してください。** スコアのレジストリが新しいスナップショットに移り、トランスポートオーバーレイはスナップショットに紐づいています。オーバーレイを再構築するまで、モデル呼び出し元はすべてのレーンで `transport overlay snapshot mismatch` として拒否されます。
+- **スコアは Artificial Analysis Intelligence Index v4.3.2 に準拠。** v4.2 と v4.3.2 は別の尺度で、差も一様ではありません（Fable 5.1 max 57 → 53、Grok 4.6 high 51 → 44、Sol high 48 → 42）。そのため 1 行を追加するのではなく全行を再採点しました。上限も変わります。Fable 5.1 max・Fable 5.1 xhigh・Astra max は 53 で並び、これまで `hard-judgment` で何にも届かなかった中程度 effort のコントローラーも届くようになりました。`scripts/aa_rebaseline.py` は保存した AA の抽出ファイルからレジストリを再構築するので、次の指数改訂は再実行で済みます。
+- **レーンを再配分し、Grok 4.7 を追加。** `hardest-coding`・`hard-judgment`・`taste-final` に Astra (high) と Opus 5 (high) の段を加え、中程度 effort のコントローラーがいきなり他ベンダーの末尾に落ちないようにしました。Grok 4.7 は `live-search` の第一候補になり、`hard-judgment`・`taste-final` では Grok 4.6 の前に入ります。レーンはこのホストで未検証の候補を飛ばすため、`resign` が 4.7 をプローブするまでは 4.6 が処理します。`consult` と `coding-overflow` は 4.6 のままです。`bulk-mechanical` の末尾は Opus 5 (medium) になりました。
+- **機能していなかったフォールバックを修正。** `claude claude-sonnet-5 high` は旧レジストリでは決してディスパッチできませんでした。プローブ後は解決されます。
+- アップグレード: `npm i -g omnilane@0.45.0`、続けて `omnilane resign`。Grok 4.7 を使うには、再署名時に `grok` CLI がログイン済みである必要があります。
 
 ## v0.44.0 の新機能
 

@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 113,
+    "catalogEntries": 114,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1033,6 +1033,33 @@
         "gpt-oss-120b-low"
       ],
       "mappingReason": "AA base row is the closest family record; provider effort semantics may differ"
+    },
+    {
+      "vendor": "grok",
+      "access": "cli",
+      "catalogModel": "grok-4.7",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "live-search",
+          "position": "primary",
+          "effort": "high"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Released 2026-09-21, after this v4.2 inventory was taken, so none of its 643 rows is this model; config/aa-model-policy.json scores it from AA v4.3.2 as grok-4-7 (xhigh) and grok-4-7-high"
     },
     {
       "vendor": "grok",

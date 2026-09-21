@@ -4270,7 +4270,7 @@ test_configure_model_catalogs() {
   done <<'EOF'
 codex|1|9|1|gpt-5.3-codex-spark
 claude|2|21|1|claude-haiku-4-5-20251001
-grok|3|3||grok-4.3-official
+grok|3|4||grok-4.3-official
 gemini|4|14||gpt-oss-120b-medium
 kimi|5|3||kimi-k2.5
 qwen|6|8||qwen3-coder-flash
