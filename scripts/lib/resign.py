@@ -61,6 +61,7 @@ def current_anchors() -> dict[str, dict[str, Path]]:
 def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict]:
     """Per vendor: what no longer matches the live overlay, and the signer it recorded."""
     report = {}
+    registry_snapshot = build_overlay.REGISTRY["snapshot"]["id"]
     for vendor in VENDORS:
         recorded = [entry for entry in overlay.get("evidence", []) if entry.get("vendor") == vendor]
         runner_name = build_overlay.RUNNERS[vendor]
@@ -81,11 +82,19 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             reasons.append(f"{runner_name} is not pinned")
         elif sha256(runner) != recorded_runner["sha256"]:
             reasons.append(f"{runner_name} changed")
+        cli_changed = any(runner_name not in reason for reason in reasons)
+        # The overlay is bound to one registry snapshot and dispatch refuses any
+        # other, so a re-scored registry strands a host whose CLIs never moved.
+        snapshot_only = not reasons and overlay.get("snapshot_id") != registry_snapshot
+        if overlay.get("snapshot_id") != registry_snapshot:
+            reasons.append(f"the score registry moved from {overlay.get('snapshot_id')} "
+                           f"to {registry_snapshot}")
         report[vendor] = {
             "drifted": bool(reasons),
             "reasons": reasons,
+            "snapshot_only": snapshot_only,
             "cli": str(cli) if cli else None,
-            "cli_changed": any(runner_name not in reason for reason in reasons),
+            "cli_changed": cli_changed,
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
             "recorded_codesign": recorded_signer(recorded_cli),
         }
@@ -105,6 +114,8 @@ def recorded_signer(entry: dict | None) -> dict | None:
 def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
     if not vendor_report["cli"]:
         return False, "the CLI is not installed"
+    if vendor_report.get("snapshot_only"):
+        return True, "only the score registry changed; existing probe evidence is reused"
     if not vendor_report["cli_changed"]:
         return True, "only omnilane's own runner script changed"
     current = cli_provenance.facts(vendor_report["cli"])
@@ -339,7 +350,9 @@ def resign(args, log=print) -> int:
         root.mkdir(parents=True)
         shutil.copytree(source / "evidence", root / "evidence")
         shutil.copy2(live, root / "live-overlay.BEFORE.json")
-        sweeps = {vendor: probe_sweep.sweep(vendor, root, log=log) for vendor in proceed}
+        sweeps = {vendor: probe_sweep.sweep(vendor, root, log=log,
+                                            only_missing=report[vendor]["snapshot_only"])
+                  for vendor in proceed}
         summary["sweeps"] = sweeps
         unfinished = [vendor for vendor, result in sweeps.items() if result["outcome"] != "done"]
         for vendor in unfinished:
@@ -393,7 +406,12 @@ def resign(args, log=print) -> int:
                     staged["evidence"][index] = old
         staged_path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
         try:
-            before, after = verified(live), verified(staged_path)
+            if overlay.get("snapshot_id") == staged["snapshot_id"]:
+                before = verified(live)
+            else:
+                # Bound to another registry snapshot, the live overlay does not load at all.
+                before = {vendor: 0 for vendor in VENDORS}
+            after = verified(staged_path)
         except (aa_policy.PolicyError, OSError, ValueError) as error:
             log(f"omnilane: the staged overlay does not load ({error}); live overlay untouched")
             return EXIT_ROLLED_BACK

@@ -39,6 +39,14 @@ silently: before 0.42.6 the overlay hashed claude `2.1.263` while every dispatch
 ran `2.1.266`, so eleven mappings were "verified" against a binary that had not
 run for a day.
 
+The overlay also names the score registry snapshot it was built for, and dispatch
+refuses an overlay built for any other (`transport overlay snapshot mismatch`).
+A release that re-scores the registry therefore stales every vendor at once, on
+every host, whether or not a CLI moved. `omnilane resign` treats that as drift
+too. No executable changed, so it reuses the probe evidence it already has,
+probes only the rows that have none (the models the new registry added) and
+rebuilds the overlay for the new snapshot.
+
 ## Re-signing with `omnilane resign`
 
 `omnilane resign` does the re-signing described below in one command, and is what

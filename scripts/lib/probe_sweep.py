@@ -92,11 +92,22 @@ def _text(record: dict) -> str:
 
 
 def sweep(vendor: str, root: Path, *, repo: Path = build_overlay.REPO, home: Path | None = None,
-          run_probe=probe_module.probe, manager=session_manager, log=print) -> dict:
-    """Probe one vendor into root/evidence. Never raises for a probe that merely failed."""
+          run_probe=probe_module.probe, manager=session_manager, log=print,
+          only_missing: bool = False) -> dict:
+    """Probe one vendor into root/evidence. Never raises for a probe that merely failed.
+
+    only_missing probes just the rows root/evidence has no record for: the
+    executable is unchanged, so what it already answered still stands.
+    """
     home = home or Path.home()
     entries = plan(vendor)
     report = {"vendor": vendor, "outcome": "done", "passed": [], "failed": [], "detail": ""}
+    if only_missing:
+        entries = [entry for entry in entries
+                   if not (root / "evidence" / f"{entry['name']}.json").is_file()]
+        if not entries:
+            report["detail"] = "every row already has probe evidence"
+            return report
     if (vendor in KEYCHAIN_VENDORS and sys.platform == "darwin"
             and os.environ.get("OMNILANE_PROBE_ANY_SESSION") != "1"):
         name = manager()
@@ -148,7 +159,9 @@ def sweep(vendor: str, root: Path, *, repo: Path = build_overlay.REPO, home: Pat
             return report
         report["failed"].append(entry["config_id"])
         log(f"{entry['name']} fail {str(record.get('verdict_reason'))[:120]}")
-    if not report["passed"]:
+    # With only_missing the rows not re-probed still hold, so a new row that
+    # fails is a finding about that row, not about the vendor.
+    if not report["passed"] and not only_missing:
         report.update(outcome="failed", detail="no selector of this vendor passed")
     return report
 

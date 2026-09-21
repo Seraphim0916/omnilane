@@ -1059,7 +1059,7 @@
       ],
       "mappingStatus": "no-aa-row",
       "aaSlugs": [],
-      "mappingReason": "Released 2026-09-21, after this v4.2 inventory was taken, so none of its 643 rows is this model; config/aa-model-policy.json scores it from AA v4.3.2 as grok-4-7 (xhigh) and grok-4-7-high"
+      "mappingReason": "Released 2026-09-21, after this v4.2 inventory was taken, so none of its 643 rows is this model; config/aa-model-policy.json scores it from AA v4.3.2 as grok-4-7 (xhigh) and grok-4-7-high. Its routeRefs are routing.yaml as of 2026-09-22; every other entry's are as of this inventory"
     },
     {
       "vendor": "grok",

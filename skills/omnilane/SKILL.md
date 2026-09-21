@@ -240,8 +240,8 @@ A refusal is one JSON line on stderr and no job exists. Read `failed_gate`,
 ```json
 {"allowed": false, "code": "target-above-effective-ceiling", "failed_gate": "downward-ceiling",
  "required_caller_effort": "xhigh", "next_command": "omnilane list",
- "lane_requirement": {"lane": "hardest-coding", "target": "codex/gpt-6-astra-xhigh", "score": 54},
- "eligible_lanes": [{"lane": "bulk-mechanical", "target": "codex/gpt-5-6-sol-high", "score": 48, "transport_verified": true}]}
+ "lane_requirement": {"lane": "hardest-coding", "target": "codex/gpt-6-astra-xhigh", "score": 52},
+ "eligible_lanes": [{"lane": "bulk-mechanical", "target": "codex/gpt-5-6-sol-high", "score": 42, "transport_verified": true}]}
 ```
 
 `eligible_lanes` is every lane you can reach right now. Moving to one of them is

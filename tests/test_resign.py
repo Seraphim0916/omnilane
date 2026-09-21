@@ -189,6 +189,30 @@ class SweepTests(unittest.TestCase):
         self.assertEqual(calls.count("cx-gpt-5_4-mini-none"), 1)
         self.assertTrue((self.root / "evidence/cx-gpt-5_4-mini-none.json").exists())
 
+    def test_only_missing_probes_just_the_rows_without_evidence(self):
+        names = [entry["name"] for entry in probe_sweep.plan("grok")]
+        evidence = self.root / "evidence"
+        evidence.mkdir(parents=True)
+        for name in names[1:]:
+            (evidence / f"{name}.json").write_text("{}")
+        run, calls = self.prober(lambda *_: ("fail", "upstream 400: model is not supported", ""))
+        report = probe_sweep.sweep("grok", self.root, run_probe=run, manager=lambda: "Aqua",
+                                   log=lambda _: None, only_missing=True)
+        self.assertEqual(calls, names[:1])
+        # The rows left alone still hold, so one new row failing does not fail the vendor.
+        self.assertEqual((report["outcome"], len(report["failed"])), ("done", 1))
+
+    def test_only_missing_with_full_evidence_needs_no_session(self):
+        evidence = self.root / "evidence"
+        evidence.mkdir(parents=True)
+        for entry in probe_sweep.plan("grok"):
+            (evidence / f"{entry['name']}.json").write_text("{}")
+        run, calls = self.prober(lambda *_: ("pass", "", ""))
+        with patch.object(sys, "platform", "darwin"):
+            report = probe_sweep.sweep("grok", self.root, run_probe=run, manager=lambda: "Background",
+                                       log=lambda _: None, only_missing=True)
+        self.assertEqual((report["outcome"], calls), ("done", []))
+
 
 class ResignTests(unittest.TestCase):
     """A host with four fake CLIs, a signed overlay, and then an update."""
@@ -229,6 +253,7 @@ class ResignTests(unittest.TestCase):
         which.start()
         self.addCleanup(which.stop)
         self.sweeps = []
+        self.only_missing = {}
         self.build(self.sweep_root)
         self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
 
@@ -259,8 +284,9 @@ class ResignTests(unittest.TestCase):
         return path
 
     def run_resign(self, *, outcome="done", smoke=(True, "ok"), failing=(), **flags):
-        def sweep(vendor, root, log=print, **_):
+        def sweep(vendor, root, log=print, only_missing=False, **_):
             self.sweeps.append(vendor)
+            self.only_missing[vendor] = only_missing
             entries = probe_sweep.plan(vendor)
             if outcome == "done":
                 for entry in entries:
@@ -314,6 +340,33 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
         self.assertEqual((self.sweeps, digest(self.live)), ([], before))
         self.assertTrue(any("grok drifted: runs" in line for line in self.lines), self.lines)
+
+    def older_snapshot(self):
+        overlay = json.loads(self.live.read_text())
+        overlay["snapshot_id"] = "aa-older-snapshot"
+        self.live.write_text(json.dumps(overlay))
+
+    def test_a_re_scored_registry_is_drift_even_when_no_executable_moved(self):
+        self.older_snapshot()
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
+        self.assertEqual((self.sweeps, digest(self.live)), ([], before))
+        self.assertTrue(any("score registry moved from aa-older-snapshot" in line
+                            for line in self.lines), self.lines)
+
+    def test_a_re_scored_registry_is_re_signed_from_the_existing_evidence(self):
+        self.older_snapshot()
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.only_missing, {vendor: True for vendor in resign.VENDORS})
+        self.assertEqual(json.loads(self.live.read_text())["snapshot_id"],
+                         build_overlay.REGISTRY["snapshot"]["id"])
+
+    def test_an_update_alongside_a_re_scored_registry_is_probed_in_full(self):
+        self.older_snapshot()
+        self.update("grok")
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertIs(self.only_missing["grok"], False)
+        self.assertIs(self.only_missing["codex"], True)
 
     def test_a_same_signer_update_is_re_signed_and_only_that_vendor_is_probed(self):
         new = self.update("grok")

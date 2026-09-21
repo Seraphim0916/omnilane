@@ -49,6 +49,12 @@ lane with `transport overlay snapshot mismatch`.
 
 ### Fixed
 
+- `omnilane resign` now treats a re-scored registry as drift. It compared only
+  executables and runner scripts, so on a host where no CLI had moved it
+  reported "nothing to re-sign" and left an overlay that dispatch refuses for
+  good. With the executables unchanged it reuses the existing probe evidence,
+  probes only the rows that have none, and rebuilds the overlay for the new
+  snapshot; a vendor whose CLI also moved is still probed in full.
 - `claude claude-sonnet-5 high` was a fallback that could never be dispatched:
   the v4.2 registry had only a non-reasoning row at that effort, which Claude's
   `--effort` cannot select. It now resolves to the adaptive row once probed.
