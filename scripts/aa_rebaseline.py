@@ -5,6 +5,7 @@
     build   regenerate the registry from a saved extract (never from the network)
     report  write per-vendor evidence tables and the old-vs-new score diff
     matrix  show, per controller, the first reachable target of every lane
+    lanes   print, per lane, each candidate with the measurements the lane is ordered on
 
 The registry is an approval artifact: build only rewrites the file. Pinning its
 sha256 in scripts/lib/aa_policy.py and re-signing the host overlay stay manual.
@@ -34,6 +35,9 @@ KEEP = (
     "omniscience", "tau2", "lcr", "ifbench", "critpt", "gdpvalNormalized", "itBenchSre",
     "apexAgents", "price1mInputTokens", "price1mOutputTokens", "price1mBlended7To2To1",
     "intelligenceIndexOutputTokensPerTask", "timeToFirstAnswerToken",
+    # what routing.yaml orders its lanes on
+    "terminalBench40", "automationBenchPartialScore", "tauBanking", "mlcrOverall", "mmmuPro",
+    "omniscienceBreakdown", "briefcaseBreakdown", "intelligenceIndexCost", "intelligenceIndexTimePerTask",
 )
 
 # Rows this snapshot adds. identity mirrors the sibling rows of the same model.
@@ -92,8 +96,14 @@ def parse_records(body: str) -> dict[str, dict]:
         except ValueError:
             continue
         slug = obj.get("slug")
-        if isinstance(slug, str) and slug not in records:
-            records[slug] = obj
+        if not isinstance(slug, str):
+            continue
+        # A model appears several times, each copy carrying a different subset of
+        # fields; which copy comes first varies between fetches.
+        merged = records.setdefault(slug, {})
+        for key, value in obj.items():
+            if merged.get(key) is None:
+                merged[key] = value
     return records
 
 
@@ -299,6 +309,75 @@ def cmd_matrix(args) -> int:
     return 0
 
 
+def _nested(*path):
+    def read(record):
+        for key in path:
+            record = (record or {}).get(key)
+        return record
+    return read
+
+
+MEASURES = {  # column title -> (reader, decimals, scale)
+    "index": (_nested("intelligenceIndex"), 1, 1),
+    "Terminal-Bench 4.0": (_nested("terminalBench40"), 3, 1),
+    "Terminal-Bench 2.1": (_nested("terminalBench21"), 3, 1),
+    "SciCode": (_nested("scicode"), 3, 1),
+    "hallucination rate": (_nested("omniscienceBreakdown", "hallucinationRate"), 3, 1),
+    "knowledge (omniscience)": (_nested("omniscience"), 1, 1),
+    "HLE": (_nested("hle"), 3, 1),
+    "GPQA": (_nested("gpqa"), 3, 1),
+    "CritPt": (_nested("critpt"), 3, 1),
+    "Briefcase analytical Elo": (_nested("briefcaseBreakdown", "analyticalQuality", "elo"), 0, 1),
+    "Briefcase overall Elo": (_nested("briefcaseBreakdown", "overall", "elo"), 0, 1),
+    "Briefcase presentation Elo": (_nested("briefcaseBreakdown", "presentation", "elo"), 0, 1),
+    "GDPval": (_nested("gdpvalNormalized"), 3, 1),
+    "AutomationBench": (_nested("automationBenchPartialScore"), 3, 1),
+    "MMMU-Pro": (_nested("mmmuPro"), 3, 1),
+    "mlcrOverall": (_nested("mlcrOverall"), 3, 1),
+    "AA-LCR": (_nested("lcr"), 3, 1),
+    "minutes / task": (_nested("intelligenceIndexTimePerTask"), 1, 1 / 60),
+    "first answer token (s)": (_nested("timeToFirstAnswerToken", "total"), 0, 1),
+    "index run cost ($)": (_nested("intelligenceIndexCost", "total"), 0, 1),
+}
+LANE_MEASURES = {
+    "hardest-coding": ("Terminal-Bench 4.0", "Terminal-Bench 2.1", "SciCode", "hallucination rate"),
+    "bulk-mechanical": ("Terminal-Bench 4.0", "Terminal-Bench 2.1", "hallucination rate", "minutes / task",
+                        "index run cost ($)"),
+    "triage": ("index", "index run cost ($)", "minutes / task"),
+    "hard-judgment": ("HLE", "GPQA", "CritPt", "Briefcase analytical Elo", "hallucination rate"),
+    "taste-final": ("Briefcase overall Elo", "Briefcase presentation Elo", "GDPval"),
+    "consult": ("index",),
+    "ui-draft": ("MMMU-Pro", "Terminal-Bench 4.0"),
+    "long-context": ("mlcrOverall", "AA-LCR", "index run cost ($)"),
+    "fast-agentic": ("AutomationBench", "minutes / task", "first answer token (s)"),
+    "live-search": ("hallucination rate", "knowledge (omniscience)"),
+    "coding-overflow": ("Terminal-Bench 4.0", "SciCode"),
+}
+
+
+def cmd_lanes(args) -> int:
+    """Per lane, every candidate with the measurements that lane is ordered on."""
+    records = json.loads(Path(args.extract).read_text())["records"]
+    rows = json.loads(Path(args.registry).read_text())["scored_configs"]
+    for lane, chain in lane_table(Path(args.routing)).items():
+        titles = LANE_MEASURES.get(lane, ("index",))
+        print(f"\n**{lane}**\n\n| # | candidate | score | " + " | ".join(titles) + " |")
+        print("|---|---|---|" + "---|" * len(titles))
+        for index, (vendor, model, effort) in enumerate(chain, 1):
+            row = target_row(rows, vendor, model, effort)
+            name = f"{vendor} {model}" + (f" {effort}" if effort else "")
+            if row is None:
+                print(f"| {index} | {name} | not scored | " + " | ".join("—" for _ in titles) + " |")
+                continue
+            cells = []
+            for title in titles:
+                reader, places, scale = MEASURES[title]
+                value = reader(records.get(row["aa_slug"]))
+                cells.append("not published" if value is None else f"{value * scale:.{places}f}")
+            print(f"| {index} | {name} | {row['score']} | " + " | ".join(cells) + " |")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -317,8 +396,13 @@ def main() -> int:
     matrix.add_argument("--registry", default=str(REGISTRY))
     matrix.add_argument("--routing", default=str(REPO / "routing.yaml"))
     matrix.add_argument("--controller", nargs="+", required=True, help="registry config ids")
+    lanes = sub.add_parser("lanes")
+    lanes.add_argument("--extract", required=True)
+    lanes.add_argument("--registry", default=str(REGISTRY))
+    lanes.add_argument("--routing", default=str(REPO / "routing.yaml"))
     args = parser.parse_args()
-    return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix}[args.command](args)
+    return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix,
+            "lanes": cmd_lanes}[args.command](args)
 
 
 if __name__ == "__main__":

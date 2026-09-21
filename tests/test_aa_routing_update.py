@@ -17,17 +17,17 @@ DISPATCH = ROOT / "scripts" / "dispatch.sh"
 
 
 EXPECTED_DEFAULTS = {
-    "hardest-coding": "claude claude-fable-5-1 max",
-    "bulk-mechanical": "codex gpt-5.6-sol high",
+    "hardest-coding": "codex gpt-6-astra xhigh",
+    "bulk-mechanical": "codex gpt-6-astra low",
     "triage": "codex gpt-5.6-luna high",
     "hard-judgment": "claude claude-fable-5-1 xhigh",
-    "taste-final": "claude claude-fable-5-1 xhigh",
+    "taste-final": "claude claude-opus-5 max",
     "consult": "codex gpt-6-astra xhigh",
-    "ui-draft": "codex gpt-5.6-sol high",
-    "long-context": "gemini gemini-3.8-flash-medium -",
-    "fast-agentic": "gemini gemini-3.8-flash-low -",
+    "ui-draft": "codex gpt-6-astra high",
+    "long-context": "claude claude-opus-5 high",
+    "fast-agentic": "codex gpt-6-astra low",
     "live-search": "grok grok-4.7 high",
-    "coding-overflow": "grok grok-4.6 high",
+    "coding-overflow": "grok grok-4.7 high",
     "arbitrate": "off - -",
 }
 

@@ -7,44 +7,191 @@ are on other scales and are not comparable with the v4.3.2 figures.
 
 ## Current routing decision — 2026-09-22 (AA v4.3.2)
 
-Every figure here comes from one AA model page retrieved 2026-09-22 and saved as
-`docs/reports/aa-v4.3.2-extract-2026-09-22.json` (655 records on the page, page
-sha256 inside the file). `docs/reports/aa-rebaseline-2026-09-22.md` has the
-per-controller reachability tables and the dry-run evidence.
+`routing.yaml` was rewritten on this date, not amended. Each lane names the
+measurements that match its kind of work, and its candidates are listed
+best-first on them. Because a caller may only dispatch to a target scoring at or
+below its own ceiling, each chain also steps down through the score range, so
+that whatever a controller's ceiling, the first candidate it can reach is the
+best one it can reach. The `score` column below is the registry's ceiling value.
 
-| Configuration | Index | Terminal-Bench 2.1 | SciCode | HLE | Output tokens / task | First answer token | Blended $/M |
+Sources. Registry scores: `docs/reports/aa-v4.3.2-extract-2026-09-22.json`.
+Lane measurements: `docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`, a second
+capture of the same AA page the same day; every index value in the two files is
+identical. The page served at that capture carried no hallucination-rate field,
+so that one field comes from a capture about an hour earlier, as the file's
+`supplement` block records. The tables are generated, not typed:
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`.
+
+What the measurements are. AA's own v4.3 note says Terminal-Bench moved to 4.0 and
+AutomationBench joined the index. Terminal-Bench 2.1 is kept for reference only:
+the frontier sits between 0.87 and 0.91 on it, so it no longer separates anyone,
+while 4.0 spreads the same models from 0.2 to 0.6. Briefcase is AA's expert
+grading of finished business documents, with separate Elo scores for analytical
+quality and for presentation. `mlcrOverall` is carried in AA's page data without
+a caption; it is read here as a harder long-context benchmark because it sits
+beside AA-LCR and spreads the models that AA-LCR cannot separate. That reading is
+unverified.
+
+**hardest-coding**
+
+| # | candidate | score | Terminal-Bench 4.0 | Terminal-Bench 2.1 | SciCode | hallucination rate |
+|---|---|---|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.891 | 0.557 | 0.483 |
+| 2 | claude claude-fable-5-1 xhigh | 53 | 0.551 | 0.910 | 0.609 | 0.705 |
+| 3 | codex gpt-6-astra high | 51 | 0.540 | 0.899 | 0.554 | 0.448 |
+| 4 | claude claude-fable-5-1 high | 51 | 0.520 | 0.899 | 0.587 | 0.688 |
+| 5 | codex gpt-6-astra medium | 50 | 0.495 | 0.895 | 0.542 | 0.465 |
+| 6 | claude claude-opus-5 high | 48 | 0.460 | 0.876 | 0.554 | 0.612 |
+| 7 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | 0.541 | 0.469 |
+| 8 | codex gpt-5.6-sol xhigh | 44 | 0.247 | 0.895 | 0.571 | 0.919 |
+| 9 | grok grok-4.7 high | 46 | 0.247 | not published | 0.578 | 0.324 |
+| 10 | grok grok-4.6 high | 44 | 0.212 | 0.884 | 0.565 | 0.343 |
+| 11 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | 0.566 | 0.552 |
+
+**bulk-mechanical**
+
+| # | candidate | score | Terminal-Bench 4.0 | Terminal-Bench 2.1 | hallucination rate | minutes / task | index run cost ($) |
 |---|---|---|---|---|---|---|---|
-| Claude Fable 5.1 max | 53.4 | 0.914 | 0.631 | 0.591 | 78,111 | 279.9 s | 7.175 |
-| Claude Fable 5.1 xhigh | 53.2 | 0.910 | 0.609 | 0.587 | 60,538 | 180.0 s | 7.175 |
-| GPT-6 Astra xhigh | 52.4 | 0.891 | 0.557 | 0.546 | 16,901 | 139.5 s | 7.70 |
-| GPT-6 Astra high | 50.9 | 0.899 | 0.554 | 0.531 | 11,813 | 34.4 s | 7.70 |
-| Claude Opus 5 high | 48.1 | 0.876 | 0.554 | 0.528 | 46,239 | 14.4 s | 3.85 |
-| Grok 4.7 high | 46.3 | not published | 0.578 | 0.423 | 65,901 | not published | not published |
-| Claude Opus 5 medium | 44.8 | 0.861 | 0.515 | 0.513 | 28,977 | 4.6 s | 3.85 |
-| Grok 4.6 high | 44.3 | 0.884 | 0.565 | 0.429 | 35,835 | 41.2 s | 1.35 |
-| GPT-5.6 Sol high | 42.3 | 0.873 | 0.578 | 0.460 | 13,250 | 9.6 s | 3.08 |
-| Gemini 3.8 Flash high | 40.9 | 0.876 | 0.566 | 0.478 | 71,003 | 22.7 s | 0.578 |
-| Claude Sonnet 5 high | 31.7 | not published | 0.543 | 0.357 | 44,341 | 11.7 s | 1.54 |
+| 1 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | 0.469 | 1.3 | 1537 |
+| 2 | codex gpt-5.6-sol high | 42 | 0.207 | 0.873 | 0.912 | 3.2 | 1487 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | 0.552 | 3.3 | 1623 |
+| 4 | claude claude-opus-5 medium | 45 | 0.343 | 0.861 | 0.607 | 5.1 | 2732 |
 
-What changed in the lane orderings, and why:
+**triage**
 
-- **Two rungs below Astra xhigh** in `hardest-coding`, `hard-judgment` and
-  `taste-final`: Astra high, then Opus 5 high. Between Astra xhigh and Grok 4.6
-  the old chains were empty, so a controller scoring below Astra xhigh fell
-  straight to the cross-vendor tail. Astra high is the strong rung (its
-  Terminal-Bench result is not below xhigh). Opus 5 high ties Flash high on
-  Terminal-Bench at several times the price; it is there for ceiling coverage.
-- **Grok 4.7 ahead of Grok 4.6** in `hard-judgment`, `taste-final` and
-  `live-search`, on a two-point index lead. It is absent from `hardest-coding`
-  and `coding-overflow` because AA has published no Terminal-Bench result for
-  it, and from `consult` because `--vendor` takes a vendor's first segment
-  without falling through.
-- **Opus 5 medium replaces Sonnet 5 high** at the end of `bulk-mechanical`:
-  thirteen index points higher, faster to a first answer and fewer tokens per
-  task, at 2.5 times the blended price. `live-search` keeps Sonnet 5 high, where
-  the price matters more than the score, with Opus 5 medium behind it.
-- `triage`, `consult`, `ui-draft`, `long-context`, `fast-agentic` and
-  `coding-overflow` are unchanged; the new figures do not reorder them.
+| # | candidate | score | index | index run cost ($) | minutes / task |
+|---|---|---|---|---|---|
+| 1 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.6 |
+| 2 | gemini gemini-3.8-flash-low | 33 | 33.5 | not published | not published |
+| 3 | claude claude-sonnet-5 low | 24 | 24.3 | 653 | 2.5 |
+| 4 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.6 |
+
+**hard-judgment**
+
+| # | candidate | score | HLE | GPQA | CritPt | Briefcase analytical Elo | hallucination rate |
+|---|---|---|---|---|---|---|---|
+| 1 | claude claude-fable-5-1 xhigh | 53 | 0.587 | 0.934 | 0.311 | 1971 | 0.705 |
+| 2 | codex gpt-6-astra xhigh | 52 | 0.546 | 0.963 | 0.314 | 1724 | 0.483 |
+| 3 | claude claude-opus-5 max | 51 | 0.549 | 0.932 | 0.291 | 1965 | 0.608 |
+| 4 | codex gpt-6-astra high | 51 | 0.531 | 0.949 | 0.289 | 1703 | 0.448 |
+| 5 | claude claude-opus-5 xhigh | 50 | 0.544 | 0.937 | 0.277 | 1958 | 0.595 |
+| 6 | claude claude-opus-5 high | 48 | 0.528 | 0.937 | 0.283 | 1855 | 0.612 |
+| 7 | grok grok-4.7 high | 46 | 0.423 | not published | 0.180 | 1967 | 0.324 |
+| 8 | grok grok-4.6 high | 44 | 0.429 | 0.949 | 0.171 | 1690 | 0.343 |
+| 9 | gemini gemini-3.8-flash-high | 41 | 0.478 | 0.953 | 0.183 | 1151 | 0.552 |
+
+**taste-final**
+
+| # | candidate | score | Briefcase overall Elo | Briefcase presentation Elo | GDPval |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5 max | 51 | 1673 | 1560 | 0.604 |
+| 2 | claude claude-fable-5-1 xhigh | 53 | 1669 | 1473 | 0.610 |
+| 3 | claude claude-opus-5 xhigh | 50 | 1649 | 1492 | 0.588 |
+| 4 | grok grok-4.7 high | 46 | 1644 | 1506 | 0.597 |
+| 5 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 |
+| 6 | claude claude-opus-5 high | 48 | 1573 | 1446 | 0.540 |
+| 7 | grok grok-4.6 high | 44 | 1546 | 1519 | 0.553 |
+| 8 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 |
+
+**consult**
+
+| # | candidate | score | index |
+|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 52.4 |
+| 2 | claude claude-fable-5-1 xhigh | 53 | 53.2 |
+| 3 | grok grok-4.7 high | 46 | 46.3 |
+| 4 | grok grok-4.6 high | 44 | 44.3 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 40.9 |
+
+**ui-draft**
+
+| # | candidate | score | MMMU-Pro | Terminal-Bench 4.0 |
+|---|---|---|---|---|
+| 1 | codex gpt-6-astra high | 51 | 0.864 | 0.540 |
+| 2 | claude claude-opus-5 high | 48 | 0.824 | 0.460 |
+| 3 | codex gpt-6-astra low | 46 | 0.846 | 0.419 |
+| 4 | gemini gemini-3.8-flash-high | 41 | 0.856 | 0.197 |
+
+**long-context**
+
+| # | candidate | score | mlcrOverall | AA-LCR | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5 high | 48 | 0.594 | 0.790 | 4332 |
+| 2 | claude claude-opus-5 medium | 45 | 0.561 | 0.820 | 2732 |
+| 3 | claude claude-opus-5 low | 39 | 0.539 | 0.813 | 1561 |
+| 4 | codex gpt-5.6-terra max | 42 | 0.317 | 0.830 | 2501 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 0.217 | 0.813 | 1623 |
+
+**fast-agentic**
+
+| # | candidate | score | AutomationBench | minutes / task | first answer token (s) |
+|---|---|---|---|---|---|
+| 1 | codex gpt-6-astra low | 46 | 0.591 | 1.3 | 2 |
+| 2 | gemini gemini-3.8-flash-medium | 40 | 0.609 | not published | not published |
+| 3 | codex gpt-5.6-sol medium | 39 | 0.513 | 2.1 | 5 |
+| 4 | claude claude-opus-5 low | 39 | 0.518 | 2.5 | 3 |
+
+**live-search**
+
+| # | candidate | score | hallucination rate | knowledge (omniscience) |
+|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 0.324 | 30.9 |
+| 2 | grok grok-4.6 high | 44 | 0.343 | 30.5 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.552 | 29.6 |
+| 4 | claude claude-opus-5 medium | 45 | 0.607 | 31.0 |
+
+**coding-overflow**
+
+| # | candidate | score | Terminal-Bench 4.0 | SciCode |
+|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 0.247 | 0.578 |
+| 2 | grok grok-4.6 high | 44 | 0.212 | 0.565 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 |
+| 4 | kimi kimi-k3 | not scored | — | — |
+| 5 | qwen qwen3-coder-plus | not scored | — | — |
+| 6 | opencode - | not scored | — | — |
+
+Why each lane is ordered this way:
+
+- **hardest-coding** follows Terminal-Bench 4.0. Astra xhigh leads it and has the
+  lowest hallucination rate among the top rows. Fable xhigh leads the saturated
+  2.1 benchmark and SciCode, and beats Fable max on 4.0 (0.551 against 0.520) at
+  about two thirds of max's run cost, so max is in no chain. Astra loses far less
+  than any other family as effort drops (low still scores 0.419, where Opus is
+  down to 0.343 by medium and Sol high sits at 0.207), which is why it supplies
+  most of the rungs.
+- **bulk-mechanical** wants routine coding per minute and per dollar. Astra low
+  costs what Sol high costs and is ahead on both coding benchmarks, in under half
+  the time, with roughly half the hallucination rate. Sol high remains for
+  callers whose ceiling is below Astra low.
+- **triage** is bought by the run. Luna high's run cost is a small fraction of any
+  other row that still reads code. Sonnet low outscores Haiku for similar money.
+- **hard-judgment** follows HLE and CritPt for reasoning and Briefcase analytical
+  Elo for written analysis; hallucination rate decides the second opinion. Fable
+  xhigh leads both reasoning measures. Astra xhigh is the independent family and
+  the least likely of the top rows to assert something false. Opus keeps its
+  analytical Elo down the effort ladder (1855 at high) where Astra does not
+  (1703). Grok 4.7's analytical Elo equals Opus max's, but its reasoning scores
+  are among the lowest in the chain, so it stays below the Opus rows.
+- **taste-final** has no benchmark, and nothing here measures Chinese phrasing.
+  The nearest evidence is Briefcase. Opus max is level with Fable overall and
+  clearly ahead on presentation. Grok 4.7 is graded above every Astra row overall,
+  so it precedes Astra. Final prose still needs human review.
+- **ui-draft** follows MMMU-Pro first and Terminal-Bench 4.0 second. Fable has no
+  published MMMU-Pro result and is left out rather than assumed.
+- **long-context** follows `mlcrOverall`, where Opus leads every other family by
+  a wide margin and keeps that lead down to low effort; AA-LCR is shown to make
+  the saturation visible. Fable max scores higher still (0.711) but at three
+  times Opus high's run cost, and it is the only Fable row with a published value.
+- **fast-agentic** follows AutomationBench and time per task. Astra low is the
+  fastest row that still scores near the top. Flash medium scores as high and is
+  the cross-vendor row; Flash low falls to 0.365. Haiku scores 0.032 and is gone.
+- **live-search**: Grok is the only native X source, and both releases hallucinate
+  less than either fallback. Opus medium replaces Sonnet because Sonnet's effort
+  rows have a negative omniscience score, more false assertions than true ones.
+- **coding-overflow** has no Codex row by design. Grok 4.7 edges 4.6 on
+  Terminal-Bench 4.0 and SciCode.
+- **consult** lists each vendor's strongest generally reachable configuration.
 
 The capability boundaries listed under 2026-09-05 still hold.
 

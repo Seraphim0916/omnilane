@@ -1042,6 +1042,21 @@
       "disposition": "default",
       "routeRefs": [
         {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "consult",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "coding-overflow",
+          "position": "primary",
+          "effort": "high"
+        },
+        {
           "lane": "hard-judgment",
           "position": "fallback",
           "effort": "high"

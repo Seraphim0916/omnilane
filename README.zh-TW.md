@@ -211,17 +211,17 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1（max） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol（high） | Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 重構、搬遷、測試、大面積掃描等耐力工作 |
-| 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
-| 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.6 → Gemini 3.8 Flash（Medium） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
-| 🎨 ui-draft | GPT-5.6 Sol（high） | Claude Fable 5.1（xhigh）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
-| 📚 long-context | Gemini 3.8 Flash（Medium） | GPT-5.6 Terra（max）→ Claude Opus 5（medium） | 長文件整合；上下文容量本身不證明任務品質 |
-| ⚡ fast-agentic | Gemini 3.8 Flash（Low） | GPT-5.6 Luna（high）→ Claude Haiku 4.5 | 高速多步驟工具迴圈、多模態檢查 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Sonnet 5（high）→ Claude Opus 5（medium） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
+| 🔥 hardest-coding | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ GPT-6 Astra（high）→ Claude Fable 5.1（high）→ GPT-6 Astra（medium）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ GPT-5.6 Sol（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🏗️ bulk-mechanical | GPT-6 Astra（low） | GPT-5.6 Sol（high）→ Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
+| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Claude Opus 5（max）→ GPT-6 Astra（high）→ Claude Opus 5（xhigh）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |
+| ✒️ taste-final | Claude Opus 5（max） | Claude Fable 5.1（xhigh）→ Claude Opus 5（xhigh）→ Grok 4.7 → GPT-6 Astra（xhigh）→ Claude Opus 5（high）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
+| 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
+| 🎨 ui-draft | GPT-6 Astra（high） | Claude Opus 5（high）→ GPT-6 Astra（low）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
+| 📚 long-context | Claude Opus 5（high） | Claude Opus 5（medium）→ Claude Opus 5（low）→ GPT-5.6 Terra（max）→ Gemini 3.8 Flash（High） | 長文件整合；上下文容量本身不證明任務品質 |
+| ⚡ fast-agentic | GPT-6 Astra（low） | Gemini 3.8 Flash（Medium）→ GPT-5.6 Sol（medium）→ Claude Opus 5（low） | 高速多步驟工具迴圈、多模態檢查 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 
 **備選模型**是候選鏈的下一位——首選那家的廠商 CLI 沒裝時,派工就降到它。每條
@@ -695,7 +695,8 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 - **升級後請跑一次 `omnilane resign`。** 分數政策檔換了新快照，而傳輸覆蓋檔綁的是快照；覆蓋檔重建之前，模型身分的派工在每條車道都會被拒，訊息是 `transport overlay snapshot mismatch`。
 - **分數改採 Artificial Analysis Intelligence Index v4.3.2。** v4.2 與 v4.3.2 是不同的量尺，各家落差也不一樣（Fable 5.1 max 57 → 53、Grok 4.6 high 51 → 44、Sol high 48 → 42），所以是整份重新計分，不是只加一列。上限跟著變：Fable 5.1 max、Fable 5.1 xhigh、Astra max 現在同為 53 分；以前在 `hard-judgment` 什麼都派不到的中階主控，現在派得到了。`scripts/aa_rebaseline.py` 會從存下來的 AA 抽取檔重建政策檔，下次指數改版重跑即可。
-- **車道重新分配，加入 Grok 4.7。** `hardest-coding`、`hard-judgment`、`taste-final` 多了 Astra（high）與 Opus 5（high）兩階，中階主控不會一掉就到跨廠商的尾段。Grok 4.7 成為 `live-search` 首選，並在 `hard-judgment`、`taste-final` 排在 Grok 4.6 前面；車道會跳過本機尚未驗證的候選，所以在 `resign` 探測過 4.7 之前仍由 4.6 服務。`consult` 與 `coding-overflow` 留在 4.6。`bulk-mechanical` 的末段改為 Opus 5（medium）。
+- **車道表是重寫，不是修補。** 每條車道先講明「這類工作該看哪些量測」，候選再依那些量測由強到弱排：`hardest-coding` 看高難度終端編碼（Terminal-Bench 4.0，頂尖模型還沒把它做滿的那個編碼評測），`hard-judgment` 看專家級推理與文件的分析品質評分，`taste-final` 看文件呈現品質評分，`fast-agentic` 看自動化正確率與每步耗時，`long-context` 看較難的那個長上下文評測，`ui-draft` 看圖像理解。有八條車道換了首選：`hardest-coding` 由 Astra（xhigh）領先，`bulk-mechanical` 與 `fast-agentic` 由 Astra（low）領先，`ui-draft` 由 Astra（high）領先，`taste-final` 由 Opus 5（max）領先，`long-context` 由 Opus 5（high）領先，`coding-overflow` 和 `live-search` 一樣由 Grok 4.7 領先。每條車道鏈同時沿著分數往下排，所以不論主控的上限在哪，它第一個派得到的就是它派得到的最好的。Fable max 與 Astra max 不在任何車道鏈裡：xhigh 與它們持平或更好，花費少得多。數字都在 `docs/model-capabilities-2026-09.md`。
+- **Grok 服務的每條車道都加入 Grok 4.7**，排在 Grok 4.6 前面，4.6 留在後面：車道會跳過本機尚未驗證的候選，所以在 `resign` 探測過 4.7 之前仍由 4.6 服務。帶 `--vendor grok` 時不會往下找；在那之前請指定 `--model grok-4.6`。
 - **修掉一個失效的備援。** `claude claude-sonnet-5 high` 在舊政策檔下永遠派不出去；現在探測通過後就能解析。
 - 升級：`npm i -g omnilane@0.45.0`，接著 `omnilane resign`。要用 Grok 4.7，重簽時 `grok` CLI 必須是登入狀態。
 

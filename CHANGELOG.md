@@ -25,21 +25,39 @@ lane with `transport overlay snapshot mismatch`.
   25 rows that were estimates are measured; 23 remain estimated. Each row
   carries `score_raw`, and `schema_notes.score_rounding` records the half-up
   rule.
-- `hardest-coding`, `hard-judgment` and `taste-final` gain GPT-6 Astra (high)
-  and Claude Opus 5 (high) below Astra xhigh, so a mid-effort controller stays
-  inside the top two families instead of dropping to the cross-vendor tail.
-- `bulk-mechanical` ends on Claude Opus 5 (medium) instead of Claude Sonnet 5
-  (high); `live-search` keeps Sonnet 5 (high) and adds Opus 5 (medium) behind it.
+- `routing.yaml` is rewritten rather than amended. Each lane names the
+  measurements that match its kind of work and lists candidates best-first on
+  them, and each chain steps down through the score range so that whatever a
+  controller's ceiling, the first candidate it can reach is the best one it can
+  reach. Eight lanes change their first choice:
+  - `hardest-coding`: GPT-6 Astra (xhigh), on Terminal-Bench 4.0 (AA moved to it
+    in v4.3; the frontier is saturated on 2.1) and the lowest hallucination rate
+    of the top rows. Fable (xhigh) follows; it beats Fable (max) on 4.0 for about
+    two thirds of the cost, so `max` is in no chain and stays explicit-only.
+  - `bulk-mechanical` and `fast-agentic`: Astra (low). It costs what Sol (high)
+    costs and is ahead on coding, speed and hallucination; it is the fastest row
+    that still scores near the top on AutomationBench. Claude Haiku leaves
+    `fast-agentic`, where it scores close to nothing.
+  - `taste-final`: Claude Opus 5 (max), on AA's expert grading of finished
+    documents. Grok 4.7 is graded above every Astra row there and precedes Astra.
+  - `long-context`: Claude Opus 5 (high, then medium, then low). AA-LCR is
+    saturated; on the harder long-context figure Claude leads every other family
+    by a wide margin at every effort.
+  - `ui-draft`: Astra (high), on MMMU-Pro then Terminal-Bench 4.0.
+  - `live-search` and `coding-overflow`: Grok 4.7.
+  `hard-judgment` keeps Fable (xhigh) then Astra (xhigh) and gains Opus rungs,
+  which hold their graded analytical quality down the effort ladder where Astra
+  does not. The figures behind every ordering, generated from the tracked
+  extract, are in `docs/model-capabilities-2026-09.md`.
 
 ### Added
 
 - Grok 4.7: registry rows at xhigh and high, a catalog entry in
-  `omnilane configure`, and first place in `live-search` plus a place ahead of
-  Grok 4.6 in `hard-judgment` and `taste-final`. A lane skips a candidate whose
-  transport this host has not proven, so Grok 4.6 keeps serving until
-  `omnilane resign` has probed 4.7. `consult` and `coding-overflow` stay on 4.6:
-  `--vendor` takes a vendor's first segment without falling through, and AA has
-  no terminal-coding result for 4.7 yet.
+  `omnilane configure`, and a place ahead of Grok 4.6 in every lane Grok serves.
+  A lane skips a candidate whose transport this host has not proven, so Grok 4.6
+  keeps serving until `omnilane resign` has probed 4.7.
+- `scripts/aa_rebaseline.py lanes` prints, per lane, each candidate with the
+  measurements that lane is ordered on.
 - Claude Sonnet 5 at xhigh, high, medium and low. AA now scores them; they were
   `unknown_configs`.
 - `scripts/aa_rebaseline.py` (`fetch`, `build`, `report`, `matrix`) regenerates
@@ -66,8 +84,9 @@ lane with `transport overlay snapshot mismatch`.
 
 ### Known gap until `omnilane resign`
 
-- `--vendor grok` on `hard-judgment`, `taste-final` or `live-search` is refused
-  (`runtime-mapping-unverified`), because the first Grok segment there is 4.7.
+- `--vendor grok` is refused on every lane (`runtime-mapping-unverified`): with
+  `--vendor` a lane takes that vendor's first segment without falling through,
+  and it is now 4.7. Add `--model grok-4.6` until the host has proven 4.7.
 
 ## [0.44.0] - 2026-09-21
 

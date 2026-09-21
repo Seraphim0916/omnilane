@@ -220,17 +220,17 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
-| 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
-| ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) | リアルタイム X／Web 検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
+| 🎨 ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
+| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リアルタイム X／Web 検索とソーシャル文脈 |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
 **バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
@@ -706,7 +706,8 @@ work の別名ではありません。サービス管理など、work の境界�
 
 - **アップグレード後に `omnilane resign` を一度実行してください。** スコアのレジストリが新しいスナップショットに移り、トランスポートオーバーレイはスナップショットに紐づいています。オーバーレイを再構築するまで、モデル呼び出し元はすべてのレーンで `transport overlay snapshot mismatch` として拒否されます。
 - **スコアは Artificial Analysis Intelligence Index v4.3.2 に準拠。** v4.2 と v4.3.2 は別の尺度で、差も一様ではありません（Fable 5.1 max 57 → 53、Grok 4.6 high 51 → 44、Sol high 48 → 42）。そのため 1 行を追加するのではなく全行を再採点しました。上限も変わります。Fable 5.1 max・Fable 5.1 xhigh・Astra max は 53 で並び、これまで `hard-judgment` で何にも届かなかった中程度 effort のコントローラーも届くようになりました。`scripts/aa_rebaseline.py` は保存した AA の抽出ファイルからレジストリを再構築するので、次の指数改訂は再実行で済みます。
-- **レーンを再配分し、Grok 4.7 を追加。** `hardest-coding`・`hard-judgment`・`taste-final` に Astra (high) と Opus 5 (high) の段を加え、中程度 effort のコントローラーがいきなり他ベンダーの末尾に落ちないようにしました。Grok 4.7 は `live-search` の第一候補になり、`hard-judgment`・`taste-final` では Grok 4.6 の前に入ります。レーンはこのホストで未検証の候補を飛ばすため、`resign` が 4.7 をプローブするまでは 4.6 が処理します。`consult` と `coding-overflow` は 4.6 のままです。`bulk-mechanical` の末尾は Opus 5 (medium) になりました。
+- **レーン表は手直しではなく書き直しです。** 各レーンはまず「この種の作業に合う測定」を定め、候補をその測定で強い順に並べます。`hardest-coding` は高難度のターミナルコーディング（Terminal-Bench 4.0、最上位モデルでもまだ飽和していないコーディング評価）、`hard-judgment` は専門家レベルの推論と文書の分析品質の採点、`taste-final` は文書の提示品質の採点、`fast-agentic` は自動化の正確さと 1 ステップあたりの時間、`long-context` はより難しい方の長文脈評価、`ui-draft` は画像理解を見ます。8 つのレーンで第一候補が変わりました。`hardest-coding` は Astra (xhigh)、`bulk-mechanical` と `fast-agentic` は Astra (low)、`ui-draft` は Astra (high)、`taste-final` は Opus 5 (max)、`long-context` は Opus 5 (high)、`coding-overflow` は `live-search` と同じく Grok 4.7 が先頭です。どのチェーンもスコアの範囲を順に下っていくので、コントローラーの上限がどこにあっても、最初に届く候補が届く中で最良の候補になります。Fable max と Astra max はどのチェーンにも入っていません。xhigh が同等かそれ以上で、コストは大幅に小さいためです。数値は `docs/model-capabilities-2026-09.md` にあります。
+- **Grok が担当するすべてのレーンに Grok 4.7 を追加**し、Grok 4.6 の前に置きました。4.6 はその後ろに残ります。レーンはこのホストで未検証の候補を飛ばすため、`resign` が 4.7 をプローブするまでは 4.6 が処理します。`--vendor grok` を付けた場合は後ろへ進みません。それまでは `--model grok-4.6` を指定してください。
 - **機能していなかったフォールバックを修正。** `claude claude-sonnet-5 high` は旧レジストリでは決してディスパッチできませんでした。プローブ後は解決されます。
 - アップグレード: `npm i -g omnilane@0.45.0`、続けて `omnilane resign`。Grok 4.7 を使うには、再署名時に `grok` CLI がログイン済みである必要があります。
 

@@ -218,17 +218,17 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
-| 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) | 실시간 X／웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
+| 🎨 ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
+| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
@@ -691,7 +691,8 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 - **업그레이드 후 `omnilane resign` 을 한 번 실행하세요.** 점수 레지스트리가 새 스냅샷으로 바뀌었고 트랜스포트 오버레이는 스냅샷에 묶여 있습니다. 오버레이를 다시 만들기 전까지 모델 호출자는 모든 레인에서 `transport overlay snapshot mismatch` 로 거부됩니다.
 - **점수는 Artificial Analysis Intelligence Index v4.3.2 를 따릅니다.** v4.2 와 v4.3.2 는 서로 다른 척도이고 차이도 고르지 않습니다(Fable 5.1 max 57 → 53, Grok 4.6 high 51 → 44, Sol high 48 → 42). 그래서 한 행을 추가하지 않고 모든 행을 다시 채점했습니다. 상한도 함께 바뀝니다. Fable 5.1 max, Fable 5.1 xhigh, Astra max 가 53 으로 같아졌고, 이전에는 `hard-judgment` 에서 아무것도 닿지 않던 중간 effort 컨트롤러도 이제 닿습니다. `scripts/aa_rebaseline.py` 는 저장해 둔 AA 추출 파일로 레지스트리를 다시 만들기 때문에 다음 지수 개정은 재실행으로 끝납니다.
-- **레인 재배분, Grok 4.7 추가.** `hardest-coding`, `hard-judgment`, `taste-final` 에 Astra (high) 와 Opus 5 (high) 단계를 넣어 중간 effort 컨트롤러가 곧바로 다른 벤더의 끝단으로 떨어지지 않게 했습니다. Grok 4.7 은 `live-search` 의 첫 번째 선택이 되고 `hard-judgment`, `taste-final` 에서는 Grok 4.6 앞에 놓입니다. 레인은 이 호스트에서 검증되지 않은 후보를 건너뛰므로 `resign` 이 4.7 을 프로브하기 전까지는 4.6 이 처리합니다. `consult` 와 `coding-overflow` 는 4.6 을 유지합니다. `bulk-mechanical` 의 마지막은 Opus 5 (medium) 입니다.
+- **레인 표는 손질이 아니라 다시 썼습니다.** 각 레인은 먼저 "이런 종류의 작업에 맞는 측정"을 정하고, 후보를 그 측정에서 강한 순서로 나열합니다. `hardest-coding` 은 고난도 터미널 코딩(Terminal-Bench 4.0, 최상위 모델도 아직 포화시키지 못한 코딩 평가), `hard-judgment` 는 전문가 수준의 추론과 문서의 분석 품질 채점, `taste-final` 은 문서의 표현 품질 채점, `fast-agentic` 은 자동화 정확도와 단계당 시간, `long-context` 는 더 어려운 쪽의 긴 컨텍스트 평가, `ui-draft` 는 이미지 이해를 봅니다. 여덟 레인의 첫 번째 선택이 바뀌었습니다. `hardest-coding` 은 Astra (xhigh), `bulk-mechanical` 과 `fast-agentic` 은 Astra (low), `ui-draft` 는 Astra (high), `taste-final` 은 Opus 5 (max), `long-context` 는 Opus 5 (high), `coding-overflow` 는 `live-search` 와 마찬가지로 Grok 4.7 이 맨 앞입니다. 모든 체인은 점수 범위를 차례로 내려가므로, 컨트롤러의 상한이 어디에 있든 처음 닿는 후보가 닿을 수 있는 최선의 후보입니다. Fable max 와 Astra max 는 어떤 체인에도 없습니다. xhigh 가 같거나 앞서면서 비용은 훨씬 적기 때문입니다. 수치는 `docs/model-capabilities-2026-09.md` 에 있습니다.
+- **Grok 이 맡는 모든 레인에 Grok 4.7 을 추가**해 Grok 4.6 앞에 두었고, 4.6 은 그 뒤에 남습니다. 레인은 이 호스트에서 검증되지 않은 후보를 건너뛰므로 `resign` 이 4.7 을 프로브하기 전까지는 4.6 이 처리합니다. `--vendor grok` 을 붙이면 뒤로 넘어가지 않습니다. 그 전까지는 `--model grok-4.6` 을 지정하세요.
 - **동작하지 않던 폴백 수정.** `claude claude-sonnet-5 high` 는 이전 레지스트리에서는 결코 디스패치될 수 없었습니다. 이제 프로브 후에는 해석됩니다.
 - 업그레이드: `npm i -g omnilane@0.45.0`, 이어서 `omnilane resign`. Grok 4.7 을 쓰려면 재서명 시 `grok` CLI 가 로그인 상태여야 합니다.
 

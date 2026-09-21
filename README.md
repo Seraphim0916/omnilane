@@ -256,17 +256,17 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.1 (max) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-5.6 Sol (high) | Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → GPT-6 Astra (high) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.6 → Gemini 3.8 Flash (Medium) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | GPT-5.6 Sol (high) | Claude Fable 5.1 (xhigh) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
-| 📚 long-context | Gemini 3.8 Flash (Medium) | GPT-5.6 Terra (max) → Claude Opus 5 (medium) | Long-document synthesis; context size alone does not prove task quality |
-| ⚡ fast-agentic | Gemini 3.8 Flash (Low) | GPT-5.6 Luna (high) → Claude Haiku 4.5 | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Sonnet 5 (high) → Claude Opus 5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
-| 🚰 coding-overflow | Grok 4.6 | Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
+| 🎨 ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
+| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | Fast multi-step tool loops and multimodal checks |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
@@ -863,12 +863,25 @@ working notes, including per-benchmark caveats, live in
   tie at 53, and a mid-effort controller that reached nothing in `hard-judgment`
   before now does. `scripts/aa_rebaseline.py` rebuilds the registry from a saved
   AA extract, so the next index revision is a re-run.
-- **Lanes re-allocated, Grok 4.7 added.** `hardest-coding`, `hard-judgment` and
-  `taste-final` gain Astra (high) and Opus 5 (high) as rungs a mid-effort
-  controller can reach. Grok 4.7 leads `live-search` and sits ahead of Grok 4.6
-  in `hard-judgment` and `taste-final`; a lane skips a candidate this host has
-  not proven, so 4.6 keeps serving until `resign` has probed 4.7. `consult` and
-  `coding-overflow` stay on 4.6. `bulk-mechanical` now ends on Opus 5 (medium).
+- **The lane table is rewritten, not patched.** Each lane now names the
+  measurements that match its kind of work and lists candidates best-first on
+  them: hard terminal coding (Terminal-Bench 4.0, the coding benchmark the
+  frontier has not saturated) for `hardest-coding`, expert-level reasoning and
+  graded analytical quality for `hard-judgment`, graded document presentation for
+  `taste-final`, automation accuracy per minute for `fast-agentic`, the harder
+  long-context benchmark for `long-context`, visual understanding for `ui-draft`.
+  Eight lanes change their first choice: Astra (xhigh) leads `hardest-coding`,
+  Astra (low) leads `bulk-mechanical` and `fast-agentic`, Astra (high) leads
+  `ui-draft`, Opus 5 (max) leads `taste-final`, Opus 5 (high) leads
+  `long-context`, and Grok 4.7 leads `coding-overflow` as well as `live-search`.
+  Every chain also steps down through the score range, so whatever a
+  controller's ceiling, the first candidate it can reach is the best one it can
+  reach. Fable max and Astra max are in no chain: xhigh is level or ahead for
+  markedly less. The figures are in `docs/model-capabilities-2026-09.md`.
+- **Grok 4.7 joins every lane Grok serves**, ahead of Grok 4.6, which stays
+  behind it: a lane skips a candidate this host has not proven, so 4.6 keeps
+  serving until `resign` has probed 4.7. With `--vendor grok` there is no
+  fall-through; until then ask for `--model grok-4.6`.
 - **A dead fallback fixed.** `claude claude-sonnet-5 high` could never be
   dispatched under the old registry; it now resolves once probed.
 - Upgrade: `npm i -g omnilane@0.45.0`, then `omnilane resign`. For Grok 4.7 the
