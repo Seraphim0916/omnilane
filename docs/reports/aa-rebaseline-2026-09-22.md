@@ -38,27 +38,39 @@ v4.2 下，Fable 5.1 medium／low、Opus 5 medium、Astra low、Sol high 在 `ha
 
 分項指標取自同一份抽取檔。重點依據：Terminal-Bench 2.1——Fable 5.1 max 0.914、Astra high 0.899（不低於 xhigh 的 0.891）、
 Grok 4.6 high 0.884、Opus 5 high 0.876、Flash high 0.876；Grok 4.7 **沒有** Terminal-Bench 結果。
-Sonnet 5 max 每題輸出約 11.8 萬 token、首個答案 token 約 141 秒；Opus 5 medium 約 2.9 萬 token、約 4.6 秒。
+
+Claude 第三順位的兩個候選（同一份抽取檔）：
+
+| 設定 | 指數 | Terminal-Bench 2.1 | 每題輸出 token | 首個答案 token | 混合價（美元／百萬） |
+|---|---|---|---|---|---|
+| Sonnet 5 high | 31.7 | 無資料 | 44,341 | 11.7 秒 | 1.54 |
+| Opus 5 medium | 44.8 | 0.861 | 28,977 | 4.6 秒 | 3.85 |
+
+Opus 5 medium 分數高 13 分、比較快、用的 token 較少，單價是 2.5 倍。
 
 | 車道 | 原本 | 現在 | 理由 |
 |---|---|---|---|
-| hardest-coding | Fable max → Astra xhigh → Grok 4.6 → Flash high | Fable max → Astra xhigh → **Astra high → Opus 5 high** → Grok 4.6 → Flash high | 52 與 44 之間原本是空的；中階主控一掉就到尾段。Grok 留在有編碼實測的 4.6 |
+| hardest-coding | Fable max → Astra xhigh → Grok 4.6 → Flash high | Fable max → Astra xhigh → **Astra high → Opus 5 high** → Grok 4.6 → Flash high | 52 與 44 之間原本是空的；中階主控一掉就到尾段。Astra high 是實力候選（0.899）；Opus 5 high 的 Terminal-Bench 與 Flash high 同為 0.876、單價約 6.7 倍，放它是為了補 48 分這一階的上限覆蓋，不是因為編碼較強——只留 Astra high 也說得通。Grok 留在有編碼實測的 4.6 |
 | hard-judgment | Fable xhigh → Astra xhigh → Grok 4.6 | Fable xhigh → Astra xhigh → **Astra high → Opus 5 high → Grok 4.7 high** → Grok 4.6 | 同上；Grok 4.7 指數高 2 分，排在 4.6 前 |
 | taste-final | …→ Grok 4.6 → Flash high | 同 hard-judgment，尾段保留 Flash high | 同上 |
-| live-search | Grok 4.6 → Flash high → Sonnet 5 high → off | **Grok 4.7 high** → Grok 4.6 → Flash high → **Opus 5 medium** → off | Sonnet 5 high 是失效備援（見下） |
-| bulk-mechanical | Sol high → Flash high → Sonnet 5 high | Sol high → Flash high → **Opus 5 medium** | 同上；Sonnet 要到 max 才有分數，那個努力等級對批次工作太慢 |
+| live-search | Grok 4.6 → Flash high → Sonnet 5 high → off | **Grok 4.7 high** → Grok 4.6 → Flash high → Sonnet 5 high → **Opus 5 medium** → off | 一般網頁搜尋用不到 45 分，便宜的 Sonnet 5 high 留著；它在尚未驗證的主機上會被跳過，由 Opus 5 medium 接手 |
+| bulk-mechanical | Sol high → Flash high → Sonnet 5 high | Sol high → Flash high → **Opus 5 medium** | 依上表：分數、速度、token 都是 Opus 5 medium 佔優，代價是單價 2.5 倍。要省錢可改回 Sonnet 5 high（重簽後可用）——由 Vincent 決定 |
 | consult、coding-overflow | Grok 4.6 | 不變 | `--vendor` 只取該家第一段、被拒不往下；4.7 沒有編碼實測 |
 | triage、ui-draft、long-context、fast-agentic | — | 不變 | 新數據沒有改變排序 |
 
 **發現的既有問題**：`claude claude-sonnet-5 high` 在 v4.2 政策檔裡只對得到「非推理」列，而本機 overlay 只驗證了 Sonnet 5 的 max 列，
-所以 `bulk-mechanical` 與 `live-search` 的第三順位其實一直派不出去。
+所以 `bulk-mechanical` 與 `live-search` 的第三順位在 v4.2 下一直派不出去。本分支已把 Sonnet 5 的 adaptive high 列加進政策檔與探測清單，
+重簽探測通過後它就能用；在那之前仍會被跳過。
+
+**重簽前的已知缺口**：帶 `--vendor grok` 派 `hard-judgment`／`taste-final`／`live-search` 會失敗。`resolve_chain` 在指定廠商時只取該家第一段
+（現在是尚未驗證的 `grok-4.7 high`），被拒就回傳失敗、不往下找 4.6。不帶 `--vendor` 的一般派工不受影響。
 
 **未驗證的候選會被跳過**：`dispatch.sh` 的 `resolve_chain` 對政策拒絕的候選（超上限或傳輸未驗證）一律 `continue`。
-實測（沙箱 overlay、真實 dispatch、`--dry-run`）：`live-search` 落在候選 2／5 的 `grok-4.6 high`。
+實測（沙箱 overlay、真實 dispatch、`--dry-run`）：`live-search` 落在候選 2／6 的 `grok-4.6 high`。
 所以 Grok 4.7 排在前面是安全的，等本機重簽探測通過後自動生效。
 
 主控為 Fable 5.1 medium（49）時，11 條車道的 `--dry-run` 全數成功：
-`hardest-coding`／`hard-judgment`／`taste-final` → Opus 5 high（候選 4）；`live-search` → Grok 4.6（候選 2／5）；其餘維持首選。
+`hardest-coding`／`hard-judgment`／`taste-final` → Opus 5 high（候選 4）；`live-search` → Grok 4.6（候選 2／6）；其餘維持首選。
 
 ## 驗證
 
@@ -86,10 +98,18 @@ Sonnet 5 max 每題輸出約 11.8 萬 token、首個答案 token 約 141 秒；O
    repo 的新車道表在這兩條上不會生效，要不要改由 Vincent 決定。
 6. MacMini 同樣要 pull＋重簽。
 
-## 尚未做、等車道表定案再做
+## 尚未做：必須跟這一版一起出，不是後續工作
 
-- 車道表的文件同步：`skills/omnilane/SKILL.md`、五語 README、`docs/model-capabilities-2026-09.md`
-  （SKILL.md 改動＝六面部署）。
+等車道表定案才動手，免得五語文件改兩次：
+
+- 車道表的文件同步：`skills/omnilane/SKILL.md`（＝六面部署）、五語 README、`docs/model-capabilities-2026-09.md`。
+  `routing.yaml` 檔頭明訂「改排序就要更新該文件」，這是合約不是建議。
 - `CHANGELOG.md`、`VERSION`／`package.json` 升 0.45.0。
+
+刻意沒做：`scripts/configure.sh` 的互動選單沒有加 `grok-4.7`。選單上的每個模型都必須登錄在
+`docs/aa-model-coverage-2026-09-05.json`，那是另一份釘在 v4.2、643 列的盤點，要加就得整份重做，屬於獨立工作項。
+因此政策檔也沒有 `grok-4.7` 的別名（別名只鏡射該選單）。手改 `routing.local.yaml` 不受影響。
+
+已查過不用改：README、`docs/native-executor.md`、`docs/completion-wakeup.md` 裡的 `2026-09-07` 都是歷史敘述或協定版本，與快照無關。
 - `docs/reports/aa-*-2026-09-07.md` 與 `docs/model-governance-proposal.md` 仍未進版控（v4.2 快照的證據）。
   建議一併提交作為前一版的紀錄；由 Vincent 決定。

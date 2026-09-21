@@ -84,6 +84,9 @@ for cid, model in [("claude/claude-sonnet-5", "claude-sonnet-5"),
                    ("claude/claude-opus-4-6-adaptive", "claude-opus-4-6"),
                    ("claude/claude-sonnet-4-6-adaptive", "claude-sonnet-4-6")]:
     PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-max")
+# Targets resolve on vendor/model/effort alone, so claude-sonnet-5-non-reasoning
+# (also effort high) must never be listed here: two verified rows at one
+# selector make every sonnet-5 high dispatch ambiguous-runtime-mapping.
 for effort in ["xhigh", "high", "medium", "low"]:
     PROVEN[f"claude/claude-sonnet-5-{effort}"] = (
         "model_and_effort", "claude-sonnet-5", f"cl-claude-sonnet-5-{effort}")

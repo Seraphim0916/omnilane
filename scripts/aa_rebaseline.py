@@ -50,7 +50,6 @@ NEW_ROWS = [
     ("claude/claude-sonnet-5-low", "claude", "claude-sonnet-5", "low", "adaptive",
      "claude-sonnet-5-low", "claude/claude-sonnet-5"),
 ]
-NEW_ALIASES = {"grok-4.7": "grok-4.6"}  # new catalog model -> alias entry to clone
 
 
 def half_up(value: float) -> int:
@@ -138,7 +137,7 @@ def rescore(row: dict, record: dict, version: str, as_of: str, report: str) -> N
 def cmd_build(args) -> int:
     extract = json.loads(Path(args.extract).read_text())
     records, version, as_of = extract["records"], extract["benchmark_version"], args.as_of
-    old = json.loads(REGISTRY.read_text())
+    old = json.loads(Path(args.base).read_text())
     new = copy.deepcopy(old)
     report = lambda vendor: f"docs/reports/aa-{vendor}-evidence-{as_of}.md"  # noqa: E731
 
@@ -194,14 +193,8 @@ def cmd_build(args) -> int:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
                     and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
-    have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
-    for model, source in NEW_ALIASES.items():
-        template = next(a for a in new["aliases"] if a["catalog_model"] == source)
-        if (template["catalog_vendor"], model) not in have:
-            clone = copy.deepcopy(template)
-            clone["catalog_model"] = model
-            clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS if m == model]
-            new["aliases"].insert(new["aliases"].index(template), clone)
+    # aliases mirror scripts/configure.sh's catalog; a model that catalog does not
+    # offer gets no alias here.
 
     vendors: dict[str, int] = {}
     for row in scored:
@@ -307,6 +300,8 @@ def main() -> int:
     build = sub.add_parser("build")
     build.add_argument("--extract", required=True)
     build.add_argument("--as-of", required=True)
+    build.add_argument("--base", default=str(REGISTRY),
+                       help="the registry to re-score; pass the previous snapshot to rebuild from scratch")
     build.add_argument("--approval", default="proposed", choices=("proposed", "approved"))
     report = sub.add_parser("report")
     report.add_argument("--old", required=True, help="the previous registry file")
