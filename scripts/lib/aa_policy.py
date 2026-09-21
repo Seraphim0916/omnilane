@@ -23,9 +23,12 @@ from typing import Any
 
 
 MAX_BYTES = 1_048_576
-# Approval anchor for the frozen AA v4.2 2026-09-07 source bytes. Updating this
-# constant is a governance change, never a caller argument/environment override.
-APPROVED_REGISTRY_SHA256 = "0782c87de123c02738c3ff60e4bc3c1cc10d110113e872b8f8627212861cdaab"
+# Approval anchor for the frozen AA source bytes. Updating these constants is a
+# governance change, never a caller argument/environment override.
+# scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
+APPROVED_BENCHMARK_VERSION = "4.3.2"
+APPROVED_AS_OF = "2026-09-22"
+APPROVED_REGISTRY_SHA256 = "45527a42a6489a7bc6022164c79344113b74f9220625e412abb43f97aceb2de8"
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))
@@ -109,10 +112,10 @@ def _validate_registry(value: dict[str, Any]) -> dict[str, Any]:
     _check(isinstance(snapshot, dict), "invalid AA registry snapshot")
     for key in ("id", "benchmark_version", "as_of", "frozen"):
         _check(key in snapshot, "incomplete AA registry snapshot")
-    _check(snapshot["benchmark_version"] == "4.2"
-           and snapshot["as_of"] == "2026-09-07"
+    _check(snapshot["benchmark_version"] == APPROVED_BENCHMARK_VERSION
+           and snapshot["as_of"] == APPROVED_AS_OF
            and snapshot["frozen"] is True,
-           "AA registry is not frozen v4.2 dated 2026-09-07")
+           f"AA registry is not frozen v{APPROVED_BENCHMARK_VERSION} dated {APPROVED_AS_OF}")
     policy = value["policy"]
     _check(isinstance(policy, dict)
            and policy.get("decision") == "target_score <= min(caller_score, inherited_ceiling)"
@@ -135,7 +138,8 @@ def _validate_registry(value: dict[str, Any]) -> dict[str, Any]:
         _check(type(row["score"]) is int and 0 <= row["score"] <= 100,
                "invalid AA score")
         _check(type(row["estimated"]) is bool, "invalid AA estimated flag")
-        _check(row["benchmark_version"] == "4.2" and row["as_of"] == "2026-09-07",
+        _check(row["benchmark_version"] == APPROVED_BENCHMARK_VERSION
+               and row["as_of"] == APPROVED_AS_OF,
                "mixed AA registry snapshot")
         _check(isinstance(row["transport_mapping"], dict), "invalid transport mapping")
     return value

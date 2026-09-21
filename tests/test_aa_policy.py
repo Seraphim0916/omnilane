@@ -76,22 +76,22 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_frozen_registry_coverage_and_estimates(self):
         validated = aa_policy._validate_registry(copy.deepcopy(self.real))
-        self.assertEqual(len(validated["scored_configs"]), 78)
-        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 48)
+        self.assertEqual(len(validated["scored_configs"]), 83)
+        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 23)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 35, "claude": 27, "gemini": 7, "grok": 9,
+            "codex": 34, "claude": 31, "gemini": 7, "grok": 11,
         })
 
     def test_same_score_is_allowed(self):
-        result = self.decide("codex/gpt-6-astra-xhigh", "claude/claude-fable-5-1-xhigh")
+        result = self.decide("codex/gpt-6-astra", "claude/claude-fable-5-1-xhigh")
         self.assertTrue(result["allowed"])
         self.assertEqual(result["code"], "same-score-allowed")
-        self.assertEqual(result["target_score"], 54)
+        self.assertEqual(result["target_score"], 53)
 
     def test_within_display_grade_upward_is_denied(self):
         result = self.decide("claude/claude-opus-5-xhigh", "codex/gpt-6-astra-xhigh")
         self.assertFalse(result["allowed"])
-        self.assertEqual((result["caller_score"], result["target_score"]), (53, 54))
+        self.assertEqual((result["caller_score"], result["target_score"]), (50, 52))
         self.assertEqual(result["code"], "target-above-effective-ceiling")
 
     def test_cross_vendor_down_allowed_and_up_denied(self):
@@ -103,9 +103,9 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertFalse(up["allowed"])
 
     def test_estimated_row_keeps_score_and_estimated_flag(self):
-        result = self.decide("codex/gpt-6-astra", "codex/gpt-5-6-terra-medium")
+        result = self.decide("codex/gpt-6-astra", "codex/gpt-5-5-low")
         self.assertTrue(result["allowed"])
-        self.assertEqual(result["target_score"], 37)
+        self.assertEqual(result["target_score"], 31)
         self.assertTrue(result["target_estimated"])
 
     def test_unknown_caller_model_effort_reasoning_and_fallback_deny(self):
@@ -129,16 +129,16 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_caller_ceiling_propagates_and_inherited_ceiling_narrows(self):
         result = self.decide(
-            "codex/gpt-6-astra", "codex/gpt-5-6-sol-high", ceiling=49
+            "codex/gpt-6-astra", "codex/gpt-5-6-sol-high", ceiling=43
         )
         self.assertTrue(result["allowed"])
-        self.assertEqual(result["effective_ceiling"], 49)
-        self.assertEqual(result["child_context"]["inherited_ceiling"], 49)
+        self.assertEqual(result["effective_ceiling"], 43)
+        self.assertEqual(result["child_context"]["inherited_ceiling"], 43)
         narrowed = self.decide(
-            "codex/gpt-6-astra", "codex/gpt-5-6-sol-xhigh", ceiling=49
+            "codex/gpt-6-astra", "codex/gpt-5-6-sol-xhigh", ceiling=43
         )
         self.assertFalse(narrowed["allowed"])
-        self.assertEqual((narrowed["target_score"], narrowed["effective_ceiling"]), (50, 49))
+        self.assertEqual((narrowed["target_score"], narrowed["effective_ceiling"]), (44, 43))
 
     def test_missing_caller_context_has_actionable_structured_diagnosis(self):
         result = aa_policy.decide(

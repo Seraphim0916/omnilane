@@ -49,6 +49,9 @@ PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "gk-grok-4_6-high
 for effort in ["xhigh", "medium", "low"]:
     PROVEN[f"grok/grok-4-6-{effort}"] = ("cli_reasoning_effort", "grok-4.6", f"gk-grok-4_6-{effort}")
 PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high")
+# AA scores grok-4.7 at xhigh and high only; its base row is the xhigh one.
+PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
+PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
 
 for cid, rid, ev in [
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
@@ -81,6 +84,9 @@ for cid, model in [("claude/claude-sonnet-5", "claude-sonnet-5"),
                    ("claude/claude-opus-4-6-adaptive", "claude-opus-4-6"),
                    ("claude/claude-sonnet-4-6-adaptive", "claude-sonnet-4-6")]:
     PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-max")
+for effort in ["xhigh", "high", "medium", "low"]:
+    PROVEN[f"claude/claude-sonnet-5-{effort}"] = (
+        "model_and_effort", "claude-sonnet-5", f"cl-claude-sonnet-5-{effort}")
 
 # Fable is listed so its failures reach unproven[] rather than vanishing. Its
 # probes were refused for quota on 2026-09-07 and again on 2026-09-09; the

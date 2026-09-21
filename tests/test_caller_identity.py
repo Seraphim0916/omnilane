@@ -624,11 +624,15 @@ class ResolveTests(unittest.TestCase):
                 self.assertEqual(row["id"], config, reason)
 
     def test_claude_is_never_mapped_onto_a_non_reasoning_row(self):
-        # ADR-0046: Claude's --effort has no reasoning-off value, so the only
-        # sonnet-5 row at high, the non-reasoning one, cannot be what ran.
+        # ADR-0046: Claude's --effort has no reasoning-off value, so of the two
+        # sonnet-5 rows at high only the adaptive one can be what ran.
         row, reason = self.resolve("claude", "claude-sonnet-5", "high")
+        self.assertEqual(row["id"], "claude/claude-sonnet-5-high", reason)
+        self.assertEqual(row["reasoning"], "adaptive")
+        # opus-4-7 at high is scored only as non-reasoning, so it stays unresolved.
+        row, reason = self.resolve("claude", "claude-opus-4-7", "high")
         self.assertIsNone(row)
-        self.assertIn("claude-sonnet-5", reason)
+        self.assertIn("claude-opus-4-7", reason)
 
     def test_a_missing_effort_resolves_only_where_a_default_is_scored(self):
         row, reason = self.resolve("claude", "claude-opus-5", None)
@@ -775,7 +779,7 @@ class WriteContextTests(unittest.TestCase):
             path = caller_identity.write_context(row, reg, Path(tmp))
             value, _ = aa_policy.load_caller(path, reg)
             self.assertEqual(value["caller"], {key: row[key] for key in aa_policy.IDENTITY_FIELDS})
-            self.assertEqual(value["inherited_ceiling"], 52)
+            self.assertEqual(value["inherited_ceiling"], 48)
             first = path.stat().st_mtime_ns
             self.assertEqual(caller_identity.write_context(row, reg, Path(tmp)), path)
             self.assertEqual(path.stat().st_mtime_ns, first)
@@ -886,8 +890,8 @@ class EligibleLanesTests(unittest.TestCase):
         return result.stdout
 
     def refusal(self, **extra):
-        value = {"allowed": False, "code": "target-above-effective-ceiling", "effective_ceiling": 48,
-                 "inherited_ceiling": 48, "caller_score": 48, "caller_degraded": True,
+        value = {"allowed": False, "code": "target-above-effective-ceiling", "effective_ceiling": 46,
+                 "inherited_ceiling": 46, "caller_score": 46, "caller_degraded": True,
                  "caller": {"vendor": "codex", "model": "gpt-6-astra"}}
         value.update(extra)
         return json.dumps(value)
@@ -901,7 +905,7 @@ class EligibleLanesTests(unittest.TestCase):
     def test_names_the_effort_that_reaches_the_lanes_cheapest_target(self):
         value = json.loads(self.annotate(self.refusal(), lane="hardest"))
         self.assertEqual(value["lane_requirement"],
-                         {"lane": "hardest", "target": "codex/gpt-6-astra-xhigh", "score": 54,
+                         {"lane": "hardest", "target": "codex/gpt-6-astra-xhigh", "score": 52,
                           "required_caller_effort": "xhigh"})
         self.assertEqual(value["required_caller_effort"], "xhigh")
         self.assertIn("recorded no effort", value["reason"])
@@ -941,13 +945,13 @@ class WhoamiCommandTests(unittest.TestCase):
         self.assertEqual(path.parent, Path(self.tmp.name) / "caller-context")
         value = json.loads(path.read_text())
         self.assertEqual(value["caller"]["effort"], "high")
-        self.assertEqual(value["inherited_ceiling"], 52)
+        self.assertEqual(value["inherited_ceiling"], 48)
         self.assertIn("claude/claude-opus-5-high", result.stderr)
 
     def test_the_omnilane_subcommand_reaches_the_same_answer(self):
         result = self.run_whoami("claude", "--model", "claude-opus-5", "--effort", "max", via_cli=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(Path(result.stdout.strip()).read_text())["inherited_ceiling"], 54)
+        self.assertEqual(json.loads(Path(result.stdout.strip()).read_text())["inherited_ceiling"], 51)
 
     def test_a_codex_launch_without_an_effort_degrades_to_the_floor(self):
         result = self.run_whoami("codex", "exec", "-m", "gpt-6-astra")
@@ -956,9 +960,9 @@ class WhoamiCommandTests(unittest.TestCase):
         self.assertEqual(path.name, "codex--gpt-6-astra--effort-unverified.json")
         value = json.loads(path.read_text())
         self.assertIs(value["effort_unverified"], True)
-        self.assertEqual(value["inherited_ceiling"], 48)
+        self.assertEqual(value["inherited_ceiling"], 46)
         self.assertIn("unrecorded effort", result.stderr)
-        self.assertIn("ceiling 48", result.stderr)
+        self.assertIn("ceiling 46", result.stderr)
 
     def test_an_unscored_codex_model_without_an_effort_still_refuses(self):
         result = self.run_whoami("codex", "exec", "-m", "gpt-0-nothing")
@@ -1076,10 +1080,10 @@ class DispatchReadsCallerTests(unittest.TestCase):
         return sent
 
     def test_a_max_launcher_reaches_the_top_candidate(self):
-        result = self.dispatch(launcher=["claude", "--model", "claude-opus-5", "--effort", "max"])
+        result = self.dispatch(launcher=["claude", "--model", "claude-fable-5-1", "--effort", "max"])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.models_sent(), ["gpt-6-astra"])
-        self.assertIn("claude/claude-opus-5", result.stderr)
+        self.assertIn("claude/claude-fable-5-1", result.stderr)
 
     def test_a_high_launcher_is_held_to_its_own_ceiling(self):
         result = self.dispatch(launcher=["claude", "--model", "claude-opus-5", "--effort", "high"])
@@ -1091,9 +1095,9 @@ class DispatchReadsCallerTests(unittest.TestCase):
         context = Path(self.tmp.name) / "caller.json"
         context.write_text(json.dumps({
             "schema_version": 1, "snapshot_id": self.registry["snapshot"]["id"], "kind": "model",
-            "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS}, "inherited_ceiling": 52}))
+            "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS}, "inherited_ceiling": 50}))
         self.env["OMNILANE_AA_CALLER_CONTEXT"] = str(context)
-        result = self.dispatch(launcher=["claude", "--model", "claude-opus-5", "--effort", "max"])
+        result = self.dispatch(launcher=["claude", "--model", "claude-fable-5-1", "--effort", "max"])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.models_sent(), ["gpt-5.6-sol"])
 

@@ -30,7 +30,7 @@ class LineageTests(unittest.TestCase):
         self.policy.write_bytes((ROOT/'config/aa-model-policy.json').read_bytes())
         caller = next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-6-astra-medium')
         self.context_value = {'schema_version':1,'snapshot_id':self.registry['snapshot']['id'],
-            'kind':'model','caller':{k:caller[k] for k in aa_policy.IDENTITY_FIELDS}, 'inherited_ceiling':52}
+            'kind':'model','caller':{k:caller[k] for k in aa_policy.IDENTITY_FIELDS}, 'inherited_ceiling':50}
         self.context = self.base/'caller.json'; self.context.write_text(json.dumps(self.context_value))
         self.marker = self.base/'spy.jsonl'; self.bins = self.base/'bin'; self.bins.mkdir()
         spy = self.bins/'codex'
@@ -64,7 +64,7 @@ if '-o' in sys.argv:
         called=json.loads(self.marker.read_text().splitlines()[-1])
         self.assertEqual(called['context']['caller']['model'],'gpt-5.6-sol')
         self.assertEqual(called['context']['caller']['effort'],'high')
-        self.assertEqual(called['context']['inherited_ceiling'],52)
+        self.assertEqual(called['context']['inherited_ceiling'],50)
         self.assertIsNone(called['human'])
         job=next((self.home/'jobs').iterdir())
         self.assertEqual(json.loads((job/'aa-authorizer.json').read_text())['caller']['model'],'gpt-6-astra')
@@ -93,7 +93,7 @@ if '-o' in sys.argv:
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertEqual(r.returncode,0,r.stderr)
         self.assertEqual(len(self.marker.read_text().splitlines()),2)
-        self.assertEqual(json.loads(self.marker.read_text().splitlines()[-1])['context']['inherited_ceiling'],52)
+        self.assertEqual(json.loads(self.marker.read_text().splitlines()[-1])['context']['inherited_ceiling'],50)
 
     def test_retry_tamper_fails_before_provider(self):
         r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
@@ -113,7 +113,7 @@ if '-o' in sys.argv:
         child=Path(plan['worker_contract']['caller_context_path'])
         self.assertEqual(json.loads(child.read_text())['caller']['model'],'gpt-5.6-sol')
         self.assertFalse(self.marker.exists())
-        self.assertEqual(plan['aa_policy']['target_score'],48)
+        self.assertEqual(plan['aa_policy']['target_score'],42)
 
     def test_native_upward_denied_before_provider_or_job(self):
         r=self.run_dispatch('--executor','native','--vendor','codex','--model','gpt-6-astra','--effort','xhigh')
@@ -172,7 +172,7 @@ if '-o' in sys.argv:
         self.assertEqual(called['context']['caller']['vendor'],'gemini')
         self.assertEqual(called['context']['caller']['model'],'gemini-3.8-flash')
         self.assertEqual(called['context']['caller']['effort'],'high')
-        self.assertEqual(called['context']['inherited_ceiling'],52)
+        self.assertEqual(called['context']['inherited_ceiling'],50)
         self.assertIsNone(called['human'])
 
     def test_cross_vendor_encoded_effort_conflict_never_invokes_provider(self):
@@ -187,7 +187,7 @@ if '-o' in sys.argv:
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
         row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-luna-high')
-        lower={**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':37}
+        lower={**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':32}
         self.context.write_text(json.dumps(lower))
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertNotEqual(r.returncode,0)
@@ -208,7 +208,7 @@ if '-o' in sys.argv:
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
         row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-luna-high')
-        self.context.write_text(json.dumps({**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':37}))
+        self.context.write_text(json.dumps({**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':32}))
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertNotEqual(r.returncode,0)
         self.assertIn('target-above-effective-ceiling',r.stderr)
@@ -270,7 +270,7 @@ if '-o' in sys.argv:
         self.assertEqual(before,digest)
         self.assertEqual(before,hashlib.sha256(self.policy.read_bytes()).hexdigest())
         row=next(r for r in registry['scored_configs'] if r['id']=='codex/gpt-5-6-sol-high')
-        self.assertEqual(row['score'],48)
+        self.assertEqual(row['score'],42)
         self.assertFalse(row['transport_mapping']['upstream_identity_verified'])
 
     def test_overlay_host_mismatch_fails_closed(self):
