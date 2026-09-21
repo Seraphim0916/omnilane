@@ -26,7 +26,7 @@ EXPECTED_DEFAULTS = {
     "ui-draft": "codex gpt-5.6-sol high",
     "long-context": "gemini gemini-3.8-flash-medium -",
     "fast-agentic": "gemini gemini-3.8-flash-low -",
-    "live-search": "grok grok-4.6 high",
+    "live-search": "grok grok-4.7 high",
     "coding-overflow": "grok grok-4.6 high",
     "arbitrate": "off - -",
 }
