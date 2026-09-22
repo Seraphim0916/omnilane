@@ -53,6 +53,31 @@ NEW_ROWS = [
      "claude-sonnet-5-medium", "claude/claude-sonnet-5"),
     ("claude/claude-sonnet-5-low", "claude", "claude-sonnet-5", "low", "adaptive",
      "claude-sonnet-5-low", "claude/claude-sonnet-5"),
+    ("claude/claude-opus-5-5", "claude", "claude-opus-5-5", "max", "adaptive",
+     "claude-opus-5-5", "claude/claude-opus-5"),
+    ("claude/claude-opus-5-5-xhigh", "claude", "claude-opus-5-5", "xhigh", "adaptive",
+     "claude-opus-5-5-xhigh", "claude/claude-opus-5-xhigh"),
+    ("claude/claude-opus-5-5-high", "claude", "claude-opus-5-5", "high", "adaptive",
+     "claude-opus-5-5-high", "claude/claude-opus-5-high"),
+    ("claude/claude-opus-5-5-medium", "claude", "claude-opus-5-5", "medium", "adaptive",
+     "claude-opus-5-5-medium", "claude/claude-opus-5-medium"),
+    ("claude/claude-opus-5-5-low", "claude", "claude-opus-5-5", "low", "adaptive",
+     "claude-opus-5-5-low", "claude/claude-opus-5-low"),
+    ("codex/gpt-5-3-codex", "codex", "gpt-5.3-codex", "xhigh", "reasoning",
+     "gpt-5-3-codex", "codex/gpt-5-4"),
+    # AA names no effort and no reasoning mode for Instant, so both stay unlabelled.
+    ("codex/gpt-5-5-instant-06-26", "codex", "gpt-5.5-instant", None, "unspecified",
+     "gpt-5-5-instant-06-26", "codex/gpt-5-5-non-reasoning"),
+    ("gemini/gemini-3-5-flash-lite", "gemini", "gemini-3.5-flash-lite", "high", "unspecified",
+     "gemini-3-5-flash-lite", "gemini/gemini-3-7-flash"),
+    ("codex/gpt-oss-120b", "codex", "gpt-oss-120b", "high", "reasoning",
+     "gpt-oss-120b", "codex/gpt-5-4"),
+    ("codex/gpt-oss-120b-low", "codex", "gpt-oss-120b", "low", "reasoning",
+     "gpt-oss-120b-low", "codex/gpt-5-4-low"),
+    ("codex/gpt-oss-20b", "codex", "gpt-oss-20b", "high", "reasoning",
+     "gpt-oss-20b", "codex/gpt-5-4"),
+    ("codex/gpt-oss-20b-low", "codex", "gpt-oss-20b", "low", "reasoning",
+     "gpt-oss-20b-low", "codex/gpt-5-4-low"),
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6"}  # new catalog model -> alias entry to clone
 
@@ -169,7 +194,8 @@ def cmd_build(args) -> int:
         row = copy.deepcopy(by_id[shape])
         row.update(id=cid, vendor=vendor, model=model, effort=effort, reasoning=reasoning,
                    fallback=None, aa_slug=slug, source_urls=[PAGE.format(slug=slug)])
-        row["transport_mapping"]["candidate_model_ids"] = [model]
+        # gemini selectors carry the effort in the model id, as target_row reads them
+        row["transport_mapping"]["candidate_model_ids"] = [f"{model}-{effort}" if vendor == "gemini" else model]
         rescore(row, records[slug], version, as_of, report(vendor))
         scored.append(row)
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))

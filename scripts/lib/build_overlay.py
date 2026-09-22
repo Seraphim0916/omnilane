@@ -64,9 +64,10 @@ for cid, rid, ev in [
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 
-for effort in ["max", "xhigh", "high", "medium", "low"]:
-    cid = "claude/claude-opus-5" + ("" if effort == "max" else f"-{effort}")
-    PROVEN[cid] = ("model_and_effort", "claude-opus-5", f"cl-claude-opus-5-{effort}")
+for model in ["claude-opus-5", "claude-opus-5-5"]:
+    for effort in ["max", "xhigh", "high", "medium", "low"]:
+        cid = f"claude/{model}" + ("" if effort == "max" else f"-{effort}")
+        PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-{effort}")
 # gpt-6-astra rejects effort "none" upstream ("Unsupported value: 'none' is not
 # supported with the 'gpt-6-astra' model"), so it has no non-reasoning selector.
 for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini"]:
