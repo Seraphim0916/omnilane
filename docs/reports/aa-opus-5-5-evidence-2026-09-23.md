@@ -1,6 +1,6 @@
 # AA v4.3.2 補列證據：Claude Opus 5.5 及另外 7 個未收錄 slug（2026-09-23）
 
-狀態：`approval.status = proposed`（待 Vincent 核准；本檔不構成核准）。
+狀態：`approval.status = approved`（Vincent 於 2026-09-23 明示核准；核准版雜湊見下方）。
 
 ## 來源
 
@@ -58,11 +58,12 @@ Opus 5.5 缺的欄位（五列都是 null，AA 尚未公布）：`mlcrOverall`�
 | 項目 | sha256 |
 |---|---|
 | 舊政策檔（main `c196c71`，v0.45.0） | `a1109913b9928d943bc440787d26caaf7818e40abdaae32899750d65e5eb5fdd` |
-| 新政策檔 | `ca1cdfe03b89e6779e33c8373409aa232adfc5490463a615dae0b34b4be55aaf` |
+| 新政策檔（proposed） | `ca1cdfe03b89e6779e33c8373409aa232adfc5490463a615dae0b34b4be55aaf` |
+| 新政策檔（approved，最終） | `b891f5030eb9a1cb4726233195f8835f2fa6e82260223392cd5e3216bfd779cc` |
 
-可重現性：以舊檔副本為 base 連跑兩次，再用 `--base config/aa-model-policy.json` 連跑兩次，四次產物的 sha256 都是 `ca1cdfe0…5aaf`。
+可重現性：proposed 版以舊檔副本為 base 連跑兩次，再用 `--base config/aa-model-policy.json` 連跑兩次，四次產物的 sha256 都是 `ca1cdfe0…5aaf`。核准版以舊檔副本為 base、`--approval approved` 連跑兩次，兩次都是 `b891f503…79cc`；與 proposed 版只差 `snapshot.approval.status`（proposed→approved）與 `snapshot.approval.estimated_scores`（provisional_pending_review→approved_provisional）。
 
-`scripts/lib/aa_policy.py` 的釘選已同步：`APPROVED_AS_OF = "2026-09-23"`、`APPROVED_REGISTRY_SHA256 = "ca1cdfe0…5aaf"`；`APPROVED_BENCHMARK_VERSION` 維持 `4.3.2`。
+`scripts/lib/aa_policy.py` 的釘選已同步：`APPROVED_AS_OF = "2026-09-23"`、`APPROVED_REGISTRY_SHA256 = "b891f503…79cc"`；`APPROVED_BENCHMARK_VERSION` 維持 `4.3.2`。
 
 ## report 輸出
 
@@ -75,6 +76,6 @@ report: wrote 4 vendor reports under /Users/vincentw/dev/omnilane-wt/aa-opus55/d
 
 ## 已知差異
 
-- 快照的 `approval.source` 指向 `docs/reports/aa-rebaseline-2026-09-23.md`（build 固定產生的名稱），這個檔不存在；本檔依任務書命名為 `aa-opus-5-5-evidence-2026-09-23.md`。核准時要決定補那個檔，或改名。
-- `approval.status` 是 `proposed`；`aa_policy.py` 不檢查這個欄位，所以只要釘選同步，載入時就會生效。發布前要由 Vincent 核准，並以 `--approval approved` 重建（雜湊會變，要再同步釘選）。
+- 快照的 `approval.source` 指向 `docs/reports/aa-rebaseline-2026-09-23.md`（build 固定產生的名稱），已補建該摘要檔並連回本檔。
+- `aa_policy.py` 不檢查 `approval.status` 欄位，生效與否只看釘選雜湊；核准版已重建並同步釘選。
 - gpt-oss-20b 的 low（9.95，估計值）分數高於 high（8.97，非估計值），這是 AA 的原始資料，照收不修。

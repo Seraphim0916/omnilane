@@ -1,7 +1,7 @@
 # AA 政策檔補列 Claude Opus 5.5，並把它排進車道（2026-09-23）
 
 來源：claude-code-s／MacStudio，2026-09-23。分支 `feat/aa-opus-5-5`，工作樹 `~/dev/omnilane-wt/aa-opus55`。
-狀態：`snapshot.approval.status = proposed`，**尚未核准**；核准要 Vincent 明講，改成 `approved` 會讓雜湊變動，釘選要跟著改。
+狀態：`snapshot.approval.status = approved`。Vincent 於 2026-09-23 在主控工作階段明示「核准政策檔，改成已核准」；以 `--approval approved` 重建，除 `approval.status` 與 `approval.estimated_scores` 兩欄外與 proposed 版（`ca1cdfe0…5aaf`）逐列相同。
 本檔是政策檔 `snapshot.approval.source` 指向的摘要。逐列證據、抽取來源與雜湊重現紀錄在
 [`aa-opus-5-5-evidence-2026-09-23.md`](aa-opus-5-5-evidence-2026-09-23.md)。
 
@@ -19,7 +19,7 @@ AA 仍是 Intelligence Index v4.3.2，與前一快照 `aa-v4.3.2-2026-09-22-v1` 
 - 另外 7 列（gpt-5.3-codex、gpt-5.5-instant、gemini-3.5-flash-lite、gpt-oss-120b 高／低、gpt-oss-20b 高／低）
   只為讓以它們執行的主控有上限可查；不進任何車道鏈，也不進 `omnilane configure` 選單。
 - 新 12 列的 `transport_mapping` 全部未驗證，不宣稱任何 CLI 叫得到。
-- 雜湊：舊 `a1109913…5fdd` → 新 `ca1cdfe0…5aaf`；`scripts/lib/aa_policy.py` 的釘選已同步。
+- 雜湊：舊 `a1109913…5fdd` → proposed 版 `ca1cdfe0…5aaf` → 核准版 `b891f503…79cc`；`scripts/lib/aa_policy.py` 的釘選已同步到核准版。
 
 ## 車道
 
@@ -57,6 +57,6 @@ taste-final 的 xhigh，因 max 58 高於上限 56）；medium 主控的結果�
 
 ## 合併前後必須由 Vincent 做的事
 
-1. 核准政策檔（`approval.status`），或維持 proposed 發版——由 Vincent 決定。
+1. ~~核准政策檔~~：已於 2026-09-23 核准。
 2. 合併並安裝後，**重簽完成前每一次派工都會被拒**（`transport overlay snapshot mismatch`）；請緊接著跑 `omnilane resign`。
 3. MacMini 同樣要 pull＋重簽。
