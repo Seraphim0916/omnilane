@@ -64,16 +64,16 @@ decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
 | Lane | First choice | Backup | Use for |
 |---|---|---|---|
-| hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → GPT-6 Astra (xhigh) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
-| consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; always keep `--vendor` |
-| ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
+| hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
+| taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; always keep `--vendor` |
+| ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
 | long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | Long-context synthesis; context size alone is not a quality result |
 | fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | Fast multi-step agentic loops and multimodal checks |
-| live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
+| live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
 | coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. The operator enables it with `arbitrate: vote codex,claude,grok -` in routing.local.yaml (1-4 voters; a `2` in place of the final `-` adds a rebuttal round). One quota hit PER VOTER PER ROUND; you chair and own the decision |
 
@@ -315,17 +315,25 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-- **Claude Fable 5.1:** quality-first controller; leads hard-judgment at xhigh and
-  is second in hardest-coding and taste-final. Send the hardest coding to Astra
-  xhigh, bulk and fast agentic work to Astra low, long documents and final prose
-  to Opus. `max` is in no chain: xhigh is level with it or ahead, for less.
-- **Claude Opus 5:** leads taste-final (max) and long-context (high, down to low),
-  and supplies the mid rungs of the hard lanes; an independent reviewer when
-  explicitly selected.
+- **Claude Opus 5.5:** leads hardest-coding and ui-draft (xhigh), hard-judgment and
+  taste-final (max, then xhigh and high), and is the Claude row in consult (xhigh)
+  and the Claude fallback in live-search (medium). Running at medium your ceiling
+  is 51: the max, xhigh and high rows that head those chains are out of reach, and
+  you start at the first row scoring 51 or less. Send bulk and fast agentic work to
+  Astra low and long documents to Opus 5.
+- **Claude Fable 5.1:** quality-first controller below Opus 5.5; its xhigh row
+  follows the Opus 5.5 rows in hardest-coding, hard-judgment and taste-final. Send
+  the hardest coding to Astra xhigh, bulk and fast agentic work to Astra low, long
+  documents and final prose to Opus. `max` is in no chain: xhigh is level with it
+  or ahead, for less.
+- **Claude Opus 5:** leads long-context (high, down to low), follows the Opus 5.5
+  rows in taste-final (max), and supplies the mid rungs of the hard lanes; an
+  independent reviewer when explicitly selected.
 - **Claude Sonnet:** coordination and tools; a cheap triage fallback at low. Never
   self-assign judgment, coding or search: its effort rows score low there.
-- **GPT Astra:** leads hardest-coding (xhigh), ui-draft (high), bulk-mechanical and
-  fast-agentic (low); the independent second opinion in hard-judgment. Resolve
+- **GPT Astra:** leads bulk-mechanical and fast-agentic (low) and consult (xhigh);
+  the first non-Claude row in hardest-coding (xhigh) and ui-draft (high); the
+  independent second opinion in hard-judgment. Resolve
   your real effort first; an explicit higher effort does not bypass the ceiling.
 - **GPT Sol / Terra / Luna:** fallbacks below Astra for mechanical and agentic
   work, Terra for long context, Luna for triage, only within your exact ceiling.
@@ -346,6 +354,7 @@ lane table; do not assume an older model is equivalent.
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
 | Opus | claude | claude-opus-5 | high |
+| Opus 5.5 | claude | claude-opus-5-5 | xhigh |
 | Fable 5.1 | claude | claude-fable-5-1 | xhigh |
 | Sonnet | claude | claude-sonnet-5 | high |
 | Haiku | claude | claude-haiku-4-5 | - |

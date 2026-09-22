@@ -211,16 +211,16 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ GPT-6 Astra（high）→ Claude Fable 5.1（high）→ GPT-6 Astra（medium）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ GPT-5.6 Sol（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🔥 hardest-coding | Claude Opus 5.5（xhigh） | Claude Opus 5.5（high）→ GPT-6 Astra（xhigh）→ Claude Fable 5.1（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5.5（medium）→ Claude Fable 5.1（high）→ GPT-6 Astra（medium）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ GPT-5.6 Sol（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
 | 🏗️ bulk-mechanical | GPT-6 Astra（low） | GPT-5.6 Sol（high）→ Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 重構、搬遷、測試、大面積掃描等耐力工作 |
 | 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
-| ⚖️ hard-judgment | Claude Fable 5.1（xhigh） | GPT-6 Astra（xhigh）→ Claude Opus 5（max）→ GPT-6 Astra（high）→ Claude Opus 5（xhigh）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Opus 5（max） | Claude Fable 5.1（xhigh）→ Claude Opus 5（xhigh）→ Grok 4.7 → GPT-6 Astra（xhigh）→ Claude Opus 5（high）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
-| 💬 consult | GPT-6 Astra（xhigh） | Claude Fable 5.1（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
-| 🎨 ui-draft | GPT-6 Astra（high） | Claude Opus 5（high）→ GPT-6 Astra（low）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
+| ⚖️ hard-judgment | Claude Opus 5.5（max） | Claude Opus 5.5（xhigh）→ Claude Opus 5.5（high）→ Claude Fable 5.1（xhigh）→ GPT-6 Astra（xhigh）→ Claude Opus 5（max）→ Claude Opus 5.5（medium）→ GPT-6 Astra（high）→ Claude Opus 5（xhigh）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |
+| ✒️ taste-final | Claude Opus 5.5（max） | Claude Opus 5.5（xhigh）→ Claude Opus 5.5（high）→ Claude Opus 5（max）→ Claude Fable 5.1（xhigh）→ Claude Opus 5（xhigh）→ Grok 4.7 → GPT-6 Astra（xhigh）→ Claude Opus 5（high）→ Grok 4.6 → Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
+| 💬 consult | GPT-6 Astra（xhigh） | Claude Opus 5.5（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
+| 🎨 ui-draft | Claude Opus 5.5（xhigh） | GPT-6 Astra（high）→ Claude Opus 5.5（high）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
 | 📚 long-context | Claude Opus 5（high） | Claude Opus 5（medium）→ Claude Opus 5（low）→ GPT-5.6 Terra（max）→ Gemini 3.8 Flash（High） | 長文件整合；上下文容量本身不證明任務品質 |
 | ⚡ fast-agentic | GPT-6 Astra（low） | Gemini 3.8 Flash（Medium）→ GPT-5.6 Sol（medium）→ Claude Opus 5（low） | 高速多步驟工具迴圈、多模態檢查 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Opus 5.5（medium） | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 

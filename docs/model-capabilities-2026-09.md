@@ -1,26 +1,30 @@
 # Model capabilities — September 2026 snapshot
 
-External records are dated per section. The 2026-09-22 decision below is the
+External records are dated per section. The 2026-09-23 decision below is the
 current basis for `routing.yaml`. The 2026-09-05 v4.2 decision and the
 2026-09-02 v4.1.1-era snapshot are kept as historical evidence; their scores
 are on other scales and are not comparable with the v4.3.2 figures.
 
-## Current routing decision — 2026-09-22 (AA v4.3.2)
+## Current routing decision — 2026-09-23 (AA v4.3.2, Claude Opus 5.5 added)
 
-`routing.yaml` was rewritten on this date, not amended. Each lane names the
-measurements that match its kind of work, and its candidates are listed
-best-first on them. Because a caller may only dispatch to a target scoring at or
-below its own ceiling, each chain also steps down through the score range, so
-that whatever a controller's ceiling, the first candidate it can reach is the
-best one it can reach. The `score` column below is the registry's ceiling value.
+`routing.yaml` was rewritten on 2026-09-22, not amended, and on 2026-09-23 Claude
+Opus 5.5 was placed into it on the same rule. Each lane names the measurements
+that match its kind of work, and its candidates are listed best-first on them.
+Because a caller may only dispatch to a target scoring at or below its own
+ceiling, each chain also steps down through the score range, so that whatever a
+controller's ceiling, the first candidate it can reach is the best one it can
+reach. The `score` column below is the registry's ceiling value.
 
-Sources. Registry scores: `docs/reports/aa-v4.3.2-extract-2026-09-22.json`.
-Lane measurements: `docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`, a second
-capture of the same AA page the same day; every index value in the two files is
-identical. The page served at that capture carried no hallucination-rate field,
-so that one field comes from a capture about an hour earlier, as the file's
-`supplement` block records. The tables are generated, not typed:
-`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`.
+Sources. Registry scores and lane measurements:
+`docs/reports/aa-v4.3.2-extract-2026-09-23.json`, a capture of the AA page on
+2026-09-23 that carries the Opus 5.5 rows; the re-scoring is summarised in
+`docs/reports/aa-rebaseline-2026-09-23.md`. The tables are generated, not typed:
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-09-23.json`.
+That capture carries no hallucination-rate field for any model, so the column
+reads "not published" throughout. Where the text below relies on a hallucination
+rate, the figure comes from the 2026-09-22 lane-metrics capture
+(`docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`, its `supplement` block);
+no hallucination rate for Opus 5.5 has been observed in any capture.
 
 What the measurements are. AA's own v4.3 note says Terminal-Bench moved to 4.0 and
 AutomationBench joined the index. Terminal-Bench 2.1 is kept for reference only:
@@ -36,69 +40,79 @@ unverified.
 
 | # | candidate | score | Terminal-Bench 4.0 | Terminal-Bench 2.1 | SciCode | hallucination rate |
 |---|---|---|---|---|---|---|
-| 1 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.891 | 0.557 | 0.483 |
-| 2 | claude claude-fable-5-1 xhigh | 53 | 0.551 | 0.910 | 0.609 | 0.705 |
-| 3 | codex gpt-6-astra high | 51 | 0.540 | 0.899 | 0.554 | 0.448 |
-| 4 | claude claude-fable-5-1 high | 51 | 0.520 | 0.899 | 0.587 | 0.688 |
-| 5 | codex gpt-6-astra medium | 50 | 0.495 | 0.895 | 0.542 | 0.465 |
-| 6 | claude claude-opus-5 high | 48 | 0.460 | 0.876 | 0.554 | 0.612 |
-| 7 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | 0.541 | 0.469 |
-| 8 | codex gpt-5.6-sol xhigh | 44 | 0.247 | 0.895 | 0.571 | 0.919 |
-| 9 | grok grok-4.7 high | 46 | 0.247 | not published | 0.578 | 0.324 |
-| 10 | grok grok-4.6 high | 44 | 0.212 | 0.884 | 0.565 | 0.343 |
-| 11 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | 0.566 | 0.552 |
+| 1 | claude claude-opus-5-5 xhigh | 56 | 0.596 | not published | 0.650 | not published |
+| 2 | claude claude-opus-5-5 high | 54 | 0.566 | not published | 0.604 | not published |
+| 3 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.891 | 0.557 | not published |
+| 4 | claude claude-fable-5-1 xhigh | 53 | 0.551 | 0.910 | 0.609 | not published |
+| 5 | codex gpt-6-astra high | 51 | 0.540 | 0.899 | 0.554 | not published |
+| 6 | claude claude-opus-5-5 medium | 51 | 0.525 | not published | 0.593 | not published |
+| 7 | claude claude-fable-5-1 high | 51 | 0.520 | 0.899 | 0.587 | not published |
+| 8 | codex gpt-6-astra medium | 50 | 0.495 | 0.895 | 0.542 | not published |
+| 9 | claude claude-opus-5 high | 48 | 0.460 | 0.876 | 0.554 | not published |
+| 10 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | 0.541 | not published |
+| 11 | codex gpt-5.6-sol xhigh | 44 | 0.247 | 0.895 | 0.571 | not published |
+| 12 | grok grok-4.7 high | 46 | 0.247 | not published | 0.578 | not published |
+| 13 | grok grok-4.6 high | 44 | 0.212 | 0.884 | 0.565 | not published |
+| 14 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | 0.566 | not published |
 
 **bulk-mechanical**
 
 | # | candidate | score | Terminal-Bench 4.0 | Terminal-Bench 2.1 | hallucination rate | minutes / task | index run cost ($) |
 |---|---|---|---|---|---|---|---|
-| 1 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | 0.469 | 1.3 | 1537 |
-| 2 | codex gpt-5.6-sol high | 42 | 0.207 | 0.873 | 0.912 | 3.2 | 1487 |
-| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | 0.552 | 3.3 | 1623 |
-| 4 | claude claude-opus-5 medium | 45 | 0.343 | 0.861 | 0.607 | 5.1 | 2732 |
+| 1 | codex gpt-6-astra low | 46 | 0.419 | 0.880 | not published | 1.5 | 1537 |
+| 2 | codex gpt-5.6-sol high | 42 | 0.207 | 0.873 | not published | 3.2 | 1487 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.876 | not published | 3.8 | 1623 |
+| 4 | claude claude-opus-5 medium | 45 | 0.343 | 0.861 | not published | 5.2 | 2732 |
 
 **triage**
 
 | # | candidate | score | index | index run cost ($) | minutes / task |
 |---|---|---|---|---|---|
-| 1 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.6 |
+| 1 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.7 |
 | 2 | gemini gemini-3.8-flash-low | 33 | 33.5 | not published | not published |
 | 3 | claude claude-sonnet-5 low | 24 | 24.3 | 653 | 2.5 |
-| 4 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.6 |
+| 4 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.3 |
 
 **hard-judgment**
 
 | # | candidate | score | HLE | GPQA | CritPt | Briefcase analytical Elo | hallucination rate |
 |---|---|---|---|---|---|---|---|
-| 1 | claude claude-fable-5-1 xhigh | 53 | 0.587 | 0.934 | 0.311 | 1971 | 0.705 |
-| 2 | codex gpt-6-astra xhigh | 52 | 0.546 | 0.963 | 0.314 | 1724 | 0.483 |
-| 3 | claude claude-opus-5 max | 51 | 0.549 | 0.932 | 0.291 | 1965 | 0.608 |
-| 4 | codex gpt-6-astra high | 51 | 0.531 | 0.949 | 0.289 | 1703 | 0.448 |
-| 5 | claude claude-opus-5 xhigh | 50 | 0.544 | 0.937 | 0.277 | 1958 | 0.595 |
-| 6 | claude claude-opus-5 high | 48 | 0.528 | 0.937 | 0.283 | 1855 | 0.612 |
-| 7 | grok grok-4.7 high | 46 | 0.423 | not published | 0.180 | 1967 | 0.324 |
-| 8 | grok grok-4.6 high | 44 | 0.429 | 0.949 | 0.171 | 1690 | 0.343 |
-| 9 | gemini gemini-3.8-flash-high | 41 | 0.478 | 0.953 | 0.183 | 1151 | 0.552 |
+| 1 | claude claude-opus-5-5 max | 58 | 0.614 | not published | 0.317 | 2207 | not published |
+| 2 | claude claude-opus-5-5 xhigh | 56 | 0.575 | not published | 0.317 | 2151 | not published |
+| 3 | claude claude-opus-5-5 high | 54 | 0.556 | not published | 0.309 | 2040 | not published |
+| 4 | claude claude-fable-5-1 xhigh | 53 | 0.587 | 0.934 | 0.311 | 1971 | not published |
+| 5 | codex gpt-6-astra xhigh | 52 | 0.546 | 0.963 | 0.314 | 1724 | not published |
+| 6 | claude claude-opus-5 max | 51 | 0.549 | 0.932 | 0.291 | 1965 | not published |
+| 7 | claude claude-opus-5-5 medium | 51 | 0.547 | not published | 0.277 | 1925 | not published |
+| 8 | codex gpt-6-astra high | 51 | 0.531 | 0.949 | 0.289 | 1703 | not published |
+| 9 | claude claude-opus-5 xhigh | 50 | 0.544 | 0.937 | 0.277 | 1958 | not published |
+| 10 | claude claude-opus-5 high | 48 | 0.528 | 0.937 | 0.283 | 1855 | not published |
+| 11 | grok grok-4.7 high | 46 | 0.423 | not published | 0.180 | 1967 | not published |
+| 12 | grok grok-4.6 high | 44 | 0.429 | 0.949 | 0.171 | 1690 | not published |
+| 13 | gemini gemini-3.8-flash-high | 41 | 0.478 | 0.953 | 0.183 | 1151 | not published |
 
 **taste-final**
 
 | # | candidate | score | Briefcase overall Elo | Briefcase presentation Elo | GDPval |
 |---|---|---|---|---|---|
-| 1 | claude claude-opus-5 max | 51 | 1673 | 1560 | 0.604 |
-| 2 | claude claude-fable-5-1 xhigh | 53 | 1669 | 1473 | 0.610 |
-| 3 | claude claude-opus-5 xhigh | 50 | 1649 | 1492 | 0.588 |
-| 4 | grok grok-4.7 high | 46 | 1644 | 1506 | 0.597 |
-| 5 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 |
-| 6 | claude claude-opus-5 high | 48 | 1573 | 1446 | 0.540 |
-| 7 | grok grok-4.6 high | 44 | 1546 | 1519 | 0.553 |
-| 8 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 |
+| 1 | claude claude-opus-5-5 max | 58 | 1822 | 1710 | 0.673 |
+| 2 | claude claude-opus-5-5 xhigh | 56 | 1780 | 1640 | 0.660 |
+| 3 | claude claude-opus-5-5 high | 54 | 1704 | 1555 | 0.596 |
+| 4 | claude claude-opus-5 max | 51 | 1673 | 1560 | 0.604 |
+| 5 | claude claude-fable-5-1 xhigh | 53 | 1669 | 1473 | 0.610 |
+| 6 | claude claude-opus-5 xhigh | 50 | 1649 | 1492 | 0.588 |
+| 7 | grok grok-4.7 high | 46 | 1644 | 1506 | 0.597 |
+| 8 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 |
+| 9 | claude claude-opus-5 high | 48 | 1573 | 1446 | 0.540 |
+| 10 | grok grok-4.6 high | 44 | 1546 | 1519 | 0.553 |
+| 11 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 |
 
 **consult**
 
 | # | candidate | score | index |
 |---|---|---|---|
 | 1 | codex gpt-6-astra xhigh | 52 | 52.4 |
-| 2 | claude claude-fable-5-1 xhigh | 53 | 53.2 |
+| 2 | claude claude-opus-5-5 xhigh | 56 | 56.0 |
 | 3 | grok grok-4.7 high | 46 | 46.3 |
 | 4 | grok grok-4.6 high | 44 | 44.3 |
 | 5 | gemini gemini-3.8-flash-high | 41 | 40.9 |
@@ -107,10 +121,12 @@ unverified.
 
 | # | candidate | score | MMMU-Pro | Terminal-Bench 4.0 |
 |---|---|---|---|---|
-| 1 | codex gpt-6-astra high | 51 | 0.864 | 0.540 |
-| 2 | claude claude-opus-5 high | 48 | 0.824 | 0.460 |
-| 3 | codex gpt-6-astra low | 46 | 0.846 | 0.419 |
-| 4 | gemini gemini-3.8-flash-high | 41 | 0.856 | 0.197 |
+| 1 | claude claude-opus-5-5 xhigh | 56 | 0.866 | 0.596 |
+| 2 | codex gpt-6-astra high | 51 | 0.864 | 0.540 |
+| 3 | claude claude-opus-5-5 high | 54 | 0.858 | 0.566 |
+| 4 | claude claude-opus-5 high | 48 | 0.824 | 0.460 |
+| 5 | codex gpt-6-astra low | 46 | 0.846 | 0.419 |
+| 6 | gemini gemini-3.8-flash-high | 41 | 0.856 | 0.197 |
 
 **long-context**
 
@@ -126,19 +142,19 @@ unverified.
 
 | # | candidate | score | AutomationBench | minutes / task | first answer token (s) |
 |---|---|---|---|---|---|
-| 1 | codex gpt-6-astra low | 46 | 0.591 | 1.3 | 2 |
+| 1 | codex gpt-6-astra low | 46 | 0.591 | 1.5 | 3 |
 | 2 | gemini gemini-3.8-flash-medium | 40 | 0.609 | not published | not published |
-| 3 | codex gpt-5.6-sol medium | 39 | 0.513 | 2.1 | 5 |
-| 4 | claude claude-opus-5 low | 39 | 0.518 | 2.5 | 3 |
+| 3 | codex gpt-5.6-sol medium | 39 | 0.513 | 2.2 | 5 |
+| 4 | claude claude-opus-5 low | 39 | 0.518 | 2.7 | 3 |
 
 **live-search**
 
 | # | candidate | score | hallucination rate | knowledge (omniscience) |
 |---|---|---|---|---|
-| 1 | grok grok-4.7 high | 46 | 0.324 | 30.9 |
-| 2 | grok grok-4.6 high | 44 | 0.343 | 30.5 |
-| 3 | gemini gemini-3.8-flash-high | 41 | 0.552 | 29.6 |
-| 4 | claude claude-opus-5 medium | 45 | 0.607 | 31.0 |
+| 1 | grok grok-4.7 high | 46 | not published | 30.9 |
+| 2 | grok grok-4.6 high | 44 | not published | 30.5 |
+| 3 | gemini gemini-3.8-flash-high | 41 | not published | 29.6 |
+| 4 | claude claude-opus-5-5 medium | 51 | not published | 40.3 |
 
 **coding-overflow**
 
@@ -153,45 +169,77 @@ unverified.
 
 Why each lane is ordered this way:
 
-- **hardest-coding** follows Terminal-Bench 4.0. Astra xhigh leads it and has the
-  lowest hallucination rate among the top rows. Fable xhigh leads the saturated
-  2.1 benchmark and SciCode, and beats Fable max on 4.0 (0.551 against 0.520) at
-  about two thirds of max's run cost, so max is in no chain. Astra loses far less
-  than any other family as effort drops (low still scores 0.419, where Opus is
-  down to 0.343 by medium and Sol high sits at 0.207), which is why it supplies
-  most of the rungs.
+- **hardest-coding** follows Terminal-Bench 4.0. Opus 5.5 xhigh ties Astra xhigh
+  on it (0.596 each) and is ahead on SciCode (0.650 against 0.557); Opus 5.5 max
+  scores the same 0.596, so max is in no chain here. Opus 5.5 high (0.566) is
+  placed second as the rung for callers whose ceiling is 54 or 55; on 4.0 alone
+  Astra xhigh (0.596) is ahead of it, yet a caller whose ceiling is 54 or 55
+  reaches Opus 5.5 high before Astra xhigh. Opus 5.5 medium (0.525) sits where its 4.0 result falls, between
+  Astra high (0.540) and Fable high (0.520). Astra xhigh had the lowest
+  hallucination rate among the top rows in the 2026-09-22 capture (0.483). Fable
+  xhigh beats Fable max on 4.0 (0.551 against 0.520) at about two thirds of max's
+  run cost. Astra loses far less than any other family as effort drops (low still
+  scores 0.419, where Opus 5 is down to 0.343 by medium and Sol high sits at
+  0.207), which is why it supplies most of the lower rungs.
 - **bulk-mechanical** wants routine coding per minute and per dollar. Astra low
   costs what Sol high costs and is ahead on both coding benchmarks, in under half
-  the time, with roughly half the hallucination rate. Sol high remains for
-  callers whose ceiling is below Astra low.
+  the time, with roughly half the hallucination rate (2026-09-22 capture). Sol
+  high remains for callers whose ceiling is below Astra low. Opus 5.5 was not
+  placed in this lane in 0.46.0: it scores higher on 4.0, but its time per task
+  is not published, and this lane's point is time and money per task.
 - **triage** is bought by the run. Luna high's run cost is a small fraction of any
   other row that still reads code. Sonnet low outscores Haiku for similar money.
 - **hard-judgment** follows HLE and CritPt for reasoning and Briefcase analytical
-  Elo for written analysis; hallucination rate decides the second opinion. Fable
-  xhigh leads both reasoning measures. Astra xhigh is the independent family and
-  the least likely of the top rows to assert something false. Opus keeps its
-  analytical Elo down the effort ladder (1855 at high) where Astra does not
-  (1703). Grok 4.7's analytical Elo equals Opus max's, but its reasoning scores
-  are among the lowest in the chain, so it stays below the Opus rows.
+  Elo for written analysis; hallucination rate decides the second opinion. Opus
+  5.5 max leads HLE (0.614), clearly ahead of its own xhigh (0.575), so unlike
+  Fable max it is in the chain; it also leads analytical Elo (2207). Opus 5.5
+  xhigh and high follow as its rungs; on HLE Fable xhigh (0.587) is ahead of both,
+  but both are graded far above Fable on analytical Elo (2151 and 2040 against
+  1971). Opus 5.5 medium (HLE 0.547) sits just behind Opus 5 max (0.549) and ahead
+  of Astra high (0.531). Astra xhigh is the independent family and was the least
+  likely of the top rows to assert something false in the 2026-09-22 capture.
+  Opus keeps its analytical Elo down the effort ladder (Opus 5 high 1855) where
+  Astra does not (1703). Grok 4.7's analytical Elo equals Opus 5 max's, but its
+  reasoning scores are among the lowest in the chain, so it stays below the Opus
+  rows.
 - **taste-final** has no benchmark, and nothing here measures Chinese phrasing.
-  The nearest evidence is Briefcase. Opus max is level with Fable overall and
-  clearly ahead on presentation. Grok 4.7 is graded above every Astra row overall,
-  so it precedes Astra. Final prose still needs human review.
-- **ui-draft** follows MMMU-Pro first and Terminal-Bench 4.0 second. Fable has no
-  published MMMU-Pro result and is left out rather than assumed.
-- **long-context** follows `mlcrOverall`, where Opus leads every other family by
+  The nearest evidence is Briefcase. Opus 5.5 max, xhigh and high are graded
+  above every other row overall (1822, 1780, 1704), and max and xhigh also lead
+  on presentation; Opus 5.5 high's presentation (1555) is level with Opus 5 max's
+  (1560). Opus 5.5 medium (1642 overall) is graded below Opus 5 max and is left
+  out. Opus 5 max is level with Fable overall and clearly ahead on presentation.
+  Grok 4.7 is graded above every Astra row overall, so it precedes Astra. Final
+  prose still needs human review.
+- **ui-draft** follows MMMU-Pro first and Terminal-Bench 4.0 second. Opus 5.5
+  xhigh leads both (0.866 and 0.596); Opus 5.5 max is barely ahead on MMMU-Pro
+  (0.877) and level on 4.0, so the chain starts at xhigh. Astra high (0.864) is
+  just behind, and Opus 5.5 high (0.858) just behind Astra high while ahead of it
+  on 4.0. Fable has no published MMMU-Pro result and is left out rather than
+  assumed.
+- **long-context** follows `mlcrOverall`, where Opus 5 leads every other family by
   a wide margin and keeps that lead down to low effort; AA-LCR is shown to make
   the saturation visible. Fable max scores higher still (0.711) but at three
   times Opus high's run cost, and it is the only Fable row with a published value.
+  Opus 5.5 has no published `mlcrOverall`, so it is not placed here.
 - **fast-agentic** follows AutomationBench and time per task. Astra low is the
   fastest row that still scores near the top. Flash medium scores as high and is
   the cross-vendor row; Flash low falls to 0.365. Haiku scores 0.032 and is gone.
-- **live-search**: Grok is the only native X source, and both releases hallucinate
-  less than either fallback. Opus medium replaces Sonnet because Sonnet's effort
-  rows have a negative omniscience score, more false assertions than true ones.
+  Opus 5.5 was not placed in this lane in 0.46.0: its time per task and first
+  answer token are not published, so the lane's second measure cannot compare it.
+- **live-search**: Grok is the only native X source, and in the 2026-09-22
+  capture both releases hallucinated less than either fallback. Opus 5.5 medium
+  replaces Opus 5 medium as the Claude fallback: it scores 40.3 on omniscience
+  against Opus 5 medium's 31.0; its hallucination rate is not published. Opus
+  rather than Sonnet because Sonnet's effort rows have a negative omniscience
+  score, more false assertions than true ones.
 - **coding-overflow** has no Codex row by design. Grok 4.7 edges 4.6 on
   Terminal-Bench 4.0 and SciCode.
-- **consult** lists each vendor's strongest generally reachable configuration.
+- **consult** lists each vendor's strongest generally reachable configuration;
+  for Claude that is now Opus 5.5 xhigh (index 56.0 against Fable xhigh's 53.2).
+
+The 2026-09-22 tables before Opus 5.5 was placed can be regenerated from the
+routing.yaml of commit c196c71 with
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-lane-metrics-2026-09-22.json`.
 
 The capability boundaries listed under 2026-09-05 still hold.
 

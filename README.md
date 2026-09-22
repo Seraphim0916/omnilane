@@ -256,16 +256,16 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → GPT-6 Astra (xhigh) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| ⚖️ hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
+| 🎨 ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
 | ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 

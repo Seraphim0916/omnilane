@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 114,
+    "catalogEntries": 115,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -631,6 +631,48 @@
         "claude-fable-5-1-xhigh"
       ],
       "mappingReason": "AA family/effort rows matched after punctuation normalization; AA slugs are not runtime IDs"
+    },
+    {
+      "vendor": "claude",
+      "access": "cli",
+      "catalogModel": "claude-opus-5-5",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "primary",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "primary",
+          "effort": "max"
+        },
+        {
+          "lane": "taste-final",
+          "position": "primary",
+          "effort": "max"
+        },
+        {
+          "lane": "consult",
+          "position": "fallback",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "primary",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "live-search",
+          "position": "fallback",
+          "effort": "medium"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as claude-opus-5-5 (max), claude-opus-5-5-xhigh, -high, -medium and -low"
     },
     {
       "vendor": "claude",

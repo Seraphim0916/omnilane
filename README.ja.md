@@ -220,16 +220,16 @@ flowchart LR
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🔥 hardest-coding | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → GPT-6 Astra (xhigh) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
 | 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.1 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5 (max) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Opus 5 (max) | Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Fable 5.1 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | GPT-6 Astra (high) | Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| ⚖️ hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
+| 🎨 ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
 | ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | リアルタイム X／Web 検索とソーシャル文脈 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) | リアルタイム X／Web 検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
