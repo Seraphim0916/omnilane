@@ -850,6 +850,28 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.46.0
+
+- **Run `omnilane resign` once after upgrading.** The registry snapshot changes
+  to `aa-v4.3.2-2026-09-23-v1` and the transport overlay is bound to it; until
+  the overlay is rebuilt, a model caller is refused on every lane with
+  `transport overlay snapshot mismatch`. Until `resign` has probed Opus 5.5 on a
+  host, lanes skip its Opus 5.5 rows and serve the next candidate.
+- **Claude Opus 5.5 joins the registry and the lanes** (58 at max, 56 xhigh, 54
+  high, 51 medium, 42 low on AA v4.3.2), placed on each lane's own measurements.
+  It leads `hardest-coding` and `ui-draft` at xhigh, and `hard-judgment` and
+  `taste-final` at max, followed by its xhigh and high rows; max is in those two
+  chains because it is clearly ahead of xhigh there, and stays out of
+  `hardest-coding`, where it scores no higher. It is the Claude row in `consult`
+  (xhigh) and the Claude fallback in `live-search` (medium). An Opus 5.5 medium
+  controller has a ceiling of 51 and starts below the rows that head those
+  chains. New alias `Opus 5.5`; `Opus` still means Opus 5. The figures are in
+  `docs/model-capabilities-2026-09.md`.
+- **Seven more AA rows are scored** (gpt-5.3-codex, gpt-5.5-instant,
+  gemini-3.5-flash-lite, gpt-oss-120b and gpt-oss-20b) so that a caller running
+  on one of them has a ceiling. None is placed in a lane.
+- Upgrade: `npm i -g omnilane@0.46.0`, then `omnilane resign`.
+
 ## What's new in v0.45.0
 
 - **Run `omnilane resign` once after upgrading.** The score registry moved to a

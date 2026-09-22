@@ -6,6 +6,52 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-23
+
+Claude Opus 5.5 joins the registry and the lanes. **Every host must run
+`omnilane resign` once after upgrading**: the registry snapshot changes to
+`aa-v4.3.2-2026-09-23-v1`, the transport overlay is bound to it, and until it is
+rebuilt a model caller is refused on every lane with
+`transport overlay snapshot mismatch`. Until the re-sign has probed Opus 5.5 on a
+host, every lane skips its Opus 5.5 rows there and serves the next candidate.
+
+### Added
+
+- Claude Opus 5.5 at max, xhigh, high, medium and low (scores 58, 56, 54, 51
+  and 42 on AA Intelligence Index v4.3.2), a catalog entry in
+  `omnilane configure`, and the `Opus 5.5` alias (claude-opus-5-5, xhigh). The
+  existing `Opus` alias still means Opus 5.
+- Seven more AA rows that were not in the registry: gpt-5.3-codex,
+  gpt-5.5-instant, gemini-3.5-flash-lite, gpt-oss-120b and gpt-oss-20b (high and
+  low each). They are scored so that a caller running on one of them has a
+  ceiling; none of them is placed in any lane or in the configure catalog.
+  The registry grows from 83 to 95 scored rows (26 estimated). The re-score is
+  summarised in `docs/reports/aa-rebaseline-2026-09-23.md`; the 83 existing
+  rows keep their scores.
+
+### Changed
+
+- Opus 5.5 is placed on each lane's own measurements:
+  - `hardest-coding`: Opus 5.5 (xhigh) first. It ties Astra (xhigh) on
+    Terminal-Bench 4.0 and is ahead on SciCode; its max row scores no higher on
+    4.0, so max is not in the chain. Opus 5.5 (high) is the second rung, then
+    the previous chain, with Opus 5.5 (medium) between Astra (high) and Fable
+    (high).
+  - `hard-judgment`: Opus 5.5 (max), then xhigh and high, then the previous
+    chain, with Opus 5.5 (medium) after Opus 5 (max). Max is in this chain
+    because it is clearly ahead of its own xhigh on HLE, and it leads graded
+    analytical quality.
+  - `taste-final`: Opus 5.5 (max), then xhigh and high, ahead of Opus 5 (max):
+    they are graded above every other row on finished documents.
+  - `ui-draft`: Opus 5.5 (xhigh) first on MMMU-Pro and Terminal-Bench 4.0;
+    Opus 5.5 (high) follows Astra (high).
+  - `consult`: the Claude row is Opus 5.5 (xhigh) instead of Fable 5.1 (xhigh).
+  - `live-search`: the Claude fallback is Opus 5.5 (medium) instead of Opus 5
+    (medium); it scores well ahead on AA's knowledge benchmark.
+  A controller running Opus 5.5 at medium has a ceiling of 51 and starts below
+  the max, xhigh and high rows. `docs/model-capabilities-2026-09.md` carries the
+  per-candidate figures, generated from the tracked 2026-09-23 extract.
+
 ## [0.45.0] - 2026-09-22
 
 The score registry moves to Artificial Analysis Intelligence Index v4.3.2, the
@@ -1324,7 +1370,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...v0.44.0
 [0.43.1]: https://github.com/Seraphim0916/omnilane/compare/v0.43.0...v0.43.1

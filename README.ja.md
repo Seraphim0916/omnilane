@@ -702,6 +702,13 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.46.0 の新機能
+
+- **アップグレード後に `omnilane resign` を一度実行してください。** レジストリのスナップショットが `aa-v4.3.2-2026-09-23-v1` に変わり、トランスポートオーバーレイはスナップショットに紐づいています。オーバーレイを再構築するまで、モデル呼び出し元はすべてのレーンで `transport overlay snapshot mismatch` として拒否されます。`resign` がこのホストで Opus 5.5 をプローブするまで、レーンは Opus 5.5 の行を飛ばして次の候補が処理します。
+- **Claude Opus 5.5 をレジストリとレーンに追加**しました（AA v4.3.2 で max 58、xhigh 56、high 54、medium 51、low 42）。各レーン自身の測定に基づいて配置しています。`hardest-coding` と `ui-draft` は xhigh、`hard-judgment` と `taste-final` は max が先頭で、その後に xhigh と high が続きます。この 2 レーンで max を入れたのは xhigh より明確に上回るためで、`hardest-coding` では max のスコアが上がらないため入れていません。`consult` の Claude 枠は xhigh、`live-search` の Claude フォールバックは medium になりました。medium で動く Opus 5.5 コントローラーの上限は 51 で、チェーン先頭の行には届きません。新しいエイリアス `Opus 5.5` を追加し、`Opus` は引き続き Opus 5 を指します。数値は `docs/model-capabilities-2026-09.md` にあります。
+- **AA の 7 行を新たに採点**しました（gpt-5.3-codex、gpt-5.5-instant、gemini-3.5-flash-lite、gpt-oss-120b、gpt-oss-20b）。これらで動く呼び出し元にも上限が付きます。どのレーンにも入れていません。
+- アップグレード: `npm i -g omnilane@0.46.0`、続けて `omnilane resign`。
+
 ## v0.45.0 の新機能
 
 - **アップグレード後に `omnilane resign` を一度実行してください。** スコアのレジストリが新しいスナップショットに移り、トランスポートオーバーレイはスナップショットに紐づいています。オーバーレイを再構築するまで、モデル呼び出し元はすべてのレーンで `transport overlay snapshot mismatch` として拒否されます。

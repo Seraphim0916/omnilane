@@ -687,6 +687,13 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.46.0 새 기능
+
+- **업그레이드 후 `omnilane resign` 을 한 번 실행하세요.** 레지스트리 스냅샷이 `aa-v4.3.2-2026-09-23-v1` 로 바뀌었고 트랜스포트 오버레이는 스냅샷에 묶여 있습니다. 오버레이를 다시 만들기 전까지 모델 호출자는 모든 레인에서 `transport overlay snapshot mismatch` 로 거부됩니다. `resign` 이 이 호스트에서 Opus 5.5 를 프로브하기 전까지 레인은 Opus 5.5 행을 건너뛰고 다음 후보가 처리합니다.
+- **Claude Opus 5.5 를 레지스트리와 레인에 추가**했습니다(AA v4.3.2 기준 max 58, xhigh 56, high 54, medium 51, low 42). 각 레인 자체의 측정에 따라 배치했습니다. `hardest-coding` 과 `ui-draft` 는 xhigh, `hard-judgment` 와 `taste-final` 은 max 가 맨 앞이고 그 뒤로 xhigh 와 high 가 이어집니다. 이 두 레인에 max 를 넣은 것은 거기서 xhigh 보다 분명히 앞서기 때문이며, `hardest-coding` 에서는 max 점수가 더 높지 않아 넣지 않았습니다. `consult` 의 Claude 자리는 xhigh, `live-search` 의 Claude 폴백은 medium 이 되었습니다. medium 으로 실행되는 Opus 5.5 컨트롤러의 상한은 51 이라 체인 맨 앞의 행에는 닿지 않습니다. 새 별칭 `Opus 5.5` 를 추가했고 `Opus` 는 계속 Opus 5 를 뜻합니다. 수치는 `docs/model-capabilities-2026-09.md` 에 있습니다.
+- **AA 의 7 개 행을 새로 채점**했습니다(gpt-5.3-codex, gpt-5.5-instant, gemini-3.5-flash-lite, gpt-oss-120b, gpt-oss-20b). 이 모델로 실행되는 호출자도 상한을 갖게 됩니다. 어떤 레인에도 넣지 않았습니다.
+- 업그레이드: `npm i -g omnilane@0.46.0`, 이어서 `omnilane resign`.
+
 ## v0.45.0 새 기능
 
 - **업그레이드 후 `omnilane resign` 을 한 번 실행하세요.** 점수 레지스트리가 새 스냅샷으로 바뀌었고 트랜스포트 오버레이는 스냅샷에 묶여 있습니다. 오버레이를 다시 만들기 전까지 모델 호출자는 모든 레인에서 `transport overlay snapshot mismatch` 로 거부됩니다.

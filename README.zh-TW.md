@@ -691,6 +691,13 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.46.0 新功能
+
+- **升級後請跑一次 `omnilane resign`。** 政策檔快照換成 `aa-v4.3.2-2026-09-23-v1`，而傳輸覆蓋檔綁的是快照；覆蓋檔重建之前，模型身分的派工在每條車道都會被拒，訊息是 `transport overlay snapshot mismatch`。在 `resign` 於本機探測過 Opus 5.5 之前，車道會跳過 Opus 5.5 各列，由下一個候選服務。
+- **Claude Opus 5.5 加入政策檔與車道**（AA v4.3.2：max 58、xhigh 56、high 54、medium 51、low 42），依各車道自己的量測排入。`hardest-coding` 與 `ui-draft` 由它的 xhigh 領先，`hard-judgment` 與 `taste-final` 由它的 max 領先，後面接它的 xhigh、high；max 進這兩條鏈是因為在那裡明顯勝過 xhigh，`hardest-coding` 上 max 沒有更高，所以不放。`consult` 的 Claude 格改用它的 xhigh，`live-search` 的 Claude 備援改用它的 medium。以 medium 執行的 Opus 5.5 主控上限是 51，搆不到鏈首那幾列。新增別名 `Opus 5.5`；`Opus` 仍指 Opus 5。數字都在 `docs/model-capabilities-2026-09.md`。
+- **另外補上 7 個 AA 列的分數**（gpt-5.3-codex、gpt-5.5-instant、gemini-3.5-flash-lite、gpt-oss-120b、gpt-oss-20b），讓以這些模型執行的主控有上限可查；它們不進任何車道。
+- 升級：`npm i -g omnilane@0.46.0`，接著 `omnilane resign`。
+
 ## v0.45.0 新功能
 
 - **升級後請跑一次 `omnilane resign`。** 分數政策檔換了新快照，而傳輸覆蓋檔綁的是快照；覆蓋檔重建之前，模型身分的派工在每條車道都會被拒，訊息是 `transport overlay snapshot mismatch`。
