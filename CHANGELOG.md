@@ -34,9 +34,10 @@ host, every lane skips its Opus 5.5 rows there and serves the next candidate.
 - Opus 5.5 is placed on each lane's own measurements:
   - `hardest-coding`: Opus 5.5 (xhigh) first. It ties Astra (xhigh) on
     Terminal-Bench 4.0 and is ahead on SciCode; its max row scores no higher on
-    4.0, so max is not in the chain. Opus 5.5 (high) is the second rung, then
-    the previous chain, with Opus 5.5 (medium) between Astra (high) and Fable
-    (high).
+    4.0, so max is not in the chain. Astra (xhigh) stays second; Opus 5.5
+    (high) follows it, below Astra (xhigh) and above Fable (xhigh) on 4.0,
+    then the previous chain, with Opus 5.5 (medium) between Astra (high) and
+    Fable (high).
   - `hard-judgment`: Opus 5.5 (max), then xhigh and high, then the previous
     chain, with Opus 5.5 (medium) after Opus 5 (max). Max is in this chain
     because it is clearly ahead of its own xhigh on HLE, and it leads graded

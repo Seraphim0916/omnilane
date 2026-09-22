@@ -211,7 +211,7 @@ flowchart LR
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Opus 5.5（xhigh） | Claude Opus 5.5（high）→ GPT-6 Astra（xhigh）→ Claude Fable 5.1（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5.5（medium）→ Claude Fable 5.1（high）→ GPT-6 Astra（medium）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ GPT-5.6 Sol（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🔥 hardest-coding | Claude Opus 5.5（xhigh） | GPT-6 Astra（xhigh）→ Claude Opus 5.5（high）→ Claude Fable 5.1（xhigh）→ GPT-6 Astra（high）→ Claude Opus 5.5（medium）→ Claude Fable 5.1（high）→ GPT-6 Astra（medium）→ Claude Opus 5（high）→ GPT-6 Astra（low）→ GPT-5.6 Sol（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
 | 🏗️ bulk-mechanical | GPT-6 Astra（low） | GPT-5.6 Sol（high）→ Gemini 3.8 Flash（High）→ Claude Opus 5（medium） | 重構、搬遷、測試、大面積掃描等耐力工作 |
 | 🧹 triage | GPT-5.6 Luna（high） | Gemini 3.8 Flash（Low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
 | ⚖️ hard-judgment | Claude Opus 5.5（max） | Claude Opus 5.5（xhigh）→ Claude Opus 5.5（high）→ Claude Fable 5.1（xhigh）→ GPT-6 Astra（xhigh）→ Claude Opus 5（max）→ Claude Opus 5.5（medium）→ GPT-6 Astra（high）→ Claude Opus 5（xhigh）→ Claude Opus 5（high）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |

@@ -28,7 +28,7 @@ AA 仍是 Intelligence Index v4.3.2，與前一快照 `aa-v4.3.2-2026-09-22-v1` 
 
 | 車道 | 變更 | 依據 |
 |---|---|---|
-| hardest-coding | Opus 5.5 xhigh 第 1、high 第 2；medium 插在 Astra high 與 Fable high 之間 | Terminal-Bench 4.0：xhigh 0.596 與 Astra xhigh 同分、SciCode 0.650 領先；max 同為 0.596，不放；medium 0.525 |
+| hardest-coding | Opus 5.5 xhigh 第 1、Astra xhigh 第 2、Opus 5.5 high 第 3；medium 插在 Astra high 與 Fable high 之間 | Terminal-Bench 4.0：xhigh 0.596 與 Astra xhigh 同分、SciCode 0.650 領先；max 同為 0.596，不放；high 0.566 低於 Astra xhigh 0.596、高於 Fable xhigh 0.551；medium 0.525 |
 | hard-judgment | Opus 5.5 max 第 1、xhigh、high；medium 插在 Opus 5 max 之後 | HLE：max 0.614 明顯高於 xhigh 0.575；Briefcase 分析 Elo 2207 領先；medium 0.547 |
 | taste-final | Opus 5.5 max、xhigh、high 排在 Opus 5 max 之前；medium 不放 | Briefcase 整體 Elo 1822／1780／1704，高於其他所有列 |
 | ui-draft | Opus 5.5 xhigh 第 1；high 在 Astra high 之後 | MMMU-Pro 0.866 領先，Terminal-Bench 4.0 0.596 |
@@ -49,7 +49,7 @@ AA 仍是 Intelligence Index v4.3.2，與前一快照 `aa-v4.3.2-2026-09-22-v1` 
 
 | 主控（上限） | hardest-coding | hard-judgment | taste-final |
 |---|---|---|---|
-| Opus 5.5 xhigh（56） | Astra xhigh 3／14 | Fable 5.1 xhigh 4／13 | Opus 5 max 4／11 |
+| Opus 5.5 xhigh（56） | Astra xhigh 2／14 | Fable 5.1 xhigh 4／13 | Opus 5 max 4／11 |
 | Opus 5.5 medium（51） | Astra high 5／14 | Opus 5 max 6／13 | Opus 5 max 4／11 |
 
 依鏈序推算（未實測，要重簽後才能驗）：重簽並探測通過後，xhigh 主控在三條車道都會改拿 Opus 5.5（依上限：hardest-coding 的 xhigh、hard-judgment 與

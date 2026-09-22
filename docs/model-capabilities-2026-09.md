@@ -41,8 +41,8 @@ unverified.
 | # | candidate | score | Terminal-Bench 4.0 | Terminal-Bench 2.1 | SciCode | hallucination rate |
 |---|---|---|---|---|---|---|
 | 1 | claude claude-opus-5-5 xhigh | 56 | 0.596 | not published | 0.650 | not published |
-| 2 | claude claude-opus-5-5 high | 54 | 0.566 | not published | 0.604 | not published |
-| 3 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.891 | 0.557 | not published |
+| 2 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.891 | 0.557 | not published |
+| 3 | claude claude-opus-5-5 high | 54 | 0.566 | not published | 0.604 | not published |
 | 4 | claude claude-fable-5-1 xhigh | 53 | 0.551 | 0.910 | 0.609 | not published |
 | 5 | codex gpt-6-astra high | 51 | 0.540 | 0.899 | 0.554 | not published |
 | 6 | claude claude-opus-5-5 medium | 51 | 0.525 | not published | 0.593 | not published |
@@ -172,9 +172,8 @@ Why each lane is ordered this way:
 - **hardest-coding** follows Terminal-Bench 4.0. Opus 5.5 xhigh ties Astra xhigh
   on it (0.596 each) and is ahead on SciCode (0.650 against 0.557); Opus 5.5 max
   scores the same 0.596, so max is in no chain here. Opus 5.5 high (0.566) is
-  placed second as the rung for callers whose ceiling is 54 or 55; on 4.0 alone
-  Astra xhigh (0.596) is ahead of it, yet a caller whose ceiling is 54 or 55
-  reaches Opus 5.5 high before Astra xhigh. Opus 5.5 medium (0.525) sits where its 4.0 result falls, between
+  behind Astra xhigh (0.596) on 4.0 and ahead of Fable xhigh (0.551), so it
+  sits between them. Opus 5.5 medium (0.525) sits where its 4.0 result falls, between
   Astra high (0.540) and Fable high (0.520). Astra xhigh had the lowest
   hallucination rate among the top rows in the 2026-09-22 capture (0.483). Fable
   xhigh beats Fable max on 4.0 (0.551 against 0.520) at about two thirds of max's
