@@ -6,6 +6,53 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-09-23
+
+GPT-6 Sol and GPT-6 Luna join the registry, and every lane is re-ordered
+value-first. **Every host must run `omnilane resign` once after upgrading**: the
+registry snapshot changes to `aa-v4.3.2-2026-09-23-v2`, and until the overlay is
+rebuilt a model caller is refused on every lane with
+`transport overlay snapshot mismatch`. GPT-6 Sol and Luna can only be proven by a
+`resign` that reaches Codex; until then every chain serves the row behind them.
+
+### Added
+
+- GPT-6 Sol and GPT-6 Luna at max, xhigh, high, medium, low and non-reasoning
+  (Sol 48, 44, 43, 40, 34, 28; Luna 37, 34, 32, 29, 21, 18 on AA v4.3.2), catalog
+  entries in `omnilane configure`, the aliases `GPT-6 Sol` (xhigh) and `GPT-6 Luna`
+  (high), and probe entries so that `resign` proves them. The registry grows from
+  95 to 107 scored rows; the 95 earlier rows keep their scores.
+- `scripts/aa_rebaseline.py value` prints the value pick for every caller
+  ceiling in each lane, with the band, the second measure, and the ceilings where
+  a chain cannot express the rule.
+- `scripts/aa_rebaseline.py build --revision N` numbers a second snapshot on the
+  same day (`-v2`), and `report` writes the evidence file each row points to, so
+  a same-day snapshot no longer overwrites the first one's reports.
+
+### Changed
+
+- Every chain is ordered value-first. For each caller ceiling, the chain gives
+  the cheapest row that is close to the best the ceiling can reach on the lane's
+  own measurement. "Close" is a near-tie in hardest-coding, hard-judgment,
+  taste-final, long-context and coding-overflow; in the throughput lanes it also
+  covers a gap up to twice that size at half the cost. A cheaper row may not give
+  up much on the lane's second measure, and fast-agentic excludes rows slower
+  than 10 s to the first token. No chain contains a max row any more.
+  - `hardest-coding`: Astra (xhigh) first; it ties Opus 5.5 (xhigh) on
+    Terminal-Bench 4.0 for less. Opus 5.5 (medium) is the next rung.
+  - `bulk-mechanical`: Opus 5.5 (medium), then Astra (medium, low), GPT-6 Sol
+    (high) and cheaper rows.
+  - `triage`: GPT-6 Luna (high), with GPT-5.6 Luna (high) behind it.
+  - `hard-judgment`: Opus 5.5 (xhigh), then Fable 5.1 (xhigh), Opus 5.5
+    (medium) and the Opus 5 ladder; Astra (high) is the Codex row.
+  - `taste-final`: Opus 5.5 (xhigh, high, medium), then Grok 4.7.
+  - `ui-draft`: Opus 5.5 (high) first.
+  - `fast-agentic`: GPT-6 Sol (high, medium, low), with Astra (low) behind them.
+  - `long-context`: the Codex row is Terra (xhigh) instead of Terra (max).
+  - `live-search`: the Claude fallback is Opus 5.5 (low).
+  `docs/model-capabilities-2026-09.md` carries the rule, the value picks and
+  the per-candidate figures, generated from the 09:03 capture.
+
 ## [0.46.0] - 2026-09-23
 
 Claude Opus 5.5 joins the registry and the lanes. **Every host must run
@@ -1371,7 +1418,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/Seraphim0916/omnilane/compare/v0.43.1...v0.44.0
