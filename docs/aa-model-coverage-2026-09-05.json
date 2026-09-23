@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 115,
+    "catalogEntries": 117,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -325,6 +325,50 @@
         "gpt-6-astra-xhigh"
       ],
       "mappingReason": "AA effort is encoded by row slug; runtime effort is separate"
+    },
+    {
+      "vendor": "codex",
+      "access": "cli",
+      "catalogModel": "gpt-6-sol",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "fast-agentic",
+          "position": "primary",
+          "effort": "high"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "medium"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as gpt-6-sol (max), gpt-6-sol-xhigh, -high, -medium, -low and -non-reasoning"
+    },
+    {
+      "vendor": "codex",
+      "access": "cli",
+      "catalogModel": "gpt-6-luna",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "triage",
+          "position": "primary",
+          "effort": "high"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as gpt-6-luna (max), gpt-6-luna-xhigh, -high, -medium, -low and -non-reasoning"
     },
     {
       "vendor": "codex",

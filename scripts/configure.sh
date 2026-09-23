@@ -149,7 +149,7 @@ esac
 
 # Native CLI catalogs are pinned from each installed CLI's live model surface.
 # Dynamic/API catalogs stay curated — "c" always accepts an exact model ID.
-CODEX_MODELS=("gpt-6-astra" "gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
+CODEX_MODELS=("gpt-6-astra" "gpt-6-sol" "gpt-6-luna" "gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
 CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
 CLAUDE_MODELS=("default" "best" "fable" "opus" "sonnet" "haiku" "opus[1m]" "sonnet[1m]" "opusplan" "claude-fable-5" "claude-fable-5-1" "claude-opus-5-5" "claude-opus-5" "claude-sonnet-5" "claude-opus-4-8" "claude-opus-4-7" "claude-opus-4-6" "claude-opus-4-5-20251101" "claude-sonnet-4-6" "claude-sonnet-4-5-20250929" "claude-haiku-4-5" "claude-haiku-4-5-20251001")
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")

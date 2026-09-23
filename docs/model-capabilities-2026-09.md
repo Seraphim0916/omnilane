@@ -1,11 +1,327 @@
 # Model capabilities — September 2026 snapshot
 
-External records are dated per section. The 2026-09-23 decision below is the
-current basis for `routing.yaml`. The 2026-09-05 v4.2 decision and the
-2026-09-02 v4.1.1-era snapshot are kept as historical evidence; their scores
-are on other scales and are not comparable with the v4.3.2 figures.
+External records are dated per section. The value-first decision of
+2026-09-23 below is the current basis for `routing.yaml`; the best-first decision
+made earlier the same day, the 2026-09-05 v4.2 decision and the 2026-09-02
+v4.1.1-era snapshot are kept as historical evidence. The v4.2 and older scores are
+on other scales and are not comparable with the v4.3.2 figures.
 
-## Current routing decision — 2026-09-23 (AA v4.3.2, Claude Opus 5.5 added)
+## Current routing decision — 2026-09-23, second snapshot (value-first, GPT-6 Sol and Luna added)
+
+`routing.yaml` was rewritten again on 2026-09-23, this time value-first, after
+OpenAI released GPT-6 Sol and GPT-6 Luna and AA published them. The registry
+snapshot is `aa-v4.3.2-2026-09-23-v2` (107 scored rows; the 95 earlier rows
+re-score unchanged).
+
+**The rule.** Each lane names one measurement that fits its kind of work. For
+every caller ceiling, take the rows that ceiling can reach and the best of them on
+that measurement; among the rows *close* to it, the cheapest wins (cost is AA's
+cost to run its whole index at API prices). The chain lists those picks from the
+highest ceiling down, so the first candidate any caller can reach is the
+best-value one it can reach. "Close" means:
+
+- a near-tie on the measurement in the quality-critical lanes (hardest-coding,
+  hard-judgment, taste-final, long-context, coding-overflow);
+- in the throughput lanes, either a near-tie or a gap up to twice that size at
+  half the cost or less;
+- in every lane, a cheaper row may not give up more than a set amount on the
+  lane's second measurement;
+- in fast-agentic, rows slower than 10 s to their first answer token are not
+  candidates at all.
+
+max rows are not candidates: wherever max is ahead of the same model's xhigh
+row, it costs far more for it. After the value picks, a chain may add rows that
+the rule does not pick: the GPT-5.6 or Astra row that stands in until a host
+proves a new GPT-6 row, and the other vendors' best rows at the end, so that a
+host with one subscription still gets a full chain.
+
+The picks are computed, not chosen by hand:
+`scripts/aa_rebaseline.py value --extract docs/reports/aa-v4.3.2-extract-2026-09-23-0903.json`
+prints them per lane, with the band, the second measurement, and every ceiling
+where a chain cannot express the rule. That happens when the rule prefers a
+cheaper row for a narrow ceiling range while a better row sits above it; the
+chain then gives the better row. The bands are in `VALUE_LANES` in that script.
+The tables below come from
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-09-23-0903.json`,
+a capture of the AA page at 09:03 on 2026-09-23.
+
+**What the capture lacks.**
+
+- AA publishes no GPQA result for any model added since 2026-09-17: Opus 5.5,
+  Grok 4.7, and GPT-6 Sol and Luna.
+- No model has a hallucination rate in this capture.
+- Opus 5.5 has no `mlcrOverall`, and its max row has no time per task.
+- GPT-6 Sol and Luna have not been probed on any host yet. The capture came
+  while the Codex quota was exhausted, and `omnilane resign` can only prove them
+  once it resets. Until then, the chains serve the row behind them.
+
+The measurement notes of the previous decision below still apply.
+
+**Value picks** (output of `value`):
+
+**hardest-coding** — Terminal-Bench 4.0, band 0.02; SciCode within 0.05; near-ties only
+
+- codex gpt-6-astra xhigh (score 52)
+- claude claude-opus-5-5 medium (score 51)
+- codex gpt-6-astra medium (score 50)
+- claude claude-fable-5-1 medium (score 49)
+- claude claude-opus-5 high (score 48)
+- codex gpt-6-astra low (score 46)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5-5 low (score 42)
+- claude claude-opus-5 low (score 39)
+
+**bulk-mechanical** — Terminal-Bench 4.0, band 0.06; minutes / task within 2.0; wide band
+
+- claude claude-opus-5-5 medium (score 51)
+- codex gpt-6-astra medium (score 50)
+- codex gpt-6-astra low (score 46)
+- codex gpt-6-sol high (score 43)
+- claude claude-opus-5-5 low (score 42)
+- codex gpt-6-sol medium (score 40)
+- claude claude-opus-5 low (score 39)
+- codex gpt-6-luna low (score 21)
+
+**hard-judgment** — HLE, band 0.02; Briefcase analytical Elo within 150; near-ties only
+
+- claude claude-opus-5-5 xhigh (score 56)
+- claude claude-fable-5-1 xhigh (score 53)
+- claude claude-opus-5-5 medium (score 51)
+- claude claude-fable-5-1 medium (score 49)
+- claude claude-opus-5 high (score 48)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5-5 low (score 42)
+- codex gpt-5.6-sol medium (score 39)
+
+**taste-final** — Briefcase overall Elo, band 30; Briefcase presentation Elo within 100; near-ties only
+
+- claude claude-opus-5-5 xhigh (score 56)
+- claude claude-opus-5-5 high (score 54)
+- claude claude-opus-5-5 medium (score 51)
+- grok grok-4.7 high (score 46)
+- grok grok-4.6 high (score 44)
+- grok grok-4.6 medium (score 43)
+- codex gpt-5.6-sol high (score 42)
+- codex gpt-5.6-terra xhigh (score 38)
+
+**ui-draft** — MMMU-Pro, band 0.01; Terminal-Bench 4.0 within 0.05; wide band
+
+- claude claude-opus-5-5 high (score 54)
+- claude claude-opus-5-5 medium (score 51)
+- codex gpt-6-astra medium (score 50)
+- claude claude-opus-5-5 low (score 42)
+- codex gpt-6-sol medium (score 40)
+- ceiling 55: the chain gives claude/claude-opus-5-5-high, the rule prefers claude/claude-opus-5-5-medium
+- ceiling 54: the chain gives claude/claude-opus-5-5-high, the rule prefers claude/claude-opus-5-5-medium
+
+**fast-agentic** — AutomationBench, band 0.03; minutes / task within 1.0; wide band
+
+- codex gpt-6-sol high (score 43)
+- codex gpt-6-sol medium (score 40)
+- codex gpt-6-sol low (score 34)
+- ceiling 45: the chain gives codex/gpt-6-sol-high, the rule prefers codex/gpt-6-sol-medium
+- ceiling 44: the chain gives codex/gpt-6-sol-high, the rule prefers codex/gpt-6-sol-medium
+- ceiling 43: the chain gives codex/gpt-6-sol-high, the rule prefers codex/gpt-6-sol-medium
+
+**long-context** — mlcrOverall, band 0.02; near-ties only
+
+- claude claude-opus-5 high (score 48)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5 low (score 39)
+- codex gpt-5.6-terra xhigh (score 38)
+- codex gpt-5.6-luna xhigh (score 35)
+- codex gpt-5.6-luna high (score 32)
+- codex gpt-5.6-terra medium (score 30)
+
+**Chains and their measurements** (output of `lanes`):
+
+**hardest-coding**
+
+| # | candidate | score | Terminal-Bench 4.0 | SciCode | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.557 | not published | 3803 |
+| 2 | claude claude-opus-5-5 medium | 51 | 0.525 | 0.593 | not published | 1627 |
+| 3 | codex gpt-6-astra medium | 50 | 0.495 | 0.542 | not published | 2434 |
+| 4 | claude claude-fable-5-1 medium | 49 | 0.449 | 0.564 | not published | 3983 |
+| 5 | claude claude-opus-5 high | 48 | 0.460 | 0.554 | not published | 4332 |
+| 6 | codex gpt-6-astra low | 46 | 0.419 | 0.541 | not published | 1537 |
+| 7 | claude claude-opus-5 medium | 45 | 0.343 | 0.515 | not published | 2732 |
+| 8 | claude claude-opus-5-5 low | 42 | 0.313 | 0.586 | not published | 860 |
+| 9 | claude claude-opus-5 low | 39 | 0.263 | 0.492 | not published | 1561 |
+| 10 | grok grok-4.7 high | 46 | 0.247 | 0.578 | not published | 3881 |
+| 11 | grok grok-4.6 high | 44 | 0.212 | 0.565 | not published | 2352 |
+| 12 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | not published | 1623 |
+
+**bulk-mechanical**
+
+| # | candidate | score | Terminal-Bench 4.0 | minutes / task | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 medium | 51 | 0.525 | 3.2 | 1627 |
+| 2 | codex gpt-6-astra medium | 50 | 0.495 | 3.4 | 2434 |
+| 3 | codex gpt-6-astra low | 46 | 0.419 | 1.5 | 1537 |
+| 4 | codex gpt-6-sol high | 43 | 0.263 | 1.4 | 610 |
+| 5 | codex gpt-5.6-sol high | 42 | 0.207 | 3.2 | 1487 |
+| 6 | claude claude-opus-5-5 low | 42 | 0.313 | 1.3 | 860 |
+| 7 | codex gpt-6-sol medium | 40 | 0.187 | 1.0 | 417 |
+| 8 | claude claude-opus-5 low | 39 | 0.263 | 2.7 | 1561 |
+| 9 | gemini gemini-3.8-flash-high | 41 | 0.197 | 3.8 | 1623 |
+
+**triage**
+
+| # | candidate | score | index | index run cost ($) | minutes / task |
+|---|---|---|---|---|---|
+| 1 | codex gpt-6-luna high | 32 | 32.1 | 48 | 2.2 |
+| 2 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.8 |
+| 3 | gemini gemini-3.8-flash-low | 33 | 33.5 | not published | not published |
+| 4 | claude claude-sonnet-5 low | 24 | 24.3 | 653 | 2.5 |
+| 5 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.2 |
+
+**hard-judgment**
+
+| # | candidate | score | HLE | Briefcase analytical Elo | CritPt | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 xhigh | 56 | 0.575 | 2151 | 0.317 | not published | 4057 |
+| 2 | claude claude-fable-5-1 xhigh | 53 | 0.587 | 1971 | 0.311 | not published | 9063 |
+| 3 | claude claude-opus-5-5 medium | 51 | 0.547 | 1925 | 0.277 | not published | 1627 |
+| 4 | claude claude-fable-5-1 medium | 49 | 0.538 | 1817 | 0.291 | not published | 3983 |
+| 5 | claude claude-opus-5 high | 48 | 0.528 | 1855 | 0.283 | not published | 4332 |
+| 6 | claude claude-opus-5 medium | 45 | 0.513 | 1665 | 0.269 | not published | 2732 |
+| 7 | claude claude-opus-5-5 low | 42 | 0.483 | 1459 | 0.177 | not published | 860 |
+| 8 | codex gpt-6-astra high | 51 | 0.531 | 1703 | 0.289 | not published | 2925 |
+| 9 | grok grok-4.7 high | 46 | 0.423 | 1967 | 0.180 | not published | 3881 |
+| 10 | gemini gemini-3.8-flash-high | 41 | 0.478 | 1151 | 0.183 | not published | 1623 |
+
+**taste-final**
+
+| # | candidate | score | Briefcase overall Elo | Briefcase presentation Elo | GDPval | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 xhigh | 56 | 1780 | 1640 | 0.660 | 4057 |
+| 2 | claude claude-opus-5-5 high | 54 | 1704 | 1555 | 0.596 | 2172 |
+| 3 | claude claude-opus-5-5 medium | 51 | 1642 | 1504 | 0.538 | 1627 |
+| 4 | grok grok-4.7 high | 46 | 1644 | 1506 | 0.597 | 3881 |
+| 5 | grok grok-4.6 high | 44 | 1546 | 1519 | 0.553 | 2352 |
+| 6 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 | 3803 |
+| 7 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 | 1623 |
+
+**consult**
+
+| # | candidate | score | index | index run cost ($) |
+|---|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 52.4 | 3803 |
+| 2 | claude claude-opus-5-5 xhigh | 56 | 56.0 | 4057 |
+| 3 | grok grok-4.7 high | 46 | 46.3 | 3881 |
+| 4 | grok grok-4.6 high | 44 | 44.3 | 2352 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 40.9 | 1623 |
+
+**ui-draft**
+
+| # | candidate | score | MMMU-Pro | Terminal-Bench 4.0 | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 high | 54 | 0.858 | 0.566 | 2172 |
+| 2 | claude claude-opus-5-5 medium | 51 | 0.857 | 0.525 | 1627 |
+| 3 | codex gpt-6-astra medium | 50 | 0.851 | 0.495 | 2434 |
+| 4 | claude claude-opus-5-5 low | 42 | 0.847 | 0.313 | 860 |
+| 5 | codex gpt-6-sol medium | 40 | 0.806 | 0.187 | 417 |
+| 6 | codex gpt-6-astra low | 46 | 0.846 | 0.419 | 1537 |
+| 7 | gemini gemini-3.8-flash-high | 41 | 0.856 | 0.197 | 1623 |
+
+**long-context**
+
+| # | candidate | score | mlcrOverall | AA-LCR | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5 high | 48 | 0.594 | 0.790 | 4332 |
+| 2 | claude claude-opus-5 medium | 45 | 0.561 | 0.820 | 2732 |
+| 3 | claude claude-opus-5 low | 39 | 0.539 | 0.813 | 1561 |
+| 4 | codex gpt-5.6-terra xhigh | 38 | 0.217 | 0.790 | 1187 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 0.217 | 0.813 | 1623 |
+
+**fast-agentic**
+
+| # | candidate | score | AutomationBench | minutes / task | first answer token (s) | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | codex gpt-6-sol high | 43 | 0.601 | 1.4 | 10 | 610 |
+| 2 | codex gpt-6-sol medium | 40 | 0.580 | 1.0 | 2 | 417 |
+| 3 | codex gpt-6-sol low | 34 | 0.539 | 0.4 | 1 | 268 |
+| 4 | codex gpt-6-astra low | 46 | 0.591 | 1.5 | 3 | 1537 |
+| 5 | gemini gemini-3.8-flash-medium | 40 | 0.609 | not published | not published | 1100 |
+| 6 | claude claude-opus-5-5 low | 42 | 0.529 | 1.3 | 9 | 860 |
+
+**live-search**
+
+| # | candidate | score | knowledge (omniscience) | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 30.9 | not published | 3881 |
+| 2 | grok grok-4.6 high | 44 | 30.5 | not published | 2352 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 29.6 | not published | 1623 |
+| 4 | claude claude-opus-5-5 low | 42 | 38.9 | not published | 860 |
+
+**coding-overflow**
+
+| # | candidate | score | Terminal-Bench 4.0 | SciCode | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 0.247 | 0.578 | 3881 |
+| 2 | grok grok-4.6 high | 44 | 0.212 | 0.565 | 2352 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | 1623 |
+| 4 | kimi kimi-k3 | not scored | — | — | — |
+| 5 | qwen qwen3-coder-plus | not scored | — | — | — |
+| 6 | opencode - | not scored | — | — | — |
+
+Why each lane is ordered this way:
+
+- **hardest-coding** (Terminal-Bench 4.0; SciCode second; near-ties only). Astra
+  xhigh ties Opus 5.5 xhigh on 4.0 (0.596 each) at a lower score and a lower run
+  cost ($3803 against $4057), so every caller that can reach it gets it. Opus 5.5
+  high (0.566) trails it by more than a near-tie. For callers below Astra xhigh,
+  Opus 5.5 medium (0.525, $1627) is within a near-tie of Astra high (0.540,
+  $2925) and ahead on SciCode (0.593 against 0.554), so it takes that rung. The
+  rest of the ladder is Astra medium, Fable medium, Opus 5 high, Astra low and the
+  Opus low rows.
+- **bulk-mechanical** (4.0; time per task second; wide band). Opus 5.5 medium
+  (0.525, 3.2 min, $1627) is within twice the band of Astra xhigh (0.596, 5.2 min,
+  $3803) at under half the cost, so it leads. GPT-6 Sol high (0.263, 1.4 min,
+  $610) is the cheap fast rung. GPT-5.6 Sol high stays behind it until a host
+  proves GPT-6 Sol.
+- **triage** is bought by the run. GPT-6 Luna high matches GPT-5.6 Luna high on
+  the index (32.1 each) for $48 against $108. The older row stays behind it until
+  a host proves GPT-6 Luna.
+- **hard-judgment** (HLE; Briefcase analytical Elo second; near-ties only). Opus
+  5.5 xhigh (0.575, $4057) is within a near-tie of Fable xhigh (0.587, $9063) at
+  under half the money, and it leads analytical Elo (2151 against 1971). Fable
+  xhigh is ahead of Opus 5.5 high (0.556) by more than a near-tie, so callers
+  scoring 53 to 55 get Fable xhigh. Below that come Opus 5.5 medium (0.547,
+  $1627), Fable medium and the Opus 5 ladder. Astra high is Codex's best-value
+  row and closes the chain with Grok 4.7 and Flash.
+- **taste-final** (Briefcase overall Elo; presentation second; near-ties only).
+  Opus 5.5 xhigh, high and medium (1780, 1704, 1642) are each graded above
+  everything else the same ceiling reaches, for less than the Opus 5 and Fable
+  rows they displace. Grok 4.7 high (1644) serves callers below Opus 5.5 medium.
+- **ui-draft** (MMMU-Pro; 4.0 second; wide band). MMMU-Pro is near-saturated
+  (0.846–0.877 across the top). Opus 5.5 high (0.858, 4.0 0.566, $2172) is within
+  the band of everything above it and codes close enough to it. For ceilings 54
+  and 55 the rule would prefer the still cheaper Opus 5.5 medium; the chain gives
+  high.
+- **long-context** (`mlcrOverall`; near-ties only). Opus 5 high (0.594), medium
+  (0.561) and low (0.539) are more than a near-tie apart, so the ladder stays
+  quality-ordered. Terra xhigh replaces Terra max as the Codex row because max
+  rows are explicit-only. Opus 5.5 has no `mlcrOverall` and is not placed.
+- **fast-agentic** (AutomationBench; time per task second; 10 s first-token cap).
+  GPT-6 Sol high (0.601, 1.4 min, 10 s, $610) leads. Its xhigh row scores 0.617
+  but waits 47 s for the first token and falls outside the cap. Sol medium and low
+  are the faster, cheaper rungs. Astra low stays behind them until a host proves
+  GPT-6 Sol.
+- **live-search**: Grok stays first as the only native X source. The Claude
+  fallback moves to Opus 5.5 low (omniscience 38.9, $860), which is within a
+  near-tie of medium (40.3, $1627).
+- **coding-overflow** has no Codex row by design. Grok 4.7 high is within a
+  near-tie of its xhigh row for less and stays first.
+- **consult** is not a value lane: it lists each vendor's strongest generally
+  reachable row below max.
+
+The previous best-first chains can be regenerated from the routing.yaml of commit
+d81bc0a with
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-09-23.json`.
+
+## Previous routing decision — 2026-09-23, first snapshot (best-first, Claude Opus 5.5 added)
 
 `routing.yaml` was rewritten on 2026-09-22, not amended, and on 2026-09-23 Claude
 Opus 5.5 was placed into it on the same rule. Each lane names the measurements

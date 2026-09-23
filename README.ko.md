@@ -218,17 +218,17 @@ flowchart LR
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Opus 5.5 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | Claude Opus 5.5 (medium) | GPT-6 Astra (medium) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → Gemini 3.8 Flash (High) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
-| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) | 실시간 X／웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
+| ⚡ fast-agentic | GPT-6 Sol (high) | GPT-6 Sol (medium) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
 **백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
@@ -686,6 +686,24 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.47.0 새 기능
+
+- **업그레이드 후 호스트마다 `omnilane resign`을 한 번 실행하세요.** 레지스트리
+  스냅샷이 `aa-v4.3.2-2026-09-23-v2`로 바뀝니다. overlay를 다시 만들기 전까지 모델
+  호출자는 모든 레인에서 `transport overlay snapshot mismatch`로 거부됩니다.
+  GPT-6 Sol과 Luna는 Codex에 닿는 `resign`으로만 검증되며, 그전까지 각 체인은 그
+  뒤의 행을 사용합니다.
+- **GPT-6 Sol과 GPT-6 Luna가 레지스트리에 추가**되었습니다(Sol은 max 48부터 low
+  34, Luna는 37부터 21). `omnilane configure` 카탈로그와 별칭 `GPT-6 Sol`,
+  `GPT-6 Luna`도 추가되었습니다.
+- **모든 레인을 가성비 우선으로 재정렬했습니다.** 호출자 상한마다, 그 상한으로 닿는
+  최고의 행에 품질이 가까운 행 중 가장 싼 행을 고릅니다. 품질이 중요한 레인은 거의
+  동점일 때만 싼 행으로 바꾸고, 처리량 레인은 허용 폭을 넓게 둡니다. max 행은 어떤
+  체인에도 들어가지 않습니다. `hardest-coding`은 Astra xhigh, `bulk-mechanical`은
+  Opus 5.5 medium, `triage`는 GPT-6 Luna high, `fast-agentic`은 GPT-6 Sol high가
+  맨 앞입니다. `scripts/aa_rebaseline.py value`로 각 체인의 근거를 볼 수 있습니다.
+- 업그레이드: `npm i -g omnilane@0.47.0` 후 `omnilane resign`.
 
 ## v0.46.0 새 기능
 

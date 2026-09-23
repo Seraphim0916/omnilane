@@ -256,17 +256,17 @@ actually resolves.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Opus 5.5 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | Claude Opus 5.5 (medium) | GPT-6 Astra (medium) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
-| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
-| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) | Realtime X/web search; backups provide generic web search, not equivalent X context |
-| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
+| ⚡ fast-agentic | GPT-6 Sol (high) | GPT-6 Sol (medium) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
@@ -849,6 +849,26 @@ working notes, including per-benchmark caveats, live in
   supervised process group. Omnilane neither initializes nor requires a repository.
 
 ## 📜 Release history
+
+## What's new in v0.47.0
+
+- **Run `omnilane resign` once after upgrading.** The registry snapshot changes
+  to `aa-v4.3.2-2026-09-23-v2`; until the overlay is rebuilt a model caller is
+  refused on every lane with `transport overlay snapshot mismatch`. GPT-6 Sol and
+  Luna are proven only by a `resign` that reaches Codex; until then every chain
+  serves the row behind them.
+- **GPT-6 Sol and GPT-6 Luna join the registry** (Sol 48 at max down to 34 at
+  low, Luna 37 down to 21), with configure catalog entries and the aliases
+  `GPT-6 Sol` and `GPT-6 Luna`.
+- **Every lane is ordered value-first.** For each caller ceiling a chain gives
+  the cheapest row that is close to the best that ceiling can reach on the lane's
+  own measurement. The quality-critical lanes trade only on near-ties; the
+  throughput lanes use a wider band. No chain contains a max row any more.
+  Astra xhigh now heads `hardest-coding`, Opus 5.5 medium heads
+  `bulk-mechanical`, GPT-6 Luna high heads `triage` and GPT-6 Sol high heads
+  `fast-agentic`. `scripts/aa_rebaseline.py value` shows the picks behind each
+  chain.
+- Upgrade: `npm i -g omnilane@0.47.0`, then `omnilane resign`.
 
 ## What's new in v0.46.0
 

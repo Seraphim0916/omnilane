@@ -211,17 +211,17 @@ flowchart LR
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Claude Opus 5.5 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6 Astra (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → GPT-5.6 Sol (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
-| 🏗️ bulk-mechanical | GPT-6 Astra (low) | GPT-5.6 Sol (high) → Gemini 3.8 Flash (High) → Claude Opus 5 (medium) | 重构、迁移、测试、大范围扫描——机械耐力活 |
-| 🧹 triage | GPT-5.6 Luna (high) | Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
-| ⚖️ hard-judgment | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Fable 5.1 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5 (max) → Claude Opus 5.5 (medium) → GPT-6 Astra (high) → Claude Opus 5 (xhigh) → Claude Opus 5 (high) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 架构裁决、深度推理、第二意见 |
-| ✒️ taste-final | Claude Opus 5.5 (max) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Opus 5 (max) → Claude Fable 5.1 (xhigh) → Claude Opus 5 (xhigh) → Grok 4.7 → GPT-6 Astra (xhigh) → Claude Opus 5 (high) → Grok 4.6 → Gemini 3.8 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
+| 🏗️ bulk-mechanical | Claude Opus 5.5 (medium) | GPT-6 Astra (medium) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → Gemini 3.8 Flash (High) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
+| ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | 架构裁决、深度推理、第二意见 |
+| ✒️ taste-final | Claude Opus 5.5 (xhigh) | Claude Opus 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
-| 🎨 ui-draft | Claude Opus 5.5 (xhigh) | GPT-6 Astra (high) → Claude Opus 5.5 (high) → Claude Opus 5 (high) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
-| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (max) → Gemini 3.8 Flash (High) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
-| ⚡ fast-agentic | GPT-6 Astra (low) | Gemini 3.8 Flash (Medium) → GPT-5.6 Sol (medium) → Claude Opus 5 (low) | 高速多步骤工具循环、多模态检查 |
-| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (medium) | 实时 X／网页搜索与社交上下文 |
-| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode | Codex 配额耗尽时的中量级编码安全阀 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → Claude Opus 5.5 (low) → GPT-6 Sol (medium) → GPT-6 Astra (low) → Gemini 3.8 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
+| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
+| ⚡ fast-agentic | GPT-6 Sol (high) | GPT-6 Sol (medium) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
+| 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 实时 X／网页搜索与社交上下文 |
+| 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Codex 配额耗尽时的中量级编码安全阀 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
@@ -681,6 +681,22 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.47.0 新功能
+
+- **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成
+  `aa-v4.3.2-2026-09-23-v2`；overlay 重建之前，模型主控在每条通道都会被拒绝
+  （`transport overlay snapshot mismatch`）。GPT-6 Sol 与 Luna 要等 `resign`
+  能连到 Codex 才能验证；在那之前，各条链会改派排在它们后面的那一行。
+- **GPT-6 Sol 与 GPT-6 Luna 加入策略文件**（Sol 从最高 48 到低 34，Luna 从 37
+  到 21），`omnilane configure` 菜单加入两者，另有别名 `GPT-6 Sol`、`GPT-6 Luna`。
+- **每条通道改按性价比排序。** 对每个主控上限，链会给出质量接近该上限所能拿到
+  的最好一行、且最便宜的那一行。质量攸关的通道只在几乎持平时才换便宜的；
+  吞吐量通道的容许范围更宽。所有链都不再包含 max 档。现在
+  `hardest-coding` 由 Astra xhigh 领头、`bulk-mechanical` 由 Opus 5.5 medium、
+  `triage` 由 GPT-6 Luna high、`fast-agentic` 由 GPT-6 Sol high 领头。
+  `scripts/aa_rebaseline.py value` 可以查看每条链背后的选择。
+- 升级：`npm i -g omnilane@0.47.0`，然后 `omnilane resign`。
 
 ## v0.46.0 新功能
 
