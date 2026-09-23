@@ -33,8 +33,9 @@ IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 # config_id -> (selector_type, runtime_model, probe evidence basename)
 PROVEN: dict[str, tuple[str, str, str]] = {}
 
-for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-5.6-sol", "gpt-5_6-sol"),
-                    ("gpt-5.6-luna", "gpt-5_6-luna"), ("gpt-5.6-terra", "gpt-5_6-terra")]:
+for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6-sol", "gpt-6-sol"), ("gpt-6-luna", "gpt-6-luna"),
+                    ("gpt-5.6-sol", "gpt-5_6-sol"), ("gpt-5.6-luna", "gpt-5_6-luna"),
+                    ("gpt-5.6-terra", "gpt-5_6-terra")]:
     base = model.replace(".", "-").replace("gpt-", "gpt-")
     for effort in ["max", "xhigh", "high", "medium", "low"]:
         cid = f"codex/{model.replace('.', '-')}" + ("" if effort == "max" else f"-{effort}")

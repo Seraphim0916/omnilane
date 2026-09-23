@@ -78,8 +78,14 @@ NEW_ROWS = [
      "gpt-oss-20b", "codex/gpt-5-4"),
     ("codex/gpt-oss-20b-low", "codex", "gpt-oss-20b", "low", "reasoning",
      "gpt-oss-20b-low", "codex/gpt-5-4-low"),
+    *[(f"codex/gpt-6-{family}" + ("" if effort == "max" else f"-{effort or 'non-reasoning'}"), "codex",
+       f"gpt-6-{family}", effort, "non-reasoning" if effort is None else "reasoning",
+       f"gpt-6-{family}" + ("" if effort == "max" else f"-{effort or 'non-reasoning'}"),
+       f"codex/gpt-5-6-{family}" + ("" if effort == "max" else f"-{effort or 'non-reasoning'}"))
+      for family in ("sol", "luna") for effort in ("max", "xhigh", "high", "medium", "low", None)],
 ]
-NEW_ALIASES = {"grok-4.7": "grok-4.6"}  # new catalog model -> alias entry to clone
+NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
+               "gpt-6-luna": "gpt-6-astra"}  # new catalog model -> alias entry to clone
 
 
 def half_up(value: float) -> int:
@@ -175,7 +181,9 @@ def cmd_build(args) -> int:
     records, version, as_of = extract["records"], extract["benchmark_version"], args.as_of
     old = json.loads(Path(args.base).read_text())
     new = copy.deepcopy(old)
-    report = lambda vendor: f"docs/reports/aa-{vendor}-evidence-{as_of}.md"  # noqa: E731
+    # a second snapshot on the same day must not reuse the first one's id or overwrite its reports
+    tag = as_of if args.revision == 1 else f"{as_of}-v{args.revision}"
+    report = lambda vendor: f"docs/reports/aa-{vendor}-evidence-{tag}.md"  # noqa: E731
 
     scored, dropped = [], []
     for row in new["scored_configs"]:
@@ -247,12 +255,12 @@ def cmd_build(args) -> int:
                        "unknown_configs": len(unknown), "aliases": len(new["aliases"]),
                        "by_vendor": {v: vendors[v] for v in old["coverage"]["by_vendor"]}}
     new["snapshot"].update(
-        id=f"aa-v{version}-{as_of}-v1", benchmark_version=version, as_of=as_of,
+        id=f"aa-v{version}-{as_of}-v{args.revision}", benchmark_version=version, as_of=as_of,
         source={"extract": str(Path(args.extract).resolve().relative_to(REPO)),
                 "page_url": extract["source_url"], "page_sha256": extract["page_sha256"],
                 "fetched_at": extract["fetched_at"]},
         approval={"status": args.approval, "scope": f"aa-v{version}-rebaseline",
-                  "source": f"docs/reports/aa-rebaseline-{as_of}.md",
+                  "source": f"docs/reports/aa-rebaseline-{tag}.md",
                   "estimated_scores": "approved_provisional" if args.approval == "approved"
                   else "provisional_pending_review"})
     new.setdefault("schema_notes", {})["score_rounding"] = (
@@ -286,7 +294,10 @@ def cmd_report(args) -> int:
                 and cid not in {r["id"] for r in new["scored_configs"]}]
         if gone:
             lines += ["", "No longer listed by AA, moved to unknown_configs: " + ", ".join(gone)]
-        (out / f"aa-{vendor}-evidence-{as_of}.md").write_text("\n".join(lines) + "\n")
+        # write where the rows point, so a same-day second snapshot never overwrites the first's report
+        target = next((REPO / r["evidence_report"] for r in new["scored_configs"] if r["vendor"] == vendor),
+                      out / f"aa-{vendor}-evidence-{as_of}.md")
+        target.write_text("\n".join(lines) + "\n")
     print(f"report: wrote {len(new['coverage']['by_vendor'])} vendor reports under {out}")
     return 0
 
@@ -366,19 +377,93 @@ MEASURES = {  # column title -> (reader, decimals, scale)
     "index run cost ($)": (_nested("intelligenceIndexCost", "total"), 0, 1),
 }
 LANE_MEASURES = {
-    "hardest-coding": ("Terminal-Bench 4.0", "Terminal-Bench 2.1", "SciCode", "hallucination rate"),
-    "bulk-mechanical": ("Terminal-Bench 4.0", "Terminal-Bench 2.1", "hallucination rate", "minutes / task",
-                        "index run cost ($)"),
+    "hardest-coding": ("Terminal-Bench 4.0", "SciCode", "hallucination rate", "index run cost ($)"),
+    "bulk-mechanical": ("Terminal-Bench 4.0", "minutes / task", "index run cost ($)"),
     "triage": ("index", "index run cost ($)", "minutes / task"),
-    "hard-judgment": ("HLE", "GPQA", "CritPt", "Briefcase analytical Elo", "hallucination rate"),
-    "taste-final": ("Briefcase overall Elo", "Briefcase presentation Elo", "GDPval"),
-    "consult": ("index",),
-    "ui-draft": ("MMMU-Pro", "Terminal-Bench 4.0"),
+    "hard-judgment": ("HLE", "Briefcase analytical Elo", "CritPt", "hallucination rate", "index run cost ($)"),
+    "taste-final": ("Briefcase overall Elo", "Briefcase presentation Elo", "GDPval", "index run cost ($)"),
+    "consult": ("index", "index run cost ($)"),
+    "ui-draft": ("MMMU-Pro", "Terminal-Bench 4.0", "index run cost ($)"),
     "long-context": ("mlcrOverall", "AA-LCR", "index run cost ($)"),
-    "fast-agentic": ("AutomationBench", "minutes / task", "first answer token (s)"),
-    "live-search": ("hallucination rate", "knowledge (omniscience)"),
-    "coding-overflow": ("Terminal-Bench 4.0", "SciCode"),
+    "fast-agentic": ("AutomationBench", "minutes / task", "first answer token (s)", "index run cost ($)"),
+    "live-search": ("knowledge (omniscience)", "hallucination rate", "index run cost ($)"),
+    "coding-overflow": ("Terminal-Bench 4.0", "SciCode", "index run cost ($)"),
 }
+# Value-first ordering (the `value` command): lane -> (measure, near-tie band, second measure,
+# how much worse a cheaper row may be on it, lowest ceiling to compute). Strict lanes trade
+# quality for money only on a near-tie; the others also count a row as close when it costs at
+# most half as much for a gap up to twice the band.
+VALUE_LANES = {
+    "hardest-coding": ("Terminal-Bench 4.0", 0.02, "SciCode", 0.05, 40),
+    "bulk-mechanical": ("Terminal-Bench 4.0", 0.06, "minutes / task", 2.0, 38),
+    "hard-judgment": ("HLE", 0.02, "Briefcase analytical Elo", 150, 40),
+    "taste-final": ("Briefcase overall Elo", 30, "Briefcase presentation Elo", 100, 40),
+    "ui-draft": ("MMMU-Pro", 0.01, "Terminal-Bench 4.0", 0.05, 40),
+    "fast-agentic": ("AutomationBench", 0.03, "minutes / task", 1.0, 38),
+    "long-context": ("mlcrOverall", 0.02, None, None, 30),
+}
+# A tool loop waits for every first token, so a slow starter is no fast row whatever it scores.
+VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
+STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
+VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5", "claude-haiku-4-5",
+                  "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
+                  "grok-4.7", "grok-4.6", "gemini-3.8-flash"}
+LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
+
+
+def cmd_value(args) -> int:
+    """Per lane, the value pick for every caller ceiling and the chain those picks make."""
+    records = json.loads(Path(args.extract).read_text())["records"]
+    rows = json.loads(Path(args.registry).read_text())["scored_configs"]
+    cost_of = MEASURES["index run cost ($)"][0]
+
+    def measure(title, row):
+        reader, _, scale = MEASURES[title]
+        value = reader(records.get(row["aa_slug"]))
+        return None if value is None else value * scale
+
+    pool = [r for r in rows if r["reasoning"] != "non-reasoning" and r["effort"] != "max"
+            and (r["model"].rsplit("-", 1)[0] if r["vendor"] == "gemini" else r["model"]) in VALUE_FAMILIES]
+    for lane, (title, band, second, band2, floor) in VALUE_LANES.items():
+        def pick(ceiling):
+            reach = [r for r in pool if r["score"] <= ceiling and measure(title, r) is not None
+                     and cost_of(records.get(r["aa_slug"])) is not None]
+            if lane in VALUE_CAPS:
+                cap_title, cap = VALUE_CAPS[lane]
+                reach = [r for r in reach if measure(cap_title, r) is not None and measure(cap_title, r) <= cap]
+            if not reach:
+                return None
+            cost = lambda r: cost_of(records.get(r["aa_slug"]))  # noqa: E731
+            best = max(reach, key=lambda r: (measure(title, r), -cost(r)))
+            near = []
+            for r in reach:
+                gap = measure(title, best) - measure(title, r)
+                wide = lane not in STRICT_LANES and gap <= 2 * band and cost(r) <= 0.5 * cost(best)
+                if not (gap <= band or wide):
+                    continue
+                if second and measure(second, best) is not None:
+                    if measure(second, r) is None:
+                        continue
+                    worse = measure(second, r) - measure(second, best)
+                    if (worse if second in LOWER_IS_BETTER else -worse) > band2:
+                        continue
+                near.append(r)
+            return min(near, key=lambda r: (cost(r), -measure(title, r)))
+        ceilings = range(max(r["score"] for r in rows), floor - 1, -1)
+        picks = []
+        for ceiling in ceilings:
+            chosen = pick(ceiling)
+            if chosen and chosen not in picks:
+                picks.append(chosen)
+        print(f"\n**{lane}** — {title}, band {band}" + (f"; {second} within {band2}" if second else "")
+              + ("; near-ties only" if lane in STRICT_LANES else "; wide band") + "\n")
+        for r in picks:
+            print(f"- {r['vendor']} {r['model']} {r['effort']} (score {r['score']})")
+        for ceiling in ceilings:
+            want, got = pick(ceiling), next((r for r in picks if r["score"] <= ceiling), None)
+            if want is not got:
+                print(f"- ceiling {ceiling}: the chain gives {got and got['id']}, the rule prefers {want and want['id']}")
+    return 0
 
 
 def cmd_lanes(args) -> int:
@@ -416,19 +501,23 @@ def main() -> int:
     build.add_argument("--base", default=str(REGISTRY),
                        help="the registry to re-score; pass the previous snapshot to rebuild from scratch")
     build.add_argument("--approval", default="proposed", choices=("proposed", "approved"))
+    build.add_argument("--revision", type=int, default=1, help="snapshot number within the as-of day")
     report = sub.add_parser("report")
     report.add_argument("--old", required=True, help="the previous registry file")
     matrix = sub.add_parser("matrix")
     matrix.add_argument("--registry", default=str(REGISTRY))
     matrix.add_argument("--routing", default=str(REPO / "routing.yaml"))
     matrix.add_argument("--controller", nargs="+", required=True, help="registry config ids")
+    value = sub.add_parser("value")
+    value.add_argument("--extract", required=True)
+    value.add_argument("--registry", default=str(REGISTRY))
     lanes = sub.add_parser("lanes")
     lanes.add_argument("--extract", required=True)
     lanes.add_argument("--registry", default=str(REGISTRY))
     lanes.add_argument("--routing", default=str(REPO / "routing.yaml"))
     args = parser.parse_args()
     return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix,
-            "lanes": cmd_lanes}[args.command](args)
+            "lanes": cmd_lanes, "value": cmd_value}[args.command](args)
 
 
 if __name__ == "__main__":
