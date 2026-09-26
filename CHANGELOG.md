@@ -6,6 +6,30 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-27
+
+A registry refresh on the 2026-09-27 AA capture. **Every host must run
+`omnilane resign` once after upgrading**: the registry snapshot changes to
+`aa-v4.3.2-2026-09-27-v1`. The version jumps from 0.47 to 0.50 as a milestone;
+nothing between them was released.
+
+### Added
+
+- `scripts/aa_rebaseline.py fill` gives a value AA published once and later
+  withdrew its figure from an earlier tracked capture, and lists every filled field
+  in the extract under `filled_from_earlier_capture`.
+
+### Changed
+
+- Registry snapshot `aa-v4.3.2-2026-09-27-v1`. All 107 scores are unchanged. AA
+  re-measured speed, and Opus 5.5 (max) gained its harder long-context result.
+  GPT-6 Sol and Luna (medium) keep their 2026-09-23 time per task and first-token
+  time, which AA withdrew on 2026-09-26. The value picks are unchanged, so no lane
+  changes. The tables in `docs/model-capabilities-2026-09.md` are regenerated.
+- GPT-6 Sol and Luna are now proven on a host: `resign` probed all ten
+  selectors once the Codex quota reset, and `gpt-6-sol`/`gpt-6-luna` are the
+  right model ids.
+
 ## [0.47.0] - 2026-09-23
 
 GPT-6 Sol and GPT-6 Luna join the registry, and every lane is re-ordered
@@ -1418,7 +1442,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...v0.50.0
 [0.47.0]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/Seraphim0916/omnilane/compare/v0.44.0...v0.45.0
