@@ -682,6 +682,18 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.50.0 新功能
+
+- **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成
+  `aa-v4.3.2-2026-09-27-v1`。
+- 按 2026-09-27 的 AA 数据更新策略文件：所有分数不变，AA 重新测量了速度，通道都不变。
+  GPT-6 Sol 与 Luna（medium）被 AA 在 2026-09-26 撤下的速度数字，用新的
+  `scripts/aa_rebaseline.py fill` 沿用旧值。
+- GPT-6 Sol 与 Luna 已验证：Codex 额度重置后，模型代号 `gpt-6-sol`、`gpt-6-luna`
+  通过 `resign` 探测。
+- 版本号从 0.47 直接跳到 0.50，作为里程碑。
+- 升级：`npm i -g omnilane@0.50.0`，然后 `omnilane resign`。
+
 ## v0.47.0 新功能
 
 - **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成

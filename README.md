@@ -850,6 +850,18 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.50.0
+
+- **Run `omnilane resign` once after upgrading.** The registry snapshot changes to
+  `aa-v4.3.2-2026-09-27-v1`.
+- A registry refresh on the 2026-09-27 AA capture: every score is unchanged, AA
+  re-measured speed, and no lane changes. GPT-6 Sol and Luna (medium) keep the speed
+  figures AA withdrew on 2026-09-26, filled by the new `scripts/aa_rebaseline.py fill`.
+- GPT-6 Sol and Luna are proven: the model ids `gpt-6-sol` and `gpt-6-luna` passed
+  `resign` once the Codex quota reset.
+- The version jumps from 0.47 to 0.50 as a milestone.
+- Upgrade: `npm i -g omnilane@0.50.0`, then `omnilane resign`.
+
 ## What's new in v0.47.0
 
 - **Run `omnilane resign` once after upgrading.** The registry snapshot changes
