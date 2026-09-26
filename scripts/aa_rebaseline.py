@@ -168,6 +168,30 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def cmd_fill(args) -> int:
+    """Give back a value AA published once and later withdrew, from an earlier capture.
+
+    AA re-measures speed and sometimes blanks a figure for days; a withdrawn value keeps
+    its earlier figure rather than dropping the row out of a lane. Every fill is listed
+    in the extract so the evidence report can cite it.
+    """
+    extract = json.loads(Path(args.extract).read_text())
+    earlier = json.loads(Path(args.earlier).read_text())["records"]
+    filled = []
+    for slug, record in extract["records"].items():
+        for field, value in (earlier.get(slug) or {}).items():
+            if value not in (None, {}, []) and record.get(field) in (None, {}, []):
+                record[field] = value
+                filled.append({"slug": slug, "field": field})
+    extract["filled_from_earlier_capture"] = {
+        "source": str(Path(args.earlier).resolve().relative_to(REPO)), "fields": filled}
+    Path(args.out).write_bytes(dump(extract))
+    print(f"fill: {len(filled)} field(s) from {args.earlier} -> {args.out}")
+    for entry in filled:
+        print(f"  {entry['slug']}: {entry['field']}")
+    return 0
+
+
 def rescore(row: dict, record: dict, version: str, as_of: str, report: str) -> None:
     row["score"] = half_up(record["intelligenceIndex"])
     row["score_raw"] = round(record["intelligenceIndex"], 2)
@@ -502,6 +526,10 @@ def main() -> int:
                        help="the registry to re-score; pass the previous snapshot to rebuild from scratch")
     build.add_argument("--approval", default="proposed", choices=("proposed", "approved"))
     build.add_argument("--revision", type=int, default=1, help="snapshot number within the as-of day")
+    fill = sub.add_parser("fill")
+    fill.add_argument("--extract", required=True, help="the fresh capture")
+    fill.add_argument("--earlier", required=True, help="a tracked earlier capture to take withdrawn values from")
+    fill.add_argument("--out", required=True)
     report = sub.add_parser("report")
     report.add_argument("--old", required=True, help="the previous registry file")
     matrix = sub.add_parser("matrix")
@@ -517,7 +545,7 @@ def main() -> int:
     lanes.add_argument("--routing", default=str(REPO / "routing.yaml"))
     args = parser.parse_args()
     return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix,
-            "lanes": cmd_lanes, "value": cmd_value}[args.command](args)
+            "lanes": cmd_lanes, "value": cmd_value, "fill": cmd_fill}[args.command](args)
 
 
 if __name__ == "__main__":

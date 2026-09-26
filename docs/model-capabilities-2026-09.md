@@ -8,6 +8,16 @@ on other scales and are not comparable with the v4.3.2 figures.
 
 ## Current routing decision — 2026-09-23, second snapshot (value-first, GPT-6 Sol and Luna added)
 
+**2026-09-27 refresh (0.50.0).** The registry moved to snapshot `aa-v4.3.2-2026-09-27-v1`
+from `docs/reports/aa-v4.3.2-extract-2026-09-27.json`. Every score is unchanged;
+AA re-measured speed, and Opus 5.5 max gained an `mlcrOverall` (0.667). AA had
+withdrawn the time per task and first-token time of GPT-6 Sol medium and Luna medium
+since 2026-09-26; `scripts/aa_rebaseline.py fill` gave both back their 2026-09-23 09:03
+figures, and the extract lists the four filled fields under
+`filled_from_earlier_capture`. `value` gives the same picks as on 2026-09-23, so no
+chain changed. The tables below are regenerated from the 2026-09-27 capture; the rule,
+the picks and the reasons further down stand as written.
+
 `routing.yaml` was rewritten again on 2026-09-23, this time value-first, after
 OpenAI released GPT-6 Sol and GPT-6 Luna and AA published them. The registry
 snapshot is `aa-v4.3.2-2026-09-23-v2` (107 scored rows; the 95 earlier rows
@@ -133,7 +143,7 @@ The measurement notes of the previous decision below still apply.
 - codex gpt-5.6-luna high (score 32)
 - codex gpt-5.6-terra medium (score 30)
 
-**Chains and their measurements** (output of `lanes`):
+**Chains and their measurements** (output of `lanes` on the 2026-09-27 capture):
 
 **hardest-coding**
 
@@ -157,24 +167,24 @@ The measurement notes of the previous decision below still apply.
 | # | candidate | score | Terminal-Bench 4.0 | minutes / task | index run cost ($) |
 |---|---|---|---|---|---|
 | 1 | claude claude-opus-5-5 medium | 51 | 0.525 | 3.2 | 1627 |
-| 2 | codex gpt-6-astra medium | 50 | 0.495 | 3.4 | 2434 |
-| 3 | codex gpt-6-astra low | 46 | 0.419 | 1.5 | 1537 |
-| 4 | codex gpt-6-sol high | 43 | 0.263 | 1.4 | 610 |
-| 5 | codex gpt-5.6-sol high | 42 | 0.207 | 3.2 | 1487 |
+| 2 | codex gpt-6-astra medium | 50 | 0.495 | 2.9 | 2434 |
+| 3 | codex gpt-6-astra low | 46 | 0.419 | 1.4 | 1537 |
+| 4 | codex gpt-6-sol high | 43 | 0.263 | 2.0 | 610 |
+| 5 | codex gpt-5.6-sol high | 42 | 0.207 | 2.7 | 1487 |
 | 6 | claude claude-opus-5-5 low | 42 | 0.313 | 1.3 | 860 |
 | 7 | codex gpt-6-sol medium | 40 | 0.187 | 1.0 | 417 |
-| 8 | claude claude-opus-5 low | 39 | 0.263 | 2.7 | 1561 |
-| 9 | gemini gemini-3.8-flash-high | 41 | 0.197 | 3.8 | 1623 |
+| 8 | claude claude-opus-5 low | 39 | 0.263 | 2.5 | 1561 |
+| 9 | gemini gemini-3.8-flash-high | 41 | 0.197 | 3.5 | 1623 |
 
 **triage**
 
 | # | candidate | score | index | index run cost ($) | minutes / task |
 |---|---|---|---|---|---|
-| 1 | codex gpt-6-luna high | 32 | 32.1 | 48 | 2.2 |
-| 2 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.8 |
+| 1 | codex gpt-6-luna high | 32 | 32.1 | 48 | 2.5 |
+| 2 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 1.9 |
 | 3 | gemini gemini-3.8-flash-low | 33 | 33.5 | not published | not published |
 | 4 | claude claude-sonnet-5 low | 24 | 24.3 | 653 | 2.5 |
-| 5 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.2 |
+| 5 | claude claude-haiku-4-5 | 17 | 16.9 | 524 | 2.8 |
 
 **hard-judgment**
 
@@ -188,7 +198,7 @@ The measurement notes of the previous decision below still apply.
 | 6 | claude claude-opus-5 medium | 45 | 0.513 | 1665 | 0.269 | not published | 2732 |
 | 7 | claude claude-opus-5-5 low | 42 | 0.483 | 1459 | 0.177 | not published | 860 |
 | 8 | codex gpt-6-astra high | 51 | 0.531 | 1703 | 0.289 | not published | 2925 |
-| 9 | grok grok-4.7 high | 46 | 0.423 | 1967 | 0.180 | not published | 3881 |
+| 9 | grok grok-4.7 high | 46 | 0.423 | 1948 | 0.180 | not published | 3881 |
 | 10 | gemini gemini-3.8-flash-high | 41 | 0.478 | 1151 | 0.183 | not published | 1623 |
 
 **taste-final**
@@ -198,8 +208,8 @@ The measurement notes of the previous decision below still apply.
 | 1 | claude claude-opus-5-5 xhigh | 56 | 1780 | 1640 | 0.660 | 4057 |
 | 2 | claude claude-opus-5-5 high | 54 | 1704 | 1555 | 0.596 | 2172 |
 | 3 | claude claude-opus-5-5 medium | 51 | 1642 | 1504 | 0.538 | 1627 |
-| 4 | grok grok-4.7 high | 46 | 1644 | 1506 | 0.597 | 3881 |
-| 5 | grok grok-4.6 high | 44 | 1546 | 1519 | 0.553 | 2352 |
+| 4 | grok grok-4.7 high | 46 | 1637 | 1501 | 0.597 | 3881 |
+| 5 | grok grok-4.6 high | 44 | 1539 | 1517 | 0.553 | 2352 |
 | 6 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 | 3803 |
 | 7 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 | 1623 |
 
@@ -239,12 +249,12 @@ The measurement notes of the previous decision below still apply.
 
 | # | candidate | score | AutomationBench | minutes / task | first answer token (s) | index run cost ($) |
 |---|---|---|---|---|---|---|
-| 1 | codex gpt-6-sol high | 43 | 0.601 | 1.4 | 10 | 610 |
+| 1 | codex gpt-6-sol high | 43 | 0.601 | 2.0 | 10 | 610 |
 | 2 | codex gpt-6-sol medium | 40 | 0.580 | 1.0 | 2 | 417 |
-| 3 | codex gpt-6-sol low | 34 | 0.539 | 0.4 | 1 | 268 |
-| 4 | codex gpt-6-astra low | 46 | 0.591 | 1.5 | 3 | 1537 |
+| 3 | codex gpt-6-sol low | 34 | 0.539 | 0.7 | 2 | 268 |
+| 4 | codex gpt-6-astra low | 46 | 0.591 | 1.4 | 3 | 1537 |
 | 5 | gemini gemini-3.8-flash-medium | 40 | 0.609 | not published | not published | 1100 |
-| 6 | claude claude-opus-5-5 low | 42 | 0.529 | 1.3 | 9 | 860 |
+| 6 | claude claude-opus-5-5 low | 42 | 0.529 | 1.3 | 6 | 860 |
 
 **live-search**
 

@@ -27,8 +27,8 @@ MAX_BYTES = 1_048_576
 # governance change, never a caller argument/environment override.
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "4.3.2"
-APPROVED_AS_OF = "2026-09-23"
-APPROVED_REGISTRY_SHA256 = "575dc3cf755b027be2060afbfb3ed190d6b6738691fb05b81a83f1e524326798"
+APPROVED_AS_OF = "2026-09-27"
+APPROVED_REGISTRY_SHA256 = "6d372b250bbafffcd43bd72cab647713cb83b3ad37c5e1f525c53ff11b4ddff7"
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))
