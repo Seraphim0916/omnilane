@@ -1,12 +1,321 @@
 # Model capabilities — September 2026 snapshot
 
 External records are dated per section. The value-first decision of
-2026-09-23 below is the current basis for `routing.yaml`; the best-first decision
-made earlier the same day, the 2026-09-05 v4.2 decision and the 2026-09-02
+2026-09-30 below is the current basis for `routing.yaml`; the value-first decision
+of 2026-09-23 it extends, the best-first decision made earlier that day, the
+2026-09-05 v4.2 decision and the 2026-09-02
 v4.1.1-era snapshot are kept as historical evidence. The v4.2 and older scores are
 on other scales and are not comparable with the v4.3.2 figures.
 
-## Current routing decision — 2026-09-23, second snapshot (value-first, GPT-6 Sol and Luna added)
+## Current routing decision — 2026-09-30 (value-first, Claude Sonnet 5.5 and GPT-6.1 Sol added)
+
+Anthropic released Claude Sonnet 5.5 and OpenAI released GPT-6.1 Sol, and AA
+published both at max, xhigh, high, medium and low (neither has a non-reasoning
+row). They join the registry as snapshot `aa-v4.3.2-2026-09-30-v1`, built from
+`docs/reports/aa-v4.3.2-extract-2026-09-30.json` (captured 2026-09-30 03:26 +08:00):
+117 scored rows, and the 107 earlier rows re-score unchanged. The rule is the one
+of 2026-09-23 below, unchanged; `VALUE_FAMILIES` now includes both new models.
+
+`value` on this capture changes six chains, and `triage` changes by hand. The rows
+the new models displace stay right behind them until a host proves Sonnet 5.5 or
+GPT-6.1 Sol with `omnilane resign`. Each displaced row sits after the new pick the
+rule gives at that row's own score, so an unproven host still gets the row it got
+before. `hard-judgment`'s and `consult`'s value picks, `long-context`, `live-search`
+and `coding-overflow` do not change.
+
+**What the capture lacks.**
+
+- Sonnet 5.5 has no MMMU-Pro and neither new model has an `mlcrOverall`, so
+  neither is placed in `ui-draft` (Sonnet) or `long-context` (both).
+- No model has a hallucination rate, and the models added since 2026-09-17 still
+  have no GPQA.
+- AA again lists no time per task or first-token time for GPT-6 Sol medium and
+  Luna medium. This capture was not filled from an earlier one, so `value` cannot
+  place GPT-6 Sol medium in `fast-agentic`; it stays in `bulk-mechanical` and
+  `ui-draft` where the chain already had it.
+- GPT-6 Sol high now waits 15 s for its first answer token (10 s on 2026-09-27),
+  over the `fast-agentic` cap.
+
+**Value picks** (output of
+`scripts/aa_rebaseline.py value --extract docs/reports/aa-v4.3.2-extract-2026-09-30.json`):
+
+**hardest-coding** — Terminal-Bench 4.0, band 0.02; SciCode within 0.05; near-ties only
+
+- codex gpt-6-astra xhigh (score 52)
+- codex gpt-6.1-sol xhigh (score 51)
+- codex gpt-6.1-sol high (score 50)
+- codex gpt-6.1-sol medium (score 48)
+- claude claude-sonnet-5-5 high (score 47)
+- codex gpt-6-astra low (score 46)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5-5 low (score 42)
+- claude claude-sonnet-5-5 medium (score 41)
+- claude claude-opus-5 low (score 39)
+
+**bulk-mechanical** — Terminal-Bench 4.0, band 0.06; minutes / task within 2.0; wide band
+
+- codex gpt-6.1-sol medium (score 48)
+- codex gpt-6.1-sol high (score 50)
+- claude claude-sonnet-5-5 high (score 47)
+- codex gpt-6.1-sol low (score 42)
+- claude claude-sonnet-5-5 medium (score 41)
+- claude claude-sonnet-5-5 low (score 36)
+- codex gpt-6-sol low (score 34)
+- ceiling 51: the chain gives codex/gpt-6-1-sol-medium, the rule prefers codex/gpt-6-1-sol-high
+- ceiling 38: the chain gives claude/claude-sonnet-5-5-low, the rule prefers codex/gpt-6-sol-low
+
+**hard-judgment** — HLE, band 0.02; Briefcase analytical Elo within 150; near-ties only
+
+- claude claude-opus-5-5 xhigh (score 56)
+- claude claude-fable-5-1 xhigh (score 53)
+- claude claude-opus-5-5 medium (score 51)
+- claude claude-fable-5-1 medium (score 49)
+- claude claude-opus-5 high (score 48)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5-5 low (score 42)
+- codex gpt-5.6-sol medium (score 39)
+
+**taste-final** — Briefcase overall Elo, band 30; Briefcase presentation Elo within 100; near-ties only
+
+- claude claude-opus-5-5 xhigh (score 56)
+- claude claude-sonnet-5-5 xhigh (score 52)
+- claude claude-sonnet-5-5 high (score 47)
+- grok grok-4.7 high (score 46)
+- grok grok-4.6 high (score 44)
+- grok grok-4.6 medium (score 43)
+- claude claude-sonnet-5-5 medium (score 41)
+- codex gpt-5.6-terra xhigh (score 38)
+
+**ui-draft** — MMMU-Pro, band 0.01; Terminal-Bench 4.0 within 0.05; wide band
+
+- claude claude-opus-5-5 high (score 54)
+- codex gpt-6.1-sol high (score 50)
+- codex gpt-6.1-sol medium (score 48)
+- codex gpt-6.1-sol low (score 42)
+- codex gpt-6-sol medium (score 40)
+- ceiling 55: the chain gives claude/claude-opus-5-5-high, the rule prefers codex/gpt-6-1-sol-high
+- ceiling 54: the chain gives claude/claude-opus-5-5-high, the rule prefers codex/gpt-6-1-sol-high
+- ceiling 50: the chain gives codex/gpt-6-1-sol-high, the rule prefers codex/gpt-6-1-sol-medium
+- ceiling 49: the chain gives codex/gpt-6-1-sol-medium, the rule prefers codex/gpt-6-1-sol-low
+- ceiling 48: the chain gives codex/gpt-6-1-sol-medium, the rule prefers codex/gpt-6-1-sol-low
+
+**fast-agentic** — AutomationBench, band 0.03; minutes / task within 1.0; wide band
+
+- codex gpt-6.1-sol medium (score 48)
+- codex gpt-6-sol low (score 34)
+- codex gpt-6.1-sol low (score 42)
+- ceiling 45: the chain gives codex/gpt-6-sol-low, the rule prefers codex/gpt-6-1-sol-low
+- ceiling 44: the chain gives codex/gpt-6-sol-low, the rule prefers codex/gpt-6-1-sol-low
+- ceiling 43: the chain gives codex/gpt-6-sol-low, the rule prefers codex/gpt-6-1-sol-low
+- ceiling 42: the chain gives codex/gpt-6-sol-low, the rule prefers codex/gpt-6-1-sol-low
+
+**long-context** — mlcrOverall, band 0.02; near-ties only
+
+- claude claude-opus-5 high (score 48)
+- claude claude-opus-5 medium (score 45)
+- claude claude-opus-5 low (score 39)
+- codex gpt-5.6-terra xhigh (score 38)
+- codex gpt-5.6-luna xhigh (score 35)
+- codex gpt-5.6-luna high (score 32)
+- codex gpt-5.6-terra medium (score 30)
+
+**Chains and their measurements** (output of
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-09-30.json`):
+
+**hardest-coding**
+
+| # | candidate | score | Terminal-Bench 4.0 | SciCode | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 0.596 | 0.557 | not published | 3803 |
+| 2 | codex gpt-6.1-sol xhigh | 51 | 0.540 | 0.557 | not published | 662 |
+| 3 | claude claude-opus-5-5 medium | 51 | 0.525 | 0.593 | not published | 1627 |
+| 4 | codex gpt-6.1-sol high | 50 | 0.515 | 0.558 | not published | 521 |
+| 5 | codex gpt-6-astra medium | 50 | 0.495 | 0.542 | not published | 2434 |
+| 6 | codex gpt-6.1-sol medium | 48 | 0.480 | 0.532 | not published | 361 |
+| 7 | claude claude-fable-5-1 medium | 49 | 0.449 | 0.564 | not published | 3983 |
+| 8 | claude claude-opus-5 high | 48 | 0.460 | 0.554 | not published | 4332 |
+| 9 | claude claude-sonnet-5-5 high | 47 | 0.439 | 0.537 | not published | 1176 |
+| 10 | codex gpt-6-astra low | 46 | 0.419 | 0.541 | not published | 1537 |
+| 11 | claude claude-opus-5 medium | 45 | 0.343 | 0.515 | not published | 2732 |
+| 12 | claude claude-opus-5-5 low | 42 | 0.313 | 0.586 | not published | 860 |
+| 13 | claude claude-sonnet-5-5 medium | 41 | 0.298 | 0.529 | not published | 701 |
+| 14 | claude claude-opus-5 low | 39 | 0.263 | 0.492 | not published | 1561 |
+| 15 | grok grok-4.7 high | 46 | 0.247 | 0.578 | not published | 3881 |
+| 16 | grok grok-4.6 high | 44 | 0.212 | 0.565 | not published | 2352 |
+| 17 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | not published | 1623 |
+
+**bulk-mechanical**
+
+| # | candidate | score | Terminal-Bench 4.0 | minutes / task | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | codex gpt-6.1-sol medium | 48 | 0.480 | 2.1 | 361 |
+| 2 | claude claude-opus-5-5 medium | 51 | 0.525 | 3.6 | 1627 |
+| 3 | codex gpt-6-astra medium | 50 | 0.495 | 3.4 | 2434 |
+| 4 | codex gpt-6.1-sol high | 50 | 0.515 | 3.4 | 521 |
+| 5 | claude claude-sonnet-5-5 high | 47 | 0.439 | 3.8 | 1176 |
+| 6 | codex gpt-6.1-sol low | 42 | 0.308 | 0.9 | 250 |
+| 7 | codex gpt-6-astra low | 46 | 0.419 | 1.5 | 1537 |
+| 8 | codex gpt-6-sol high | 43 | 0.263 | 2.5 | 610 |
+| 9 | codex gpt-5.6-sol high | 42 | 0.207 | 2.9 | 1487 |
+| 10 | claude claude-opus-5-5 low | 42 | 0.313 | 1.4 | 860 |
+| 11 | claude claude-sonnet-5-5 medium | 41 | 0.298 | 2.3 | 701 |
+| 12 | claude claude-sonnet-5-5 low | 36 | 0.207 | 1.7 | 544 |
+| 13 | codex gpt-6-sol medium | 40 | 0.187 | not published | 416 |
+| 14 | claude claude-opus-5 low | 39 | 0.263 | 2.9 | 1561 |
+| 15 | codex gpt-6-sol low | 34 | 0.091 | 0.8 | 268 |
+| 16 | gemini gemini-3.8-flash-high | 41 | 0.197 | 4.9 | 1623 |
+
+**triage**
+
+| # | candidate | score | index | index run cost ($) | minutes / task |
+|---|---|---|---|---|---|
+| 1 | codex gpt-6-luna high | 32 | 32.1 | 48 | 2.5 |
+| 2 | codex gpt-5.6-luna high | 32 | 32.1 | 108 | 2.1 |
+| 3 | gemini gemini-3.8-flash-low | 33 | 33.5 | not published | not published |
+| 4 | claude claude-sonnet-5-5 low | 36 | 35.8 | 544 | 1.7 |
+| 5 | claude claude-sonnet-5 low | 24 | 24.3 | 653 | 2.6 |
+| 6 | claude claude-haiku-4-5 | 17 | 16.9 | 594 | 2.9 |
+
+**hard-judgment**
+
+| # | candidate | score | HLE | Briefcase analytical Elo | CritPt | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 xhigh | 56 | 0.575 | 2151 | 0.317 | not published | 4057 |
+| 2 | claude claude-fable-5-1 xhigh | 53 | 0.587 | 1971 | 0.311 | not published | 9063 |
+| 3 | claude claude-opus-5-5 medium | 51 | 0.547 | 1925 | 0.277 | not published | 1627 |
+| 4 | claude claude-fable-5-1 medium | 49 | 0.538 | 1817 | 0.291 | not published | 3983 |
+| 5 | claude claude-opus-5 high | 48 | 0.528 | 1855 | 0.283 | not published | 4332 |
+| 6 | claude claude-opus-5 medium | 45 | 0.513 | 1665 | 0.269 | not published | 2732 |
+| 7 | claude claude-opus-5-5 low | 42 | 0.483 | 1459 | 0.177 | not published | 860 |
+| 8 | codex gpt-6.1-sol xhigh | 51 | 0.526 | 1720 | 0.317 | not published | 662 |
+| 9 | codex gpt-6-astra high | 51 | 0.531 | 1703 | 0.289 | not published | 2925 |
+| 10 | grok grok-4.7 high | 46 | 0.423 | 1948 | 0.180 | not published | 3881 |
+| 11 | gemini gemini-3.8-flash-high | 41 | 0.478 | 1151 | 0.183 | not published | 1623 |
+
+**taste-final**
+
+| # | candidate | score | Briefcase overall Elo | Briefcase presentation Elo | GDPval | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 xhigh | 56 | 1780 | 1640 | 0.660 | 4057 |
+| 2 | claude claude-sonnet-5-5 xhigh | 52 | 1746 | 1597 | 0.612 | 2738 |
+| 3 | claude claude-opus-5-5 high | 54 | 1704 | 1555 | 0.596 | 2172 |
+| 4 | claude claude-sonnet-5-5 high | 47 | 1634 | 1485 | 0.509 | 1176 |
+| 5 | claude claude-opus-5-5 medium | 51 | 1642 | 1504 | 0.538 | 1627 |
+| 6 | grok grok-4.7 high | 46 | 1637 | 1501 | 0.597 | 3881 |
+| 7 | grok grok-4.6 high | 44 | 1539 | 1517 | 0.553 | 2352 |
+| 8 | codex gpt-6-astra xhigh | 52 | 1544 | 1503 | 0.508 | 3803 |
+| 9 | gemini gemini-3.8-flash-high | 41 | 1202 | 1200 | 0.456 | 1623 |
+
+**consult**
+
+| # | candidate | score | index | index run cost ($) |
+|---|---|---|---|---|
+| 1 | codex gpt-6-astra xhigh | 52 | 52.4 | 3803 |
+| 2 | claude claude-opus-5-5 xhigh | 56 | 56.0 | 4057 |
+| 3 | grok grok-4.7 high | 46 | 46.3 | 3881 |
+| 4 | grok grok-4.6 high | 44 | 44.3 | 2352 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 40.9 | 1623 |
+
+**ui-draft**
+
+| # | candidate | score | MMMU-Pro | Terminal-Bench 4.0 | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5-5 high | 54 | 0.858 | 0.566 | 2172 |
+| 2 | codex gpt-6.1-sol high | 50 | 0.849 | 0.515 | 521 |
+| 3 | claude claude-opus-5-5 medium | 51 | 0.857 | 0.525 | 1627 |
+| 4 | codex gpt-6-astra medium | 50 | 0.851 | 0.495 | 2434 |
+| 5 | codex gpt-6.1-sol medium | 48 | 0.839 | 0.480 | 361 |
+| 6 | codex gpt-6.1-sol low | 42 | 0.831 | 0.308 | 250 |
+| 7 | claude claude-opus-5-5 low | 42 | 0.847 | 0.313 | 860 |
+| 8 | codex gpt-6-astra low | 46 | 0.846 | 0.419 | 1537 |
+| 9 | codex gpt-6-sol medium | 40 | 0.806 | 0.187 | 416 |
+| 10 | gemini gemini-3.8-flash-high | 41 | 0.856 | 0.197 | 1623 |
+
+**long-context**
+
+| # | candidate | score | mlcrOverall | AA-LCR | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | claude claude-opus-5 high | 48 | 0.594 | 0.790 | 4332 |
+| 2 | claude claude-opus-5 medium | 45 | 0.561 | 0.820 | 2732 |
+| 3 | claude claude-opus-5 low | 39 | 0.539 | 0.813 | 1561 |
+| 4 | codex gpt-5.6-terra xhigh | 38 | 0.217 | 0.790 | 1187 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 0.217 | 0.813 | 1623 |
+
+**fast-agentic**
+
+| # | candidate | score | AutomationBench | minutes / task | first answer token (s) | index run cost ($) |
+|---|---|---|---|---|---|---|
+| 1 | codex gpt-6.1-sol medium | 48 | 0.626 | 2.1 | 5 | 361 |
+| 2 | codex gpt-6-astra medium | 50 | 0.646 | 3.4 | 5 | 2434 |
+| 3 | codex gpt-6-sol low | 34 | 0.539 | 0.8 | 2 | 268 |
+| 4 | codex gpt-6.1-sol low | 42 | 0.526 | 0.9 | 2 | 250 |
+| 5 | codex gpt-6-astra low | 46 | 0.591 | 1.5 | 3 | 1537 |
+| 6 | gemini gemini-3.8-flash-medium | 40 | 0.609 | not published | not published | 1100 |
+| 7 | claude claude-sonnet-5-5 medium | 41 | 0.529 | 2.3 | 1 | 701 |
+| 8 | claude claude-opus-5-5 low | 42 | 0.529 | 1.4 | 12 | 860 |
+
+**live-search**
+
+| # | candidate | score | knowledge (omniscience) | hallucination rate | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 30.9 | not published | 3881 |
+| 2 | grok grok-4.6 high | 44 | 30.5 | not published | 2352 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 29.6 | not published | 1623 |
+| 4 | claude claude-opus-5-5 low | 42 | 38.9 | not published | 860 |
+
+**coding-overflow**
+
+| # | candidate | score | Terminal-Bench 4.0 | SciCode | index run cost ($) |
+|---|---|---|---|---|---|
+| 1 | grok grok-4.7 high | 46 | 0.247 | 0.578 | 3881 |
+| 2 | grok grok-4.6 high | 44 | 0.212 | 0.565 | 2352 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | 1623 |
+| 4 | kimi kimi-k3 | not scored | — | — | — |
+| 5 | qwen qwen3-coder-plus | not scored | — | — | — |
+| 6 | opencode - | not scored | — | — | — |
+
+Why each changed lane is ordered this way:
+
+- **hardest-coding.** Astra xhigh (0.596, $3803) still leads. Below it GPT-6.1 Sol
+  xhigh (0.540, $662), high (0.515, $521) and medium (0.480, $361) are each within
+  a near-tie of the best row at their ceiling for a fraction of the money. Opus 5.5
+  medium, Astra medium, Fable medium and Opus 5 high stand behind them. Sonnet 5.5
+  high (0.439, $1176) and medium (0.298, $701) take the rungs at 47 and 41.
+- **bulk-mechanical.** GPT-6.1 Sol medium (0.480, 2.1 min, $361) is within twice
+  the band of Astra xhigh at under a tenth of the cost, so it leads. Opus 5.5
+  medium and Astra medium stand behind it. GPT-6.1 Sol low (0.308, 0.9 min, $250)
+  replaces the Astra low, GPT-6 Sol high, GPT-5.6 Sol high and Opus 5.5 low rungs,
+  which stay behind it. Sonnet 5.5 medium and low are the quick Claude rows, and
+  GPT-6 Sol low (0.091, 0.8 min, $268) is the floor.
+- **triage** is bought by the run. Sonnet 5.5 low (35.8, $544) outscores Sonnet 5
+  low (24.3, $653) for less money and a shorter step, so it replaces it as the
+  Claude row. GPT-6.1 Sol low (42.1, $250) costs five times GPT-6 Luna high and is
+  not placed.
+- **hard-judgment.** The value picks are unchanged. GPT-6.1 Sol xhigh (HLE 0.526,
+  analytical 1720, $662) is within a near-tie of Astra high (0.531, 1703, $2925),
+  so it becomes the Codex row, with Astra high behind it.
+- **taste-final.** Sonnet 5.5 xhigh (1746, $2738) is graded above Opus 5.5 high
+  (1704), and Sonnet 5.5 high (1634, $1176) is within a near-tie of Opus 5.5 medium
+  (1642, $1627) for less. Both Opus rows stay behind the Sonnet rows. GPT-6.1 Sol
+  xhigh (1507) is more than a near-tie below Astra xhigh (1544), so Astra stays
+  the Codex row.
+- **ui-draft.** Opus 5.5 high still leads. GPT-6.1 Sol high (0.849, $521), medium
+  (0.839, $361) and low (0.831, $250) are the picks below it, with Opus 5.5 medium,
+  Astra medium, Opus 5.5 low and Astra low behind them. For ceilings 48 to 50 and
+  54 to 55 the rule prefers a still cheaper row; the chain gives the better one.
+- **fast-agentic.** GPT-6.1 Sol medium (0.626, 2.1 min, 5 s, $361) leads; its high
+  row scores 0.645 but waits 57 s for the first token. Astra medium (0.646, 5 s),
+  the pick on this capture without GPT-6.1 Sol, stands behind it. GPT-6 Sol high
+  (15 s) and GPT-6 Sol medium (no published speed) leave the chain. Sonnet 5.5
+  medium (0.529, 1 s, $701) is level with Opus 5.5 low (0.529, 12 s, $860) and
+  replaces it as the Claude row. For ceilings 42 to 45 the rule prefers GPT-6.1
+  Sol low; the chain gives GPT-6 Sol low.
+
+The 2026-09-23 value-first chains can be regenerated from the routing.yaml of commit
+1230085 with
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-09-27.json`.
+
+## Previous routing decision — 2026-09-23, second snapshot (value-first, GPT-6 Sol and Luna added)
 
 **2026-09-27 refresh (0.50.0).** The registry moved to snapshot `aa-v4.3.2-2026-09-27-v1`
 from `docs/reports/aa-v4.3.2-extract-2026-09-27.json`. Every score is unchanged;

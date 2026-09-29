@@ -6,8 +6,16 @@ semantic version tags.
 
 ## [Unreleased]
 
+**Every host must run `omnilane resign` once after upgrading**: the registry
+snapshot changes to `aa-v4.3.2-2026-09-30-v1`.
+
 ### Added
 
+- **Claude Sonnet 5.5 and GPT-6.1 Sol join the registry** (Sonnet 5.5 56 at max
+  down to 36 at low, GPT-6.1 Sol 52 down to 42), with the aliases `Sonnet 5.5`
+  and `GPT-6.1 Sol`. AA publishes no non-reasoning row for either. `resign` probes
+  their ten selectors; until a host proves them, every chain serves the row
+  behind them.
 - A host declares the extra model/effort pairs its sub-agent tool can run once,
   in `$OMNILANE_HOME/native-rows.json`, and `omnilane native-context` appends one
   capability row per declared model for the caller's harness, with the requested
@@ -31,6 +39,16 @@ semantic version tags.
   1.0.41, harness `grok-build`; Antigravity 1.2.12 still has no sub-agent tool;
   new Hermes (`delegate_task`, one full cycle completed) and OpenClaw
   (`sessions_spawn`, no cycle yet) rows, both through a host statement.
+- Registry snapshot `aa-v4.3.2-2026-09-30-v1` from the 2026-09-30 AA capture: 117
+  scored rows, and the 107 earlier scores are unchanged.
+- Lanes, value-first on the new capture: GPT-6.1 Sol medium heads
+  `bulk-mechanical` and `fast-agentic`, and GPT-6.1 Sol rows are the rungs below
+  the leader in `hardest-coding` and `ui-draft` and Codex's row in
+  `hard-judgment`. Sonnet 5.5 takes the second and fourth rungs of `taste-final`,
+  mid rungs of `hardest-coding` and `bulk-mechanical`, the Claude row of `triage`
+  (low) and of `fast-agentic` (medium). GPT-6 Sol high leaves `fast-agentic`: it
+  now waits over 10 s for its first token. SKILL.md, the README lane tables and
+  `docs/model-capabilities-2026-09.md` follow.
 
 ### Fixed
 

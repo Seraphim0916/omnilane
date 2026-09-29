@@ -83,6 +83,13 @@ NEW_ROWS = [
        f"gpt-6-{family}" + ("" if effort == "max" else f"-{effort or 'non-reasoning'}"),
        f"codex/gpt-5-6-{family}" + ("" if effort == "max" else f"-{effort or 'non-reasoning'}"))
       for family in ("sol", "luna") for effort in ("max", "xhigh", "high", "medium", "low", None)],
+    # AA scores Sonnet 5.5 and GPT-6.1 Sol with reasoning only; neither has a non-reasoning row.
+    *[(f"claude/claude-sonnet-5-5{suffix}", "claude", "claude-sonnet-5-5", effort, "adaptive",
+       f"claude-sonnet-5-5{suffix}", f"claude/claude-sonnet-5{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
+    *[(f"codex/gpt-6-1-sol{suffix}", "codex", "gpt-6.1-sol", effort, "reasoning",
+       f"gpt-6-1-sol{suffix}", f"codex/gpt-6-sol{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra"}  # new catalog model -> alias entry to clone
@@ -429,8 +436,8 @@ VALUE_LANES = {
 # A tool loop waits for every first token, so a slow starter is no fast row whatever it scores.
 VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
 STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
-VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5", "claude-haiku-4-5",
-                  "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
+VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-sonnet-5",
+                  "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
