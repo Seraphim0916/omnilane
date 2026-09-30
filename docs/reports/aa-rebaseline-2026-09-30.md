@@ -47,12 +47,18 @@
   - Sonnet 5.5 是 `claude-sonnet-5-5`。
   - GPT-6.1 Sol 是 `gpt-6.1-sol`，比照 `gpt-5.6-sol` 的寫法，config id 是 `codex/gpt-6-1-sol*`。
   - 兩者都還沒在任何主機探測過。
-- 雜湊：`6d372b25…dff7` → `428657f3…1214`。`build` 連跑兩次（一次以舊快照為底、一次以新快照為底），雜湊相同。
+- 雜湊：`6d372b25…dff7` → `b00c8a83…ff30`。
+  - 第一版是 `428657f3…1214`，沒有新模型的別名列。
+  - 補上兩筆別名列後，以 main `1230085` 的政策檔為底重跑 `build`：分數列沒變，只多兩筆別名，`coverage.aliases` 50 → 52。
+  - 補之前先用同一指令重跑，得到的檔案與 `428657f3…1214` 逐位元組相同。
 - 釘選：`APPROVED_AS_OF` 改成 `2026-09-30`，`APPROVED_REGISTRY_SHA256` 同步更新。
 - `build_overlay.py` 新增要探測的列：
   - `claude-sonnet-5-5` 五列，比照 `claude-opus-5-5`。
   - `gpt-6.1-sol` 五列，比照 `gpt-6-sol`。
-- 沒有新增 catalog 別名列：`scripts/configure.sh` 的選單沒有動，`claude-opus-5-5` 也沒有別名列。
+- 目錄與別名列，比照 GPT-6 Sol、Luna 的先例：
+  - `scripts/configure.sh` 的選單加上 `gpt-6.1-sol` 與 `claude-sonnet-5-5`。
+  - `NEW_ALIASES` 加上兩者，別名列分別複製自 `gpt-6-sol` 與 `claude-sonnet-5`。
+  - `docs/aa-model-coverage-2026-09-05.json` 加上兩筆目錄列，`catalogEntries` 117 → 119。
 
 ## 車道
 

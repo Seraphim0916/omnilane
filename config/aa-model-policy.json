@@ -3434,6 +3434,24 @@
   "aliases": [
     {
       "catalog_vendor": "codex",
+      "catalog_model": "gpt-6.1-sol",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "codex/gpt-6-1-sol",
+        "codex/gpt-6-1-sol-xhigh",
+        "codex/gpt-6-1-sol-high",
+        "codex/gpt-6-1-sol-medium",
+        "codex/gpt-6-1-sol-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "codex",
       "catalog_model": "gpt-6-sol",
       "status": "unknown",
       "resolved_config_id": null,
@@ -3770,6 +3788,24 @@
         "claude/claude-opus-5-high",
         "claude/claude-opus-5-medium",
         "claude/claude-opus-5-low"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "claude",
+      "catalog_model": "claude-sonnet-5-5",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "claude/claude-sonnet-5-5",
+        "claude/claude-sonnet-5-5-xhigh",
+        "claude/claude-sonnet-5-5-high",
+        "claude/claude-sonnet-5-5-medium",
+        "claude/claude-sonnet-5-5-low"
       ],
       "implicit_default_effort": null,
       "runtime_verified": false,
@@ -4150,7 +4186,7 @@
     "scored_configs": 117,
     "reference_configs": 1,
     "unknown_configs": 7,
-    "aliases": 50,
+    "aliases": 52,
     "by_vendor": {
       "codex": 57,
       "claude": 41,

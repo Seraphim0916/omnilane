@@ -92,7 +92,8 @@ NEW_ROWS = [
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
-               "gpt-6-luna": "gpt-6-astra"}  # new catalog model -> alias entry to clone
+               "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
+               "claude-sonnet-5-5": "claude-sonnet-5"}  # new catalog model -> alias entry to clone
 
 
 def half_up(value: float) -> int:

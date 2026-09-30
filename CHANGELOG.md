@@ -15,7 +15,8 @@ snapshot changes to `aa-v4.3.2-2026-09-30-v1`.
   down to 36 at low, GPT-6.1 Sol 52 down to 42), with the aliases `Sonnet 5.5`
   and `GPT-6.1 Sol`. AA publishes no non-reasoning row for either. `resign` probes
   their ten selectors; until a host proves them, every chain serves the row
-  behind them.
+  behind them. `omnilane configure` lists `gpt-6.1-sol` and `claude-sonnet-5-5`,
+  and the registry carries a catalog alias entry for each.
 - A host declares the extra model/effort pairs its sub-agent tool can run once,
   in `$OMNILANE_HOME/native-rows.json`, and `omnilane native-context` appends one
   capability row per declared model for the caller's harness, with the requested
