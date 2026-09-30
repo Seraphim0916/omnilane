@@ -91,13 +91,61 @@ native fails closed.
 ### Generating the capability file
 
 `omnilane native-context [--workdir DIR]... [--mode advise|work]... [--harness NAME]
-[--inherits-caller-runtime] [--out FILE]` writes a capability file for the
-harness it runs under and prints the path. Vendor, current model and current
-effort are read the way `omnilane whoami` reads them; nothing is inferred from
-installed CLIs. It emits one capability row: the caller's own model at its own
-effort. A caller whose effort is unrecorded gets `efforts: ["unverified"]`, which
+[--inherits-caller-runtime] [--host-rows FILE | --no-host-rows] [--out FILE]`
+writes a capability file for the harness it runs under and prints the path.
+Vendor, current model and current effort are read the way `omnilane whoami`
+reads them; nothing is inferred from installed CLIs. It emits one capability
+row: the caller's own model at its own effort, followed by any host-declared rows
+(below). A caller whose effort is unrecorded gets `efforts: ["unverified"]`, which
 matches no lane target, so that file serves `--inherit` only. Rows for other
-models are the host's to add, from its real agent-tool contract.
+models are the host's to add, from its real agent-tool contract: by hand, or once
+per host in the rows file.
+
+For a Claude caller the launch flags are read first; then omnilane binds the
+nearest `claude` ancestor to its session through `sessions/<pid>.json` in
+`$CLAUDE_CONFIG_DIR` or `~/.claude` (pid and process start time must match),
+requires `CLAUDE_CODE_SESSION_ID`, when present, to name the same session, finds
+the unique `projects/*/<sessionId>.jsonl`, and takes the model (a trailing
+`-YYYYMMDD` dropped) and the effort (the lower of `perTurnEffort` and `effort`)
+of the latest main-thread assistant record. Where they differ from the launch
+flags they win, and `whoami` says
+`transcript <id8>: <model> at <effort> (launch flags said …)`. Any missing or
+mismatched piece leaves the launch-flag reading as before. Only identity metadata
+is read, never message content; `OMNILANE_AA_CLAUDE_TRANSCRIPT=0` turns it off.
+The reason is that the desktop app changes model and effort without relaunching:
+launch flags said `--effort xhigh` while every turn ran at `max`, and a
+mid-session lowering would otherwise overstate the ceiling.
+
+A host declares the extra model/effort pairs its sub-agent tool can run once, in
+`$OMNILANE_HOME/native-rows.json`:
+
+```json
+{"schema_version": 1, "harnesses": {"claude-code": [
+  {"model": "claude-opus-5-5", "efforts": ["medium", "high", "xhigh"]},
+  {"model": "claude-opus-5", "efforts": ["high"]}]}}
+```
+
+`native-context` appends one capability row per declared model for the caller's
+harness, with the requested workdirs and modes, so no per-workdir hand edit is
+needed. `--host-rows FILE` uses another file and `--no-host-rows` skips it. Every
+pair must be a scored configuration for the caller's vendor, or nothing is
+written (exit 2). A host-asserted caller skips the file; it serves `--inherit`
+only.
+
+In Claude Code a declared row is realised by one agent definition per model and
+effort, named `omnilane-<model>-<effort>` (e.g.
+`omnilane-claude-opus-5-5-medium`), with frontmatter `model: <exact id>`,
+`effort: <effort>` and `disallowedTools: Agent`, plus a PreToolUse Bash hook in
+the definition that refuses `omnilane route|goal|native-context` and running
+`dispatch.sh`. The host calls `Agent` with `subagent_type` set to that name and
+no `model` argument. Because the definition sets `model` and `effort`, it never
+qualifies for `--inherits-caller-runtime`. A definition added during a turn is
+not callable in that same turn ("Agent type … not found"); it loads at the next
+turn. Evidence for completion: the sub-agent transcript
+`~/.claude/projects/<project>/<sessionId>/subagents/agent-<id>.jsonl` records
+`message.model` and `effort` on every assistant record, and
+`agent-<id>.meta.json` records `agentType`. Every Claude Code sub-agent loads the
+full CLAUDE.md hierarchy, so even a one-word reply costs noticeably.
 
 `inherits_caller_runtime: true` is written only when the host passes
 `--inherits-caller-runtime`. It is the host's statement that its sub-agent tool,
@@ -108,9 +156,11 @@ What this release has and has not verified about each harness's sub-agent tool:
 | Harness | Sub-agent tool | Status |
 |---|---|---|
 | Codex | `collaboration.spawn_agent`; a model override requires `fork_turns: "none"` or a bounded count | documented above from the tool contract; inheritance without an override is host-asserted |
-| Claude Code | `Agent` tool; optional `model` override | documented (code.claude.com/docs/en/sub-agents, read 2026-09-20). Model resolves in this order: the per-invocation `model` parameter, the agent definition's `model` frontmatter, `CLAUDE_CODE_SUBAGENT_MODEL`, then the main conversation's model. Effort: the definition's `effort` frontmatter overrides the session level and its default is "inherits from session". So a host may pass `--inherits-caller-runtime` only when it spawns with no `model` argument, the agent type's definition sets neither `model` (other than `inherit`) nor `effort`, and `CLAUDE_CODE_SUBAGENT_MODEL` is unset; the built-in general-purpose agent meets the definition part. Two full `--inherit` cycles on 2026-09-20 under those conditions reported the parent's exact model. The worker cannot see its own effort, so completion reports `runtime.effort: "unknown"`; effort inheritance rests on the documentation, not on an observation |
-| Grok Build | `spawn_subagent`; agent types `general-purpose`, `explore`, `plan` and user-defined ones | model: documented in the subagent guide embedded in grok 1.0.34 — "By default a subagent inherits the parent session's model"; only `[subagents.models].<agent>` in the config (highest priority) or the agent definition's `model` overrides that, and the bundled `general-purpose` definition says `model: inherit`. Effort: a definition may carry an `effort` override; no statement of the default was found, so effort inheritance is not verified. No `--inherit` cycle has been run in Grok |
-| Antigravity | — | `agy` 1.2.7 exposes `--agent`, `--model` and `--effort` for the session and its help names no sub-agent spawning surface; not verified, and no `--inherit` cycle has been run |
+| Claude Code | `Agent` tool; optional `model` override | documented (code.claude.com/docs/en/sub-agents, read 2026-09-20). Model resolves in this order: the per-invocation `model` parameter, the agent definition's `model` frontmatter, `CLAUDE_CODE_SUBAGENT_MODEL`, then the main conversation's model. Effort: the definition's `effort` frontmatter overrides the session level and its default is "inherits from session". So a host may pass `--inherits-caller-runtime` only when it spawns with no `model` argument, the agent type's definition sets neither `model` (other than `inherit`) nor `effort`, and `CLAUDE_CODE_SUBAGENT_MODEL` is unset; the built-in general-purpose agent meets the definition part. Two full `--inherit` cycles on 2026-09-20 under those conditions reported the parent's exact model. The worker cannot see its own effort; the host reads it from the sub-agent transcript (above) instead of reporting `runtime.effort: "unknown"`. Effort inheritance is observed: an inherited worker follows the session's current effort, and after the session switched to max, one ran max on all 66 of its records |
+| Grok Build | `spawn_subagent`; agent types `general-purpose`, `explore`, `plan` and user-defined ones; optional `model` argument | model: documented in the subagent guide embedded in grok 1.0.34 — "By default a subagent inherits the parent session's model"; only `[subagents.models].<agent>` in the config (highest priority) or the agent definition's `model` overrides that, and the bundled `general-purpose` definition says `model: inherit`. Effort: a definition may carry an `effort` override; no statement of the default was found in that guide. Observed on grok 1.0.41 (MacStudio and MacMini, 2026-09-30): model and effort are inherited; a parent at grok-4.7/high spawned a `general-purpose` child that ran grok-4.7/high, per `~/.grok/sessions/<cwd>/<child>/summary.json` (`current_model_id`, `reasoning_effort`). Two full `--inherit` cycles completed from a headless `grok -p` controller. Harness name `grok-build`. A pin is `[subagents.models].<type>` or the tool's `model` argument |
+| Hermes | `delegate_task` (Hermes 0.19.0); no per-call model argument | the child uses `delegation.model` if configured, else the parent's model (`tools/delegate_tool.py`: `effective_model = model or parent_agent.model`). omnilane cannot read a Hermes caller, so the host states it: `omnilane native-context --vendor V --model M --harness hermes --inherits-caller-runtime`, then `route --inherit`. If an outer vendor CLI is an ancestor of the Hermes process (e.g. Hermes started from a Claude Code shell), set `OMNILANE_AA_CALLER_FROM_PROCESS=0`; otherwise omnilane reads the outer CLI as the caller and `native-context` refuses the contradiction. Evidence: `~/.hermes/state.db`, table `sessions`, holds the child row (`source` `subagent`, `model`, `parent_session_id`). One full cycle completed on 2026-09-30 (grok-4.7 via xai-oauth) |
+| OpenClaw | `sessions_spawn` (OpenClaw 2026.9.6); optional per-call `model` and `thinking` | native sub-agents inherit the caller's model and thinking unless `agents.defaults.subagents.model` / `.thinking` (or the per-agent setting) is set. omnilane cannot read an OpenClaw caller: host statement, `--inherit` only. `--inherits-caller-runtime` is true only when no `subagents.model` pin differs from the caller's model; because the statement also covers effort, a `.thinking` pin that differs from the caller's thinking makes it false as well. No cycle has been run |
+| Antigravity | — | `agy` 1.2.7 exposed `--agent`, `--model` and `--effort` for the session and its help named no sub-agent spawning surface; `agy` 1.2.12 still exposes only a session-level `--agent` and no sub-agent tool. No `--inherit` cycle has been run |
 
 ### Inherited worker (`--inherit`)
 

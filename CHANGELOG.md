@@ -6,6 +6,41 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- A host declares the extra model/effort pairs its sub-agent tool can run once,
+  in `$OMNILANE_HOME/native-rows.json`, and `omnilane native-context` appends one
+  capability row per declared model for the caller's harness, with the requested
+  workdirs and modes. `--host-rows FILE` uses another file and `--no-host-rows`
+  skips it. A pair that is not a scored configuration for the caller's vendor
+  writes nothing (exit 2); a host-asserted caller skips the file.
+
+### Changed
+
+- The skill now says that in Claude Code a background
+  `omnilane jobs wait JOB_ID --timeout N` wakes the controller when
+  the job ends, idle or busy (Claude Code desktop 2.1.284; the terminal CLI was
+  not tested). The completion inbox alone still arrives only with the next
+  prompt.
+- The skill and `docs/native-executor.md` describe the Claude Code agent
+  definitions that realise host-declared rows (`omnilane-<model>-<effort>`,
+  callable from the next turn) and where completion evidence is read: the
+  sub-agent transcript records the model and effort of every assistant record.
+- The harness table: a Claude Code inherited worker follows the session's
+  current effort; Grok Build model and effort inheritance is observed on grok
+  1.0.41, harness `grok-build`; Antigravity 1.2.12 still has no sub-agent tool;
+  new Hermes (`delegate_task`, one full cycle completed) and OpenClaw
+  (`sessions_spawn`, no cycle yet) rows, both through a host statement.
+
+### Fixed
+
+- A Claude caller whose model or effort changed mid-session was read from its
+  stale launch flags. omnilane now binds the nearest `claude` to its session
+  transcript and takes the model and effort of the latest main-thread assistant
+  record; `whoami` says `transcript <id8>: <model> at <effort> (launch flags
+  said …)`. Any missing or mismatched piece keeps the launch-flag reading, and
+  `OMNILANE_AA_CLAUDE_TRANSCRIPT=0` turns it off.
+
 ## [0.50.0] - 2026-09-27
 
 A registry refresh on the 2026-09-27 AA capture. **Every host must run
