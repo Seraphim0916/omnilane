@@ -682,6 +682,13 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.51.1 新功能
+
+- 升级后每台主机运行一次 `omnilane resign`；之前漏测新模型的主机（例如经 ssh 重签后的 Sonnet 5.5）只会补测那几行。请在图形终端运行，才能读取 Claude、Gemini、Grok 的登录。
+- `resign` 把“这台主机从未探测过的配置”视为漂移，即使可执行文件没变也一样。`--check` 会列出这些配置并以 10 退出。测过但失败的配置不重测；签名者检查、`--approve`、`--trust-adhoc` 不变。
+- 安装后仍有未探测的配置时会发出警告并列出名称。
+- 升级：`npm i -g omnilane@0.51.1`，然后 `omnilane resign`。
+
 ## v0.51.0 新功能
 
 - **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成

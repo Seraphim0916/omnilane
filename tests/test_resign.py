@@ -254,6 +254,7 @@ class ResignTests(unittest.TestCase):
         self.addCleanup(which.stop)
         self.sweeps = []
         self.only_missing = {}
+        self.probed = {}
         self.build(self.sweep_root)
         self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
 
@@ -283,11 +284,18 @@ class ResignTests(unittest.TestCase):
         self.bins[vendor] = path
         return path
 
-    def run_resign(self, *, outcome="done", smoke=(True, "ok"), failing=(), **flags):
+    def run_resign(self, *, outcome="done", outcomes=None, smoke=(True, "ok"), failing=(), **flags):
         def sweep(vendor, root, log=print, only_missing=False, **_):
             self.sweeps.append(vendor)
             self.only_missing[vendor] = only_missing
             entries = probe_sweep.plan(vendor)
+            if only_missing:
+                entries = [e for e in entries if not (root / "evidence" / f"{e['name']}.json").is_file()]
+            vendor_outcome = (outcomes or {}).get(vendor, outcome)
+            if vendor_outcome != "done":
+                return {"vendor": vendor, "outcome": vendor_outcome, "detail": "stub",
+                        "passed": [], "failed": []}
+            self.probed[vendor] = [e["config_id"] for e in entries]
             if outcome == "done":
                 for entry in entries:
                     self.descriptor(root, entry["name"],
@@ -367,6 +375,87 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
         self.assertIs(self.only_missing["grok"], False)
         self.assertIs(self.only_missing["codex"], True)
+
+    def never_probed(self, vendor="claude", *, verdict=None):
+        """Re-sign the live overlay as if one planned probe of vendor never ran, or ran with verdict."""
+        entry = probe_sweep.plan(vendor)[-1]
+        for old in (self.sweep_root / "evidence").glob(entry["name"] + ".*"):
+            old.unlink()
+        if verdict:
+            self.descriptor(self.sweep_root, entry["name"], verdict)
+        self.build(self.sweep_root)
+        self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        return sorted(cid for cid, (_, _, name) in build_overlay.PROVEN.items() if name == entry["name"])
+
+    def mapped(self):
+        return {m["config_id"] for m in json.loads(self.live.read_text())["mappings"]}
+
+    def test_a_never_probed_configuration_is_drift_with_nothing_else_changed(self):
+        rows = self.never_probed()
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
+        self.assertEqual((self.sweeps, digest(self.live)), ([], before))
+        self.assertTrue(any("claude drifted:" in line and "never probed on this host" in line
+                            and rows[0] in line for line in self.lines), self.lines)
+
+    def test_only_the_never_probed_configurations_are_probed(self):
+        rows = self.never_probed()
+        self.assertFalse(set(rows) & self.mapped())
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.sweeps, ["claude"])
+        self.assertIs(self.only_missing["claude"], True)
+        self.assertEqual(sorted(self.probed["claude"]), rows)
+        self.assertTrue(set(rows) <= self.mapped())
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_OK, self.lines)
+
+    def test_a_row_missing_from_an_older_overlay_counts_as_never_probed(self):
+        rows = self.never_probed()
+        overlay = json.loads(self.live.read_text())
+        overlay["unproven"] = [u for u in overlay["unproven"] if u["config_id"] not in rows]
+        self.live.write_text(json.dumps(overlay))
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual(sorted(self.probed["claude"]), rows)
+
+    def test_a_probe_that_answered_and_failed_is_not_probed_again(self):
+        rows = self.never_probed(verdict="fail")
+        overlay = json.loads(self.live.read_text())
+        self.assertTrue({u["config_id"] for u in overlay["unproven"]} >= set(rows))
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        self.assertEqual((self.sweeps, digest(self.live)), ([], before))
+
+    def test_a_vendor_never_set_up_here_is_not_drift(self):
+        for entry in probe_sweep.plan("gemini"):
+            for old in (self.sweep_root / "evidence").glob(entry["name"] + ".*"):
+                old.unlink()
+        self.build(self.sweep_root)
+        self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_OK, self.lines)
+
+    def test_a_never_probed_row_does_not_bypass_the_signer_check(self):
+        self.never_probed()
+        new = self.update("claude")
+        self.signers["claude"] = "adhoc"
+        before = digest(self.live)
+        self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+        self.assertEqual((self.sweeps, digest(self.live)), ([], before))
+        self.assertTrue(any("--approve claude" in line for line in self.lines), self.lines)
+        self.assertEqual(self.run_resign(approve=["claude"]), resign.EXIT_OK, self.lines)
+        self.assertIs(self.only_missing["claude"], False)
+        self.assertEqual(self.pinned("claude"), str(new))
+
+    def test_an_install_that_leaves_rows_unprobed_warns(self):
+        rows = self.never_probed()
+        self.older_snapshot()
+        self.assertEqual(self.run_resign(outcomes={"claude": "unprobeable"}, no_smoke=True),
+                         resign.EXIT_OPERATOR, self.lines)
+        warning = [line for line in self.lines if "WARNING claude" in line]
+        self.assertTrue(warning and rows[0] in warning[0] and "skipped the smoke" in warning[0],
+                        self.lines)
+        self.assertEqual(json.loads(self.live.read_text())["snapshot_id"],
+                         build_overlay.REGISTRY["snapshot"]["id"])
 
     def test_a_same_signer_update_is_re_signed_and_only_that_vendor_is_probed(self):
         new = self.update("grok")

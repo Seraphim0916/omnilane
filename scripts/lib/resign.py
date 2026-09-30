@@ -11,7 +11,10 @@ drift and, when it is safe to, repairs it without an operator:
 
 A changed executable is re-probed unattended only when it still carries the
 signer the live overlay recorded and still sits in the same install location.
-Anything else stops at a notification; `--approve VENDOR` is the operator saying
+A configuration the probe plan lists but this host never probed (a new model,
+or a sweep that could not reach a login) is drift too; with the executable
+unchanged, only those rows are probed. A probe that answered and failed is not
+re-probed. Anything else stops at a notification; `--approve VENDOR` is the operator saying
 they looked. `--trust-adhoc VENDOR` is the operator saying an adhoc signature in
 that install location is their own local step, so those updates count as
 same-signer.
@@ -83,22 +86,53 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
         elif sha256(runner) != recorded_runner["sha256"]:
             reasons.append(f"{runner_name} changed")
         cli_changed = any(runner_name not in reason for reason in reasons)
+        executables_unchanged = not reasons
         # The overlay is bound to one registry snapshot and dispatch refuses any
         # other, so a re-scored registry strands a host whose CLIs never moved.
-        snapshot_only = not reasons and overlay.get("snapshot_id") != registry_snapshot
+        snapshot_only = executables_unchanged and overlay.get("snapshot_id") != registry_snapshot
         if overlay.get("snapshot_id") != registry_snapshot:
             reasons.append(f"the score registry moved from {overlay.get('snapshot_id')} "
                            f"to {registry_snapshot}")
+        missing = unprobed(overlay, vendor)
+        if missing:
+            reasons.append(f"{len(missing)} configuration(s) never probed on this host: "
+                           + ", ".join(missing))
         report[vendor] = {
             "drifted": bool(reasons),
             "reasons": reasons,
             "snapshot_only": snapshot_only,
+            # Unchanged executables mean what they already answered still stands,
+            # so only the rows with no evidence need a probe.
+            "only_missing": executables_unchanged and bool(snapshot_only or missing),
+            "unprobed": missing,
             "cli": str(cli) if cli else None,
             "cli_changed": cli_changed,
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
             "recorded_codesign": recorded_signer(recorded_cli),
         }
     return report
+
+
+NOT_PROBED = "not probed on this host"
+
+
+def unprobed(overlay: dict, vendor: str) -> list[str]:
+    """Configurations this vendor could run here that no probe ever answered.
+
+    A row the probe plan gained after the last sweep either appears in unproven[]
+    as not probed, or, from an overlay built before the plan listed it, nowhere.
+    A probe that answered and failed is a finding, not a gap, so it is not here:
+    re-probing it on every run would only repeat the failure. A vendor with no
+    verified mapping was never set up on this host, which is not drift either.
+    """
+    if not any(build_overlay.ROWS[m["config_id"]]["vendor"] == vendor
+               for m in overlay.get("mappings", []) if m.get("config_id") in build_overlay.ROWS):
+        return []
+    mapped = {m.get("config_id") for m in overlay.get("mappings", [])}
+    reasons = {u.get("config_id"): u.get("verdict_reason") for u in overlay.get("unproven", [])}
+    return sorted(cid for cid in build_overlay.PROVEN
+                  if build_overlay.ROWS[cid]["vendor"] == vendor and cid not in mapped
+                  and reasons.get(cid, NOT_PROBED) == NOT_PROBED)
 
 
 def recorded_signer(entry: dict | None) -> dict | None:
@@ -116,6 +150,8 @@ def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
         return False, "the CLI is not installed"
     if vendor_report.get("snapshot_only"):
         return True, "only the score registry changed; existing probe evidence is reused"
+    if vendor_report.get("only_missing"):
+        return True, "the executable is unchanged; probing only the configurations never probed here"
     if not vendor_report["cli_changed"]:
         return True, "only omnilane's own runner script changed"
     current = cli_provenance.facts(vendor_report["cli"])
@@ -351,7 +387,7 @@ def resign(args, log=print) -> int:
         shutil.copytree(source / "evidence", root / "evidence")
         shutil.copy2(live, root / "live-overlay.BEFORE.json")
         sweeps = {vendor: probe_sweep.sweep(vendor, root, log=log,
-                                            only_missing=report[vendor]["snapshot_only"])
+                                            only_missing=report[vendor]["only_missing"])
                   for vendor in proceed}
         summary["sweeps"] = sweeps
         unfinished = [vendor for vendor, result in sweeps.items() if result["outcome"] != "done"]
@@ -386,7 +422,7 @@ def resign(args, log=print) -> int:
         staged = json.loads(staged_path.read_text())
         # Only a re-probed vendor gets a new pin; every other drifted one keeps the
         # pin it had, because its new executable was never probed.
-        unprobed = [vendor for vendor in VENDORS if report[vendor]["drifted"] and vendor not in proceed]
+        pins_kept = [vendor for vendor in VENDORS if report[vendor]["drifted"] and vendor not in proceed]
         for index, entry in enumerate(staged["evidence"]):
             if entry.get("codesign") is not None:
                 # build_overlay anchors every vendor afresh, so a trust recorded on an
@@ -396,7 +432,7 @@ def resign(args, log=print) -> int:
                 if old is not None:
                     entry["operator_trust"] = old["operator_trust"]
                     entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
-            if entry.get("vendor") in unprobed:
+            if entry.get("vendor") in pins_kept:
                 name = Path(entry["path"]).name
                 is_runner = name == build_overlay.RUNNERS[entry["vendor"]]
                 old = next((e for e in overlay["evidence"] if e.get("vendor") == entry["vendor"]
@@ -441,6 +477,17 @@ def resign(args, log=print) -> int:
             aa_policy.atomic_bytes(live, backup.read_bytes())
             log(f"omnilane: smoke failed for {', '.join(failures)}; restored {backup}")
             outcome = EXIT_ROLLED_BACK
+        else:
+            gaps = {vendor: unprobed(staged, vendor) for vendor in VENDORS}
+            gaps = {vendor: rows for vendor, rows in gaps.items() if rows}
+            summary["still_unprobed"] = gaps
+            for vendor, rows in gaps.items():
+                # Dispatch refuses these rows until a probe answers them; the next
+                # resign picks them up as drift, from a session that can probe them.
+                log(f"omnilane: WARNING {vendor}: {len(rows)} configuration(s) are installed "
+                    f"unprobed and will be refused: {', '.join(rows)}. Run omnilane resign "
+                    f"--vendor {vendor} from a session that can reach its login"
+                    + (" (this run also skipped the smoke dispatch)" if args.no_smoke else ""))
     if held and outcome == EXIT_OK:
         outcome = EXIT_OPERATOR
         for vendor in held:

@@ -850,6 +850,13 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.51.1
+
+- After upgrading, run `omnilane resign` on every host once; a host that skipped probing a new model (for example Sonnet 5.5 after an ssh re-sign) now probes just those rows. Run it from a GUI terminal so the Claude, Gemini and Grok logins are reachable.
+- `resign` treats a configuration that was never probed on this host as drift, even when no executable changed. `--check` lists those rows and exits 10. A probe that answered and failed is not repeated, and the signer check, `--approve` and `--trust-adhoc` are unchanged.
+- An install that leaves rows unprobed now warns and names them.
+- Upgrade: `npm i -g omnilane@0.51.1`, then `omnilane resign`.
+
 ## What's new in v0.51.0
 
 - **Run `omnilane resign` once after upgrading.** The registry snapshot changes to

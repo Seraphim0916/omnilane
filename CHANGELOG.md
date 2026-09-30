@@ -6,6 +6,24 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.51.1] - 2026-10-01
+
+### Fixed
+
+- `omnilane resign` now treats a configuration the probe plan lists but this
+  host never probed as drift, even when no executable changed and the registry
+  snapshot is current. Before, a host whose sweep for a new model was skipped
+  (an ssh session cannot reach the Claude, Gemini or Grok login) kept those rows
+  unproven with "not probed on this host", and every later `resign` said there
+  was nothing to re-sign. With the executable unchanged, only those rows are
+  probed; `--check` lists them and exits 10. A probe that answered and failed is
+  not probed again, and a vendor with no verified mapping on the host is not
+  drift. The signer check, `--approve` and `--trust-adhoc` are unchanged: an
+  executable that moved is still held until the operator approves it.
+- An install that leaves rows unprobed (for example `--no-smoke` from ssh after
+  a snapshot change) now warns, names the rows that dispatch will refuse, and
+  records them as `still_unprobed` in the report.
+
 ## [0.51.0] - 2026-09-30
 
 **Every host must run `omnilane resign` once after upgrading**: the registry
@@ -1498,7 +1516,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...HEAD
+[0.51.1]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...v0.50.0
 [0.47.0]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...v0.47.0

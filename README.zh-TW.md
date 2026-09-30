@@ -691,6 +691,13 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.51.1 新功能
+
+- 升級後每台主機跑一次 `omnilane resign`；先前漏測新模型的主機（例如經 ssh 重簽後的 Sonnet 5.5）只會補測那幾列。請在圖形終端機執行，才讀得到 Claude、Gemini、Grok 的登入。
+- `resign` 把「這台主機從沒探測過的設定」視為漂移，即使執行檔沒變也一樣。`--check` 會列出這些設定並以 10 結束。測過但失敗的設定不重測；簽署者檢查、`--approve`、`--trust-adhoc` 不變。
+- 安裝後仍有未探測的設定時會發出警告並列出名稱。
+- 升級：`npm i -g omnilane@0.51.1`，接著 `omnilane resign`。
+
 ## v0.51.0 新功能
 
 - **升級後每台機器都要跑一次 `omnilane resign`。** 政策檔快照換成
