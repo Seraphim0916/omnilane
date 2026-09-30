@@ -170,10 +170,12 @@ Pass `--inherits-caller-runtime` only if it is true of your tool:
 
 | Harness | True when |
 |---|---|
-| Claude Code | you call `Agent` with no `model` argument, the agent type's definition sets neither `model` (other than `inherit`) nor `effort`, and `CLAUDE_CODE_SUBAGENT_MODEL` is unset. The built-in general-purpose agent qualifies; a custom or plugin agent with its own frontmatter does not |
+| Claude Code | you call `Agent` with no `model` argument, the agent type's definition sets neither `model` (other than `inherit`) nor `effort`, and `CLAUDE_CODE_SUBAGENT_MODEL` is unset. The built-in general-purpose agent qualifies; a custom or plugin agent with its own frontmatter does not. Such a worker follows the session's current effort, including a change made mid-session (observed: the session switched to max and an inherited worker ran max on all 66 of its records) |
 | Codex | you call `collaboration.spawn_agent` with no model and no effort |
-| Grok Build | model inheritance is documented (`spawn_subagent`, bundled `general-purpose` is `model: inherit`, no `[subagents.models]` pin); effort inheritance is not verified |
-| Antigravity | no sub-agent tool verified; do not assert it |
+| Grok Build | you call `spawn_subagent` with no `model` argument and `[subagents.models]` pins nothing for the agent type (the bundled `general-purpose` is `model: inherit`). Model and effort inheritance observed on grok 1.0.41: parent grok-4.7/high, child grok-4.7/high. Harness name `grok-build` |
+| Hermes | `delegation.model` is not configured: `delegate_task` takes no model argument, and the child then runs the parent's model. omnilane cannot read a Hermes caller; state it as described below |
+| OpenClaw | you call `sessions_spawn` with no `model` or `thinking` argument, and no `agents.defaults.subagents.model` or `.thinking` pin (or per-agent pin) differs from your own. omnilane cannot read an OpenClaw caller; state it as described below. No cycle has been run |
+| Antigravity | agy 1.2.12 exposes only a session-level `--agent`, no sub-agent tool; do not assert it |
 
 Here the lane is only a label for what kind of work it is; it is not checked
 against your ceiling, because no lane target runs. The handoff says
@@ -194,6 +196,18 @@ own statement — add `--vendor <yours> --model <the model you really run>` to
 carries no ceiling; completion is checked against what you stated. Lane dispatch
 stays refused while you are unread; report that instead of guessing an identity.
 
+Hermes and OpenClaw callers are always in this case. From Hermes:
+
+```sh
+omnilane native-context --vendor V --model M --harness hermes --inherits-caller-runtime --workdir /absolute/repo
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo <lane> "<task brief>"
+```
+
+If a vendor CLI is an ancestor of the Hermes process (Hermes started from a
+Claude Code shell, for example), set `OMNILANE_AA_CALLER_FROM_PROCESS=0`;
+otherwise omnilane reads the outer CLI as the caller and `native-context` refuses
+the contradiction.
+
 **B. A specific model your sub-agent tool can select.** Describe your tool's real
 contract in a capability file (start from `omnilane native-context`, add rows for
 the exact model/effort pairs your tool accepts) and pass it:
@@ -208,6 +222,32 @@ is no OS sandbox) and lifecycle (`single-shot`). Same vendor is not same model;
 nothing is inferred from installed CLIs. `--executor native` fails instead of
 falling back; `--executor cli` forces the external CLI. With a Codex model
 override use `fork_turns: "none"` or a bounded count, never `"all"`.
+
+Instead of adding those rows to every file by hand, a host declares its extra
+pairs once in `$OMNILANE_HOME/native-rows.json`:
+
+```json
+{"schema_version": 1, "harnesses": {"claude-code": [
+  {"model": "claude-opus-5-5", "efforts": ["medium", "high", "xhigh"]},
+  {"model": "claude-opus-5", "efforts": ["high"]}]}}
+```
+
+`omnilane native-context` then appends one row per declared model for your
+harness, with the workdirs and modes you asked for. `--host-rows FILE` reads
+another file; `--no-host-rows` skips it. Every pair must be a scored
+configuration for your vendor, or nothing is written (exit 2). A host-asserted
+caller (the statement in A) skips the file; it serves `--inherit` only.
+
+In Claude Code each such row is one agent definition per model and effort, named
+`omnilane-<model>-<effort>` (e.g. `omnilane-claude-opus-5-5-medium`), with
+frontmatter `model: <exact id>`, `effort: <effort>` and `disallowedTools: Agent`,
+plus a PreToolUse Bash hook in the definition that refuses
+`omnilane route|goal|native-context` and running `dispatch.sh`. Call `Agent` with
+`subagent_type` set to that name and no `model` argument. These definitions set
+`model` and `effort`, so they serve B, never `--inherits-caller-runtime`. A
+definition added during a turn is not callable in that turn ("Agent type … not
+found"); it loads at the next turn. Every Claude Code sub-agent loads the full
+CLAUDE.md hierarchy, so even a one-word reply costs noticeably.
 
 **Both A and B print a PENDING handoff as one JSON object on stdout, not a
 result.** Its `job_id`, `task`, `workdir`, `mode`, `timeout` and
@@ -232,7 +272,11 @@ omnilane jobs --json status JOB_ID
 ```
 
 `outcome` is `"success"` or `"failure"`; report a failure as a failure. `vendor`,
-`model` and `harness` must equal the handoff's; a mismatch is rejected.
+`model` and `harness` must equal the handoff's; a mismatch is rejected. In Claude
+Code, read `runtime.model` and `runtime.effort` from the sub-agent transcript
+`~/.claude/projects/<project>/<sessionId>/subagents/agent-<id>.jsonl`: every
+assistant record carries `message.model` and `effort`, and `agent-<id>.meta.json`
+beside it records `agentType`.
 Never report completion before ingestion. Background, live, named-thread,
 multi-round, vote, `sysops` and hard-isolation work stays on the CLI path. Reuse
 of an existing agent, cancellation and the strict schemas are in
@@ -299,8 +343,14 @@ How you hear about a background job finishing:
   `automation_update` heartbeat tool, then record the receipt. On callback:
   `poll`, acknowledge, verify, acknowledge acceptance, and close the automation
   when every tracked job is handled. Details: `docs/completion-wakeup.md`.
-- **Claude Code:** the completion inbox arrives with the *next* prompt; it does
-  not wake an idle controller. With nothing else to do, stay on `omnilane jobs wait`.
+- **Claude Code:** after `omnilane route --background`, run
+  `omnilane jobs wait JOB_ID --timeout N` with the Bash tool's `run_in_background`.
+  When it exits, the controller is woken: an idle one starts a new turn in the
+  second the job ended, a busy one gets it right after its current turn (verified
+  on Claude Code desktop 2.1.284; the terminal CLI was not tested). `jobs wait`
+  gives up after 600 s by default (exit 124; the job keeps running), so make N at
+  least the job's own timeout. Without such a waiter the completion inbox arrives
+  only with the next prompt.
 - **Native sub-agents:** the host's own callback gives you the result; still
   ingest and verify it.
 
@@ -393,8 +443,20 @@ Examples: "Ask Opus to challenge this architecture" →
 
 Dispatch finds the nearest vendor CLI among your process's ancestors; nearest
 wins, so a Codex worker started by a Claude session is a Codex caller. Claude,
-Grok and Agy are read from their launch flags (`--model`, `--effort`). Codex
-outside app-server is read from `-m`/`--model` or `-c model=…` plus
+Grok and Agy are read from their launch flags (`--model`, `--effort`). A Claude
+caller is then read from its current turn, because the desktop app changes model
+and effort without relaunching: omnilane binds the nearest `claude` to its
+session through `sessions/<pid>.json` in `$CLAUDE_CONFIG_DIR` or `~/.claude` (pid
+and process start time must match), requires `CLAUDE_CODE_SESSION_ID`, when
+present, to name the same session, finds the unique
+`projects/*/<sessionId>.jsonl`, and takes the model and effort of its latest
+main-thread assistant record (the lower of `perTurnEffort` and `effort`; a
+trailing `-YYYYMMDD` on the model id is dropped). Where they differ from the
+launch flags they win, and `whoami` says `transcript <id8>: <model> at <effort>
+(launch flags said …)`. Any missing or mismatched piece leaves the launch-flag
+reading; only identity metadata is read, never message content, and
+`OMNILANE_AA_CLAUDE_TRANSCRIPT=0` turns this off. Codex outside app-server is
+read from `-m`/`--model` or `-c model=…` plus
 `model_reasoning_effort`; a profile is not a selector. Codex app-server ignores
 launch flags and reads the **current turn** instead: `CODEX_THREAD_ID` must match
 between your process and codex's direct child, the rollout
