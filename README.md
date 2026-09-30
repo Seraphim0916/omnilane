@@ -850,6 +850,22 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.51.0
+
+- **Run `omnilane resign` once after upgrading.** The registry snapshot changes to
+  `aa-v4.3.2-2026-09-30-v1`; the old transport overlay no longer loads, and every
+  dispatch is refused until the re-sign.
+- Claude Sonnet 5.5 and GPT-6.1 Sol are scored, and the lanes are re-ordered
+  value-first on the 2026-09-30 AA capture.
+- A Claude caller's identity now comes from its session transcript (current model
+  and effort; the launch flags are the fallback; `OMNILANE_AA_CLAUDE_TRANSCRIPT=0`
+  turns it off). A desktop session that changed model or effort mid-session, or a
+  scheduled task started with `--model default`, is read correctly.
+- Host-declared native rows: `$OMNILANE_HOME/native-rows.json` adds the model/effort
+  pairs the host's sub-agent tool can run; `native-context --host-rows FILE` /
+  `--no-host-rows`.
+- Upgrade: `npm i -g omnilane@0.51.0`, then `omnilane resign`.
+
 ## What's new in v0.50.0
 
 - **Run `omnilane resign` once after upgrading.** The registry snapshot changes to

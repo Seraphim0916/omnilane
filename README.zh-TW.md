@@ -691,6 +691,18 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.51.0 新功能
+
+- **升級後每台機器都要跑一次 `omnilane resign`。** 政策檔快照換成
+  `aa-v4.3.2-2026-09-30-v1`；舊的傳輸覆蓋檔不再載入，重簽前所有派工都會被拒絕。
+- Claude Sonnet 5.5 與 GPT-6.1 Sol 已評分；依 2026-09-30 的 AA 資料，通道以性價比優先重新排序。
+- Claude 呼叫端的身分改從它的工作階段紀錄讀取（目前的模型與強度；啟動旗標作為備援；
+  `OMNILANE_AA_CLAUDE_TRANSCRIPT=0` 可關閉）。桌面版工作階段中途換過模型或強度，
+  或用 `--model default` 啟動的排程工作，都能正確讀出。
+- 主機宣告的原生列：`$OMNILANE_HOME/native-rows.json` 補上主機子代理工具能跑的
+  模型／強度組合；`native-context --host-rows FILE`／`--no-host-rows`。
+- 升級：`npm i -g omnilane@0.51.0`，接著 `omnilane resign`。
+
 ## v0.50.0 新功能
 
 - **升級後每台機器都要跑一次 `omnilane resign`。** 政策檔快照換成

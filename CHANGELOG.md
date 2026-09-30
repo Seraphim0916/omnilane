@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-30
+
 **Every host must run `omnilane resign` once after upgrading**: the registry
 snapshot changes to `aa-v4.3.2-2026-09-30-v1`.
 
@@ -1496,7 +1498,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...v0.50.0
 [0.47.0]: https://github.com/Seraphim0916/omnilane/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/Seraphim0916/omnilane/compare/v0.45.0...v0.46.0

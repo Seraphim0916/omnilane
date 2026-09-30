@@ -682,6 +682,18 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.51.0 新功能
+
+- **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成
+  `aa-v4.3.2-2026-09-30-v1`；旧的传输覆盖文件不再加载，重签前所有派工都会被拒绝。
+- Claude Sonnet 5.5 与 GPT-6.1 Sol 已评分；按 2026-09-30 的 AA 数据，通道以性价比优先重新排序。
+- Claude 调用方的身份改为从它的会话记录读取（当前的模型与强度；启动参数作为后备；
+  `OMNILANE_AA_CLAUDE_TRANSCRIPT=0` 可关闭）。桌面版会话中途换过模型或强度，
+  或用 `--model default` 启动的计划任务，都能正确读出。
+- 主机声明的原生行：`$OMNILANE_HOME/native-rows.json` 补上主机子代理工具能运行的
+  模型／强度组合；`native-context --host-rows FILE`／`--no-host-rows`。
+- 升级：`npm i -g omnilane@0.51.0`，然后 `omnilane resign`。
+
 ## v0.50.0 新功能
 
 - **升级后每台机器都要运行一次 `omnilane resign`。** 策略文件快照换成

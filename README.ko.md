@@ -687,6 +687,21 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.51.0 새 기능
+
+- **업그레이드 후 호스트마다 `omnilane resign`을 한 번 실행하세요.** 레지스트리
+  스냅샷이 `aa-v4.3.2-2026-09-30-v1`로 바뀝니다. 이전 transport overlay는 더 이상
+  로드되지 않으며, 재서명 전까지 모든 디스패치가 거부됩니다.
+- Claude Sonnet 5.5와 GPT-6.1 Sol이 점수를 받았고, 2026-09-30 AA 데이터로 레인을
+  가성비 우선으로 다시 정렬했습니다.
+- Claude 호출자의 신원은 이제 세션 트랜스크립트에서 읽습니다(현재 모델과 effort, 실행
+  플래그는 대체 수단, `OMNILANE_AA_CLAUDE_TRANSCRIPT=0`으로 끔). 세션 도중 모델이나
+  effort를 바꾼 데스크톱 세션, `--model default`로 시작한 예약 작업도 올바르게 읽습니다.
+- 호스트가 선언한 네이티브 행: `$OMNILANE_HOME/native-rows.json`에 호스트의 서브 에이전트
+  도구가 실행할 수 있는 모델/effort 조합을 추가합니다. `native-context --host-rows FILE` /
+  `--no-host-rows`.
+- 업그레이드: `npm i -g omnilane@0.51.0` 후 `omnilane resign`.
+
 ## v0.50.0 새 기능
 
 - **업그레이드 후 호스트마다 `omnilane resign`을 한 번 실행하세요.** 레지스트리

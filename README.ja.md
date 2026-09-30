@@ -702,6 +702,22 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.51.0 の新機能
+
+- **アップグレード後、各ホストで一度 `omnilane resign` を実行してください。**
+  レジストリのスナップショットが `aa-v4.3.2-2026-09-30-v1` に変わります。古い
+  transport overlay は読み込まれなくなり、再署名までディスパッチはすべて拒否されます。
+- Claude Sonnet 5.5 と GPT-6.1 Sol をスコア化し、2026-09-30 の AA データでレーンを
+  コスパ優先で並べ直しました。
+- Claude の呼び出し元の身元はセッションのトランスクリプトから読みます（現在のモデルと
+  effort。起動フラグはフォールバック。`OMNILANE_AA_CLAUDE_TRANSCRIPT=0` で無効化）。
+  途中でモデルや effort を変えたデスクトップのセッションや、`--model default` で
+  起動したスケジュールタスクも正しく読み取れます。
+- ホスト宣言のネイティブ行：`$OMNILANE_HOME/native-rows.json` に、ホストのサブエージェント
+  ツールが実行できるモデル／effort の組を追加します。`native-context --host-rows FILE`／
+  `--no-host-rows`。
+- アップグレード：`npm i -g omnilane@0.51.0` のあと `omnilane resign`。
+
 ## v0.50.0 の新機能
 
 - **アップグレード後、各ホストで一度 `omnilane resign` を実行してください。**
