@@ -36,6 +36,8 @@ except ImportError:  # Explicit-model callers still work on Python 3.9/3.10.
 REPO = Path(__file__).resolve().parents[2]
 MAX_DEPTH = 64
 ENCODED_EFFORTS = ("xhigh", "high", "medium", "low")
+_CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+_CLAUDE_TAIL_BYTES = 4 * 1024 * 1024
 Selector = tuple[str, Optional[str], Optional[str]]
 Lookup = Callable[[int], Optional[tuple[int, list[str]]]]
 EnvironmentLookup = Callable[[int], dict[str, str]]
@@ -444,10 +446,128 @@ def _rollout_selector(thread: str,
     return ("codex", latest["model"], effort), source
 
 
+def _claude_process_start(pid: int) -> str:
+    """Read ps's C-locale start time in UTC, never the invoking shell's timezone."""
+    result = subprocess.run(
+        ["ps", "-o", "lstart=", "-p", str(pid)],
+        env={**os.environ, "TZ": "UTC", "LC_ALL": "C"},
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        check=True, timeout=5,
+    )
+    return result.stdout.strip()
+
+
+def _claude_start_second(value: str | datetime | None) -> datetime | None:
+    """Session procStart and the injectable live start share UTC second precision."""
+    if isinstance(value, str):
+        try:
+            value = datetime.strptime(value.strip(), "%a %b %d %H:%M:%S %Y")
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).replace(microsecond=0)
+
+
+def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
+    """Read at most 4 MiB; inspect identity fields only and never return content."""
+    with path.open("rb") as stream:
+        size = stream.seek(0, os.SEEK_END)
+        offset = max(0, size - _CLAUDE_TAIL_BYTES)
+        stream.seek(offset)
+        tail = stream.read(_CLAUDE_TAIL_BYTES)
+    if offset:
+        # The first line may be incomplete. Do not interpret a truncated record.
+        tail = tail.partition(b"\n")[2]
+    for line in reversed(tail.splitlines()):
+        try:
+            record = json.loads(line)
+        except (ValueError, UnicodeError, RecursionError):
+            continue
+        if not isinstance(record, dict) or record.get("type") != "assistant":
+            continue
+        if record.get("isSidechain") is True:
+            continue
+        message = record.get("message")
+        model = message.get("model") if isinstance(message, dict) else None
+        if not isinstance(model, str) or not model:
+            continue
+        efforts = [record.get(key) for key in ("perTurnEffort", "effort")
+                   if isinstance(record.get(key), str) and record[key]]
+        if not efforts:
+            continue
+        if any(effort not in _CLAUDE_EFFORTS for effort in efforts):
+            return None, "unknown effort"
+        effort = min(efforts, key=_CLAUDE_EFFORTS.index)
+        return ("claude", re.sub(r"-[0-9]{8}$", "", model), effort), ""
+    return None, "no qualifying assistant in transcript tail"
+
+
+def _claude_transcript_overlay(
+    launcher: int, selector: Selector, environment: Mapping[str, str],
+    claude_dir: str | Path | None,
+    start_time: Callable[[int], str | datetime | None] | None,
+) -> tuple[Selector, str]:
+    """Bind a main-thread transcript to the nearest live Claude process."""
+    def fallback(reason: str) -> tuple[Selector, str]:
+        # Keep the pre-overlay contract: callers treat "" as "launch flags as read".
+        # reason only labels each refusal branch for readers.
+        return selector, ""
+
+    if environment.get("OMNILANE_AA_CLAUDE_TRANSCRIPT") == "0":
+        return fallback("disabled")
+    try:
+        home = Path(claude_dir) if claude_dir is not None else (
+            Path(environment["CLAUDE_CONFIG_DIR"])
+            if environment.get("CLAUDE_CONFIG_DIR") else Path.home() / ".claude"
+        )
+        try:
+            session = json.loads((home / "sessions" / f"{launcher}.json").read_text(
+                encoding="utf-8"))
+        except FileNotFoundError:
+            return fallback("sessions file missing")
+        if not isinstance(session, dict):
+            return fallback("invalid sessions file")
+        if type(session.get("pid")) is not int or session["pid"] != launcher:
+            return fallback("sessions pid mismatch")
+        recorded = _claude_start_second(session.get("procStart"))
+        live = _claude_start_second((start_time or _claude_process_start)(launcher))
+        if recorded is None or live is None:
+            return fallback("process start time unavailable")
+        if recorded != live:
+            return fallback("process start time mismatch")
+        sid = session.get("sessionId")
+        if not isinstance(sid, str) or not UUID_PATTERN.fullmatch(sid):
+            return fallback("invalid session id")
+        if ("CLAUDE_CODE_SESSION_ID" in environment
+                and environment["CLAUDE_CODE_SESSION_ID"] != sid):
+            return fallback("environment session id mismatch")
+        matches = (home / "projects").glob(f"*/{sid}.jsonl")
+        path = next(matches, None)
+        if path is None or next(matches, None) is not None:
+            return fallback("transcript match not unique")
+        current, reason = _claude_tail_selector(path)
+        if current is None:
+            return fallback(reason)
+        prefix = f"transcript {sid[:8]}: "
+        if current == selector:
+            return selector, prefix + "matches launch flags"
+        return current, (prefix + f"{current[1]} at {current[2]} "
+                         f"(launch flags said {selector[1]} at {selector[2] or 'none'})")
+    except (OSError, ValueError, TypeError, OverflowError, RecursionError,
+            subprocess.SubprocessError):
+        # Do not interpolate exception text: paths or decoded records may be private.
+        return fallback("transcript metadata or file unreadable")
+
+
 def read_caller(pid: int, lookup: Lookup = _process,
                 environment: EnvironmentLookup = _initial_environment,
                 current_environment: Mapping[str, str] = os.environ,
-                now: Callable[[], datetime] | None = None) -> tuple[int, Selector, str]:
+                now: Callable[[], datetime] | None = None, *,
+                claude_dir: str | Path | None = None,
+                start_time: Callable[[int], str | datetime | None] | None = None) -> tuple[int, Selector, str]:
     if current_environment.get("OMNILANE_AA_CALLER_FROM_PROCESS") == "0":
         raise ValueError("caller identity from process is disabled")
     try:
@@ -466,6 +586,14 @@ def read_caller(pid: int, lookup: Lookup = _process,
         raise ValueError("no vendor CLI among this process's ancestors; a model caller passes "
                          "--caller-context FILE and a human operator --operator-asserted-human")
     launcher, selector, child = found
+    if selector[0] == "claude":
+        # A fake process table carries fake pids; never pair them with the real
+        # ~/.claude/sessions or the real ps unless the test injects both seams.
+        if lookup is not _process and (claude_dir is None or start_time is None):
+            return launcher, selector, ""
+        current, source = _claude_transcript_overlay(
+            launcher, selector, current_environment, claude_dir, start_time)
+        return launcher, current, source
     if selector[0] != "codex" or selector[1] is not None:
         return launcher, selector, ""
     thread = current_environment.get("CODEX_THREAD_ID")
