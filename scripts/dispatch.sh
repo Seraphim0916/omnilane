@@ -28,6 +28,16 @@ set -euo pipefail
 # A separate --job-timeout can cap lock wait plus all calls in this dispatch.
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# Private configure diff input: used only by an explicit --list inspection.
+# Consume it here so normal dispatch and its workers never inherit the switch.
+LIST_DEFAULTS_ONLY="${OMNILANE_CONFIGURE_DEFAULTS_ONLY:-0}"
+unset OMNILANE_CONFIGURE_DEFAULTS_ONLY
+export -n LIST_DEFAULTS_ONLY
+# Private configure set input: only explicit --validate reads this candidate.
+# Keep the real HOME/local.sh, and never pass the input to normal workers.
+VALIDATE_LOCAL_FILE="${OMNILANE_CONFIGURE_VALIDATE_FILE:-}"
+unset OMNILANE_CONFIGURE_VALIDATE_FILE
+export -n VALIDATE_LOCAL_FILE
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 
@@ -486,8 +496,9 @@ resolve_chain() {
 }
 
 print_effective_routing() {
-  local seen=" " f line lane chain spec note
+  local defaults_only="${1:-0}" seen=" " f line lane chain spec note
   for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+    [[ "$defaults_only" == "1" && "$f" == "$OMNILANE_HOME/routing.local.yaml" ]] && continue
     [[ -f "$f" ]] || continue
     while IFS= read -r line; do
       [[ "$line" =~ ^([a-z][a-z0-9-]*): ]] || continue
@@ -560,10 +571,11 @@ explain_lane() {
 }
 
 validate_routing() {
+  local local_file="${1:-$OMNILANE_HOME/routing.local.yaml}"
   local effective_seen=" " file_seen f line content lane chain seg vendor
   local line_no i total selected lane_invalid invalid=0 unreachable=0
   local SEGS=() F=()
-  for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+  for f in "$local_file" "$OMNILANE_REPO/routing.yaml"; do
     [[ -f "$f" ]] || continue
     file_seen=" "
     line_no=0
@@ -674,9 +686,9 @@ case "${1:-}" in
       [[ $# -eq 1 ]] || usage_error
     fi
     if [[ "$JSON_INSPECTION" -eq 1 ]]; then
-      emit_json_inspection list print_effective_routing
+      emit_json_inspection list print_effective_routing "$LIST_DEFAULTS_ONLY"
     fi
-    print_effective_routing
+    print_effective_routing "$LIST_DEFAULTS_ONLY"
     exit 0
     ;;
   --explain)
@@ -701,9 +713,9 @@ case "${1:-}" in
       [[ $# -eq 1 ]] || usage_error
     fi
     if [[ "$JSON_INSPECTION" -eq 1 ]]; then
-      emit_json_inspection validate validate_routing
+      emit_json_inspection validate validate_routing "$VALIDATE_LOCAL_FILE"
     fi
-    validate_routing
+    validate_routing "$VALIDATE_LOCAL_FILE"
     exit $?
     ;;
   *)
