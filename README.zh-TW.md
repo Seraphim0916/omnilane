@@ -289,6 +289,8 @@ omnilane jobs --json status JOB_ID
 
 ## 🖥️ Live Board
 
+Live UI 可使用以 `-` 開頭的自動產生 server ID 啟動，也適用於指定連接埠已被占用的情況。已記錄程序的辨識會比對新舊參數格式中的完整 ID；驗證方式與逾時上限不變。
+
 每一次派工——不論前景或 `--background`——都是落盤的一筆 job。Live Board
 是架在這個 job 儲存上、選配且唯讀的本機工作台:每個模型被問了什麼、答了
 什麼、怎麼路由、是否還在執行,一眼看完。

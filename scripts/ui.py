@@ -950,11 +950,18 @@ class UIRuntime:
             # safer than orphaning a possibly healthy authenticated server.
             return True
         command = result.stdout
+        # IDs are URL-safe tokens: compare complete arguments, retaining the
+        # split spelling used by older servers and the new equals spelling.
+        arguments = command.split()
+        has_server_id = ("--server-id=" + server_id) in arguments or any(
+            option == "--server-id" and value == server_id
+            for option, value in zip(arguments, arguments[1:])
+        )
         return (
             result.returncode == 0
             and str(Path(__file__).resolve()) in command
             and " serve " in command
-            and "--server-id " + server_id in command
+            and has_server_id
         )
 
     @staticmethod
@@ -1024,8 +1031,7 @@ def start_ui(runtime, requested_port):
             sys.executable,
             str(Path(__file__).resolve()),
             "serve",
-            "--server-id",
-            server_id,
+            "--server-id=" + server_id,
             "--port",
             str(requested_port),
         ]

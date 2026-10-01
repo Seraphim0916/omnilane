@@ -365,6 +365,8 @@ The commander orchestrates and validates; workers do not delegate again.
 
 ## 🖥️ Live Board
 
+Live UI startup accepts generated server IDs beginning with `-`, including when the requested port is busy. Recorded-process checks compare the complete ID in both old and new argument formats; authentication and timeout limits are unchanged.
+
 Every dispatch — foreground or `--background` — is a job on disk. The Live
 Board is an optional, read-only local workbench over that job store: what each
 model was asked, what it answered, how it was routed, and whether it is still
