@@ -416,7 +416,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 離線逐候選解釋路由決策
 dispatch.sh [--json] --validate [--json]           # 離線檢查生效路由，不呼叫模型
 jobs.sh [--json] {list | status 工作ID | result 工作ID} # JSON 結果只回中繼資料，不回本文
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 過濾清單
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]  # 過濾清單
 jobs.sh wait 工作ID [--timeout N]                  # 工作結束碼；124 逾時；125 工作者消失
 jobs.sh cancel 工作ID                              # 停止執行中的工作:整組 SIGTERM,再 SIGKILL
 jobs.sh rm 工作ID                                  # 刪除單一已完成/已死工作(執行中會被拒絕)
@@ -429,6 +429,23 @@ omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布
 configure.sh                                        # 互動通道選單
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非互動編輯/檢視 routing.local.yaml
 ```
+
+`configure diff` 在兩份檢視中保留 `local.sh` 的相同本機可用性設定，因此比較的是路由覆寫，而不是本機程式設定遺失造成的差異。 任一檢查失敗時，會回傳該退出狀態並說明失敗階段，而不會輸出比較結果。
+
+`configure get` 會傳遞檢查失敗的退出狀態，不會回傳不完整資料或誤報通道不存在。`configure list` 會回報存在性檢查錯誤；覆寫設定確實缺失或為空時仍正常成功。
+
+`configure set` 先驗證暫存候選設定，再發布，並保留既有檔案的權限模式。讀取既有路由內容失敗、驗證程式意外失敗或目標通道出現結構錯誤時，原設定保持不變；可用性警告與其他通道錯誤仍按既有規則處理。
+
+`configure unset` 先完成讀取與篩選，再沿用原本的就地寫入方式更新目標檔案。讀取或篩選失敗時原內容不變；寫入失敗會回報錯誤，但不保證回復。
+
+Bash、Zsh 與 Fish 補全包含文件中的頂層命令、目標命令與工作命令群組。選擇補全只會填入命令文字，不會執行工作操作。
+
+工作的 `list` 與 `status` 使用一致的觀測狀態。`dead` 表示沒有記錄退出碼，且工作程序的 PID 無效或已不存在；它不會出現在 `--status running` 中，可用 `--status dead` 篩選。`result` 會說明未記錄退出碼，不再誤稱程序仍在執行。尚無 PID 的啟動階段仍沿用 `running` 狀態，不會推測退出碼。
+
+背景工作需要 Perl 監督，讓取消能終止受監督的程序群組。
+監督本身不新增整體工作期限；沒有適用的工作逾時設定時，中繼資料仍為 `job_timeout: null`。
+受監督的單次呼叫使用 Perl alarm，逾時可能回傳 142；整體工作期限屆滿回傳 124。
+`jobs close` 最多等待 11 秒，包含程序群組清理。
 
 `--thread NAME` 會在多次單次派工間延續命名的 Claude、Codex、Grok 或 Gemini
 對話。0.33.0 會固定供應商、模型、effort 與實體工作目錄；可用
@@ -513,6 +530,8 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
+前景派工與前景 `jobs retry` 在工作失敗時也會印出已儲存的公開輸出，再回傳該工作的非零結束代碼。背景派工保留原有 job ID 輸出。
+
 `watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。Claude、Gemini、Codex 與 Grok 都支援即時信箱，但 Codex／Grok 自動選擇時仍是一次性派工，必須明示 `--live`。Grok 的 advise／work 即時請求會在啟動前停止，因為 ACP 未強制這些受限模式的邊界；一般 advise 採用一次性原生工具允許／拒絕規則。供應商不支援 `--live` 時立即失敗。`--single-shot` 對所有供應商強制一次性派工。`--idle-timeout SECONDS` 設定閒置上限，預設 900 秒，設為 `0` 則停用。
 
 閒置時不會發出 API 呼叫，也不會增加 API 費用。預設若 900 秒內沒有新信箱訊息或新結果事件，工作程序會自動收尾；整體工作逾時仍是外層上限。處理完成可提早執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請使用新的派工，或在工作完成後使用 `retry`。
@@ -530,6 +549,26 @@ omnilane jobs wait "$JOB_ID" --timeout 900
 omnilane goal note "$GOAL_ID" "結帳整合測試已通過"
 omnilane goal close "$GOAL_ID" --summary "結帳整合已穩定"
 ```
+
+更新中斷後，失敗次數會從持久化工作紀錄重建，不會重複計數。`goal close` 只在報告寫入成功後關閉目標；若寫入失敗，修正錯誤後可重試關閉。
+
+目標忙碌時會顯示唯讀的鎖定擁有者診斷，並維持結束碼 75。不會自動移除鎖定；紀錄中的 PID 無法證明擁有權，因此復原前仍須人工確認。
+
+目標狀態與報告會如實顯示 `dead` 和 `missing`，不再誤稱仍在執行。工作狀態證據不可用或不一致時顯示 `unknown`，不捏造結束碼或失敗次數。各工作秒數仍是派出後的經過時間，並非實際執行時間；目標預算不變。每份未完成工作各做一次最多兩秒的本機狀態查詢。
+
+正常清理已完成工作的檔案後，目標仍保留已驗證的結束碼、完成時間與截至完成的經過秒數。狀態與報告會另標示 `artifacts=missing`。沒有已記錄完成結果的工作仍維持遺失或未知，清理不會產生虛構的結束結果。
+
+目標派工會先持久化意圖並預留一個工作名額，再以一次性的領取紀錄，在啟動前綁定意圖與產生的工作 ID。`spent_jobs` 仍計算已記錄工作；`reserved_jobs` 表示尚未釐清的提交。未釐清或損壞的台帳會阻擋新派工與結案。對帳只修復紀錄，不啟動工作、不捏造結束碼，也不重試結果不明的提交。
+
+使用執行緒的目標派工，其 stdout 只輸出確切的工作 ID；驗證 ID 後，對應的執行緒通知會顯示在 stderr。直接背景派工仍保留原有的「通知加工作 ID」stdout 格式。
+
+`goal dispatch` 會啟動背景工作，不支援 `--dry-run`；該選項會在目標狀態變更前被拒絕。若要預覽路由，請直接使用 `omnilane dispatch --dry-run [options] LANE "TASK"`。 直接預覽不會繼承目標的工作目錄；需要時請傳入 `--workdir DIR`。
+
+目標預算紀錄必須使用 JSON 整數，不接受布林值或數字字串。選用上限仍是 `null` 或 1..999999999；計數器必須非負且位於支援的數值範圍。無效欄位會在更新台帳或派工前被拒絕。工作目錄路徑不支援定位字元、回車、換行或 NUL；一般空白與 Unicode 仍受支援。
+
+派工報錯或結果遺失時，先查看 `goal status` 再決定是否重新提交：再次執行相同指令仍會建立新意圖，因此保證的是每個意圖最多啟動一次，而不是所有相同指令自動去重。對帳需要有效的既有工作 PID／結束碼證據；若在對帳前清掉證據，預留名額會保持未釐清。已完成對帳的目標歷史不受清理工作檔案影響。舊目標仍可讀取，不會自動回收過期鎖定或恢復結果不明的意圖。
+
+背景工作開始收尾後，HUP/TERM 不會改寫已選定的結束狀態。完成通知會略過已消費紀錄，每次提示最多傳送十筆，包含無法讀取紀錄的通知。
 
 目標狀態存放在 `$OMNILANE_HOME/goals/<goal-id>/`。用 `goal status` 可查看預算用量、熔斷次數，以及每份工作陸續寫入的中繼資料與結束狀態。`goal close` 會寫入 `report.md` 並印出路徑。單一而且作法明確的工作直接派工即可；有傳入預算旗標時，該上限是硬限制，不代表保證完成。
 

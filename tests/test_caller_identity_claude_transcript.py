@@ -187,6 +187,31 @@ class ClaudeTranscriptTests(unittest.TestCase):
                 self.write_records(self.record(), self.record(effort=invalid))
                 self.assert_fallback("unknown effort")
 
+    def test_latest_main_record_missing_effort_keeps_launch_identity(self):
+        launch = ("claude", "claude-sonnet-5", "low")
+        self.tree[20] = (1, ["claude", "--model", launch[1], "--effort", launch[2]])
+        older = self.record(effort="max", perTurnEffort="max")
+        for fields in ({}, {"effort": None, "perTurnEffort": None},
+                       {"effort": "", "perTurnEffort": ""}):
+            with self.subTest(fields=fields):
+                latest = {"type": "assistant", "isSidechain": False,
+                          "message": {"model": launch[1]}, **fields}
+                self.write_records(older, latest)
+                self.assertEqual(self.read(), (20, launch, ""))
+                status, stdout, stderr = self.run_main()
+                self.assertEqual(status, 0, stderr)
+                result = json.loads(Path(stdout.strip()).read_text())
+                self.assertEqual(result["caller"]["model"], launch[1])
+                self.assertEqual(result["caller"]["effort"], launch[2])
+                self.assertNotIn("transcript", stderr)
+
+    def test_latest_main_record_missing_model_does_not_reuse_older_identity(self):
+        older = self.record(effort="max", perTurnEffort="max")
+        for message in (None, {}, {"model": ""}, {"model": None}):
+            with self.subTest(message=message):
+                self.write_records(older, self.record(message=message))
+                self.assert_fallback("latest assistant model missing")
+
     def test_effort_only_and_per_turn_only(self):
         for changes in ({"perTurnEffort": None}, {"effort": ""},
                         {"perTurnEffort": "xhigh", "effort": "medium"}):

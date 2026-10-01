@@ -27,7 +27,22 @@ set -euo pipefail
 # spawns several CLI calls, so total wall-clock can be a multiple of this value.
 # A separate --job-timeout can cap lock wait plus all calls in this dispatch.
 
+# Private goal capability must never reach runners or provider environments.
+GOAL_INTENT_REF="${OMNILANE_GOAL_INTENT:-}"
+unset OMNILANE_GOAL_INTENT
+export -n GOAL_INTENT_REF
+GOAL_STDIN_CAPTURED=0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# Private configure diff input: used only by an explicit --list inspection.
+# Consume it here so normal dispatch and its workers never inherit the switch.
+LIST_DEFAULTS_ONLY="${OMNILANE_CONFIGURE_DEFAULTS_ONLY:-0}"
+unset OMNILANE_CONFIGURE_DEFAULTS_ONLY
+export -n LIST_DEFAULTS_ONLY
+# Private configure set input: only explicit --validate reads this candidate.
+# Keep the real HOME/local.sh, and never pass the input to normal workers.
+VALIDATE_LOCAL_FILE="${OMNILANE_CONFIGURE_VALIDATE_FILE:-}"
+unset OMNILANE_CONFIGURE_VALIDATE_FILE
+export -n VALIDATE_LOCAL_FILE
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 
@@ -486,8 +501,9 @@ resolve_chain() {
 }
 
 print_effective_routing() {
-  local seen=" " f line lane chain spec note
+  local defaults_only="${1:-0}" seen=" " f line lane chain spec note
   for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+    [[ "$defaults_only" == "1" && "$f" == "$OMNILANE_HOME/routing.local.yaml" ]] && continue
     [[ -f "$f" ]] || continue
     while IFS= read -r line; do
       [[ "$line" =~ ^([a-z][a-z0-9-]*): ]] || continue
@@ -560,10 +576,11 @@ explain_lane() {
 }
 
 validate_routing() {
+  local local_file="${1:-$OMNILANE_HOME/routing.local.yaml}"
   local effective_seen=" " file_seen f line content lane chain seg vendor
   local line_no i total selected lane_invalid invalid=0 unreachable=0
   local SEGS=() F=()
-  for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
+  for f in "$local_file" "$OMNILANE_REPO/routing.yaml"; do
     [[ -f "$f" ]] || continue
     file_seen=" "
     line_no=0
@@ -674,9 +691,9 @@ case "${1:-}" in
       [[ $# -eq 1 ]] || usage_error
     fi
     if [[ "$JSON_INSPECTION" -eq 1 ]]; then
-      emit_json_inspection list print_effective_routing
+      emit_json_inspection list print_effective_routing "$LIST_DEFAULTS_ONLY"
     fi
-    print_effective_routing
+    print_effective_routing "$LIST_DEFAULTS_ONLY"
     exit 0
     ;;
   --explain)
@@ -701,9 +718,9 @@ case "${1:-}" in
       [[ $# -eq 1 ]] || usage_error
     fi
     if [[ "$JSON_INSPECTION" -eq 1 ]]; then
-      emit_json_inspection validate validate_routing
+      emit_json_inspection validate validate_routing "$VALIDATE_LOCAL_FILE"
     fi
-    validate_routing
+    validate_routing "$VALIDATE_LOCAL_FILE"
     exit $?
     ;;
   *)
@@ -1134,9 +1151,9 @@ fi
 JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
 unset OMNILANE_JOB_SUPERVISED
 [[ -x "$JOB_WORKER_SOURCE" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
-if [[ -n "$JOB_TIMEOUT" ]]; then
-  [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: whole-job timeout supervisor is unavailable" >&2; exit 2; }
-  command -v perl &>/dev/null || { echo "omnilane: --job-timeout requires perl" >&2; exit 2; }
+if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+  [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: job supervisor is unavailable" >&2; exit 2; }
+  command -v perl &>/dev/null || { echo "omnilane: background jobs and --job-timeout require perl" >&2; exit 2; }
   perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
     >/dev/null 2>&1 || { echo "omnilane: perl lacks whole-job timeout support" >&2; exit 2; }
 fi
@@ -1174,7 +1191,23 @@ fi
 chmod 700 "$JOBS_ROOT"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
+# An exclusive directory allocation prevents a generated-ID collision from
+# claiming somebody else's existing PID/exit evidence.
 mkdir -m 700 "$JOB_DIR"
+if [[ -n "$GOAL_INTENT_REF" ]]; then
+  [[ "$BACKGROUND" == "1" ]] || { rmdir "$JOB_DIR"; echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
+  # Goal stdin was already captured by goal-loop; keep the same task bytes for
+  # both its fingerprint and execution. Do not consume normal dispatch stdin.
+  if [[ "$TASK" == "-" ]]; then TASK="$(cat)"; GOAL_STDIN_CAPTURED=1; fi
+  GOAL_TASK_FINGERPRINT="$(python3 -c 'import hashlib,sys; print(hashlib.sha256((sys.argv[1] + "\0" + sys.argv[2]).encode("utf-8")).hexdigest())' "$LANE" "$TASK")"
+  if ! python3 "$OMNILANE_REPO/scripts/lib/goal_dispatch.py" claim \
+    "$OMNILANE_HOME" "$GOAL_INTENT_REF" "$JOB_ID" "$LANE" "$GOAL_TASK_FINGERPRINT"; then
+    # Remove only our new, still-empty scaffold. Never fabricate an exit:
+    # publication may have claimed this ID before a directory-fsync failure.
+    rmdir "$JOB_DIR" 2>/dev/null || true
+    exit 1
+  fi
+fi
 # Snapshot authorizer separately from the worker identity. Never hand a worker
 # its parent's identity as its own caller context.
 python3 - "$OMNILANE_REPO" "$JOB_DIR" "$AA_POLICY_FILE" "$AA_REGISTRY_SHA256" "$AA_CALLER_CONTEXT" "$AA_CALLER_SHA256" "$AA_SELECTED_DECISION" "$VENDOR" <<'AA_PUBLISH'
@@ -1237,7 +1270,9 @@ elif resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
   FOREMAN_SESSION="$resolved_foreman_session"
 fi
 
-if [[ "$TASK" == "-" ]]; then
+if [[ "$GOAL_STDIN_CAPTURED" -eq 1 ]]; then
+  (umask 077; printf '%s' "$TASK" > "$JOB_DIR/task.txt")
+elif [[ "$TASK" == "-" ]]; then
   (umask 077; cat > "$JOB_DIR/task.txt")
 else
   (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
@@ -1284,8 +1319,15 @@ chmod 600 "$META_TMP"
 mv "$META_TMP" "$JOB_DIR/meta.json"
 
 if [[ -n "$THREAD_NAME" ]]; then
-  printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
-    "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
+  # The goal caller requires exactly the claimed job ID on stdout. Its private
+  # intent was validated above; ordinary dispatch keeps its existing notice.
+  if [[ -n "$GOAL_INTENT_REF" ]]; then
+    printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+      "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE" >&2
+  else
+    printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+      "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
+  fi
 fi
 
 secure_job_files() {
@@ -1384,6 +1426,11 @@ write_completion_record() {
 }
 
 finish_job() {
+  # Once finalization starts, preserve its outcome and publish only once.
+  # Otherwise HUP/TERM can re-enter while an atomic completion rename returns,
+  # overwrite exit, advance a thread twice, or replay an already consumed record.
+  # jobs cancel retains its bounded SIGKILL escalation for a stuck finalizer.
+  if [[ "$BACKGROUND" == "1" ]]; then trap '' HUP TERM; fi
   local rc="$1"
   if [[ -n "$THREAD_NAME" ]]; then
     if [[ "$rc" -eq 0 ]]; then
@@ -1401,13 +1448,16 @@ finish_job() {
 }
 
 run_job() {
-  local rc=0
+  local rc=0 entry_shell_options="$-"
   write_current_pid_file "$JOB_DIR/pid"
   set +e
-  if [[ -n "$JOB_TIMEOUT" ]]; then
+  if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+    # Supervise every background tree so cancel reaches its descendants even
+    # where GNU timeout would otherwise create a separate, untracked group.
+    # No configured budget still means no deadline and job_timeout:null.
     OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
       OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
-      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
+      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
       "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   else
@@ -1427,6 +1477,9 @@ run_job() {
     rc=124
   fi
   finish_job "$rc"
+  # Keep finalization strict, then let a foreground +e caller capture failure
+  # and print the stored public output before returning the job status.
+  [[ "$entry_shell_options" == *e* ]] || set +e
   return "$FINISHED_RC"
 }
 
@@ -1447,6 +1500,7 @@ if [[ "$BACKGROUND" == "1" ]]; then
   exit 0
 fi
 
+[[ -z "$GOAL_INTENT_REF" ]] || { echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
 set +e; run_job; RC=$?; set -e
 [[ -f "$JOB_DIR/out.txt" ]] && cat "$JOB_DIR/out.txt"
 exit "$RC"

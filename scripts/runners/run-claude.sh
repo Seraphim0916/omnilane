@@ -142,7 +142,8 @@ finalize_live_output() {
     exit "$signal_rc"
   }
 
-  set -m
+  # The supervisor owns the whole tree; a nested group would escape its signals.
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set -m; fi
   (
     cd "$WORKDIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
@@ -150,7 +151,7 @@ finalize_live_output() {
       "$CLAUDE_BIN" "${LIVE_ARGS[@]}" < "$LIVE_INBOX" > "$EVENTS_FILE" 2> "$STDERR_FILE"
   ) &
   LIVE_CHILD_PID=$!
-  set +m
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set +m; fi
   trap 'stop_live_child 143' TERM
   trap 'stop_live_child 129' HUP
   trap 'stop_live_child 130' INT

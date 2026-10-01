@@ -8,13 +8,14 @@ my $POLL_SECONDS = 0.05;
 my $TERM_GRACE_SECONDS = 1.0;
 
 sub usage_error {
-    print STDERR "usage: job-timeout.pl SECONDS COMMAND [ARG...]\n";
+    print STDERR "usage: job-timeout.pl SECONDS|--no-deadline COMMAND [ARG...]\n";
     exit 2;
 }
 
 @ARGV >= 2 or usage_error();
 my $seconds = shift @ARGV;
-$seconds =~ /\A[1-9][0-9]{0,8}\z/ or usage_error();
+my $no_deadline = $seconds eq '--no-deadline';
+$no_deadline || $seconds =~ /\A[1-9][0-9]{0,8}\z/ or usage_error();
 
 sub monotonic_now {
     return clock_gettime(CLOCK_MONOTONIC);
@@ -60,7 +61,8 @@ $SIG{HUP}  = sub { $forwarded_exit = 129; };
 $SIG{INT}  = sub { $forwarded_exit = 130; };
 $SIG{TERM} = sub { $forwarded_exit = 143; };
 
-my $deadline = monotonic_now() + $seconds;
+# Background jobs still need group cleanup when no whole-job budget was set.
+my $deadline = $no_deadline ? undef : monotonic_now() + $seconds;
 my $pid = fork();
 if (!defined $pid) {
     print STDERR "omnilane: job supervisor could not fork: $!\n";
@@ -92,8 +94,8 @@ while (1) {
         last;
     }
 
-    my $remaining = $deadline - monotonic_now();
-    if ($remaining <= 0) {
+    my $remaining = defined($deadline) ? $deadline - monotonic_now() : $POLL_SECONDS;
+    if (defined($deadline) && $remaining <= 0) {
         terminate_group($pid, $pid, 0);
         exit 124;
     }

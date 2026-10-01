@@ -111,6 +111,7 @@ omnilane — one routing table, every harness
                                         open a goal; budgets default to unlimited
   omnilane goal dispatch GOAL_ID [dispatch.sh args...]
                                          budget-gate and start one background job
+                                         --dry-run unsupported; preview with omnilane dispatch --dry-run
   omnilane goal note GOAL_ID "TEXT"       append a timestamped foreman note
   omnilane goal status GOAL_ID           inspect budgets, fuse trips, and recorded jobs
   omnilane goal close GOAL_ID [--summary "TEXT"]
