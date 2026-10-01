@@ -51,6 +51,15 @@ Chromium with Playwright, sets `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1`, and run
 ShellCheck or a real browser is unavailable locally, say so in the pull request
 instead of treating the missing check as passed.
 
+Shell test entrypoints run through `tests/offline_env.py`: a temporary HOME and
+an allowlisted utility PATH keep installed provider CLIs, credentials and local
+configuration outside the fixtures. A fixture must explicitly supply its fake
+provider binary. Unmocked `curl`/`wget` calls fail the outer run even if a negative
+test ignores their exit code. Use `$OMNILANE_TEST_UTIL_PATH` when a fixture needs
+to replace PATH; do not restore host/system PATH directories. This is fixture
+isolation, not an operating-system network sandbox: direct HTTP code still needs
+an explicit fake in its own test.
+
 ## Pull requests
 
 Explain the user-visible problem, the chosen boundary, test evidence, risks,

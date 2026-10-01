@@ -153,6 +153,13 @@ class GoalDryRunTests(unittest.TestCase):
         self.assertIn("provider_invoked=no\n", result.stdout)
         self.assert_unchanged(before)
 
+    def test_cli_help_explains_goal_preview_boundary(self):
+        for args in (("help",), ("goal", "--help")):
+            with self.subTest(args=args):
+                result = self.cli(*args)
+                text = result.stdout + result.stderr
+                self.assertIn("--dry-run", text)
+                self.assertIn("omnilane dispatch --dry-run", text)
 
     def test_preflight_value_options_match_dispatch_parser(self):
         pattern = r"^\s+(--mode\|--workdir[^\n]*)\)\s*$"
