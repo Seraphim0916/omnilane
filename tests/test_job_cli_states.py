@@ -172,8 +172,50 @@ class JobCliStateTests(unittest.TestCase):
         for state in STATES:
             self.assertIn(state, error)
 
+    def test_bash_completion_offers_all_job_states(self):
+        script = '''source "$1"
+shift
+COMP_WORDS=(omnilane jobs "$@" --status "")
+COMP_CWORD=$((${#COMP_WORDS[@]} - 1))
+_omnilane
+printf '%s\\n' "${COMPREPLY[@]}"
+'''
+        for args in (("list",), ("--json", "list")):
+            result = subprocess.run(["bash", "-c", script, "_", str(ROOT / "completions/omnilane.bash"), *args],
+                                    env=self.env, text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(set(result.stdout.split()), STATES)
 
+    def test_zsh_and_fish_completion_declare_all_job_states(self):
+        zsh_source = (ROOT / "completions/_omnilane").read_text()
+        fish_source = (ROOT / "completions/omnilane.fish").read_text()
+        zsh_status = next((line for line in zsh_source.splitlines() if "--status[" in line), "")
+        fish_status = next(line for line in fish_source.splitlines() if "-l status " in line)
+        for state in STATES:
+            self.assertIn(state, zsh_status)
+            self.assertIn(state, fish_status)
+        for shell, source in (("zsh", "_omnilane"), ("fish", "omnilane.fish")):
+            if shutil.which(shell, path=self.env["PATH"]):
+                result = subprocess.run([shell, "-n", str(ROOT / "completions" / source)],
+                                        env=self.env, text=True, capture_output=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_zsh_passes_all_states_to_list_completion(self):
+        if not shutil.which("zsh", path=self.env["PATH"]):
+            self.skipTest("zsh is unavailable")
+        script = '''source "$1"
+shift
+_arguments() { print -l -- "$@"; }
+words=(omnilane jobs "$@" --status "")
+CURRENT=${#words}
+_omnilane
+'''
+        for args in (("list",), ("--json", "list")):
+            result = subprocess.run(["zsh", "-c", script, "_", str(ROOT / "completions/_omnilane"), *args],
+                                    env=self.env, text=True, capture_output=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            status = next(line for line in result.stdout.splitlines() if line.startswith("--status["))
+            self.assertEqual(set(status.split(":(")[1].rstrip(")").split()), STATES)
 
 
 if __name__ == "__main__":
