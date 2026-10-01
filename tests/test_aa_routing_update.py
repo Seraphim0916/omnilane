@@ -12,6 +12,8 @@ import tempfile
 import unittest
 
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 DISPATCH = ROOT / "scripts" / "dispatch.sh"
 
@@ -46,7 +48,7 @@ class AARoutingUpdateTests(unittest.TestCase):
         # and never inherit a real caller context from the invoking harness.
         self.env = {
             name: value
-            for name, value in os.environ.items()
+            for name, value in fixture_environment_with_isolated_tools(self).items()
             if not name.startswith("OMNILANE_AA_") and name != "OMNILANE_DEPTH"
         }
         self.env.update(

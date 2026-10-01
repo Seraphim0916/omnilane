@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "tests/offline_env.py"
@@ -54,6 +55,114 @@ class ShellIsolationTests(unittest.TestCase):
         return subprocess.run([sys.executable, "-I", str(LAUNCHER), *command],
                               env=self.environment, cwd=ROOT, text=True,
                               capture_output=True, timeout=20)
+
+    def install_home_dependent_rm_wrapper(self):
+        hooks = self.home / "hooks"
+        hooks.mkdir()
+        (hooks / "recycle.sh").write_text("# synthetic caller hook\n")
+        wrapper = self.bins / "rm"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            f"printf '%s\\n' rm >> {shlex.quote(str(self.marker))}\n"
+            '[ -f "$HOME/hooks/recycle.sh" ] || { echo "fixture rm: home hook missing" >&2; exit 97; }\n'
+            'exec /bin/rm "$@"\n'
+        )
+        wrapper.chmod(0o755)
+
+    def test_utility_lookup_prefers_system_before_local_and_caller_paths(self):
+        import offline_env
+        with patch.object(offline_env.shutil, "which", return_value="/bin/rm") as lookup:
+            self.assertEqual(offline_env.resolve_utility("rm", "/caller/bin"), "/bin/rm")
+        lookup.assert_called_once_with("rm", path=offline_env.SYSTEM_UTILITY_PATH)
+
+    def test_missing_system_tool_uses_local_then_caller_fallback(self):
+        import offline_env
+        for responses, expected, calls in (
+            ([None, "/opt/homebrew/bin/node"], "/opt/homebrew/bin/node", 2),
+            ([None, None, "/runtime/bin/node"], "/runtime/bin/node", 3),
+            ([None, None, None], None, 3),
+        ):
+            with self.subTest(expected=expected):
+                with patch.object(offline_env.shutil, "which", side_effect=responses) as lookup:
+                    self.assertEqual(offline_env.resolve_utility("node", "/runtime/bin"), expected)
+                self.assertEqual(lookup.call_count, calls)
+                self.assertEqual(lookup.call_args_list[1].kwargs["path"], offline_env.LOCAL_UTILITY_PATH)
+                if calls == 3:
+                    self.assertEqual(lookup.call_args_list[2].kwargs["path"], "/runtime/bin")
+
+    def goal_lock_probe(self):
+        return (
+            "import json,os,pathlib,subprocess\n"
+            f"goal_script={str(ROOT / 'scripts/lib/goal-loop.sh')!r}\n"
+            "env=os.environ.copy()\n"
+            "state=pathlib.Path(env['TMPDIR'])/'goal-state'\n"
+            "env['OMNILANE_HOME']=str(state)\n"
+            "opened=subprocess.run(['bash',goal_script,'open','fixture goal','--workdir',env['TMPDIR']],"
+            "env=env,text=True,capture_output=True,check=True)\n"
+            "goal_id=opened.stdout.strip()\n"
+            "status=subprocess.run(['bash',goal_script,'status',goal_id],env=env,text=True,capture_output=True)\n"
+            "print(json.dumps({'status':status.returncode,'lock_exists':(state/'goals'/goal_id/'.lock').exists(),"
+            "'rm':str(pathlib.Path(env['PATH'])/'rm')}))\n"
+        )
+
+    def assert_goal_lock_released_without_caller_wrapper(self, result):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["status"], 0)
+        self.assertFalse(observed["lock_exists"], observed)
+        self.assertFalse(self.marker.exists(), "caller rm wrapper was selected")
+
+    def test_launcher_uses_system_rm_and_releases_goal_lock(self):
+        self.install_home_dependent_rm_wrapper()
+        result = self.run_isolated(["python3", "-c", self.goal_lock_probe()])
+        self.assert_goal_lock_released_without_caller_wrapper(result)
+
+    def test_direct_unittest_helper_uses_system_rm_and_releases_goal_lock(self):
+        from offline_env import isolated_environment
+        self.install_home_dependent_rm_wrapper()
+        env, violations = isolated_environment(self.root / "direct", self.environment["PATH"])
+        result = subprocess.run([sys.executable, "-I", "-c", self.goal_lock_probe()],
+                                env=env, cwd=ROOT, text=True, capture_output=True, timeout=20)
+        self.assert_goal_lock_released_without_caller_wrapper(result)
+        self.assertFalse(violations.exists())
+
+    def test_legacy_fixture_keeps_environment_and_pinned_python_without_caller_rm(self):
+        from offline_env import fixture_environment_with_isolated_tools
+        self.install_home_dependent_rm_wrapper()
+        original = self.environment.copy()
+        env = fixture_environment_with_isolated_tools(self, original)
+        self.assertEqual(self.environment, original)
+        self.assertEqual({k: v for k, v in env.items() if k != "PATH"},
+                         {k: v for k, v in original.items() if k != "PATH"})
+        self.assertEqual((Path(env["PATH"]) / "python3").resolve(), Path(sys.executable).resolve())
+        temporary = self.root / "legacy-tmp"
+        temporary.mkdir()
+        env["TMPDIR"] = str(temporary)
+        result = subprocess.run([sys.executable, "-I", "-c", self.goal_lock_probe()],
+                                env=env, cwd=ROOT, text=True, capture_output=True, timeout=20)
+        self.assert_goal_lock_released_without_caller_wrapper(result)
+        explicit = self.root / "explicit-vendor"
+        explicit.mkdir()
+        (explicit / "codex").write_text("#!/bin/sh\nexit 0\n")
+        (explicit / "codex").chmod(0o755)
+        env["PATH"] = str(explicit) + os.pathsep + env["PATH"]
+        self.assertEqual(shutil.which("codex", path=env["PATH"]), str(explicit / "codex"))
+
+    def test_legacy_fixture_cleanup_fails_on_swallowed_network_guard(self):
+        from offline_env import fixture_environment_with_isolated_tools
+        original = self.environment.copy()
+
+        class NetworkFixture(unittest.TestCase):
+            def runTest(inner):
+                env = fixture_environment_with_isolated_tools(inner, original)
+                result = subprocess.run(["/bin/sh", "-c", "curl fixture.invalid >/dev/null 2>&1 || true"],
+                                        env=env, capture_output=True, timeout=5)
+                inner.assertEqual(result.returncode, 0)
+
+        result = NetworkFixture().run()
+        self.assertEqual(len(result.failures), 1)
+        self.assertEqual(len(result.errors), 0)
+        self.assertIn("unmocked fixture network command", result.failures[0][1])
 
     def test_default_doctor_cannot_start_host_vendors_or_source_host_overlay(self):
         result = self.run_isolated(["/bin/bash", str(ROOT / "scripts/doctor.sh"), "--json"])

@@ -29,6 +29,20 @@ UTILITIES = (
     "zsh",
 )
 
+# Prefer OS utilities over caller PATH wrappers that may depend on the caller's
+# real HOME. Homebrew/local tools remain available where the OS supplies none;
+# the inherited path is only a final fallback for allowlisted optional tools.
+SYSTEM_UTILITY_PATH = os.pathsep.join(("/usr/bin", "/bin", "/usr/sbin", "/sbin"))
+LOCAL_UTILITY_PATH = os.pathsep.join(("/opt/homebrew/bin", "/usr/local/bin"))
+
+
+def resolve_utility(name: str, search_path: str) -> str | None:
+    for path in (SYSTEM_UTILITY_PATH, LOCAL_UTILITY_PATH, search_path):
+        source = shutil.which(name, path=path)
+        if source:
+            return source
+    return None
+
 
 def isolated_environment(root: Path, search_path: str) -> tuple[dict[str, str], Path]:
     utilities = root / "utilities"
@@ -37,7 +51,7 @@ def isolated_environment(root: Path, search_path: str) -> tuple[dict[str, str], 
     for directory in (utilities, home / ".omnilane", temporary):
         directory.mkdir(parents=True)
     for name in UTILITIES:
-        source = shutil.which(name, path=search_path)
+        source = resolve_utility(name, search_path)
         if source:
             (utilities / name).symlink_to(Path(source).resolve())
     # Keep the running interpreter, including its installed standard/runtime
@@ -66,6 +80,25 @@ def isolated_environment(root: Path, search_path: str) -> tuple[dict[str, str], 
         "OMNILANE_AA_OPERATOR_ASSERTED_HUMAN": "1",
     }
     return environment, violations
+
+
+def fixture_environment_with_isolated_tools(test_case, environment=None) -> dict[str, str]:
+    """Keep a fixture's environment, replacing only its inherited tool PATH.
+
+    Legacy fixtures deliberately control HOME and other inputs themselves.
+    Give them the same utility resolution, Python pin and network guards as the
+    launcher, with test-owned lifetime and cleanup assertions. Explicit fake
+    vendor directories may still be prepended by the fixture afterwards.
+    """
+    result = dict(os.environ if environment is None else environment)
+    temporary = tempfile.TemporaryDirectory(prefix="omnilane-fixture-tools-")
+    test_case.addCleanup(temporary.cleanup)
+    isolated, violations = isolated_environment(Path(temporary.name), result.get("PATH", ""))
+    test_case.addCleanup(
+        lambda: test_case.assertFalse(violations.exists(), "unmocked fixture network command")
+    )
+    result["PATH"] = isolated["PATH"]
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -7,6 +7,8 @@ import tempfile
 import unittest
 
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -43,7 +45,7 @@ raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
         # that is actually under test, without inheriting the outer harness.
         self.env = {
             name: value
-            for name, value in os.environ.items()
+            for name, value in fixture_environment_with_isolated_tools(self).items()
             if not name.startswith("OMNILANE_AA_") and name != "OMNILANE_DEPTH"
         }
         for name in ("CONTEXT_MODE_MCP_SENTINEL_DIR", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID", "OMNILANE_INBOX", "OMNILANE_GROK_NO_WEB"):
