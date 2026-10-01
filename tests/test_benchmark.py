@@ -5,6 +5,9 @@ import runpy
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
+
+from offline_env import fixture_environment_with_isolated_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,7 +59,7 @@ if grep -q ALPHA "$5"; then printf 'ALPHA\\n' > "$6"; else printf 'WRONG\\n' > "
         self.tempdir.cleanup()
 
     def run_benchmark(self, *args, discover_vendors=False):
-        env = os.environ.copy()
+        env = fixture_environment_with_isolated_tools(self)
         env.update(
             {
                 "OMNILANE_BENCHMARK_REPO": str(self.repo),
@@ -141,6 +144,70 @@ if grep -q ALPHA "$5"; then printf 'ALPHA\\n' > "$6"; else printf 'WRONG\\n' > "
         lanes, _ = benchmark["list_routes"](self.repo / "scripts" / "dispatch.sh", env)
         self.assertEqual(["quality", "absent"], lanes)
         self.assertFalse(self.marker.exists())
+
+    def test_missing_runner_does_not_report_invocation(self):
+        (self.repo / "scripts/runners/run-codex.sh").unlink()
+        result = self.run_benchmark("--run")
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["provider_invoked"])
+        self.assertFalse(self.marker.exists())
+        self.assertEqual(["runner_error", "runner_error"], [
+            item["status"] for item in report["vendors"][0]["workloads"]
+        ])
+        self.assertEqual(2, report["vendors"][0]["planned_calls"])
+        self.assertEqual("1.00", report["vendors"][0]["cost"]["estimated_total_usd"])
+
+    def test_nonexecutable_runner_does_not_report_invocation(self):
+        (self.repo / "scripts/runners/run-codex.sh").chmod(0o644)
+        result = self.run_benchmark("--run")
+        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertFalse(json.loads(result.stdout)["provider_invoked"])
+        self.assertFalse(self.marker.exists())
+
+    def test_runner_spawn_error_does_not_report_invocation(self):
+        runner = self.repo / "scripts/runners/run-codex.sh"
+        runner.write_text("#!" + str(self.root / "missing-interpreter") + "\n")
+        result = self.run_benchmark("--run")
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertFalse(report["provider_invoked"])
+        self.assertFalse(self.marker.exists())
+        self.assertEqual(["runner_error", "runner_error"], [
+            item["status"] for item in report["vendors"][0]["workloads"]
+        ])
+
+    def test_started_runner_failure_still_reports_invocation(self):
+        runner = self.repo / "scripts/runners/run-codex.sh"
+        runner.write_text(runner.read_text() + "\nexit 7\n")
+        result = self.run_benchmark("--run")
+        self.assertEqual(1, result.returncode, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["provider_invoked"])
+        self.assertEqual("invokedinvoked", self.marker.read_text())
+
+    def test_later_missing_runner_preserves_earlier_invocation(self):
+        runner = self.repo / "scripts/runners/run-codex.sh"
+        runner.write_text(runner.read_text() + '\nrm -- "$0"\n')
+        result = self.run_benchmark("--run")
+        self.assertEqual(1, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertTrue(report["provider_invoked"])
+        self.assertEqual("invoked", self.marker.read_text())
+        self.assertEqual(["passed", "runner_error"], [
+            item["status"] for item in report["vendors"][0]["workloads"]
+        ])
+
+    def test_started_runner_timeout_reports_invocation(self):
+        benchmark = runpy.run_path(str(BENCHMARK))
+        workload = {"id": "alpha", "lane": "quality", "weight": 1,
+                    "prompt": "ALPHA", "pattern": "ALPHA"}
+        with mock.patch.object(benchmark["subprocess"], "run",
+                               side_effect=subprocess.TimeoutExpired("fake-runner", 6)):
+            item, error, invoked = benchmark["run_one"](
+                self.repo, "codex", {"model": "fake-model"}, workload, 1, os.environ.copy())
+        self.assertEqual("runner_error", item["status"])
+        self.assertTrue(error)
+        self.assertTrue(invoked)
 
     def test_explicit_run_scores_quality_without_returning_bodies(self):
         result = self.run_benchmark("--run")
