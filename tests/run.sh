@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# Always sanitize the aggregate entry, even if the invoking shell carries a
+# stale isolation variable. Only the launcher's private child skips re-exec.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -u
 
 # Tests own their dispatch environment. Inherited recursion guards or watchdog
@@ -2479,7 +2487,7 @@ test_installer_check_and_dry_run_are_read_only() {
   mkdir -p "$fresh/.omnilane"
   printf 'touch "$HOME/DRY_RUN_OVERLAY_EXECUTED"\n' > "$fresh/.omnilane/local.sh"
   fresh_before="$(snapshot_installer_home "$fresh")"
-  install_plan="$(HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  install_plan="$(HOME="$fresh" PATH="$fresh/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --dry-run 2>&1)"
   fresh_after="$(snapshot_installer_home "$fresh")"
 
@@ -2490,17 +2498,17 @@ test_installer_check_and_dry_run_are_read_only() {
   { printf 'base\n'; cat "$ROOT/hooks/routing-instruction.md"; } > "$installed/.codex/AGENTS.md"
   chmod 400 "$installed/.codex/AGENTS.md"
   installed_before="$(snapshot_installer_home "$installed")"
-  uninstall_plan="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+  uninstall_plan="$(HOME="$installed" PATH="$installed/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
     bash "$ROOT/install.sh" --uninstall --dry-run 2>&1)"
   installed_after="$(snapshot_installer_home "$installed")"
-  check_out="$(HOME="$installed" PATH="$installed/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+  check_out="$(HOME="$installed" PATH="$installed/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
     bash "$ROOT/install.sh" --check 2>&1)"
   check_rc=$?
 
   partial="$TEST_ROOT/install-check-partial"; make_fake_installer_home "$partial"
   mkdir -p "$partial/.codex/skills"
   ln -s "$ROOT/skills/omnilane" "$partial/.codex/skills/omnilane"
-  partial_out="$(HOME="$partial" PATH="$partial/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  partial_out="$(HOME="$partial" PATH="$partial/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --check 2>&1)"
   partial_rc=$?
 
@@ -2509,7 +2517,7 @@ test_installer_check_and_dry_run_are_read_only() {
   target="$foreign/outside/wrapper"; printf 'FOREIGN-CANARY\n' > "$target"
   ln -s "$target" "$foreign/.local/bin/omnilane"
   foreign_before="$(snapshot_installer_home "$foreign")"
-  HOME="$foreign" PATH="$foreign/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$foreign" PATH="$foreign/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --check >/dev/null 2>&1
   foreign_rc=$?
   foreign_after="$(snapshot_installer_home "$foreign")"
@@ -2519,13 +2527,13 @@ test_installer_check_and_dry_run_are_read_only() {
   mkdir -p "$parent_outside"
   ln -s "$parent_outside" "$parent_link/.codex/skills"
   parent_before="$(snapshot_installer_home "$parent_link")"
-  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$parent_link" PATH="$parent_link/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
   parent_rc=$?
-  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$parent_link" PATH="$parent_link/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --check >/dev/null 2>&1
   parent_check_rc=$?
-  HOME="$parent_link" PATH="$parent_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$parent_link" PATH="$parent_link/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" >/dev/null 2>&1
   parent_install_rc=$?
   parent_after="$(snapshot_installer_home "$parent_link")"
@@ -2534,13 +2542,13 @@ test_installer_check_and_dry_run_are_read_only() {
   mkdir -p "$internal_link/shared-skills"
   ln -s ../shared-skills "$internal_link/.codex/skills"
   internal_before="$(snapshot_installer_home "$internal_link")"
-  HOME="$internal_link" PATH="$internal_link/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$internal_link" PATH="$internal_link/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1
   internal_rc=$?
   internal_after="$(snapshot_installer_home "$internal_link")"
 
   for locale in en zh-TW zh-CN ja ko; do
-    HOME="$fresh" PATH="$fresh/bin:/usr/bin:/bin" OMNILANE_HOOKS=none OMNILANE_LANG="$locale" \
+    HOME="$fresh" PATH="$fresh/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none OMNILANE_LANG="$locale" \
       bash "$ROOT/install.sh" --dry-run >/dev/null 2>&1 || locale_ok=0
   done
   fresh_after="$(snapshot_installer_home "$fresh")"
@@ -2582,13 +2590,13 @@ test_installer_usage_is_fail_closed() {
   make_fake_installer_home "$help"
   make_fake_installer_home "$extra"
 
-  HOME="$unknown" PATH="$unknown/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$unknown" PATH="$unknown/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --typo > "$unknown/out" 2>&1
   rc_unknown=$?
-  HOME="$help" PATH="$help/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$help" PATH="$help/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --help > "$help/out" 2>&1
   rc_help=$?
-  HOME="$extra" PATH="$extra/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$extra" PATH="$extra/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --uninstall extra > "$extra/out" 2>&1
   rc_extra=$?
 
@@ -2619,10 +2627,10 @@ test_uninstall_preserves_foreign_symlinks() {
   wrapper_target="$(readlink "$wrapper")"
   skill_target="$(readlink "$skill")"
 
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --uninstall > "$home/out" 2>&1
 
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" > "$home/install.out" 2>&1
 
   if [[ ! -L "$wrapper" || "$(readlink "$wrapper")" != "$wrapper_target" ]]; then
@@ -2648,7 +2656,7 @@ test_incomplete_marker_fails_closed() {
       reversed) printf '<!-- omnilane-routing:end -->\ntext\n<!-- omnilane-routing:start -->\n' ;;
     esac > "$home/.codex/AGENTS.md"
     before="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
-    HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+    HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
       bash "$ROOT/install.sh" </dev/null > "$home/out" 2>&1
     rc=$?
     after="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
@@ -2665,9 +2673,9 @@ test_install_uninstall_byte_reversible() {
   home="$TEST_ROOT/reversible"; make_fake_installer_home "$home"
   printf 'alpha\nomega\n' > "$home/.codex/AGENTS.md"
   before="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
     bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1 || return 1
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" \
     bash "$ROOT/install.sh" --uninstall > "$home/uninstall.out" 2>&1 || return 1
   after="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
   if [[ "$before" != "$after" ]]; then
@@ -2682,9 +2690,9 @@ test_install_uninstall_preserves_missing_final_newline() {
   home="$TEST_ROOT/reversible-no-newline"; make_fake_installer_home "$home"
   printf 'alpha\nomega' > "$home/.codex/AGENTS.md"
   before="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
     bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1 || return 1
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" \
     bash "$ROOT/install.sh" --uninstall > "$home/uninstall.out" 2>&1 || return 1
   after="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
   if [[ "$before" != "$after" ]]; then
@@ -2702,9 +2710,9 @@ test_install_uninstall_preserves_symlink() {
   ln -s ../shared/AGENTS.md "$home/.codex/AGENTS.md"
   target_before="$(readlink "$home/.codex/AGENTS.md")"
   before="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=codex \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
     bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1 || return 1
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" \
     bash "$ROOT/install.sh" --uninstall > "$home/uninstall.out" 2>&1 || return 1
   target_after="$(readlink "$home/.codex/AGENTS.md" 2>/dev/null || true)"
   after="$(shasum -a 256 "$home/.codex/AGENTS.md" | awk '{print $1}')"
@@ -2725,7 +2733,7 @@ test_install_preserves_existing_wrapper_file() {
   mkdir -p "$home/.local/bin"
   printf 'ORIGINAL-WRAPPER-CANARY\n' > "$home/.local/bin/omnilane"
   before="$(shasum -a 256 "$home/.local/bin/omnilane" | awk '{print $1}')"
-  if HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  if HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1; then
     rc=0
   else
@@ -2746,10 +2754,10 @@ test_install_preserves_existing_wrapper_file() {
 test_uninstall_succeeds_after_vendor_removal() {
   local name="uninstall succeeds after vendor removal" home rc
   home="$TEST_ROOT/uninstall-no-vendor"; make_fake_installer_home "$home"
-  HOME="$home" PATH="$home/bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+  HOME="$home" PATH="$home/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" </dev/null > "$home/install.out" 2>&1 || return 1
   rm "$home/bin/codex"
-  if HOME="$home" PATH="/usr/bin:/bin" OMNILANE_HOOKS=none \
+  if HOME="$home" PATH="$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     bash "$ROOT/install.sh" --uninstall > "$home/uninstall.out" 2>&1; then
     rc=0
   else
@@ -3370,7 +3378,7 @@ test_round2_untrusted_boundary_and_cleanup
 test_shell_completion_is_safe_and_current
 test_release_audit_is_offline_read_only_and_actionable
 release_audit_usage_doc_rc=0
-release_audit_usage_doc_output="$(/bin/bash "$ROOT/tests/test_release_audit_usage_doc.sh" 2>&1)" || release_audit_usage_doc_rc=$?
+release_audit_usage_doc_output="$(/bin/bash "$ROOT/tests/test_release_audit_usage_doc.sh" --omnilane-offline-child 2>&1)" || release_audit_usage_doc_rc=$?
 printf '%s\n' "$release_audit_usage_doc_output"
 release_audit_usage_doc_summary="${release_audit_usage_doc_output##*$'\n'}"
 if [[ "$release_audit_usage_doc_summary" =~ ^([0-9]+)\ passed,\ ([0-9]+)\ failed$ ]]; then
@@ -3695,7 +3703,7 @@ test_doctor_vendors() {
   home="$TEST_ROOT/doctor-vendors"; bindir="$home/bin"; mkdir -p "$home" "$bindir"
   for b in codex claude agy; do printf '#!/bin/sh\n' > "$bindir/$b"; chmod +x "$bindir/$b"; done
 
-  out="$(OMNILANE_HOME="$home" PATH="$bindir:/usr/bin:/bin" OPENROUTER_API_KEY=x \
+  out="$(OMNILANE_HOME="$home" PATH="$bindir:$OMNILANE_TEST_UTIL_PATH" OPENROUTER_API_KEY=x \
     /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"
   if [[ "$out" != *"PASS  vendors"* ]]; then
     fail "$name" "no vendors PASS line: $out"; return
@@ -3711,7 +3719,7 @@ test_doctor_vendors() {
         "$vline" != *qwen* || "$vline" != *opencode* ]]; then
     fail "$name" "vendors missing set wrong: $vline"; return
   fi
-  jout="$(OMNILANE_HOME="$home" PATH="$bindir:/usr/bin:/bin" OPENROUTER_API_KEY=x \
+  jout="$(OMNILANE_HOME="$home" PATH="$bindir:$OMNILANE_TEST_UTIL_PATH" OPENROUTER_API_KEY=x \
     /bin/bash "$ROOT/scripts/doctor.sh" --json 2>&1)"
   if [[ "$jout" != *'"check":"vendors"'* ]]; then
     fail "$name" "json vendors check absent: $jout"; return
@@ -4183,7 +4191,7 @@ test_jobs_rm
 
 test_live_mailbox_case() {
   local test_case="$1" name="$2" out rc=0
-  out="$(bash "$ROOT/tests/test_live_mailbox.sh" "$test_case" 2>&1)" || rc=$?
+  out="$(bash "$ROOT/tests/test_live_mailbox.sh" --omnilane-offline-child "$test_case" 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4228,7 +4236,7 @@ test_live_mailbox_case grok-live-fallback "Grok failed handshake degrades to sin
 
 test_goal_loop_case() {
   local test_case="$1" name="$2" out rc=0
-  out="$(bash "$ROOT/tests/test_goal_loop.sh" "$test_case" 2>&1)" || rc=$?
+  out="$(bash "$ROOT/tests/test_goal_loop.sh" --omnilane-offline-child "$test_case" 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4337,7 +4345,7 @@ test_completion_fish
 
 test_foreman_completion_inbox() {
   local name="foreman completion inbox" out rc=0
-  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" 2>&1)" || rc=$?
+  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --omnilane-offline-child 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4349,7 +4357,7 @@ test_foreman_completion_inbox
 test_completion_settings_detection() {
   local name="completion settings detection" out rc=0
   out="$(OMNILANE_DOCTOR_GOAL_LOOP="$ROOT/scripts/lib/goal-loop.sh" \
-    bash "$ROOT/tests/test_foreman_inbox.sh" --doctor-settings 2>&1)" || rc=$?
+    bash "$ROOT/tests/test_foreman_inbox.sh" --omnilane-offline-child --doctor-settings 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4360,7 +4368,7 @@ test_completion_settings_detection
 
 test_thread_dispatch() {
   local name="threaded dispatch" out rc=0
-  out="$(bash "$ROOT/tests/test_thread_dispatch.sh" 2>&1)" || rc=$?
+  out="$(bash "$ROOT/tests/test_thread_dispatch.sh" --omnilane-offline-child 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4371,7 +4379,7 @@ test_thread_dispatch
 
 test_install_check_read_only() {
   local name="installer check is read-only" out rc=0
-  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --install-readonly 2>&1)" || rc=$?
+  out="$(bash "$ROOT/tests/test_foreman_inbox.sh" --omnilane-offline-child --install-readonly 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else
@@ -4409,7 +4417,7 @@ test_doctor_goal_orchestrator_check
 
 test_completion_idle_fixes() {
   local name="completion idle structural regressions" out rc=0
-  out="$(/bin/bash "$ROOT/tests/test_completion_idle_fixes.sh" 2>&1)" || rc=$?
+  out="$(/bin/bash "$ROOT/tests/test_completion_idle_fixes.sh" --omnilane-offline-child 2>&1)" || rc=$?
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "$out"
   else

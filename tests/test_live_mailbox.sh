@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -euo pipefail
 
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_JOB_TIMEOUT
@@ -1570,51 +1578,51 @@ PY
 
 case "$CASE" in
  "")
-    bash "$0" codex-killed-runner
+    bash "$0" --omnilane-offline-child codex-killed-runner
     printf 'ok - killed Codex live runner reaps app-server process group\n'
-    bash "$0" codex-app-server-eof-cleanup
+    bash "$0" --omnilane-offline-child codex-app-server-eof-cleanup
     printf 'ok - Codex app-server prefers EOF cleanup and bounds TERM/KILL escalation\n'
-    bash "$0" codex-close-grace-invariant
+    bash "$0" --omnilane-offline-child codex-close-grace-invariant
     printf 'ok - Codex close grace precedes worker escalation\n'
-    bash "$0" codex-full-close-budget-invariant
+    bash "$0" --omnilane-offline-child codex-full-close-budget-invariant
     printf 'ok - Codex turn plus app-server close budget precedes worker escalation\n'
-    bash "$0" codex-shutdown-grace
+    bash "$0" --omnilane-offline-child codex-shutdown-grace
     printf 'ok - Codex live shutdown waits gracefully then escalates\n'
-    /bin/bash "$ROOT/tests/test_live_close_deadline.sh"
+    /bin/bash "$ROOT/tests/test_live_close_deadline.sh" --omnilane-offline-child
     printf 'ok - bounded close preserves queued input and precedes jobs timeout\n'
-    bash "$0" live-fail-fast
+    bash "$0" --omnilane-offline-child live-fail-fast
     printf 'ok - live mode rejects non-capable vendor\n'
-    bash "$0" single-shot-claude
+    bash "$0" --omnilane-offline-child single-shot-claude
     printf 'ok - single-shot mode forces Claude one-shot\n'
-    bash "$0" idle-cap
+    bash "$0" --omnilane-offline-child idle-cap
     printf 'ok - live mailbox idle cap closes session\n'
-    bash "$0" claude-close-recovery
+    bash "$0" --omnilane-offline-child claude-close-recovery
     printf 'ok - Claude close recovers completed result output\n'
-    bash "$0" gemini-schema
+    bash "$0" --omnilane-offline-child gemini-schema
     printf 'ok - Gemini live mailbox uses agy schema\n'
-    bash "$0" json-escape
+    bash "$0" --omnilane-offline-child json-escape
     printf 'ok - live prompt JSON escaping round-trips exact text\n'
-  bash "$0" jobs-send-json-escape
+  bash "$0" --omnilane-offline-child jobs-send-json-escape
   printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
-  bash "$0" codex-live-rpc
+  bash "$0" --omnilane-offline-child codex-live-rpc
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
-    bash "$0" codex-live-fallback
+    bash "$0" --omnilane-offline-child codex-live-fallback
     printf 'ok - Codex failed handshake degrades to single-shot\n'
-    bash "$0" grok-killed-runner
+    bash "$0" --omnilane-offline-child grok-killed-runner
     printf 'ok - killed Grok live runner reaps ACP process group\n'
-    bash "$0" grok-close-grace-invariant
+    bash "$0" --omnilane-offline-child grok-close-grace-invariant
     printf 'ok - Grok close grace precedes worker escalation\n'
-    bash "$0" grok-live-acp
+    bash "$0" --omnilane-offline-child grok-live-acp
     printf 'ok - Grok live ACP mailbox, cancellation, and incremental output\n'
-    bash "$0" grok-model-errors
+    bash "$0" --omnilane-offline-child grok-model-errors
     printf 'ok - Grok model argv and prompt error correlation\n'
-    bash "$0" grok-advise-fail-closed
+    bash "$0" --omnilane-offline-child grok-advise-fail-closed
     printf 'ok - Grok advise dispatch and internal FIFO fail closed\n'
-    bash "$0" grok-live-fallback
+    bash "$0" --omnilane-offline-child grok-live-fallback
     printf 'ok - Grok failed handshake degrades to single-shot\n'
-    bash "$0" codex-probe-stdin-open
+    bash "$0" --omnilane-offline-child codex-probe-stdin-open
     printf 'ok - Codex initialize probe keeps stdin open\n'
-    bash "$0" grok-probe-stdin-open
+    bash "$0" --omnilane-offline-child grok-probe-stdin-open
     printf 'ok - Grok initialize probe keeps stdin open\n'
     ;;
   live-fail-fast) case_live_fail_fast ;;
@@ -1631,7 +1639,7 @@ case "$CASE" in
     codex-close-grace-invariant) case_codex_close_grace_precedes_worker_escalation ;;
     codex-full-close-budget-invariant) case_codex_full_close_budget_precedes_worker_escalation ;;
   codex-shutdown-grace) case_codex_shutdown_grace ;;
-  codex-close-deadline) /bin/bash "$ROOT/tests/test_live_close_deadline.sh" ;;
+  codex-close-deadline) /bin/bash "$ROOT/tests/test_live_close_deadline.sh" --omnilane-offline-child ;;
     grok-killed-runner) case_grok_killed_runner_reaps_agent ;;
     grok-close-grace-invariant) case_grok_close_grace_precedes_worker_escalation ;;
     grok-live-acp) case_grok_live_acp ;;
