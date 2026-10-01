@@ -465,6 +465,7 @@ read_thread_state() { # path, expected name; populates THREAD_STATE_*
       die "invalid timestamp\n" unless $state->{$key} =~ /\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z/;
     }
     die "field too long\n" if length($state->{model}) > 512 || length($state->{effort}) > 128 || length($state->{workdir}) > 4096;
+    binmode STDOUT, ":encoding(UTF-8)";
     print join(chr(28), map { $state->{$_} } qw(name vendor model effort workdir session_id turns last_job_id created updated));
   ' "$path" "$expected_name" 2>/dev/null)" || return 1
 
