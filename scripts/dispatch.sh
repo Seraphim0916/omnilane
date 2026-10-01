@@ -1146,9 +1146,9 @@ fi
 JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
 unset OMNILANE_JOB_SUPERVISED
 [[ -x "$JOB_WORKER_SOURCE" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
-if [[ -n "$JOB_TIMEOUT" ]]; then
-  [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: whole-job timeout supervisor is unavailable" >&2; exit 2; }
-  command -v perl &>/dev/null || { echo "omnilane: --job-timeout requires perl" >&2; exit 2; }
+if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+  [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: job supervisor is unavailable" >&2; exit 2; }
+  command -v perl &>/dev/null || { echo "omnilane: background jobs and --job-timeout require perl" >&2; exit 2; }
   perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
     >/dev/null 2>&1 || { echo "omnilane: perl lacks whole-job timeout support" >&2; exit 2; }
 fi
@@ -1396,6 +1396,11 @@ write_completion_record() {
 }
 
 finish_job() {
+  # Once finalization starts, preserve its outcome and publish only once.
+  # Otherwise HUP/TERM can re-enter while an atomic completion rename returns,
+  # overwrite exit, advance a thread twice, or replay an already consumed record.
+  # jobs cancel retains its bounded SIGKILL escalation for a stuck finalizer.
+  if [[ "$BACKGROUND" == "1" ]]; then trap '' HUP TERM; fi
   local rc="$1"
   if [[ -n "$THREAD_NAME" ]]; then
     if [[ "$rc" -eq 0 ]]; then
@@ -1413,13 +1418,16 @@ finish_job() {
 }
 
 run_job() {
-  local rc=0
+  local rc=0 entry_shell_options="$-"
   write_current_pid_file "$JOB_DIR/pid"
   set +e
-  if [[ -n "$JOB_TIMEOUT" ]]; then
+  if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+    # Supervise every background tree so cancel reaches its descendants even
+    # where GNU timeout would otherwise create a separate, untracked group.
+    # No configured budget still means no deadline and job_timeout:null.
     OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
       OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
-      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "$JOB_TIMEOUT" \
+      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
       "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   else
@@ -1439,6 +1447,9 @@ run_job() {
     rc=124
   fi
   finish_job "$rc"
+  # Keep finalization strict, then let a foreground +e caller capture failure
+  # and print the stored public output before returning the job status.
+  [[ "$entry_shell_options" == *e* ]] || set +e
   return "$FINISHED_RC"
 }
 

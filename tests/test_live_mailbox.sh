@@ -321,22 +321,46 @@ case_claude_close_recovers_result_output() {
 #!/usr/bin/env bash
 set -euo pipefail
 trap '' TERM
+printf '%s\n' "$$" > "$FAKE_CLAUDE_PIDS"
 while IFS= read -r _; do
   printf '%s\n' '{"type":"system","model":"claude-opus-5"}'
   printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5","content":[{"type":"text","text":"claude recovered close output"}]}}'
   printf '%s\n' '{"type":"result","is_error":false,"result":"claude recovered close output"}'
 done
-sleep 60
+sleep 60 &
+child=$!
+printf '%s\n' "$child" >> "$FAKE_CLAUDE_PIDS"
+wait "$child"
 EOF
   chmod +x "$fake"
   printf 'triage: claude claude-opus-5 high\n' > "$home/routing.local.yaml"
-  job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" \
+  job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" FAKE_CLAUDE_PIDS="$home/claude.pids" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
     --mode work --workdir "$ROOT" --vendor claude triage 'recover completed output')"
   job_dir="$home/jobs/$job"
   wait_for_file "$job_dir/inbox.ready" || fail "stubborn Claude mailbox did not become ready"
   wait_for_lines "$job_dir/events.jsonl" 3 || fail "stubborn Claude did not emit a successful result"
-  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+  close_out="$(OMNILANE_HOME="$home" python3 - "$ROOT/scripts/jobs.sh" "$job" "$home/claude.pids" <<'PY'
+import pathlib
+import subprocess
+import sys
+import time
+
+started = time.monotonic()
+closed = subprocess.run(['bash', sys.argv[1], 'close', sys.argv[2]],
+                        text=True, capture_output=True, timeout=12)
+elapsed = time.monotonic() - started
+assert closed.returncode == 0, (closed.returncode, closed.stdout, closed.stderr)
+assert elapsed < 11.0, ('close exceeded its documented bound', elapsed)
+pids = pathlib.Path(sys.argv[3]).read_text().splitlines()
+assert len(pids) == 2, ('fake Claude and its child were not both recorded', pids)
+for pid in pids:
+    state = subprocess.run(['ps', '-o', 'stat=', '-p', pid], text=True,
+                           capture_output=True, timeout=5).stdout.strip()
+    assert not state or state.startswith('Z'), ('close returned with a live descendant', pid, state)
+print(closed.stdout, end='')
+PY
+)" ||
     fail "stubborn Claude close failed: $close_out"
   wait_for_file "$job_dir/exit" || fail "stubborn Claude close did not record exit"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "stubborn Claude close was not successful"
@@ -767,8 +791,14 @@ if not inner_budget + 0.25 < outer_budget:
     )
 timeouts = {name: float(re.search(r'^' + name + r'=([0-9.]+)$', worker, re.MULTILINE).group(1))
             for name in ('CLOSE_DRAIN_TIMEOUT', 'CLOSE_TERM_GRACE', 'CLOSE_KILL_GRACE')}
-if not 1.0 + sum(timeouts.values()) + outer_budget < 9.0:
-    raise AssertionError("worker wakeup+drain+grace+TERM+KILL must precede jobs close's quantized 10s")
+supervisor = (root / 'scripts/lib/job-timeout.pl').read_text(encoding='utf-8')
+supervisor_grace = float(re.search(r'my \$TERM_GRACE_SECONDS = ([0-9.]+);', supervisor).group(1))
+jobs = (root / 'scripts/jobs.sh').read_text(encoding='utf-8')
+close_wait = float(re.search(r'close_deadline=\$\(\(SECONDS \+ ([0-9]+)\)\)', jobs).group(1))
+if close_wait > 11.0:
+    raise AssertionError("jobs close must keep its documented 11-second upper bound")
+if not 1.05 + sum(timeouts.values()) + outer_budget + supervisor_grace < close_wait - 1:
+    raise AssertionError("worker close plus supervisor cleanup must precede jobs close's quantized deadline")
 PY
   then
     fail "Codex full close budget does not expire before worker escalation"

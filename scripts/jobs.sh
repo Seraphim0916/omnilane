@@ -506,10 +506,11 @@ case "${1:-}" in
     holder_pid="$RECORDED_PID"
     kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
     kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
-    close_deadline=$((SECONDS + 10))
+    # Include the supervisor's final 1s process-group cleanup after live close.
+    close_deadline=$((SECONDS + 11))
     while [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; do
       if [[ "$SECONDS" -ge "$close_deadline" ]]; then
-        die 124 "close signal sent, but the live worker did not terminate within 10s"
+        die 124 "close signal sent, but the live worker did not terminate within 11s"
       fi
       sleep 0.1
     done
@@ -1163,7 +1164,8 @@ case "${1:-}" in
     kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     cancel_waited=0
     while [[ "$cancel_waited" -lt 5 ]]; do
-      if [[ -e "$exit_path" || -L "$exit_path" ]]; then break; fi
+      # finish_job records exit before publishing its completion inbox record.
+      # Give the worker the full grace period to finish that cleanup as well.
       if ! kill -0 "$pid" 2>/dev/null; then break; fi
       sleep 1; cancel_waited=$((cancel_waited + 1))
     done
