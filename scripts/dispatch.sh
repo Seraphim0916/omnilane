@@ -27,6 +27,11 @@ set -euo pipefail
 # spawns several CLI calls, so total wall-clock can be a multiple of this value.
 # A separate --job-timeout can cap lock wait plus all calls in this dispatch.
 
+# Private goal capability must never reach runners or provider environments.
+GOAL_INTENT_REF="${OMNILANE_GOAL_INTENT:-}"
+unset OMNILANE_GOAL_INTENT
+export -n GOAL_INTENT_REF
+GOAL_STDIN_CAPTURED=0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # Private configure diff input: used only by an explicit --list inspection.
 # Consume it here so normal dispatch and its workers never inherit the switch.
@@ -1186,7 +1191,23 @@ fi
 chmod 700 "$JOBS_ROOT"
 JOB_ID="$(date +%Y%m%d-%H%M%S)-$$-$RANDOM"
 JOB_DIR="$JOBS_ROOT/$JOB_ID"
+# An exclusive directory allocation prevents a generated-ID collision from
+# claiming somebody else's existing PID/exit evidence.
 mkdir -m 700 "$JOB_DIR"
+if [[ -n "$GOAL_INTENT_REF" ]]; then
+  [[ "$BACKGROUND" == "1" ]] || { rmdir "$JOB_DIR"; echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
+  # Goal stdin was already captured by goal-loop; keep the same task bytes for
+  # both its fingerprint and execution. Do not consume normal dispatch stdin.
+  if [[ "$TASK" == "-" ]]; then TASK="$(cat)"; GOAL_STDIN_CAPTURED=1; fi
+  GOAL_TASK_FINGERPRINT="$(python3 -c 'import hashlib,sys; print(hashlib.sha256((sys.argv[1] + "\0" + sys.argv[2]).encode("utf-8")).hexdigest())' "$LANE" "$TASK")"
+  if ! python3 "$OMNILANE_REPO/scripts/lib/goal_dispatch.py" claim \
+    "$OMNILANE_HOME" "$GOAL_INTENT_REF" "$JOB_ID" "$LANE" "$GOAL_TASK_FINGERPRINT"; then
+    # Remove only our new, still-empty scaffold. Never fabricate an exit:
+    # publication may have claimed this ID before a directory-fsync failure.
+    rmdir "$JOB_DIR" 2>/dev/null || true
+    exit 1
+  fi
+fi
 # Snapshot authorizer separately from the worker identity. Never hand a worker
 # its parent's identity as its own caller context.
 python3 - "$OMNILANE_REPO" "$JOB_DIR" "$AA_POLICY_FILE" "$AA_REGISTRY_SHA256" "$AA_CALLER_CONTEXT" "$AA_CALLER_SHA256" "$AA_SELECTED_DECISION" "$VENDOR" <<'AA_PUBLISH'
@@ -1249,7 +1270,9 @@ elif resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
   FOREMAN_SESSION="$resolved_foreman_session"
 fi
 
-if [[ "$TASK" == "-" ]]; then
+if [[ "$GOAL_STDIN_CAPTURED" -eq 1 ]]; then
+  (umask 077; printf '%s' "$TASK" > "$JOB_DIR/task.txt")
+elif [[ "$TASK" == "-" ]]; then
   (umask 077; cat > "$JOB_DIR/task.txt")
 else
   (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
@@ -1296,8 +1319,15 @@ chmod 600 "$META_TMP"
 mv "$META_TMP" "$JOB_DIR/meta.json"
 
 if [[ -n "$THREAD_NAME" ]]; then
-  printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
-    "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
+  # The goal caller requires exactly the claimed job ID on stdout. Its private
+  # intent was validated above; ordinary dispatch keeps its existing notice.
+  if [[ -n "$GOAL_INTENT_REF" ]]; then
+    printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+      "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE" >&2
+  else
+    printf 'omnilane: thread %s turn %s (%s session %s, %s)\n' \
+      "$THREAD_NAME" "$THREAD_TURN" "$VENDOR" "$THREAD_ID" "$THREAD_MODE"
+  fi
 fi
 
 secure_job_files() {
@@ -1470,6 +1500,7 @@ if [[ "$BACKGROUND" == "1" ]]; then
   exit 0
 fi
 
+[[ -z "$GOAL_INTENT_REF" ]] || { echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
 set +e; run_job; RC=$?; set -e
 [[ -f "$JOB_DIR/out.txt" ]] && cat "$JOB_DIR/out.txt"
 exit "$RC"
