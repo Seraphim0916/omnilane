@@ -493,11 +493,13 @@ def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
         message = record.get("message")
         model = message.get("model") if isinstance(message, dict) else None
         if not isinstance(model, str) or not model:
-            continue
+            return None, "latest assistant model missing"
         efforts = [record.get(key) for key in ("perTurnEffort", "effort")
                    if isinstance(record.get(key), str) and record[key]]
         if not efforts:
-            continue
+            # Missing identity on the latest main record must not resurrect a
+            # previous turn's model or ceiling after a mid-session switch.
+            return None, "latest assistant effort missing"
         if any(effort not in _CLAUDE_EFFORTS for effort in efforts):
             return None, "unknown effort"
         effort = min(efforts, key=_CLAUDE_EFFORTS.index)
