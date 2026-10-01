@@ -98,6 +98,8 @@ def parse_plan(text):
 def load_workloads(path):
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise BenchmarkError("workloads must be UTF-8") from exc
     except OSError as exc:
         raise BenchmarkError(f"cannot read workloads: {path}: {exc}") from exc
 

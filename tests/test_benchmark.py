@@ -79,6 +79,49 @@ if grep -q ALPHA "$5"; then printf 'ALPHA\\n' > "$6"; else printf 'WRONG\\n' > "
             timeout=15,
         )
 
+    def assert_invalid_workload_encoding(self, content):
+        self.workloads.write_bytes(content)
+        dispatch = self.repo / "scripts/dispatch.sh"
+        dispatch.write_text(
+            '#!/usr/bin/env bash\nprintf reached > "$OMNILANE_TEST_BENCHMARK_LISTING.called"\nexit 97\n'
+        )
+        for arguments in ((), ("--run",)):
+            with self.subTest(arguments=arguments):
+                result = self.run_benchmark(*arguments)
+                self.assertEqual(2, result.returncode, result.stderr)
+                self.assertEqual("", result.stdout)
+                self.assertEqual("omnilane benchmark: workloads must be UTF-8\n", result.stderr)
+                self.assertFalse(Path(str(self.listing) + ".called").exists())
+                self.assertFalse(self.marker.exists())
+
+    def test_utf16_workloads_fail_before_dispatch(self):
+        self.assert_invalid_workload_encoding(
+            "alpha\tquality\t1\tALPHA\tReply ALPHA.\n".encode("utf-16")
+        )
+
+    def test_truncated_utf8_workloads_fail_before_dispatch(self):
+        self.assert_invalid_workload_encoding(
+            "alpha\tquality\t1\tALPHA\t回答".encode("utf-8")[:-1]
+        )
+
+    def test_utf8_nonascii_workload_content_is_preserved(self):
+        prompt = "請回答 ALPHA，保留 café 與日本語"
+        pattern = "^ALPHA café$"
+        self.workloads.write_text(
+            "alpha\tquality\t1\t" + pattern + "\t" + prompt + "\n", encoding="utf-8"
+        )
+        benchmark = runpy.run_path(str(BENCHMARK))
+        workload = benchmark["load_workloads"](self.workloads)[0]
+        self.assertEqual(prompt, workload["prompt"])
+        self.assertEqual(pattern, workload["pattern"])
+        result = self.run_benchmark()
+        self.assertEqual(0, result.returncode, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(1, report["workload_count"])
+        self.assertEqual("planned", report["vendors"][0]["workloads"][0]["status"])
+        self.assertFalse(report["provider_invoked"])
+        self.assertFalse(self.marker.exists())
+
     def test_default_is_dry_run_and_cost_plan_is_transparent(self):
         result = self.run_benchmark()
         self.assertEqual(0, result.returncode, result.stderr)
