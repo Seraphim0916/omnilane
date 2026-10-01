@@ -440,6 +440,8 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # 非互動編輯/檢視 rou
 
 Bash、Zsh 與 Fish 補全包含文件中的頂層命令、目標命令與工作命令群組。選擇補全只會填入命令文字，不會執行工作操作。
 
+未指定 `--vendor` 時，`benchmark` 從有效路由清單取得供應商，並略過顯示用的 `unavailable` 標記。若沒有可供 benchmark 使用的供應商，會以結束代碼 2 回報未找到設定的供應商；預設仍只乾跑，不呼叫供應商。
+
 工作的 `list` 與 `status` 使用一致的觀測狀態。`dead` 表示沒有記錄退出碼，且工作程序的 PID 無效或已不存在；它不會出現在 `--status running` 中，可用 `--status dead` 篩選。`result` 會說明未記錄退出碼，不再誤稱程序仍在執行。尚無 PID 的啟動階段仍沿用 `running` 狀態，不會推測退出碼。
 
 背景工作需要 Perl 監督，讓取消能終止受監督的程序群組。

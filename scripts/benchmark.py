@@ -192,6 +192,7 @@ def list_routes(dispatch, env):
             "off",
             "exec",
             "vote",
+            "unavailable",
         }:
             vendors.append(fields[0])
     return unique(lanes), unique(vendors)

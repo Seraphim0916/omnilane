@@ -549,6 +549,8 @@ configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.loc
 
 Bash, Zsh and Fish completion include the documented top-level, goal and job command groups. Choosing a completion only fills command text; it does not run a job action.
 
+Without `--vendor`, `benchmark` discovers vendors from the effective routing list and ignores its `unavailable` display markers. If no benchmark vendor remains, it exits 2 with a no-configured-vendors diagnostic; the default remains a dry-run without provider calls.
+
 Job `list` and `status` use the same observed state. `dead` means the worker PID is invalid or no longer exists and no exit was recorded; it is excluded from `--status running` and selectable with `--status dead`. `result` reports that no exit was recorded instead of calling the dead worker running. A missing PID still uses the existing startup `running` state; no exit code is invented.
 
 Background jobs require Perl supervision so cancellation can terminate the
