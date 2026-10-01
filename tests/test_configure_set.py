@@ -263,7 +263,7 @@ class ConfigureSetTests(unittest.TestCase):
         self.assert_no_temporary_files()
 
     def test_new_file_mode_honors_umask(self):
-        for umask in (0o022, 0o027, 0o077):
+        for umask in (0o000, 0o002, 0o022, 0o027, 0o077):
             with self.subTest(umask=oct(umask)):
                 if self.routing.exists():
                     self.routing.unlink()

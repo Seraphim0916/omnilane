@@ -102,7 +102,7 @@ cfg_set() (
     chmod "$file_mode" "$tmp"
   else
     # Omitting 'who' makes chmod honor the caller's umask, like file creation.
-    chmod =rw "$tmp"
+    chmod '=rw' "$tmp"
   fi
   mv "$tmp" "$LOCAL_FILE"
   echo "set $lane -> $spec"
