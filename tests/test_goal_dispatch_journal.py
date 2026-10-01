@@ -94,7 +94,7 @@ class GoalDispatchJournalTests(unittest.TestCase):
         bins = self.root / ("fault-bin-" + kind)
         bins.mkdir(exist_ok=True)
         hook = bins / "hook.py"
-        hook.write_text('''import json, os, runpy, sys, time
+        hook.write_text('''import json, os, pathlib, runpy, sys, time
 args = sys.argv[1:]
 if args[0].startswith("-") and args[0] != "-":
     os.execv(sys.executable, [sys.executable, *args])
