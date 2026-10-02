@@ -89,6 +89,44 @@ class OverlayHealthTests(unittest.TestCase):
         self.assertEqual(level, "PASS", message)
         self.assertIn("verified mappings", message)
 
+    def test_pending_mappings_warn_in_doctor_and_are_visible_in_list(self):
+        env, overlay = self.vendor_fixture()
+        value = json.loads(overlay.read_text())
+        reasons = {"codex": "canary failed", "grok": "CLI not found"}
+        for vendor, config_id in (("codex", "codex/gpt-6-astra"), ("grok", "grok/grok-4-6")):
+            row = next(r for r in REGISTRY["scored_configs"] if r["id"] == config_id)
+            value["mappings"].append({
+                "config_id": config_id,
+                "identity": {k: row[k] for k in ("vendor", "model", "effort", "reasoning", "fallback")},
+                "runtime_model": row["model"], "runtime_effort": row["effort"],
+                "selector_type": "model_and_effort", "verification": "request-selector-contract",
+                "evidence_tier": "billed-model",
+                "pending_recheck": {"reason": reasons[vendor], "at": "2026-10-03T00:00:00+00:00",
+                                    "consecutive_runs": 1},
+            })
+        overlay.write_text(json.dumps(value))
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "WARN"), message)
+        self.assertIn("verified mappings: codex 1 billed-model, grok 1 billed-model", message)
+        expected = "pending re-check: codex: canary failed; grok: CLI not found"
+        self.assertIn(expected, message)
+        doctor = self.doctor(env, overlay)
+        lines = [line for line in doctor.stdout.splitlines() if "transport-overlay" in line]
+        self.assertEqual(len(lines), 1, doctor.stdout)
+        self.assertIn("WARN", lines[0])
+        self.assertIn(expected, lines[0])
+        env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(overlay)
+        result = subprocess.run(["/bin/bash", str(ROOT / "bin/omnilane"), "list"],
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([line for line in result.stdout.splitlines()
+                          if "pending re-check:" in line], [expected])
+        structured = subprocess.run(["/bin/bash", str(ROOT / "scripts/dispatch.sh"), "--list", "--json"],
+                                    env=env, capture_output=True, text=True)
+        self.assertEqual(structured.returncode, 0, structured.stderr)
+        self.assertTrue(structured.stdout.startswith("{"), repr(structured.stdout))
+        json.loads(structured.stdout)  # No extra text may corrupt structured inspection.
+
     def test_untagged_drift_fails_and_names_the_file(self):
         """The 2026-09-09 incident: one drifted hash refused every dispatch."""
         overlay = self.overlay(evidence={"sha256": "0" * 64})

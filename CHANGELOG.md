@@ -17,6 +17,12 @@ semantic version tags.
 
 ### Fixed
 
+- A vendor `resign` could not handle in a run no longer loses its verified
+  mappings when another vendor is re-signed. They stay, marked
+  `pending_recheck` (reason, time, consecutive runs), `doctor` warns and `list`
+  names them, and the next `resign` retries. Only two consecutive runs that
+  cannot find the CLI remove them. An overlay naming rows the registry has since
+  dropped no longer aborts the run.
 - `resign` loads dispatch's host configuration before reading any overlay in all
   modes. Shell configuration failures and configured but unreadable or invalid-JSON
   overlays stop without writes at exit 40 (`EXIT_HOST_CONFIG`), with one diagnostic

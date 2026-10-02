@@ -99,6 +99,9 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
         if missing:
             reasons.append(f"{len(missing)} configuration(s) never probed on this host: "
                            + ", ".join(missing))
+        if any(m.get("pending_recheck") and m["identity"]["vendor"] == vendor
+               for m in overlay.get("mappings", [])):
+            reasons.append("pending re-check")
         report[vendor] = {
             "drifted": bool(reasons),
             "reasons": reasons,
@@ -347,6 +350,82 @@ def load_host_configuration() -> tuple[str, dict]:
                            + " ".join(detail.splitlines())) from None
 
 
+def retain_held(staged: dict, overlay: dict, keep: list[str],
+                held: dict[str, str], checked_at: str) -> dict[str, dict]:
+    """Carry verified contracts forward; only repeated CLI absence retires them."""
+    status = {}
+
+    def row_vendor(entry: dict) -> str | None:
+        # A row the registry dropped since the overlay was signed has no vendor
+        # to file it under and nothing left to dispatch to.
+        return build_overlay.ROWS.get(entry.get("config_id"), {}).get("vendor")
+
+    for vendor in keep:
+        old = [m for m in overlay.get("mappings", [])
+               if m["identity"]["vendor"] == vendor and m.get("config_id") in build_overlay.ROWS]
+        mark = None
+        removed = False
+        if vendor in held and old:
+            previous = old[0].get("pending_recheck", {})
+            mark = {"reason": held[vendor], "at": checked_at,
+                    "consecutive_runs": previous.get("consecutive_runs", 0) + 1}
+            removed = (mark["consecutive_runs"] >= 2
+                       and mark["reason"] == previous.get("reason") == "CLI not found")
+            status[vendor] = {"removed": removed, **mark}
+        saved = [] if removed else [
+            {**m, "pending_recheck": mark} if mark else m for m in old]
+        staged["mappings"] = [m for m in staged["mappings"]
+                              if m["identity"]["vendor"] != vendor] + saved
+        staged["evidence"] = [e for e in staged["evidence"]
+                              if e.get("vendor") != vendor]
+        if not removed:
+            staged["evidence"] += [e for e in overlay["evidence"]
+                                   if e.get("vendor") == vendor]
+        staged["unproven"] = [u for u in staged.get("unproven", [])
+                              if row_vendor(u) != vendor]
+        staged["unproven"] += [u for u in overlay.get("unproven", [])
+                               if row_vendor(u) == vendor]
+        if removed:
+            staged["unproven"] += [
+                {"config_id": m["config_id"], "verdict_reason": "vendor CLI not installed",
+                 "observed_model": None, "probed_at": None} for m in old]
+    return status
+
+
+def install_pending(live: Path, overlay: dict, held: dict[str, str],
+                    root: Path, checked_at: str, log) -> tuple[int, dict]:
+    """Metadata-only transaction when no vendor could finish; never rebuild probes."""
+    staged = json.loads(json.dumps(overlay))
+    status = retain_held(staged, overlay, list(held), held, checked_at)
+    # A metadata-only run preserves existing array order and all evidence bytes.
+    by_id = {m["config_id"]: m for m in staged["mappings"]}
+    staged["mappings"] = [by_id[m["config_id"]] for m in overlay["mappings"]
+                          if m["config_id"] in by_id]
+    removed = {v for v, mark in status.items() if mark["removed"]}
+    staged["evidence"] = [e for e in overlay["evidence"] if e.get("vendor") not in removed]
+    known = {u["config_id"] for u in overlay.get("unproven", [])}
+    new = [u for u in staged["unproven"] if u["config_id"] not in known]
+    if "unproven" in overlay or new:
+        staged["unproven"] = overlay.get("unproven", []) + new
+    else:
+        staged.pop("unproven", None)
+    if staged == overlay:
+        return EXIT_OK, status
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "transport-contracts.local.json"
+    path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
+    try:
+        verified(path)
+    except (aa_policy.PolicyError, OSError, ValueError) as error:
+        log(f"omnilane: pending overlay does not load ({error}); live overlay untouched")
+        return EXIT_ROLLED_BACK, {}
+    backup = live.with_name(live.name + f".before-{root.name}")
+    shutil.copy2(live, backup)
+    aa_policy.atomic_bytes(live, path.read_bytes())
+    log(f"omnilane: updated pending mappings only (backup {backup}); no probe rebuild")
+    return EXIT_OK, status
+
+
 def resign(args, log=print) -> int:
     try:
         overlay_env, anchors = load_host_configuration()
@@ -386,6 +465,8 @@ def resign(args, log=print) -> int:
         return EXIT_DRIFT
 
     proceed, held = [], []
+    hold_reasons, pending = {}, {}
+    installed = False
     for vendor in drifted:
         allowed, reason = gate(report[vendor], vendor in (args.approve or []))
         report[vendor]["gate"] = {"allowed": allowed, "reason": reason}
@@ -394,6 +475,10 @@ def resign(args, log=print) -> int:
             report[vendor]["canary"] = {"ok": alive, "detail": detail}
             allowed, reason = (allowed, reason) if alive else (False, f"canary failed: {detail}")
         (proceed if allowed else held).append(vendor)
+        if not allowed:
+            hold_reasons[vendor] = ("CLI not found" if not report[vendor]["cli"] else
+                                    "canary failed" if report[vendor].get("canary", {}).get("ok") is False
+                                    else "signer gate refused")
         log(f"omnilane: {vendor}: {'re-probing' if allowed else 'NOT re-signing'} - {reason}")
 
     sweep_id = "resign-" + datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -432,6 +517,8 @@ def resign(args, log=print) -> int:
                     "--allow-shrink if they are really gone")
         if unfinished:
             held += unfinished
+            hold_reasons.update({vendor: "regressed" if sweeps[vendor].get("regressed")
+                                 else "sweep unfinished" for vendor in unfinished})
             proceed = [vendor for vendor in proceed if vendor not in unfinished]
             # An unfinished vendor keeps its old evidence so the rebuild stays honest about it.
             for vendor in unfinished:
@@ -457,14 +544,7 @@ def resign(args, log=print) -> int:
                 if old is not None:
                     entry["operator_trust"] = old["operator_trust"]
                     entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
-            if entry.get("vendor") in pins_kept:
-                name = Path(entry["path"]).name
-                is_runner = name == build_overlay.RUNNERS[entry["vendor"]]
-                old = next((e for e in overlay["evidence"] if e.get("vendor") == entry["vendor"]
-                            and (Path(e["path"]).name == build_overlay.RUNNERS[e["vendor"]]) == is_runner),
-                           None)
-                if old is not None:
-                    staged["evidence"][index] = old
+        pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"])
         staged_path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
         try:
             if overlay.get("snapshot_id") == staged["snapshot_id"]:
@@ -489,6 +569,7 @@ def resign(args, log=print) -> int:
         backup = live.with_name(live.name + f".before-{sweep_id}")
         shutil.copy2(live, backup)
         aa_policy.atomic_bytes(live, staged_path.read_bytes())
+        installed = True
         log(f"omnilane: installed {staged_path} over {live} (backup {backup})")
         failures = []
         if not args.no_smoke:
@@ -502,6 +583,7 @@ def resign(args, log=print) -> int:
             aa_policy.atomic_bytes(live, backup.read_bytes())
             log(f"omnilane: smoke failed for {', '.join(failures)}; restored {backup}")
             outcome = EXIT_ROLLED_BACK
+            installed = False
         else:
             gaps = {vendor: unprobed(staged, vendor) for vendor in VENDORS}
             gaps = {vendor: rows for vendor, rows in gaps.items() if rows}
@@ -513,21 +595,36 @@ def resign(args, log=print) -> int:
                     f"unprobed and will be refused: {', '.join(rows)}. Run omnilane resign "
                     f"--vendor {vendor} from a session that can reach its login"
                     + (" (this run also skipped the smoke dispatch)" if args.no_smoke else ""))
+    if held and not proceed and outcome == EXIT_OK:
+        outcome, pending = install_pending(live, overlay, hold_reasons, root,
+                                           summary["checked_at"], log)
+        installed = outcome == EXIT_OK
     if held and outcome == EXIT_OK:
         outcome = EXIT_OPERATOR
-        for vendor in held:
-            sweep = summary.get("sweeps", {}).get(vendor, {})
-            if sweep.get("outcome") == "unprobeable":
-                # Waiting changes nothing either: the CLI has to be logged in first.
-                log(f"omnilane: {vendor} was not re-signed; its old pin stays. {sweep['detail']}: "
-                    f"omnilane resign --vendor {vendor}")
-            elif report[vendor].get("gate", {}).get("allowed"):
-                # The signer was fine; the probes were not. Approval would change nothing.
-                log(f"omnilane: {vendor} was not re-signed; its old pin stays. Retry later: "
-                    f"omnilane resign --vendor {vendor}")
-            else:
-                log(f"omnilane: {vendor} still needs an operator. After checking the executable: "
-                    f"omnilane resign --vendor {vendor} --approve {vendor}")
+    for vendor in held:
+        mark = pending.get(vendor, {})
+        if not installed:
+            log(f"omnilane: {vendor} was not re-signed; live mappings unchanged "
+                "(pending update was not installed)")
+            continue
+        if mark.get("removed"):
+            log(f"omnilane: {vendor} mappings removed after two consecutive runs: CLI not found")
+            continue
+        if not mark:
+            log(f"omnilane: {vendor} was not re-signed; no verified mappings to retain "
+                f"({hold_reasons[vendor]}).")
+            continue
+        log(f"omnilane: {vendor} was not re-signed; mappings kept and marked pending re-check "
+            f"({hold_reasons[vendor]}; consecutive runs {mark.get('consecutive_runs', 0)}).")
+        sweep = summary.get("sweeps", {}).get(vendor, {})
+        if sweep.get("outcome") == "unprobeable":
+            log(f"omnilane: {vendor}: {sweep['detail']}: omnilane resign --vendor {vendor}")
+        elif report[vendor].get("gate", {}).get("allowed"):
+            log(f"omnilane: {vendor}: Retry later: omnilane resign --vendor {vendor}")
+        else:
+            log(f"omnilane: {vendor} still needs an operator. After checking the executable: "
+                f"omnilane resign --vendor {vendor} --approve {vendor}")
+    summary["pending_recheck"] = pending
     summary.update(re_signed=proceed if outcome != EXIT_ROLLED_BACK else [], held=held,
                    exit_code=outcome, sweep_root=str(root) if root.exists() else None)
     if root.exists():

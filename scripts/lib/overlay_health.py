@@ -9,6 +9,7 @@ be reachable and every lane resolvable while `load_registry` refuses the whole
 registry over one drifted evidence hash.
 """
 import hashlib
+import json
 import os
 import sys
 from collections import Counter
@@ -50,8 +51,22 @@ def offenders(overlay_path: Path) -> list[str]:
     return found
 
 
+def pending_summary(overlay: dict) -> str:
+    pending = {m["identity"]["vendor"]: m["pending_recheck"]["reason"]
+               for m in overlay.get("mappings", []) if m.get("pending_recheck")}
+    return "; ".join(f"{vendor}: {reason}" for vendor, reason in sorted(pending.items()))
+
+
 def main() -> None:
     overlay_path = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY", "")
+    if "--pending" in sys.argv[2:]:
+        try:
+            pending = pending_summary(json.loads(Path(overlay_path).read_text()))
+        except (OSError, ValueError, KeyError, TypeError):
+            pending = ""
+        if pending:
+            print(f"pending re-check: {pending}")
+        return
     if not overlay_path:
         if os.environ.get("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN") == "1":
             emit("PASS", "no overlay configured; fine for a human operator, but a model caller "
@@ -79,9 +94,8 @@ def main() -> None:
     summary = ", ".join(f"{vendor} {count} {tier}"
                         for (vendor, tier), count in sorted(verified.items())) or "none"
 
-    import json
-
     overlay = json.loads(Path(overlay_path).read_text())
+    pending = pending_summary(overlay)
     unproven = overlay.get("unproven", [])
     extra = f"; {len(unproven)} config(s) recorded unproven" if unproven else ""
     weak = sorted({vendor for (vendor, tier) in verified if tier == "selector-only"})
@@ -89,6 +103,8 @@ def main() -> None:
         extra += (f"; {', '.join(weak)} prove only the request selector, re-probe to "
                   "record who answered")
 
+    if pending:
+        extra += f"; pending re-check: {pending}"
     stale = registry.get("_stale_transport_vendors", [])
     # The gate hashes the path the overlay recorded. An update that installs beside
     # the old executable leaves that path intact, so only this comparison sees it.
@@ -122,7 +138,7 @@ def main() -> None:
             detail += "; also moved without going stale: " + " | ".join(moved)
         emit("WARN", f"stale vendor(s) {', '.join(stale)} degraded to unverified "
                      f"({detail}); run `omnilane resign`; still verified: {summary}{extra}")
-    emit("PASS", f"verified mappings: {summary}{extra}")
+    emit("WARN" if pending else "PASS", f"verified mappings: {summary}{extra}")
 
 
 main()
