@@ -481,11 +481,6 @@ else
 fi
 set -e
 
-if [[ -n "$close_reason" ]]; then
-  printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
-  emit_mode_notice "$close_reason" || true
-fi
-
 if [[ "$natural_runner_exit" -eq 1 ]]; then
   # Draining after a natural/failed reader exit must not turn its exit status
   # into success because an earlier turn happened to emit a result event.
@@ -515,5 +510,12 @@ else
   rc="$runner_rc"
 fi
 
+# Append the idle notice only after result recovery and success checks. The
+# notice is not result output: writing it first makes an empty output file look
+# committed and causes recover_close_result_output to skip the real result.
+if [[ -n "$close_reason" ]]; then
+  printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
+  emit_mode_notice "$close_reason" || true
+fi
 trap - USR1 PIPE
 exit "$rc"
