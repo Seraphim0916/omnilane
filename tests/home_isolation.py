@@ -148,6 +148,11 @@ def activate():
             return _original(path, *args, **kwargs)
 
         setattr(os, operation, guarded_stat)
+        # Before Python 3.11 pathlib kept its own reference to os.stat/os.lstat,
+        # taken at import, so Path.exists() never reached the replacement above.
+        accessor = getattr(sys.modules.get("pathlib"), "_NormalAccessor", None)
+        if accessor is not None and hasattr(accessor, operation):
+            setattr(accessor, operation, staticmethod(guarded_stat))
     sys.addaudithook(audit)
 
     def finish():
