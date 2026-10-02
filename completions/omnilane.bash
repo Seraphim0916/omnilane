@@ -160,7 +160,7 @@ _omnilane() {
           fi
         elif [[ "$sub" == list ]]; then
           case "$prev" in
-            --status) words="running done dead pending cancelled" ;;
+            --status) words="running done dead pending cancelled expired" ;;
             --lane) words="$(_omnilane_lanes)" ;;
             --vendor) words="codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras exec" ;;
             *) words="--lane --vendor --status --json" ;;

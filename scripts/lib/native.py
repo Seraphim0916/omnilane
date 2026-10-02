@@ -24,6 +24,8 @@ import aa_policy  # noqa: E402
 MAX_BYTES = 262144
 JOB_ID = re.compile(r"[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+\Z")
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}\Z")
+DEFAULT_TIMEOUT = 600  # dispatch.sh's native handoff default
+DEADLINE_GRACE = 300
 
 
 def check(condition, message):
@@ -503,6 +505,31 @@ def validate_completion(value, state):
     return value
 
 
+def observed_job_state(job, state):
+    """Derive expiry without publishing a terminal state or blocking late results."""
+    if state["state"] != "pending":
+        return ("cancelled" if state["state"] == "cancelled" else "done"), ""
+    metadata = {}
+    if "created" not in state or "timeout" not in state:
+        metadata = read_json(job / "meta.json")
+        check(isinstance(metadata, dict), "invalid native metadata")
+    created = state.get("created", metadata.get("started"))
+    timeout = state.get("timeout", metadata.get("timeout", DEFAULT_TIMEOUT))
+    check(type(timeout) is int and timeout > 0, "invalid native timeout")
+    check(isinstance(created, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", created),
+          "invalid native creation time")
+    try:
+        started = datetime.datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+        deadline = started + datetime.timedelta(seconds=timeout + DEADLINE_GRACE)
+    except (ValueError, OverflowError):
+        raise ValueError("invalid native deadline") from None
+    if datetime.datetime.now(datetime.timezone.utc) > deadline:
+        reason = (f"native handoff deadline {deadline.strftime('%Y-%m-%dT%H:%M:%SZ')} exceeded "
+                  f"(timeout {timeout}s + grace {DEADLINE_GRACE}s); no completion recorded")
+        return "expired", reason
+    return "pending", ""
+
+
 def job_command(args):
     check(JOB_ID.fullmatch(args.job_id), "invalid job ID")
     job = jobs_root(args.home) / args.job_id
@@ -528,18 +555,24 @@ def job_command(args):
                 # any agent already spawned and must stop it with its own tool.
                 state.update(state="cancelled", exit_code=143, finished=stamp())
             atomic_json(job / "native.json", state)
-        pending = state["state"] == "pending"
-        public_state = "pending" if pending else "cancelled" if state["state"] == "cancelled" else "done"
+        public_state, reason = observed_job_state(job, state)
+        if args.action == "read-state":
+            # A single locked observation for the shell's list/stats/recommend/wait.
+            print(f"{public_state}\t{json.dumps(state.get('exit_code'))}\t{reason}")
+            return 0
         if args.action == "list-state":
             print(public_state)
             return 0
         if args.action == "result":
-            check(not pending, "native job pending; ingest caller result first")
+            check(public_state != "expired", f"native job expired ({reason}); no recorded result; ingest caller result first")
+            check(public_state != "pending", "native job pending; ingest caller result first")
         summary = {"id": args.job_id, "state": public_state, "native_state": state["state"],
                    "executor": "native", "executor_reason": state["executor_reason"],
                    "exit_code": state.get("exit_code"), "agent_id": state["agent_id"],
                    "vendor": state["vendor"], "model": state["model"], "effort": state["effort"],
                    "harness": state["harness"]}
+        if reason:
+            summary["reason"] = reason
         summary.update(agent_strategy=state.get("agent_strategy", "new"),
                        existing_agent_id=state.get("existing_agent_id"),
                        preserve_existing_context=state.get("preserve_existing_context", False))
@@ -553,6 +586,8 @@ def job_command(args):
             print(json_text({"schema_version": 1, "command": args.action, "ok": True, "job": summary}), end="")
         elif args.action == "result":
             print(state.get("completion", {}).get("result", "cancelled by caller"))
+        elif public_state == "expired":
+            print(f"expired ({reason})")
         else:
             print(json_text(summary), end="")
         return state.get("exit_code", 0) if args.action == "result" else 0
@@ -579,7 +614,7 @@ def main():
     p.add_argument("--target-config")
     p.add_argument("--session", default="auto")
     p.add_argument("--thread", default="")
-    p.add_argument("--timeout", type=int, default=600)
+    p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     p.add_argument("--job-timeout", default="")
     p.add_argument("--idle-timeout", default="")
     p.add_argument("--background", action="store_true")
@@ -587,7 +622,7 @@ def main():
     p = sub.add_parser("job")
     p.add_argument("--home", required=True)
     p.add_argument("--json", action="store_true")
-    p.add_argument("action", choices=("status", "result", "cancel", "complete-native", "list-state"))
+    p.add_argument("action", choices=("status", "result", "cancel", "complete-native", "list-state", "read-state"))
     p.add_argument("job_id")
     p.add_argument("input", nargs="?")
     args = parser.parse_args()

@@ -330,8 +330,9 @@ class NativeExecutorTests(unittest.TestCase):
 
     def test_pending_rejects_cli_lifecycle_commands(self):
         plan = self.pending()
-        for action in ("retry", "rm", "send", "close", "wait", "watch"):
+        for action in ("retry", "rm", "send", "close", "watch"):
             self.job(action, plan["job_id"], expected=2, json_mode=False)
+        self.job("wait", plan["job_id"], "--timeout", "0", expected=124, json_mode=False)
 
     def test_cli_prune_does_not_remove_native_record(self):
         plan = self.pending()

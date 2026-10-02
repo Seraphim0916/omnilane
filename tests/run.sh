@@ -1122,7 +1122,8 @@ report, lane_report, empty = map(json.loads, sys.argv[1:])
 assert report["schema_version"] == 1 and report["command"] == "recommend" and report["ok"] is True
 assert report["minimum_samples"] == 3
 assert report["sampled"] == 13 and report["completed"] == 10
-assert report["excluded"] == {"running": 1, "invalid_exit": 1, "invalid_metadata": 1}
+assert report["excluded"] == {"running": 1, "invalid_exit": 1, "invalid_metadata": 1,
+                              "pending": 0, "dead": 0, "expired": 0}
 by_lane = {item["lane"]: item for item in report["recommendations"]}
 assert set(by_lane) == {"bulk-mechanical", "hard-judgment", "triage"}
 assert by_lane["triage"]["status"] == "ready"
@@ -4436,6 +4437,13 @@ test_native_executor() {
   fi
 }
 test_native_executor
+
+test_job_expiry() {
+  local name="jobs native expiry and unfinished state counters (offline)" out rc=0
+  out="$(python3 "$ROOT/tests/test_job_expiry.py" 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "$out"; else pass "$name"; fi
+}
+test_job_expiry
 
 test_aa_policy() {
  local name="exact-AA downward policy (offline fixtures)" out rc=0

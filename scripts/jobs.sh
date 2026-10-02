@@ -31,7 +31,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -148,6 +148,22 @@ read_cli_job_state() {
     fi
   fi
   return 0
+}
+
+is_native_job() {
+  local directory="$1"
+  [[ -e "$directory/native.json" || -L "$directory/native.json" ||
+     -e "$directory/native.lock" || -L "$directory/native.lock" ]]
+}
+
+read_job_state() {
+  local directory="$1" observation
+  if is_native_job "$directory"; then
+    observation="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" read-state "${directory##*/}")" || die 1 "invalid native state"
+    IFS=$'\t' read -r JOB_STATE JOB_STATE_EXIT JOB_STATE_REASON <<< "$observation"
+  else
+    read_cli_job_state "$directory"
+  fi
 }
 
 load_job_vendor() {
@@ -361,17 +377,15 @@ done
 set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
 
-# Native jobs have no shell worker PID. Intercept before any CLI lifecycle
-# operation, including cancellation, retry, wait and rm. Python validates the
-# store, job ID, lock and record before accepting or publishing a transition.
-if [[ "$COMMAND" == "complete-native" ]] ||
-   { [[ "${2:-}" =~ $JOB_ID_PATTERN ]] &&
-     { [[ -e "$JOBS/${2}/native.json" || -L "$JOBS/${2}/native.json" ||
-          -e "$JOBS/${2}/native.lock" || -L "$JOBS/${2}/native.lock" ]]; }; }; then
+# Native jobs have no shell worker PID. Intercept mutations and unsupported
+# CLI lifecycle operations. Wait polls the same locked native observation below.
+# Python validates the store, job ID, lock and record before any transition.
+if [[ "$COMMAND" != "wait" ]] && { [[ "$COMMAND" == "complete-native" ]] ||
+   { [[ "${2:-}" =~ $JOB_ID_PATTERN ]] && is_native_job "$JOBS/${2}"; }; }; then
   case "$COMMAND" in
     complete-native) [[ $# -eq 3 ]] || usage ;;
     status|result|cancel) [[ $# -eq 2 ]] || usage ;;
-    *) die 2 "native job supports status, result, cancel and complete-native; caller owns agent lifecycle" ;;
+    *) die 2 "native job supports status, result, wait, cancel and complete-native; caller owns agent lifecycle" ;;
   esac
   native_args=(job --home "$OMNILANE_HOME")
   [[ "$JSON_MODE" -eq 0 ]] || native_args+=(--json)
@@ -795,6 +809,9 @@ case "${1:-}" in
     sampled=0
     completed=0
     running=0
+    pending=0
+    dead=0
+    expired=0
     invalid_exit=0
     invalid_metadata=0
     ids=()
@@ -824,28 +841,27 @@ case "${1:-}" in
           invalid_metadata=$((invalid_metadata + 1))
           continue
         fi
-        exit_path="$job_dir/exit"
-        if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
-          running=$((running + 1))
-          continue
-        fi
-        if ! read_exit_code "$exit_path"; then
-          invalid_exit=$((invalid_exit + 1))
-          continue
-        fi
+        read_job_state "$job_dir"
+        case "$JOB_STATE" in
+          running) running=$((running + 1)); continue ;;
+          pending) pending=$((pending + 1)); continue ;;
+          dead) dead=$((dead + 1)); continue ;;
+          expired) expired=$((expired + 1)); continue ;;
+          invalid) invalid_exit=$((invalid_exit + 1)); continue ;;
+        esac
         completed=$((completed + 1))
-        outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$RECORDED_EXIT")
+        outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$JOB_STATE_EXIT")
       done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
     fi
     rows="$(build_recommendation_rows "$minimum_samples" ${outcomes[@]+"${outcomes[@]}"})"
     if [[ "$JSON_MODE" -eq 1 ]]; then
       recommendations="$(recommendations_json "$rows")"
-      printf '{"schema_version":1,"command":"recommend","ok":true,"sampled":%s,"completed":%s,"excluded":{"running":%s,"invalid_exit":%s,"invalid_metadata":%s},"minimum_samples":%s,"recommendations":%s}\n' \
+      printf '{"schema_version":1,"command":"recommend","ok":true,"sampled":%s,"completed":%s,"excluded":{"running":%s,"invalid_exit":%s,"invalid_metadata":%s,"pending":%s,"dead":%s,"expired":%s},"minimum_samples":%s,"recommendations":%s}\n' \
         "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" \
-        "$minimum_samples" "$recommendations"
+        "$pending" "$dead" "$expired" "$minimum_samples" "$recommendations"
     else
-      printf 'recommendations: sampled=%s completed=%s running=%s invalid_exit=%s invalid_metadata=%s min_samples=%s\n' \
-        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" "$minimum_samples"
+      printf 'recommendations: sampled=%s completed=%s running=%s invalid_exit=%s invalid_metadata=%s min_samples=%s pending=%s dead=%s expired=%s\n' \
+        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" "$minimum_samples" "$pending" "$dead" "$expired"
       print_recommendations "$rows" "$minimum_samples"
     fi ;;
   stats)
@@ -875,6 +891,9 @@ case "${1:-}" in
     succeeded=0
     failed=0
     running=0
+    pending=0
+    dead=0
+    expired=0
     invalid_exit=0
     invalid_metadata=0
     ids=()
@@ -905,20 +924,21 @@ case "${1:-}" in
           [[ -z "$filter_vendor" || "$filter_vendor" == "$STATS_VENDOR" ]] || continue
         fi
         sampled=$((sampled + 1))
-        exit_path="$job_dir/exit"
-        if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-          if read_exit_code "$exit_path"; then
-            if [[ "$RECORDED_EXIT" -eq 0 ]]; then
+        read_job_state "$job_dir"
+        case "$JOB_STATE" in
+          done|cancelled)
+            if [[ "$JOB_STATE_EXIT" -eq 0 ]]; then
               succeeded=$((succeeded + 1))
             else
               failed=$((failed + 1))
             fi
-          else
-            invalid_exit=$((invalid_exit + 1))
-          fi
-        else
-          running=$((running + 1))
-        fi
+            ;;
+          running) running=$((running + 1)) ;;
+          pending) pending=$((pending + 1)) ;;
+          dead) dead=$((dead + 1)) ;;
+          expired) expired=$((expired + 1)) ;;
+          invalid) invalid_exit=$((invalid_exit + 1)) ;;
+        esac
         if [[ "$meta_ok" -eq 1 ]]; then
           lanes+=("$STATS_LANE")
           vendors+=("$STATS_VENDOR")
@@ -938,12 +958,12 @@ case "${1:-}" in
         lanes_json="$(json_stat_counts "${lanes[@]}")"
         vendors_json="$(json_stat_counts "${vendors[@]}")"
       fi
-      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s}\n' \
+      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s,"pending":%s,"dead":%s,"expired":%s}\n' \
         "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" \
-        "$invalid_metadata" "$lanes_json" "$vendors_json"
+        "$invalid_metadata" "$lanes_json" "$vendors_json" "$pending" "$dead" "$expired"
     else
-      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%%\n' \
-        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate"
+      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%% pending=%s dead=%s expired=%s\n' \
+        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" "$pending" "$dead" "$expired"
       printf 'invalid_metadata=%s\n' "$invalid_metadata"
       if [[ "$valid_metadata" -gt 0 ]]; then
         print_stat_counts lane "${lanes[@]}"
@@ -964,8 +984,8 @@ case "${1:-}" in
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
     [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     case "$filter_status" in
-      ""|running|done|dead|pending|cancelled) ;;
-      *) die 2 "invalid --status value (want running, done, dead, pending or cancelled)" ;;
+      ""|running|done|dead|pending|cancelled|expired) ;;
+      *) die 2 "invalid --status value (want running, done, dead, pending, cancelled or expired)" ;;
     esac
     if [[ ! -d "$JOBS" ]]; then
       [[ "$JSON_MODE" -eq 0 ]] || printf '{"schema_version":1,"command":"list","ok":true,"jobs":[]}\n'
@@ -986,19 +1006,12 @@ case "${1:-}" in
     json_first=1
     shown=0
     while IFS= read -r id; do
-      if [[ -e "$JOBS/$id/native.json" || -L "$JOBS/$id/native.json" || -e "$JOBS/$id/native.lock" ]]; then
-        json_state="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" list-state "$id")" || die 1 "invalid native state"
+      read_job_state "$JOBS/$id"
+      json_state="$JOB_STATE"
+      exit_json="$JOB_STATE_EXIT"
+      if is_native_job "$JOBS/$id"; then
         state="$json_state"
-        # Native completion lives in native.json, not a PID/exit pair.
-        exit_json="null"
-        if [[ "$json_state" != "pending" ]]; then
-          native_status="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" --json status "$id")" || die 1 "invalid native state"
-          exit_json="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["job"]["exit_code"])' "$native_status")"
-        fi
       else
-        read_cli_job_state "$JOBS/$id"
-        json_state="$JOB_STATE"
-        exit_json="$JOB_STATE_EXIT"
         case "$JOB_STATE" in
           done) state="done(exit $JOB_STATE_EXIT)" ;;
           invalid) state="done(invalid exit metadata)" ;;
@@ -1029,7 +1042,7 @@ case "${1:-}" in
         case "$json_state" in
           done) [[ "$filter_status" == "done" ]] || continue ;;
           running|dead) [[ "$filter_status" == "$json_state" ]] || continue ;;
-          pending|cancelled) [[ "$filter_status" == "$json_state" ]] || continue ;;
+          pending|cancelled|expired) [[ "$filter_status" == "$json_state" ]] || continue ;;
           *) continue ;;
         esac
       fi
@@ -1105,6 +1118,19 @@ case "${1:-}" in
       [[ -d "$JOB_DIR" && ! -L "$JOB_DIR" ]] || {
         die 1 "job disappeared while waiting"
       }
+      if is_native_job "$JOB_DIR"; then
+        read_job_state "$JOB_DIR"
+        case "$JOB_STATE" in
+          expired) printf 'expired (%s)\n' "$JOB_STATE_REASON"; exit 125 ;;
+          done|cancelled) echo "done exit=$JOB_STATE_EXIT"; exit "$JOB_STATE_EXIT" ;;
+        esac
+        if [[ $((SECONDS - wait_started)) -ge "$wait_timeout" ]]; then
+          printf 'wait timeout after %ss\n' "$wait_timeout" >&2
+          exit 124
+        fi
+        sleep 1
+        continue
+      fi
       exit_path="$JOB_DIR/exit"
       if [[ -e "$exit_path" || -L "$exit_path" ]]; then
         read_exit_code "$exit_path" || {

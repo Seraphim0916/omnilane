@@ -527,7 +527,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
 dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
 jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]  # filter the listing
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # filter the listing
 jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
 jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
 jobs.sh rm ID                                     # delete one finished/dead job (refuses a running job)

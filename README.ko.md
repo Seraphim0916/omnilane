@@ -426,7 +426,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # 후보별 라우팅 결정을 오프라인 설명
 dispatch.sh [--json] --validate [--json]           # 공급자 호출 없이 실효 라우팅 검사
 jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메타데이터만 반환
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]  # 목록 필터
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 목록 필터
 jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
 jobs.sh cancel ID                                 # 실행 중 작업 중지: 그룹 SIGTERM 후 SIGKILL
 jobs.sh rm ID                                     # 완료/종료 작업 1건 삭제(실행 중이면 거부)

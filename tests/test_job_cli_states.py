@@ -11,7 +11,7 @@ from offline_env import isolated_environment
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STATES = {"running", "done", "dead", "pending", "cancelled"}
+STATES = {"running", "done", "dead", "pending", "cancelled", "expired"}
 
 
 class JobCliStateTests(unittest.TestCase):
@@ -166,7 +166,7 @@ class JobCliStateTests(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout)["jobs"], [])
 
     def test_help_and_bad_filter_list_all_supported_states(self):
-        self.assertIn("running|done|dead|pending|cancelled", self.cli("help").stdout)
+        self.assertIn("running|done|dead|pending|cancelled|expired", self.cli("help").stdout)
         rejected = self.cli("--json", "list", "--status", "other", expected=2)
         error = json.loads(rejected.stdout)["error"]
         for state in STATES:
