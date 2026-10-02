@@ -60,6 +60,10 @@ to replace PATH; do not restore host/system PATH directories. This is fixture
 isolation, not an operating-system network sandbox: direct HTTP code still needs
 an explicit fake in its own test.
 
+For CI parity, use ShellCheck 0.11.0 and run `bash scripts/check.sh`, `python3.9 -m unittest discover -s tests -p 'test_*.py'`, and `python3.14 -m unittest discover -s tests -p 'test_*.py'`; unavailable checks are not passes.
+Also run `! grep -ri 'omni''route' --exclude-dir=.git --exclude-dir=.github .` and the `routing table smoke` and offline `Strict doctor acceptance` command blocks in `.github/workflows/ci.yml` (set its runner temporary-directory/run-ID variables locally).
+For browser parity, run `python -m pip install -r tests/requirements-browser.txt`, `python -m playwright install chromium`, then `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1 python -c "from tests.ui_browser_harness import browser_available; assert browser_available"` and `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1 python -m unittest tests.test_ui.FrontendBrowserBehaviorTests` with Python 3.12.
+
 ## Pull requests
 
 Explain the user-visible problem, the chosen boundary, test evidence, risks,
