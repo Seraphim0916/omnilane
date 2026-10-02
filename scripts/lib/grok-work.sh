@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Operator-only routing option: never consult shipped routing or inherited flags.
+# The one caller that passes a file is the routing lint in dispatch.sh; a
+# per-file analysis cannot see it.
+# shellcheck disable=SC2120
 grok_macos_work_enabled() {
   local file="${1:-$OMNILANE_HOME/routing.local.yaml}"
   [[ -f "$file" ]] || return 1
