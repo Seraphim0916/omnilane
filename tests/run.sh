@@ -2256,6 +2256,46 @@ EOF
   fi
 }
 
+test_doctor_installed_skill() {
+  local name="doctor compares installed skill copies with the checkout" home repo out_none out rc json
+  home="$TEST_ROOT/doctor-skill-home"
+  repo="$TEST_ROOT/doctor-skill-repo"
+  mkdir -p "$repo/scripts/lib" "$repo/skills/omnilane" "$home"
+  cat > "$repo/scripts/dispatch.sh" <<'EOF'
+#!/usr/bin/env bash
+printf 'triage: exec /bin/true -\n'
+EOF
+  chmod +x "$repo/scripts/dispatch.sh"
+  printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
+  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  printf 'current skill\n' > "$repo/skills/omnilane/SKILL.md"
+
+  out_none="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
+  mkdir -p "$home/.claude/skills/omnilane" "$home/.codex/skills/omnilane"
+  printf 'current skill\n' > "$home/.claude/skills/omnilane/SKILL.md"
+  printf 'older skill\n' > "$home/.codex/skills/omnilane/SKILL.md"
+  out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
+  rc=$?
+  json="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+    /bin/bash "$ROOT/bin/omnilane" doctor --json 2>&1)"
+
+  if [[ "$out_none" != *'PASS  installed-skill no installed copy'* ]]; then
+    fail "$name" "a host without installed copies was not reported as such: $out_none"
+  elif [[ "$out" != *'PASS  installed-skill claude reads the skill this checkout ships'* ]]; then
+    fail "$name" "matching copy was not a pass: $out"
+  elif [[ "$out" != *'WARN  installed-skill codex reads a different skill'* ]]; then
+    fail "$name" "stale copy was not a warning: $out"
+  elif [[ "$(grep -c 'installed-skill' <<<"$out")" -ne 2 ]]; then
+    fail "$name" "expected one line per installed surface: $out"
+  elif [[ "$rc" -ne 0 || "$out" != *'0 failed'* || "$json" != '{"ok":true,"checks":['* ]]; then
+    fail "$name" "a stale copy must warn, not fail: rc=$rc out=$out json=$json"
+  else
+    pass "$name"
+  fi
+}
+
 test_doctor_strict_policy() {
   local name="doctor strict warning policy" home repo out json_default json
   local rc_default rc_json_default rc_strict rc_json
@@ -2357,6 +2397,7 @@ EOF
 }
 
 test_doctor_gnu_stat_fallback
+test_doctor_installed_skill
 test_doctor_strict_policy
 
 test_provider_probe_is_opt_in_bounded_and_private() {
