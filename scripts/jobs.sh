@@ -13,6 +13,8 @@ set -euo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck disable=SC1091
+# shellcheck disable=SC1091
+source "$OMNILANE_REPO/scripts/lib/grok-work.sh"
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 JOBS="$OMNILANE_HOME/jobs"
 THREADS="$OMNILANE_HOME/threads"
@@ -101,6 +103,14 @@ print_mode_notice() {
 valid_utf8() {
   command -v iconv >/dev/null 2>&1 || return 1
   printf '%s' "$1" | iconv -f UTF-8 -t UTF-8 >/dev/null 2>&1
+}
+
+print_isolation_notice() {
+  read_public_metadata "$JOB_DIR/meta.json" || return 0
+  if [[ "$PUBLIC_METADATA" == *'"isolation":"none"'* ]]; then
+    grok_work_notice
+  fi
+  return 0
 }
 
 read_job_pid() {
@@ -245,7 +255,7 @@ parse_stats_metadata() {
 parse_audit_metadata() {
   local value="$1" current_re legacy_re native_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"executor\":\"cli\",\"executor_reason\":\"${json_string}\")?(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",(\"job_worker_source_path\":\"${json_string}\",\"job_worker_source_sha256\":\"[0-9a-f]{64}\",\"job_worker_path\":\"${json_string}\",)?\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
+  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"executor\":\"cli\",\"executor_reason\":\"${json_string}\")?(,\"isolation\":\"none\")?(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",(\"job_worker_source_path\":\"${json_string}\",\"job_worker_source_sha256\":\"[0-9a-f]{64}\",\"job_worker_path\":\"${json_string}\",)?\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
   # A native handoff has no worker, timeout or candidate of its own.
   native_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"executor\":\"native\",\"executor_reason\":\"${json_string}\",\"aa_policy_code\":\"${json_string}\",\"aa_effective_ceiling\":(null|0|[1-9][0-9]*),\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\",\"session_mode\":\"native\"\\}$"
   legacy_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",(\"foreman_session\":\"${json_string}\",)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
@@ -1069,6 +1079,7 @@ case "${1:-}" in
   status)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
+    [[ "$JSON_MODE" -eq 1 ]] || print_isolation_notice
     read_cli_job_state "$JOB_DIR"
     [[ "$JOB_STATE" != "invalid" ]] || die 1 "$JOB_STATE_REASON"
     if [[ "$JOB_STATE" == "done" ]]; then
@@ -1261,6 +1272,7 @@ case "${1:-}" in
         "$(json_escape "$2")" "$rc" "$output_available" "$stderr_available"
     else
       # Guarded cat: under set -e a missing out.txt must not eat the real exit code.
+      print_isolation_notice
       [[ -f "$JOB_DIR/out.txt" && ! -L "$JOB_DIR/out.txt" ]] && cat "$JOB_DIR/out.txt"
       if [[ -s "$JOB_DIR/out.txt.stderr.log" && ! -L "$JOB_DIR/out.txt.stderr.log" ]]; then
         echo "--- stderr ---" >&2; cat "$JOB_DIR/out.txt.stderr.log" >&2

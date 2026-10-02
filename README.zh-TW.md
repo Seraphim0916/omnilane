@@ -487,7 +487,9 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 
 CLI 省略 `--workdir` 時預設為呼叫端目前目錄；任務書仍應明示工作目錄。MCP `route`／`dry_run` 的 work 介面則另行要求明示 `workdir`。
 
-Codex 與 Claude 的三種模式使用不同政策。Agy advise／sysops 使用獨立的每工作階段原生設定，不替換訂閱認證；Agy 1.1.27 work 已以四個經驗證工具及原生終端沙箱完成限定的新建／續接驗收：工作目錄內讀寫、修改、編譯及越界寫入拒絕通過。外部暫存／快取讀取也受限；每次啟動重寫明示設定，不宣稱設定全程不可變。另一次正式 work 即時／FIFO 兩輪驗收已通過前輪讀回、越界寫入拒絕及正常關閉，來源保持不變。Grok advise 使用原生工具允許／拒絕規則；Grok 1.0.13 的完整一次性 `plain` 路徑已驗證原生關鍵字搜尋、抓頁及寫入拒絕，使用內部網頁工具 ID 與每筆工作的 MCP 就緒狀態隔離，不關閉掛鉤。若 `CONTEXT_MODE_MCP_SENTINEL_DIR` 已設為非空值，會在呼叫模型前明確回報衝突，不覆寫原設定。原生子程序網路隔離僅支援 Linux，因此 macOS Grok work 仍保留閘門；Grok 即時模式仍須明示 sysops，此次 advise 結果不擴張到其他路徑。OpenRouter 維持僅 advise；其餘供應商不自動納入這份四供應商契約。證據範圍見[日期化執行驗收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
+Codex 與 Claude 的三種模式使用不同政策。Agy advise／sysops 使用獨立的每工作階段原生設定，不替換訂閱認證；Agy 1.1.27 work 已以四個經驗證工具及原生終端沙箱完成限定的新建／續接驗收：工作目錄內讀寫、修改、編譯及越界寫入拒絕通過。外部暫存／快取讀取也受限；每次啟動重寫明示設定，不宣稱設定全程不可變。另一次正式 work 即時／FIFO 兩輪驗收已通過前輪讀回、越界寫入拒絕及正常關閉，來源保持不變。Grok advise 使用原生工具允許／拒絕規則；Grok 1.0.13 的完整一次性 `plain` 路徑已驗證原生關鍵字搜尋、抓頁及寫入拒絕，使用內部網頁工具 ID 與每筆工作的 MCP 就緒狀態隔離，不關閉掛鉤。若 `CONTEXT_MODE_MCP_SENTINEL_DIR` 已設為非空值，會在呼叫模型前明確回報衝突，不覆寫原設定。原生子程序網路隔離僅支援 Linux，因此 macOS Grok work 預設仍保留閘門；Grok 即時模式仍須明示 sysops，此次 advise 結果不擴張到其他路徑。OpenRouter 維持僅 advise；其餘供應商不自動納入這份四供應商契約。證據範圍見[日期化執行驗收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
+
+macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 加上 `option.grok-macos-work: unconfined`，啟用**沒有隔離**的單次 work。預設關閉；關閉時，macOS 的 work 候選鏈會略過 Grok。開啟時 `doctor --strict` 會失敗。詳見[選項、風險與 Grok 工人必用的任務書範本](docs/grok-unconfined-work.md)。
 
 ## 🔒 內建安全機制
 
