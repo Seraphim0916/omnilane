@@ -15,6 +15,8 @@ import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts/lib"))
 import aa_policy  # noqa: E402
@@ -1056,7 +1058,7 @@ class DispatchReadsCallerTests(unittest.TestCase):
             "host": socket.gethostname(),
             "evidence": [{"path": str(spy), "sha256": hashlib.sha256(spy.read_bytes()).hexdigest()}],
             "mappings": mappings}))
-        self.env = {k: v for k, v in os.environ.items()
+        self.env = {k: v for k, v in fixture_environment_with_isolated_tools(self).items()
                     if not k.startswith("OMNILANE_") and k not in ("CODEX_BIN", "CLAUDE_BIN")}
         self.env.update(OMNILANE_HOME=str(self.home), CODEX_BIN=str(spy), AA_SPY=str(self.marker),
                         PATH=str(bins) + os.pathsep + self.env["PATH"], OMNILANE_INBOX="0",

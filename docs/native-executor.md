@@ -109,9 +109,16 @@ the unique `projects/*/<sessionId>.jsonl`, and takes the model (a trailing
 `-YYYYMMDD` dropped) and the effort (the lower of `perTurnEffort` and `effort`)
 of the latest main-thread assistant record. Where they differ from the launch
 flags they win, and `whoami` says
-`transcript <id8>: <model> at <effort> (launch flags said …)`. Any missing or
-mismatched piece leaves the launch-flag reading as before. Only identity metadata
-is read, never message content; `OMNILANE_AA_CLAUDE_TRANSCRIPT=0` turns it off.
+`transcript <id8>: <model> at <effort> (launch flags said …)`. Missing or
+mismatched session-binding metadata leaves the launch-flag reading as before.
+Once the current main-thread record is bound, a missing model or unrecognized
+effort refuses identity lookup. A missing effort uses that model's lowest scored
+row with `effort_unverified`, even if an unspecified-effort default is scored.
+If the nearest earlier complete record names a different model, the missing-effort
+case refuses rather than borrowing its effort or raising its previous ceiling.
+With no earlier complete record in the bounded tail, the guarantee is only the
+current model's floor. Only identity metadata is read, never message content;
+`OMNILANE_AA_CLAUDE_TRANSCRIPT=0` turns it off.
 The reason is that the desktop app changes model and effort without relaunching:
 launch flags said `--effort xhigh` while every turn ran at `max`, and a
 mid-session lowering would otherwise overstate the ceiling.

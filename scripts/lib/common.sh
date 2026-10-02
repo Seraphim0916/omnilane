@@ -9,6 +9,18 @@ export OMNILANE_REPO
 # Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
 [[ -f "$OMNILANE_HOME/local.sh" ]] && source "$OMNILANE_HOME/local.sh"
 
+private_job_files() (
+  # Only this subshell changes umask; vendor-created project files keep theirs.
+  umask 077
+  local path
+  for path in "$@"; do
+    if [[ ! -e "$path" ]]; then
+      : >> "$path" || return $?
+    fi
+    chmod 600 "$path" || return $?
+  done
+)
+
 # The unquoted backslash case pattern intentionally matches one backslash.
 # shellcheck disable=SC1003
 json_escape() {
@@ -147,29 +159,18 @@ resolve_timeout_cmd() {
   else echo ""; fi
 }
 
-# Portable watchdog: timeout/gtimeout when present, perl alarm otherwise
-# (stock macOS has perl but no coreutils timeout). Warns when neither exists
-# so a hung vendor CLI cannot silently block forever.
+# Every call owns an isolated, pinned group, even without a whole-job budget.
+# The shared engine preserves per-call 142 independently of whole-job 124.
 run_with_timeout() { # seconds, command...
   local secs="$1"; shift
-  # GNU timeout creates a nested process group. Under the whole-job supervisor,
-  # keep calls in its isolated group so one outer signal reaches every runner.
-  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
-    command -v perl &>/dev/null || {
-      echo "omnilane: supervised timeout requires perl" >&2; return 125
-    }
-    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
-    return $?
-  fi
-  local t; t="$(resolve_timeout_cmd)"
-  if [[ -n "$t" ]]; then
-    "$t" "$secs" "$@"
-  elif command -v perl &>/dev/null; then
-    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
-  else
-    echo "omnilane: no timeout/gtimeout/perl — running without a watchdog" >&2
-    "$@"
-  fi
+  command -v python3 &>/dev/null || {
+    echo "omnilane: process supervision requires python3" >&2; return 125
+  }
+  local watchdog="$OMNILANE_REPO/scripts/lib/process_tree.py"
+  [[ -f "$watchdog" ]] || {
+    echo "omnilane: per-call watchdog is unavailable" >&2; return 125
+  }
+  python3 "$watchdog" call "$secs" "$@"
 }
 
 hash_str() { # stdin -> short stable token (sha256sum/shasum/cksum fallback)
@@ -465,6 +466,7 @@ read_thread_state() { # path, expected name; populates THREAD_STATE_*
       die "invalid timestamp\n" unless $state->{$key} =~ /\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z/;
     }
     die "field too long\n" if length($state->{model}) > 512 || length($state->{effort}) > 128 || length($state->{workdir}) > 4096;
+    binmode STDOUT, ":encoding(UTF-8)";
     print join(chr(28), map { $state->{$_} } qw(name vendor model effort workdir session_id turns last_job_id created updated));
   ' "$path" "$expected_name" 2>/dev/null)" || return 1
 

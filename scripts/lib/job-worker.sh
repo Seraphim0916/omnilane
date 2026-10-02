@@ -51,6 +51,7 @@ run_single_shot() {
   )
   rc=$?
   set -e
+  python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" record-completion "${OUTPUT_FILE%/*}" "$rc" || true
   emit_mode_notice "$notice"
   return "$rc"
 }
@@ -446,8 +447,8 @@ if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 set +e
 if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
-  # With the input pump's 1s read + 0.05s write, 8.85s also precedes
-  # the shortest ~9s interval of jobs close's integer SECONDS + 10 deadline.
+  # With the input pump's 1s read + 0.05s write and supervisor's 1s cleanup,
+  # 9.85s precedes jobs close's shortest ~10s (integer SECONDS + 11) deadline.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
   if ! perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
@@ -481,11 +482,6 @@ else
 fi
 set -e
 
-if [[ -n "$close_reason" ]]; then
-  printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
-  emit_mode_notice "$close_reason" || true
-fi
-
 if [[ "$natural_runner_exit" -eq 1 ]]; then
   # Draining after a natural/failed reader exit must not turn its exit status
   # into success because an earlier turn happened to emit a result event.
@@ -515,5 +511,13 @@ else
   rc="$runner_rc"
 fi
 
+# Append the idle notice only after result recovery and success checks. The
+# notice is not result output: writing it first makes an empty output file look
+# committed and causes recover_close_result_output to skip the real result.
+if [[ -n "$close_reason" ]]; then
+  printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
+  emit_mode_notice "$close_reason" || true
+fi
+python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" record-completion "$JOB_DIR" "$rc" || true
 trap - USR1 PIPE
 exit "$rc"

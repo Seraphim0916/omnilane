@@ -49,20 +49,46 @@ _omnilane_job_ids() {
   done
 }
 
+_omnilane_goal_ids() {
+  local home root dir id count=0
+  home="${OMNILANE_HOME:-$HOME/.omnilane}"
+  root="$home/goals"
+  [[ -d "$root" && ! -L "$root" ]] || return 0
+  for dir in "$root"/*(N/); do
+    [[ -L "$dir" ]] && continue
+    id="${dir:t}"
+    if [[ "$id" =~ '^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$' ]]; then
+      print -r -- "$id"
+      (( count += 1 ))
+      (( count < 1000 )) || break
+    fi
+  done
+}
+
 _omnilane() {
-  local command="${words[2]:-}" sub sub_index=3
-  local -a lanes ids
+  local command="${words[2]:-}" sub sub_index=3 goal_dispatch=0 thread_sub thread_index
+  local -a lanes ids dispatch_options goal_words
   if (( CURRENT == 2 )); then
-    _values 'command' version list route dispatch jobs doctor whoami native-context resign benchmark release-audit ui configure completion help
+    _values 'command' version list route dispatch goal jobs mcp doctor whoami native-context resign benchmark release-audit ui configure completion help
     return
+  fi
+  if [[ "$command" == goal && "${words[3]:-}" == dispatch ]] && (( CURRENT > 4 )); then
+    command=dispatch
+    goal_dispatch=1
+    # Complete forwarded dispatch arguments after the goal ID.
+    goal_words=("${words[1]}" "${words[@]:4}")
+    local -a words
+    words=("${goal_words[@]}")
+    local CURRENT=$((CURRENT - 3))
   fi
   case "$command" in
     route|dispatch)
       lanes=("${(@f)$(_omnilane_lanes)}")
-      _arguments \
+      dispatch_options=()
+      (( goal_dispatch )) || dispatch_options+=('--dry-run[resolve and print the plan without side effects]')
+      _arguments "${dispatch_options[@]}" \
          '--background[run in background]' \
          '--thread[continue named claude/codex/grok/gemini thread]:name:' \
-        '--dry-run[resolve and print the plan without side effects]' \
         '--mode[execution mode]:mode:(advise work)' \
         '--workdir[target directory]:directory:_directories' \
         '--vendor[vendor override]:vendor:(codex claude grok gemini kimi qwen opencode openrouter exec vote)' \
@@ -72,6 +98,27 @@ _omnilane() {
         '--job-timeout[whole-job seconds]:seconds:' \
         "1:lane:($lanes)" '2:task:'
       ;;
+    goal)
+      sub="${words[3]:-}"
+      if (( CURRENT == 3 )); then
+        _values 'goal command' open dispatch note status close
+      elif (( CURRENT == 4 )) && [[ "$sub" == dispatch || "$sub" == note || "$sub" == status || "$sub" == close ]]; then
+        ids=("${(@f)$(_omnilane_goal_ids)}")
+        _values 'goal id' "$ids[@]"
+      elif [[ "$sub" == open || "$sub" == close ]]; then
+        goal_words=("${words[1]}" "${words[@]:3}")
+        local -a words
+        words=("${goal_words[@]}")
+        local CURRENT=$((CURRENT - 2))
+        if [[ "$sub" == open ]]; then
+          _arguments '--budget-jobs[maximum jobs]:count:' \
+            '--budget-seconds[maximum elapsed seconds]:seconds:' \
+            '--workdir[target directory]:directory:_directories' '1:goal text:'
+        else
+          _arguments '--summary[final report summary]:text:' '1:goal id:'
+        fi
+      fi
+      ;;
     jobs)
       sub="${words[3]:-}"
       if [[ "$sub" == "--json" ]]; then
@@ -79,13 +126,34 @@ _omnilane() {
         sub="${words[4]:-}"
       fi
       if (( CURRENT == sub_index )); then
-        _values 'job command' list status result tail retry stats recommend wait audit prune help
+        _values 'job command' list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help
       elif (( CURRENT == sub_index + 1 )) &&
            [[ "$sub" == status || "$sub" == result || "$sub" == wait ||
-              "$sub" == tail || "$sub" == retry ]]; then
+              "$sub" == tail || "$sub" == retry || "$sub" == complete-native ||
+              "$sub" == send || "$sub" == watch || "$sub" == close ||
+              "$sub" == cancel || "$sub" == rm ]]; then
         ids=("${(@f)$(_omnilane_job_ids)}")
         _values 'job id' "$ids[@]"
-      elif [[ "$sub" == list || "$sub" == status || "$sub" == result ]]; then
+      elif [[ "$sub" == complete-native ]] && (( CURRENT == sub_index + 2 )); then
+        _files
+      elif [[ "$sub" == threads ]]; then
+        thread_index=$((sub_index + 1))
+        thread_sub="${words[thread_index]:-}"
+        if [[ "$thread_sub" == --json ]]; then
+          (( thread_index += 1 ))
+          thread_sub="${words[thread_index]:-}"
+        fi
+        if (( CURRENT == thread_index )); then
+          _values 'thread action' list show rm
+        elif [[ "$thread_sub" == list ]] ||
+             { [[ "$thread_sub" == show ]] && (( CURRENT > thread_index + 1 )); }; then
+          _values 'option' --json
+        fi
+      elif [[ "$sub" == list ]]; then
+        _arguments '--lane[filter by lane]:lane:' '--vendor[filter by vendor]:vendor:' \
+          '--status[filter by status]:status:(running done dead pending cancelled expired)' \
+          '--json[versioned metadata output]'
+      elif [[ "$sub" == status || "$sub" == result ]]; then
         _values 'option' --json
       elif [[ "$sub" == tail ]]; then
         _arguments '--lines[output lines to show]:count:'
@@ -125,7 +193,7 @@ _omnilane() {
         '--json[versioned JSON output]'
       ;;
     ui) _values 'ui command' start status url stop ;;
-    completion) _values 'shell' bash zsh ;;
+    completion) _values 'shell' bash zsh fish ;;
   esac
 }
 

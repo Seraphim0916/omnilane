@@ -18,7 +18,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
 : "$WORKDIR" "$EFFORT" # parity with the uniform runner interface
 
-fail() { echo "omnilane: $1" > "${OUTPUT_FILE}.stderr.log"; exit 2; }
+fail() {
+  private_job_files "${OUTPUT_FILE}.stderr.log"
+  echo "omnilane: $1" > "${OUTPUT_FILE}.stderr.log"
+  exit 2
+}
 
 VENDOR="${OMNILANE_OAI_VENDOR:?run-openai-compat.sh must be invoked via a run-<vendor>.sh wrapper}"
 SPEC="$(vendor_api_spec "$VENDOR")"
@@ -48,8 +52,10 @@ RESPONSE_FILE="${OUTPUT_FILE}.response.json"
 HEADER_FILE="${OUTPUT_FILE}.headers"
 cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" "$HEADER_FILE" 2>/dev/null || true; }
 trap cleanup EXIT
+private_job_files "$HEADER_FILE"
 ( umask 077; printf 'Authorization: Bearer %s\n' "$API_KEY" > "$HEADER_FILE" )
 
+private_job_files "$REQUEST_FILE"
 python3 - "$MODEL" "$PROMPT_FILE" > "$REQUEST_FILE" <<'PY'
 import json, sys
 model, prompt_file = sys.argv[1], sys.argv[2]
@@ -59,6 +65,7 @@ json.dump({"model": model, "messages": [{"role": "user", "content": prompt}]},
           sys.stdout)
 PY
 
+private_job_files "$RESPONSE_FILE" "${OUTPUT_FILE}.stderr.log"
 set +e
 run_with_timeout "$RUN_TIMEOUT" curl -sS --fail-with-body \
   --max-time "$RUN_TIMEOUT" \
@@ -76,6 +83,7 @@ if [[ "$RC" -ne 0 ]]; then
   exit "$RC"
 fi
 
+private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
 set +e
 python3 - "$VENDOR" "$RESPONSE_FILE" > "${OUTPUT_FILE}.tmp" 2>> "${OUTPUT_FILE}.stderr.log" <<'PY'
 import json, sys

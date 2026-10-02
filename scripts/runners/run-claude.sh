@@ -93,6 +93,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     echo "omnilane: unsafe Claude live event path" >&2
     exit 125
   fi
+  private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   LIVE_ARGS=(--disable-slash-commands --model "$MODEL")
@@ -103,6 +104,7 @@ LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
 finalize_live_output() {
   local tmp="${OUTPUT_FILE}.tmp"
   if command -v python3 >/dev/null 2>&1; then
+    private_job_files "$tmp"
     if python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
       "$EVENTS_FILE" "$tmp"; then
       mv "$tmp" "$OUTPUT_FILE"
@@ -123,7 +125,11 @@ finalize_live_output() {
     local signal_rc="$1" waited=0
     trap - TERM HUP INT
     set +e
-    if [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
+    if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+      # The owning supervisor already received cancellation and pins its group.
+      # Bash may reap asynchronously, so do not signal a remembered numeric PID.
+      [[ -z "$LIVE_CHILD_PID" ]] || wait "$LIVE_CHILD_PID" 2>/dev/null
+    elif [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
       kill -TERM "-$LIVE_CHILD_PID" 2>/dev/null || kill -TERM "$LIVE_CHILD_PID" 2>/dev/null || true
       while kill -0 "$LIVE_CHILD_PID" 2>/dev/null && [[ "$waited" -lt 50 ]]; do
         sleep 0.1
@@ -142,7 +148,8 @@ finalize_live_output() {
     exit "$signal_rc"
   }
 
-  set -m
+  # The supervisor owns the whole tree; a nested group would escape its signals.
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set -m; fi
   (
     cd "$WORKDIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
@@ -150,7 +157,7 @@ finalize_live_output() {
       "$CLAUDE_BIN" "${LIVE_ARGS[@]}" < "$LIVE_INBOX" > "$EVENTS_FILE" 2> "$STDERR_FILE"
   ) &
   LIVE_CHILD_PID=$!
-  set +m
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set +m; fi
   trap 'stop_live_child 143' TERM
   trap 'stop_live_child 129' HUP
   trap 'stop_live_child 130' INT
@@ -182,10 +189,12 @@ set +e
 (
   cd "$WORKDIR" || exit 127
   if [[ -n "$THREAD_MODE" ]]; then
+    private_job_files "${OUTPUT_FILE}.events.jsonl" "${OUTPUT_FILE}.stderr.log"
     run_with_timeout "$RUN_TIMEOUT" env \
       "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.events.jsonl" 2> "${OUTPUT_FILE}.stderr.log"
   else
+    private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
     run_with_timeout "$RUN_TIMEOUT" env \
       "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
@@ -195,6 +204,7 @@ RC=$?
 set -e
 
 if [[ -n "$THREAD_MODE" ]]; then
+  private_job_files "${OUTPUT_FILE}.tmp"
   if [[ "$RC" -eq 0 ]] && ! python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
     "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp"; then
     echo "omnilane: Claude thread stream without successful result or top-level assistant text" >> "${OUTPUT_FILE}.stderr.log"

@@ -14,6 +14,8 @@ import types
 import unittest
 
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -102,7 +104,7 @@ printf '{"type":"thread.started","thread_id":"mode-fixture"}\n'
                 with self.subTest(mode=mode):
                     argv_file = tmp / f"{mode}.argv.json"
                     output = tmp / f"{mode}.out"
-                    env = os.environ.copy()
+                    env = fixture_environment_with_isolated_tools(self)
                     env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
                         CODEX_BIN=str(fake),
@@ -171,7 +173,7 @@ printf 'grok mode fixture\n'
         prompt = tmp / "prompt.txt"
         prompt.write_text("mode fixture\n")
         output = tmp / "out.txt"
-        env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
+        env = {k: v for k, v in fixture_environment_with_isolated_tools(self).items() if not k.startswith("OMNILANE_AA_")}
         env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             GROK_BIN=str(fake),
@@ -285,7 +287,7 @@ fi
         prompt = tmp / "prompt.txt"
         prompt.write_text("mode fixture\n")
         output = tmp / "out.txt"
-        env = os.environ.copy()
+        env = fixture_environment_with_isolated_tools(self)
         env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             CLAUDE_BIN=str(fake),
@@ -503,7 +505,7 @@ fi
         prompt = tmp / "prompt.txt"
         prompt.write_text("mode fixture\n")
         output = tmp / output_name
-        env = os.environ.copy()
+        env = fixture_environment_with_isolated_tools(self)
         env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             AGY_BIN=str(fake),
@@ -726,7 +728,7 @@ class DispatchModeContracts(unittest.TestCase):
         uname = self.bin / "uname"
         uname.write_text("#!/bin/sh\nprintf 'Darwin\\n'\n")
         uname.chmod(0o755)
-        self.env = os.environ.copy()
+        self.env = fixture_environment_with_isolated_tools(self)
         self.env.update(
             OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
             OMNILANE_HOME=str(self.home),

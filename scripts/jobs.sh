@@ -31,7 +31,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|pending|cancelled]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired|incomplete]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -121,6 +121,66 @@ read_job_pid() {
   RECORDED_PID="$value"
 }
 
+read_cli_job_state() {
+  local directory="$1"
+  JOB_CLEANUP_JSON=""
+  JOB_RESIDUAL_COUNT=0
+  if [[ -e "$directory/process-cleanup.json" || -L "$directory/process-cleanup.json" || -f "$directory/cancel.json" || -f "$directory/finalization-error" ]]; then
+    local cleanup_observation
+    cleanup_observation="$(python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" state "$directory")" || return 1
+    if [[ -n "$cleanup_observation" ]]; then
+      IFS=$'\t' read -r JOB_RESIDUAL_COUNT JOB_CLEANUP_JSON <<< "$cleanup_observation"
+      JOB_STATE="incomplete"
+      JOB_STATE_EXIT=125
+      JOB_STATE_REASON="cleanup incomplete; residual $JOB_RESIDUAL_COUNT"
+      return 0
+    fi
+  fi
+  JOB_STATE="running"
+  JOB_STATE_EXIT="null"
+  JOB_STATE_REASON=""
+  # A recorded exit wins over PID observations. Reads never synthesize one.
+  if [[ -e "$directory/exit" || -L "$directory/exit" ]]; then
+    if read_exit_code "$directory/exit"; then
+      JOB_STATE="done"
+      JOB_STATE_EXIT="$RECORDED_EXIT"
+    else
+      JOB_STATE="invalid"
+      JOB_STATE_REASON="invalid recorded exit status"
+    fi
+    return 0
+  fi
+  # No PID can be the startup window before the worker publishes its identity.
+  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then
+    if ! read_job_pid "$directory/pid"; then
+      JOB_STATE="dead"
+      JOB_STATE_REASON="invalid pid metadata"
+    elif ! kill -0 "$RECORDED_PID" 2>/dev/null; then
+      JOB_STATE="dead"
+      JOB_STATE_REASON="worker gone, no exit recorded"
+    fi
+  fi
+  return 0
+}
+
+is_native_job() {
+  local directory="$1"
+  [[ -e "$directory/native.json" || -L "$directory/native.json" ||
+     -e "$directory/native.lock" || -L "$directory/native.lock" ]]
+}
+
+read_job_state() {
+  local directory="$1" observation
+  JOB_CLEANUP_JSON=""
+  JOB_RESIDUAL_COUNT=0
+  if is_native_job "$directory"; then
+    observation="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" read-state "${directory##*/}")" || die 1 "invalid native state"
+    IFS=$'\t' read -r JOB_STATE JOB_STATE_EXIT JOB_STATE_REASON <<< "$observation"
+  else
+    read_cli_job_state "$directory"
+  fi
+}
+
 load_job_vendor() {
   local session_mode_re='"session_mode":"(live|single-shot)"'
   if ! read_public_metadata "$JOB_DIR/meta.json" || ! parse_stats_metadata "$PUBLIC_METADATA"; then
@@ -198,10 +258,17 @@ parse_stats_metadata() {
 }
 
 parse_audit_metadata() {
-  local value="$1" current_re legacy_re
+  local value="$1" current_re legacy_re native_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
+  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"executor\":\"cli\",\"executor_reason\":\"${json_string}\")?(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",(\"job_worker_source_path\":\"${json_string}\",\"job_worker_source_sha256\":\"[0-9a-f]{64}\",\"job_worker_path\":\"${json_string}\",)?\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
+  # A native handoff has no worker, timeout or candidate of its own.
+  native_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"executor\":\"native\",\"executor_reason\":\"${json_string}\",\"aa_policy_code\":\"${json_string}\",\"aa_effective_ceiling\":(null|0|[1-9][0-9]*),\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\",\"session_mode\":\"native\"\\}$"
   legacy_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",(\"foreman_session\":\"${json_string}\",)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  AUDIT_METADATA_NATIVE=0
+  if [[ "$value" =~ $native_re ]]; then
+    AUDIT_METADATA_NATIVE=1
+    return 0
+  fi
   [[ "$value" =~ $current_re || "$value" =~ $legacy_re ]]
 }
 
@@ -325,17 +392,15 @@ done
 set -- ${args[@]+"${args[@]}"}
 COMMAND="${1:-unknown}"
 
-# Native jobs have no shell worker PID. Intercept before any CLI lifecycle
-# operation, including cancellation, retry, wait and rm. Python validates the
-# store, job ID, lock and record before accepting or publishing a transition.
-if [[ "$COMMAND" == "complete-native" ]] ||
-   { [[ "${2:-}" =~ $JOB_ID_PATTERN ]] &&
-     { [[ -e "$JOBS/${2}/native.json" || -L "$JOBS/${2}/native.json" ||
-          -e "$JOBS/${2}/native.lock" || -L "$JOBS/${2}/native.lock" ]]; }; }; then
+# Native jobs have no shell worker PID. Intercept mutations and unsupported
+# CLI lifecycle operations. Wait polls the same locked native observation below.
+# Python validates the store, job ID, lock and record before any transition.
+if [[ "$COMMAND" != "wait" ]] && { [[ "$COMMAND" == "complete-native" ]] ||
+   { [[ "${2:-}" =~ $JOB_ID_PATTERN ]] && is_native_job "$JOBS/${2}"; }; }; then
   case "$COMMAND" in
     complete-native) [[ $# -eq 3 ]] || usage ;;
     status|result|cancel) [[ $# -eq 2 ]] || usage ;;
-    *) die 2 "native job supports status, result, cancel and complete-native; caller owns agent lifecycle" ;;
+    *) die 2 "native job supports status, result, wait, cancel and complete-native; caller owns agent lifecycle" ;;
   esac
   native_args=(job --home "$OMNILANE_HOME")
   [[ "$JSON_MODE" -eq 0 ]] || native_args+=(--json)
@@ -477,10 +542,11 @@ case "${1:-}" in
     holder_pid="$RECORDED_PID"
     kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
     kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
-    close_deadline=$((SECONDS + 10))
+    # Include the supervisor's final 1s process-group cleanup after live close.
+    close_deadline=$((SECONDS + 11))
     while [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; do
       if [[ "$SECONDS" -ge "$close_deadline" ]]; then
-        die 124 "close signal sent, but the live worker did not terminate within 10s"
+        die 124 "close signal sent, but the live worker did not terminate within 11s"
       fi
       sleep 0.1
     done
@@ -664,7 +730,9 @@ case "${1:-}" in
         fi
       elif [[ -f "$artifact" ]]; then
             mode="$(path_mode "$artifact" 2>/dev/null || true)"
-            if [[ "$mode" != "600" ]]; then
+            # dispatch stores the worker copy read-only so a running job cannot be rewritten.
+            if [[ "$mode" != "600" &&
+                  ! ( "${artifact##*/}" == "job-worker.sh" && "$mode" == "400" ) ]]; then
               audit_emit "$id" unsafe-file-mode
               findings=$((findings + 1)); job_failed=1
             fi
@@ -677,6 +745,7 @@ case "${1:-}" in
           audit_emit "$id" missing-task
           findings=$((findings + 1)); job_failed=1
         fi
+        AUDIT_METADATA_NATIVE=0
         if ! read_public_metadata "$job_dir/meta.json" ||
            ! parse_audit_metadata "$PUBLIC_METADATA"; then
           audit_emit "$id" invalid-metadata
@@ -687,7 +756,8 @@ case "${1:-}" in
             audit_emit "$id" invalid-pid
             findings=$((findings + 1)); job_failed=1
           fi
-        else
+        elif [[ "$AUDIT_METADATA_NATIVE" -ne 1 ]]; then
+          # The caller's own sub-agent runs a native handoff; omnilane starts no process for it.
           audit_emit "$id" missing-pid
           findings=$((findings + 1)); job_failed=1
         fi
@@ -754,6 +824,9 @@ case "${1:-}" in
     sampled=0
     completed=0
     running=0
+    pending=0
+    dead=0
+    expired=0
     invalid_exit=0
     invalid_metadata=0
     ids=()
@@ -783,28 +856,27 @@ case "${1:-}" in
           invalid_metadata=$((invalid_metadata + 1))
           continue
         fi
-        exit_path="$job_dir/exit"
-        if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
-          running=$((running + 1))
-          continue
-        fi
-        if ! read_exit_code "$exit_path"; then
-          invalid_exit=$((invalid_exit + 1))
-          continue
-        fi
+        read_job_state "$job_dir"
+        case "$JOB_STATE" in
+          running) running=$((running + 1)); continue ;;
+          pending) pending=$((pending + 1)); continue ;;
+          dead) dead=$((dead + 1)); continue ;;
+          expired) expired=$((expired + 1)); continue ;;
+          invalid) invalid_exit=$((invalid_exit + 1)); continue ;;
+        esac
         completed=$((completed + 1))
-        outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$RECORDED_EXIT")
+        outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$JOB_STATE_EXIT")
       done < <(printf '%s\n' "${ids[@]}" | LC_ALL=C sort -r | sed -n "1,${limit}p")
     fi
     rows="$(build_recommendation_rows "$minimum_samples" ${outcomes[@]+"${outcomes[@]}"})"
     if [[ "$JSON_MODE" -eq 1 ]]; then
       recommendations="$(recommendations_json "$rows")"
-      printf '{"schema_version":1,"command":"recommend","ok":true,"sampled":%s,"completed":%s,"excluded":{"running":%s,"invalid_exit":%s,"invalid_metadata":%s},"minimum_samples":%s,"recommendations":%s}\n' \
+      printf '{"schema_version":1,"command":"recommend","ok":true,"sampled":%s,"completed":%s,"excluded":{"running":%s,"invalid_exit":%s,"invalid_metadata":%s,"pending":%s,"dead":%s,"expired":%s},"minimum_samples":%s,"recommendations":%s}\n' \
         "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" \
-        "$minimum_samples" "$recommendations"
+        "$pending" "$dead" "$expired" "$minimum_samples" "$recommendations"
     else
-      printf 'recommendations: sampled=%s completed=%s running=%s invalid_exit=%s invalid_metadata=%s min_samples=%s\n' \
-        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" "$minimum_samples"
+      printf 'recommendations: sampled=%s completed=%s running=%s invalid_exit=%s invalid_metadata=%s min_samples=%s pending=%s dead=%s expired=%s\n' \
+        "$sampled" "$completed" "$running" "$invalid_exit" "$invalid_metadata" "$minimum_samples" "$pending" "$dead" "$expired"
       print_recommendations "$rows" "$minimum_samples"
     fi ;;
   stats)
@@ -834,6 +906,9 @@ case "${1:-}" in
     succeeded=0
     failed=0
     running=0
+    pending=0
+    dead=0
+    expired=0
     invalid_exit=0
     invalid_metadata=0
     ids=()
@@ -864,20 +939,21 @@ case "${1:-}" in
           [[ -z "$filter_vendor" || "$filter_vendor" == "$STATS_VENDOR" ]] || continue
         fi
         sampled=$((sampled + 1))
-        exit_path="$job_dir/exit"
-        if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-          if read_exit_code "$exit_path"; then
-            if [[ "$RECORDED_EXIT" -eq 0 ]]; then
+        read_job_state "$job_dir"
+        case "$JOB_STATE" in
+          done|cancelled|incomplete)
+            if [[ "$JOB_STATE_EXIT" -eq 0 ]]; then
               succeeded=$((succeeded + 1))
             else
               failed=$((failed + 1))
             fi
-          else
-            invalid_exit=$((invalid_exit + 1))
-          fi
-        else
-          running=$((running + 1))
-        fi
+            ;;
+          running) running=$((running + 1)) ;;
+          pending) pending=$((pending + 1)) ;;
+          dead) dead=$((dead + 1)) ;;
+          expired) expired=$((expired + 1)) ;;
+          invalid) invalid_exit=$((invalid_exit + 1)) ;;
+        esac
         if [[ "$meta_ok" -eq 1 ]]; then
           lanes+=("$STATS_LANE")
           vendors+=("$STATS_VENDOR")
@@ -897,12 +973,12 @@ case "${1:-}" in
         lanes_json="$(json_stat_counts "${lanes[@]}")"
         vendors_json="$(json_stat_counts "${vendors[@]}")"
       fi
-      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s}\n' \
+      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s,"pending":%s,"dead":%s,"expired":%s}\n' \
         "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" \
-        "$invalid_metadata" "$lanes_json" "$vendors_json"
+        "$invalid_metadata" "$lanes_json" "$vendors_json" "$pending" "$dead" "$expired"
     else
-      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%%\n' \
-        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate"
+      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%% pending=%s dead=%s expired=%s\n' \
+        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" "$pending" "$dead" "$expired"
       printf 'invalid_metadata=%s\n' "$invalid_metadata"
       if [[ "$valid_metadata" -gt 0 ]]; then
         print_stat_counts lane "${lanes[@]}"
@@ -923,8 +999,8 @@ case "${1:-}" in
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
     [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     case "$filter_status" in
-      ""|running|done|pending|cancelled) ;;
-      *) die 2 "invalid --status value (want running, done, pending or cancelled)" ;;
+      ""|running|done|dead|pending|cancelled|expired|incomplete) ;;
+      *) die 2 "invalid --status value (want running, done, dead, pending, cancelled or expired)" ;;
     esac
     if [[ ! -d "$JOBS" ]]; then
       [[ "$JSON_MODE" -eq 0 ]] || printf '{"schema_version":1,"command":"list","ok":true,"jobs":[]}\n'
@@ -945,30 +1021,18 @@ case "${1:-}" in
     json_first=1
     shown=0
     while IFS= read -r id; do
-      state="running"
-      exit_json="null"
-      exit_path="$JOBS/$id/exit"
-      if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-        if read_exit_code "$exit_path"; then
-          state="done(exit $RECORDED_EXIT)"
-          json_state="done"
-          exit_json="$RECORDED_EXIT"
-        else
-          state="done(invalid exit metadata)"
-          json_state="invalid"
-        fi
-      else
-        json_state="running"
-      fi
-      if [[ -e "$JOBS/$id/native.json" || -L "$JOBS/$id/native.json" || -e "$JOBS/$id/native.lock" ]]; then
-        json_state="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" list-state "$id")" || die 1 "invalid native state"
+      read_job_state "$JOBS/$id"
+      json_state="$JOB_STATE"
+      exit_json="$JOB_STATE_EXIT"
+      if is_native_job "$JOBS/$id"; then
         state="$json_state"
-        # Native completion lives in native.json, not a PID/exit pair.
-        exit_json="null"
-        if [[ "$json_state" != "pending" ]]; then
-          native_status="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" --json status "$id")" || die 1 "invalid native state"
-          exit_json="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["job"]["exit_code"])' "$native_status")"
-        fi
+      else
+        case "$JOB_STATE" in
+          done) state="done(exit $JOB_STATE_EXIT)" ;;
+          incomplete) state="incomplete(exit 125; residual $JOB_RESIDUAL_COUNT)" ;;
+          invalid) state="done(invalid exit metadata)" ;;
+          *) state="$JOB_STATE" ;;
+        esac
       fi
       metadata=""
       metadata_json="null"
@@ -993,8 +1057,8 @@ case "${1:-}" in
       if [[ -n "$filter_status" ]]; then
         case "$json_state" in
           done) [[ "$filter_status" == "done" ]] || continue ;;
-          running) [[ "$filter_status" == "running" ]] || continue ;;
-          pending|cancelled) [[ "$filter_status" == "$json_state" ]] || continue ;;
+          running|dead|incomplete) [[ "$filter_status" == "$json_state" ]] || continue ;;
+          pending|cancelled|expired) [[ "$filter_status" == "$json_state" ]] || continue ;;
           *) continue ;;
         esac
       fi
@@ -1009,8 +1073,8 @@ case "${1:-}" in
       if [[ "$JSON_MODE" -eq 1 ]]; then
         [[ "$json_first" -eq 1 ]] || printf ','
         json_first=0
-        printf '{"id":"%s","state":"%s","exit_code":%s,"metadata":%s,"metadata_status":"%s"}' \
-          "$(json_escape "$id")" "$json_state" "$exit_json" "$metadata_json" "$metadata_status"
+        printf '{"id":"%s","state":"%s","exit_code":%s,"metadata":%s,"metadata_status":"%s"%s}' \
+          "$(json_escape "$id")" "$json_state" "$exit_json" "$metadata_json" "$metadata_status" "${JOB_CLEANUP_JSON:+,\"cleanup\":$JOB_CLEANUP_JSON}"
       else
         printf '%s  %s  %s\n' "$id" "$state" "$metadata"
       fi
@@ -1021,43 +1085,28 @@ case "${1:-}" in
   status)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
-    exit_path="$JOB_DIR/exit"
-    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-      read_exit_code "$exit_path" || {
-        die 1 "invalid recorded exit status"
-      }
+    read_cli_job_state "$JOB_DIR"
+    [[ "$JOB_STATE" != "invalid" ]] || die 1 "$JOB_STATE_REASON"
+    if [[ "$JOB_STATE" == "incomplete" ]]; then
+      python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" status "$JOB_DIR" "$2" "$JSON_MODE"
+    elif [[ "$JOB_STATE" == "done" ]]; then
       if [[ "$JSON_MODE" -eq 1 ]]; then
         printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s}}\n' \
-          "$(json_escape "$2")" "$RECORDED_EXIT"
+          "$(json_escape "$2")" "$JOB_STATE_EXIT"
       else
-        echo "done exit=$RECORDED_EXIT"
+        echo "done exit=$JOB_STATE_EXIT"
       fi
     else
-      pid=""; pid_state="missing"
-      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
-        if read_job_pid "$JOB_DIR/pid"; then
-          pid="$RECORDED_PID"; pid_state="valid"
-        else
-          pid_state="invalid"
-        fi
-      fi
-      if [[ "$pid_state" == "invalid" ]]; then
-        state="dead"; reason="invalid pid metadata"
-      elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then
-        state="dead"; reason="worker gone, no exit recorded"
-      else
-        state="running"; reason=""
-      fi
       if [[ "$JSON_MODE" -eq 1 ]]; then
-        if [[ -n "$reason" ]]; then
+        if [[ -n "$JOB_STATE_REASON" ]]; then
           printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"%s","exit_code":null,"reason":"%s"}}\n' \
-            "$(json_escape "$2")" "$state" "$(json_escape "$reason")"
+            "$(json_escape "$2")" "$JOB_STATE" "$(json_escape "$JOB_STATE_REASON")"
         else
           printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"running","exit_code":null}}\n' \
             "$(json_escape "$2")"
         fi
-      elif [[ -n "$reason" ]]; then
-        printf 'dead (%s)\n' "$reason"
+      elif [[ -n "$JOB_STATE_REASON" ]]; then
+        printf 'dead (%s)\n' "$JOB_STATE_REASON"
       else
         echo "running"
       fi
@@ -1087,6 +1136,24 @@ case "${1:-}" in
       [[ -d "$JOB_DIR" && ! -L "$JOB_DIR" ]] || {
         die 1 "job disappeared while waiting"
       }
+      if is_native_job "$JOB_DIR"; then
+        read_job_state "$JOB_DIR"
+        case "$JOB_STATE" in
+          expired) printf 'expired (%s)\n' "$JOB_STATE_REASON"; exit 125 ;;
+          done|cancelled) echo "done exit=$JOB_STATE_EXIT"; exit "$JOB_STATE_EXIT" ;;
+        esac
+        if [[ $((SECONDS - wait_started)) -ge "$wait_timeout" ]]; then
+          printf 'wait timeout after %ss\n' "$wait_timeout" >&2
+          exit 124
+        fi
+        sleep 1
+        continue
+      fi
+      read_cli_job_state "$JOB_DIR"
+      if [[ "$JOB_STATE" == "incomplete" ]]; then
+        printf 'incomplete exit=125; %s\n' "$JOB_STATE_REASON"
+        exit 125
+      fi
       exit_path="$JOB_DIR/exit"
       if [[ -e "$exit_path" || -L "$exit_path" ]]; then
         read_exit_code "$exit_path" || {
@@ -1131,55 +1198,8 @@ case "${1:-}" in
   cancel)
     [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
     select_job "$2"
-    exit_path="$JOB_DIR/exit"
-    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-      if read_exit_code "$exit_path"; then
-        echo "already finished (exit $RECORDED_EXIT)"
-      else
-        echo "already finished (invalid exit metadata)"
-      fi
-      exit 0
-    fi
-    pid=""; pid_state="missing"
-    if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
-      if read_job_pid "$JOB_DIR/pid"; then pid="$RECORDED_PID"; pid_state="valid"; else pid_state="invalid"; fi
-    fi
-    if [[ "$pid_state" != "valid" ]] || ! kill -0 "$pid" 2>/dev/null; then
-      echo "not running (no live worker to cancel)"
-      exit 0
-    fi
-    # Background workers run as their own process-group leader (dispatch `set -m`),
-    # and that leader traps SIGTERM to record a best-effort exit code. Signal the
-    # whole group so the vendor CLI child dies too and the worker writes its exit.
-    cancel_grp="$pid"
-    cancel_pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)"
-    [[ "$cancel_pgid" =~ ^[1-9][0-9]*$ ]] && cancel_grp="$cancel_pgid"
-    kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
-    cancel_waited=0
-    while [[ "$cancel_waited" -lt 5 ]]; do
-      if [[ -e "$exit_path" || -L "$exit_path" ]]; then break; fi
-      if ! kill -0 "$pid" 2>/dev/null; then break; fi
-      sleep 1; cancel_waited=$((cancel_waited + 1))
-    done
-    if kill -0 "$pid" 2>/dev/null; then
-      # The TERM trap did not fire in time; SIGKILL cannot be trapped, so no exit
-      # gets recorded — force the group down and record the terminal state below.
-      kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-      sleep 1
-    fi
-    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-      if read_exit_code "$exit_path"; then
-        echo "cancelled (exit $RECORDED_EXIT)"
-      else
-        echo "cancelled (invalid exit metadata)"
-      fi
-    elif kill -0 "$pid" 2>/dev/null; then
-      die 1 "cancel could not terminate worker pid $pid"
-    else
-      (umask 077; printf '137\n' > "$exit_path")
-      echo "cancelled (exit 137)"
-    fi
-    exit 0 ;;
+    python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" cancel "$JOB_DIR"
+    exit $? ;;
   rm)
     [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
     select_job "$2"
@@ -1200,28 +1220,14 @@ case "${1:-}" in
   result)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
-    exit_path="$JOB_DIR/exit"
-    [[ -e "$exit_path" || -L "$exit_path" ]] || {
-      die 1 "still running"
-    }
-    read_exit_code "$exit_path" || {
-      die 1 "invalid recorded exit status"
-    }
-    rc="$RECORDED_EXIT"
-    if [[ "$JSON_MODE" -eq 1 ]]; then
-      output_available=false
-      stderr_available=false
-      [[ -f "$JOB_DIR/out.txt" && ! -L "$JOB_DIR/out.txt" ]] && output_available=true
-      [[ -s "$JOB_DIR/out.txt.stderr.log" && ! -L "$JOB_DIR/out.txt.stderr.log" ]] && stderr_available=true
-      printf '{"schema_version":1,"command":"result","ok":true,"job":{"id":"%s","state":"done","exit_code":%s,"output_available":%s,"stderr_available":%s}}\n' \
-        "$(json_escape "$2")" "$rc" "$output_available" "$stderr_available"
-    else
-      # Guarded cat: under set -e a missing out.txt must not eat the real exit code.
-      [[ -f "$JOB_DIR/out.txt" && ! -L "$JOB_DIR/out.txt" ]] && cat "$JOB_DIR/out.txt"
-      if [[ -s "$JOB_DIR/out.txt.stderr.log" && ! -L "$JOB_DIR/out.txt.stderr.log" ]]; then
-        echo "--- stderr ---" >&2; cat "$JOB_DIR/out.txt.stderr.log" >&2
-      fi
-    fi
+    read_cli_job_state "$JOB_DIR"
+    case "$JOB_STATE" in
+      running) die 1 "still running" ;;
+      dead) die 1 "job is dead ($JOB_STATE_REASON); no recorded result available" ;;
+      invalid) die 1 "$JOB_STATE_REASON" ;;
+    esac
+    rc="$JOB_STATE_EXIT"
+    python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" result "$JOB_DIR" "$2" "$rc" "$JSON_MODE"
     exit "$rc" ;;
   prune)
     keep=100

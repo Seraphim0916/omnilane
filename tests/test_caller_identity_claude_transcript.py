@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import json
 import os
@@ -184,8 +185,112 @@ class ClaudeTranscriptTests(unittest.TestCase):
     def test_invalid_effort_does_not_fall_back_to_older_record(self):
         for invalid in ("unknown", "MAX", " "):
             with self.subTest(invalid=invalid):
-                self.write_records(self.record(), self.record(effort=invalid))
-                self.assert_fallback("unknown effort")
+                older = self.record(message={"model": "claude-sonnet-5"},
+                                    effort="low", perTurnEffort="low")
+                self.write_records(older, self.record(effort=invalid))
+                with self.assertRaisesRegex(ValueError, "latest assistant effort unrecognized"):
+                    self.read()
+                status, stdout, stderr = self.run_main()
+                self.assertEqual(status, 3)
+                self.assertEqual(stdout, "")
+                self.assertFalse((self.home / "output/caller-context").exists())
+                self.assertNotIn(self.MARKER, stderr)
+
+    def test_latest_main_record_missing_effort_uses_current_model_floor(self):
+        model = "claude-sonnet-5"
+        older = self.record(message={"model": model}, effort="low", perTurnEffort="low")
+        registry, _ = caller_identity.load_registry(ROOT / "config/aa-model-policy.json")
+        previous, _ = caller_identity.resolve(registry, "claude", model, "low")
+        floor = caller_identity.floor_row(registry, "claude", model)
+        for fields in ({}, {"effort": None, "perTurnEffort": None},
+                       {"effort": "", "perTurnEffort": ""}):
+            with self.subTest(fields=fields):
+                latest = {"type": "assistant", "isSidechain": False,
+                          "message": {"model": model}, **fields}
+                self.write_records(older, latest)
+                _, selector, source = self.read()
+                self.assertEqual(selector, ("claude", model, None))
+                self.assertNotEqual(selector, self.ARGV)
+                self.assertIn("transcript", source)
+                status, stdout, stderr = self.run_main()
+                self.assertEqual(status, 0, stderr)
+                result = json.loads(Path(stdout.strip()).read_text())
+                self.assertEqual(result["caller"]["model"], model)
+                self.assertEqual(result["caller"], {key: floor[key] for key in caller_identity.aa_policy.IDENTITY_FIELDS})
+                self.assertLessEqual(result["inherited_ceiling"], previous["score"])
+                self.assertTrue(result["effort_unverified"])
+                self.assertIn("unrecorded effort", stderr)
+                self.assertNotIn(self.MARKER, stdout + stderr)
+                caller, digest = caller_identity.aa_policy.load_caller(stdout.strip(), registry)
+                gate_registry = copy.deepcopy(registry)
+                target = next(row for row in gate_registry["scored_configs"]
+                              if row["id"] == previous["id"])
+                target["transport_mapping"].update(status="verified", runtime_verified=True,
+                                                   runtime_model=model, runtime_effort="low")
+                decision = caller_identity.aa_policy.decide(
+                    gate_registry, "0" * 64, vendor="claude", model=model, effort="low",
+                    caller=caller, caller_sha256=digest)
+                self.assertFalse(decision["allowed"])
+                self.assertEqual(decision["code"], "target-above-effective-ceiling")
+                self.assertEqual(decision["failed_gate"], "downward-ceiling")
+                self.assertEqual(decision["effective_ceiling"], floor["score"])
+
+    def test_latest_main_record_missing_model_refuses_high_launch_identity(self):
+        older = self.record(message={"model": "claude-sonnet-5"},
+                            effort="low", perTurnEffort="low")
+        for message in (None, {}, {"model": ""}, {"model": None}):
+            with self.subTest(message=message):
+                self.write_records(older, self.record(message=message))
+                with self.assertRaisesRegex(ValueError, "latest assistant model missing"):
+                    self.read()
+                status, stdout, stderr = self.run_main()
+                self.assertEqual(status, 3)
+                self.assertEqual(stdout, "")
+                self.assertIn("latest assistant model missing", stderr)
+                self.assertFalse((self.home / "output/caller-context").exists())
+                self.assertNotIn(self.MARKER, stderr)
+
+    def test_missing_effort_after_model_switch_refuses_increased_floor(self):
+        older = self.record(message={"model": "claude-sonnet-5"}, effort="low", perTurnEffort="low")
+        latest = self.record(effort=None, perTurnEffort=None)
+        self.write_records(older, latest)
+        with self.assertRaisesRegex(ValueError, "effort missing after model switch"):
+            self.read()
+        status, stdout, stderr = self.run_main()
+        self.assertEqual(status, 3)
+        self.assertEqual(stdout, "")
+        self.assertIn("effort missing after model switch", stderr)
+        self.assertFalse((self.home / "output/caller-context").exists())
+
+    def test_missing_effort_with_scored_default_still_uses_unverified_floor(self):
+        model = "claude-haiku-4-5"
+        self.write_records(self.record(message={"model": model + "-20251001"},
+                                       effort=None, perTurnEffort=None))
+        registry, _ = caller_identity.load_registry(ROOT / "config/aa-model-policy.json")
+        floor = caller_identity.floor_row(registry, "claude", model)
+        status, stdout, stderr = self.run_main()
+        self.assertEqual(status, 0, stderr)
+        result = json.loads(Path(stdout.strip()).read_text())
+        self.assertTrue(result["effort_unverified"])
+        self.assertEqual(floor["score"], result["inherited_ceiling"])
+        self.assertEqual(model, result["caller"]["model"])
+
+    def test_matching_launch_without_effort_is_still_marked_unverified(self):
+        self.tree[20] = (1, ["claude", "--model", "claude-sonnet-5"])
+        self.write_records(self.record(message={"model": "claude-sonnet-5"},
+                                       effort=None, perTurnEffort=None))
+        self.assertIn("matches launch flags", self.read()[2])
+        status, stdout, stderr = self.run_main()
+        self.assertEqual(status, 0, stderr)
+        self.assertTrue(json.loads(Path(stdout.strip()).read_text())["effort_unverified"])
+
+    def test_launch_only_missing_effort_retains_existing_refusal(self):
+        self.tree[20] = (1, ["claude", "--model", "claude-sonnet-5"])
+        self.session.unlink()
+        status, stdout, stderr = self.run_main()
+        self.assertEqual(status, 3)
+        self.assertEqual(stdout, "")
+        self.assertIn("without --effort", stderr)
 
     def test_effort_only_and_per_turn_only(self):
         for changes in ({"perTurnEffort": None}, {"effort": ""},

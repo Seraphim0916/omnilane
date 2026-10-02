@@ -7,6 +7,8 @@ import tempfile
 import unittest
 
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -29,7 +31,8 @@ data = {'args': sys.argv[1:], 'sentinel_dir': name,
         'exists': bool(path and path.is_dir()),
         'contents': sorted(p.name for p in path.iterdir()) if path and path.is_dir() else [],
         'mode': stat.S_IMODE(path.stat().st_mode) if path and path.is_dir() else None,
-        'hooks_env': {k: os.environ.get(k) for k in ['GROK_CLAUDE_HOOKS_ENABLED', 'GROK_CURSOR_HOOKS_ENABLED']}}
+        'hooks_env': {k: os.environ.get(k) for k in ['GROK_CLAUDE_HOOKS_ENABLED', 'GROK_CURSOR_HOOKS_ENABLED']},
+        'plugin_env': {k: os.environ.get(k) for k in ['CLAUDE_PLUGIN_ROOT', 'CLAUDE_PLUGIN_DATA']}}
 pathlib.Path(os.environ['TEST_GROK_RECORD']).write_text(json.dumps(data))
 print('mock Grok response')
 raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
@@ -43,7 +46,7 @@ raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
         # that is actually under test, without inheriting the outer harness.
         self.env = {
             name: value
-            for name, value in os.environ.items()
+            for name, value in fixture_environment_with_isolated_tools(self).items()
             if not name.startswith("OMNILANE_AA_") and name != "OMNILANE_DEPTH"
         }
         for name in ("CONTEXT_MODE_MCP_SENTINEL_DIR", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID", "OMNILANE_INBOX", "OMNILANE_GROK_NO_WEB"):
@@ -67,6 +70,13 @@ raise SystemExit(int(os.environ.get('TEST_GROK_RC', '0')))
                 args = json.loads(self.record.read_text())["args"]
                 self.assertEqual(args.count("--reasoning-effort"), 1)
                 self.assertEqual(args[args.index("--reasoning-effort") + 1], effort)
+
+    def test_claude_plugin_environment_does_not_reach_the_cli(self):
+        # With CLAUDE_PLUGIN_ROOT set, `grok -p` ends "cancelled" with empty text and exit 0.
+        result = self.run_mode(CLAUDE_PLUGIN_ROOT="/caller/plugin", CLAUDE_PLUGIN_DATA="/caller/data")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(self.record.read_text())["plugin_env"],
+                         {"CLAUDE_PLUGIN_ROOT": None, "CLAUDE_PLUGIN_DATA": None})
 
     def test_unknown_effort_fails_before_cli(self):
         result = self.run_mode(effort="invalid-value")
