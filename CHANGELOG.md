@@ -17,6 +17,11 @@ semantic version tags.
 
 ### Fixed
 
+- `resign` loads dispatch's host configuration before reading any overlay in all
+  modes. Shell configuration failures and configured but unreadable or invalid-JSON
+  overlays stop without writes at exit 40 (`EXIT_HOST_CONFIG`), with one diagnostic
+  on stderr and no traceback. Exit 2 is only an unconfigured overlay or argparse
+  usage error; daily-job owners can decide how to notify on the new code.
 - `doctor` reports `FAIL transport-overlay` when dispatch resolves a different
   executable path than the overlay pinned, naming the vendor and both paths with
   `omnilane resign` guidance. Vendor hash drift and runner-only drift remain `WARN`.

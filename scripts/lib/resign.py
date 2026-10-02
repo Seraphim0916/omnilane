@@ -20,7 +20,8 @@ that install location is their own local step, so those updates count as
 same-signer.
 
 Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check);
-20 drift needs an operator; 30 attempted and rolled back; 2 not configured.
+20 drift needs an operator; 30 attempted and rolled back; 40 host configuration
+failed (EXIT_HOST_CONFIG); 2 no overlay configured (also argparse usage errors).
 """
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ import cli_provenance  # noqa: E402
 import probe_sweep  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
+EXIT_HOST_CONFIG = 40
 VENDORS = probe_sweep.VENDORS
 
 
@@ -326,8 +328,31 @@ def trust_adhoc(live: Path, overlay: dict, report: dict, wanted: list[str], log)
     return EXIT_OK
 
 
+def load_host_configuration() -> tuple[str, dict]:
+    """Load dispatch's shell configuration and resolve binaries before reading an overlay."""
+    common = Path(build_overlay.__file__).with_name("common.sh")
+    home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
+    try:
+        result = subprocess.run(
+            ["bash", "-euo", "pipefail", "-c",
+             'source "$1" >&2; printf "%s" "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"',
+             "omnilane-resign-config", str(common)],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True,
+        )
+        return result.stdout, current_anchors() if result.stdout else {}
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = (error.stderr or f"shell exited {error.returncode}") \
+            if isinstance(error, subprocess.CalledProcessError) else str(error)
+        raise RuntimeError(f"cannot load host configuration {common} ({home / 'local.sh'}): "
+                           + " ".join(detail.splitlines())) from None
+
+
 def resign(args, log=print) -> int:
-    overlay_env = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY")
+    try:
+        overlay_env, anchors = load_host_configuration()
+    except RuntimeError as error:
+        log(f"omnilane: {error}")
+        return EXIT_HOST_CONFIG
     if not overlay_env:
         log("omnilane: no transport overlay is configured (OMNILANE_AA_TRANSPORT_OVERLAY); "
             "there is nothing to re-sign. See the README, 'Let your AI assistant drive omnilane', Step 2.")
@@ -337,8 +362,8 @@ def resign(args, log=print) -> int:
         overlay = json.loads(live.read_text())
     except (OSError, ValueError) as error:
         log(f"omnilane: cannot read the live overlay {live}: {error}")
-        return EXIT_UNCONFIGURED
-    report = detect(overlay, current_anchors())
+        return EXIT_HOST_CONFIG
+    report = detect(overlay, anchors)
     wanted = args.vendor or list(VENDORS)
     if args.record_signers:
         return record_signers(live, overlay, report, wanted, log)

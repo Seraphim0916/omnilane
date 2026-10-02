@@ -89,16 +89,7 @@ case "$cmd" in
       echo "omnilane: resign requires Python 3.9 or newer" >&2
       exit 1
     }
-    if [[ -z "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]]; then
-      # local.sh is where a host records its overlay; dispatch reads it the same way.
-      OMNILANE_AA_TRANSPORT_OVERLAY="$(
-        set +u
-        home="${OMNILANE_HOME:-$HOME/.omnilane}"
-        [[ -f "$home/local.sh" ]] && . "$home/local.sh" 2>/dev/null
-        printf '%s' "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"
-      )"
-      export OMNILANE_AA_TRANSPORT_OVERLAY
-    fi
+    # Python loads dispatch's host configuration and reports any error once.
     exec python3 "$REPO/scripts/lib/resign.py" "$@"
     ;;
   benchmark)
