@@ -169,6 +169,7 @@ while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
   # frozen decision.  In model-caller mode this also rejects Grok effort rows:
   # the current runner accepts EFFORT only for parity and discards it.
   aa_policy_gate grok "$MODEL" "$EFFORT" || exit $?
+  private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
   set +e
   OMNILANE_DEPTH=1 run_with_timeout "$RUN_TIMEOUT" \
     "$GROK_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"

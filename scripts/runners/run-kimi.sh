@@ -29,6 +29,7 @@ else
   ARGS+=(-y)
 fi
 
+private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
 set +e
 (
   cd "$WORKDIR" || exit 127

@@ -81,6 +81,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     exit 127
   }
   truncate_payload "$PROMPT_FILE" 140000
+  private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   set +e
@@ -116,6 +117,7 @@ fi
 
 truncate_payload "$PROMPT_FILE" 140000
 
+private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.progress.log" "${OUTPUT_FILE}.stderr.log"
 set +e
 (
   cd "$WORKDIR" || exit 127
