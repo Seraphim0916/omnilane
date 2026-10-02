@@ -443,6 +443,16 @@ VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claud
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
 
+def value_pool(rows: list[dict]) -> list[dict]:
+    """Rows the value rule may pick: reasoning rows below max of the routed families.
+
+    A Gemini row keeps its effort in its own field like every other vendor's, so the
+    family is the model as written; only the routing selector encodes it in the id.
+    """
+    return [r for r in rows if r["reasoning"] != "non-reasoning" and r["effort"] != "max"
+            and r["model"] in VALUE_FAMILIES]
+
+
 def cmd_value(args) -> int:
     """Per lane, the value pick for every caller ceiling and the chain those picks make."""
     records = json.loads(Path(args.extract).read_text())["records"]
@@ -454,8 +464,7 @@ def cmd_value(args) -> int:
         value = reader(records.get(row["aa_slug"]))
         return None if value is None else value * scale
 
-    pool = [r for r in rows if r["reasoning"] != "non-reasoning" and r["effort"] != "max"
-            and (r["model"].rsplit("-", 1)[0] if r["vendor"] == "gemini" else r["model"]) in VALUE_FAMILIES]
+    pool = value_pool(rows)
     for lane, (title, band, second, band2, floor) in VALUE_LANES.items():
         def pick(ceiling):
             reach = [r for r in pool if r["score"] <= ceiling and measure(title, r) is not None

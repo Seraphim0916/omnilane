@@ -409,7 +409,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
 dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，不调用模型
 jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # 过滤列表
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 过滤列表
 jobs.sh wait 作业ID [--timeout N]                  # 作业退出码；124 超时；125 工作进程消失
 jobs.sh cancel 作业ID                              # 停止运行中的作业:整组 SIGTERM,再 SIGKILL
 jobs.sh rm 作业ID                                  # 删除单个已完成/已死作业(运行中会被拒绝)
@@ -419,6 +419,25 @@ jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理�
 configure.sh                                        # 交互通道菜单
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 routing.local.yaml
 ```
+
+`configure diff` 在两份视图中保留 `local.sh` 的相同本机可用性设置，因此比较的是路由覆盖，而不是本机程序设置缺失造成的差异。 任一检查失败时，会返回该退出状态并说明失败阶段，而不会输出比较结果。
+
+`configure get` 会传递检查失败的退出状态，不会返回不完整数据或误报通道不存在。`configure list` 会报告存在性检查错误；覆盖配置确实缺失或为空时仍正常成功。
+
+`configure set` 先验证临时候选配置，再发布，并保留现有文件的权限模式。读取现有路由内容失败、验证程序意外失败或目标通道出现结构错误时，原配置保持不变；可用性警告和其他通道错误仍按既有规则处理。
+
+`configure unset` 先完成读取与筛选，再沿用原本的就地写入方式更新目标文件。读取或筛选失败时原内容不变；写入失败会报告错误，但不保证回滚。
+
+Bash、Zsh 和 Fish 补全包含文档中的顶层命令、目标命令和作业命令组。选择补全只会填入命令文字，不会执行作业操作。
+
+未指定 `--vendor` 时，`benchmark` 从有效路由列表获取供应商，并忽略仅用于显示的 `unavailable` 标记。如果没有可用于 benchmark 的供应商，会以退出码 2 报告未找到已配置供应商；默认仍是干跑，不调用供应商。
+
+作业的 `list` 和 `status` 使用一致的观测状态。`dead` 表示没有记录退出码，且工作进程的 PID 无效或已不存在；它不会出现在 `--status running` 中，可用 `--status dead` 筛选。`result` 会说明未记录退出码，不再误称进程仍在运行。尚无 PID 的启动阶段仍沿用 `running` 状态，不会推测退出码。
+
+后台作业需要 Perl 监督，使取消能终止受监督的进程组。
+监督本身不增加整体作业期限；没有适用的作业超时设置时，元数据仍为 `job_timeout: null`。
+受监督的单次调用使用 Perl alarm，超时可能返回 142；整体作业期限到期返回 124。
+`jobs close` 最多等待 11 秒，包含进程组清理。
 
 `--thread NAME` 可在多次单次派发间延续命名的 Claude、Codex、Grok 或 Gemini
 对话。0.33.0 会固定厂商、模型、effort 与实际工作目录；使用
@@ -484,6 +503,8 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
+前台派发与前台 `jobs retry` 在作业失败时也会打印已保存的公开输出，再返回该作业的非零退出码。后台派发保留原有 job ID 输出。
+
 `watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 还要求 `--mode sysops --workdir DIR`，advise／work 的实时请求在启动前停止，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
 
 空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
@@ -501,6 +522,26 @@ omnilane jobs wait "$JOB_ID" --timeout 900
 omnilane goal note "$GOAL_ID" "结账集成测试已通过"
 omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
 ```
+
+更新中断后，失败次数会从持久化工作记录重建，不会重复计数。`goal close` 只在报告写入成功后关闭目标；若写入失败，修正错误后可重试关闭。
+
+目标忙碌时会显示只读的锁持有者诊断，并保持退出码 75。不会自动移除锁；记录中的 PID 无法证明持有权，因此恢复前仍须人工确认。
+
+目标状态与报告会如实显示 `dead` 和 `missing`，不再误称仍在运行。任务状态证据不可用或不一致时显示 `unknown`，不编造退出码或失败次数。各任务秒数仍是提交后的经过时间，并非实际运行时间；目标预算不变。每个未完成任务各做一次最多两秒的本地状态查询。
+
+正常清理已完成任务的文件后，目标仍保留已验证的退出码、完成时间与截至完成的经过秒数。状态与报告会另行标注 `artifacts=missing`。没有已记录完成结果的任务仍保持缺失或未知，清理不会产生虚构的结束结果。
+
+目标派工会先持久化意图并预留一个任务名额，再以一次性的领取记录，在启动前绑定意图与生成的任务 ID。`spent_jobs` 仍统计已记录任务；`reserved_jobs` 表示尚未确认的提交。未确认或损坏的账本会阻止新派工与结案。对账只修复记录，不启动任务、不编造退出码，也不重试结果不明的提交。
+
+带线程的目标派工，其 stdout 只输出确切的任务 ID；验证 ID 后，对应的线程通知会显示在 stderr。直接后台派工仍保留原有的“通知加任务 ID”stdout 格式。
+
+`goal dispatch` 会启动后台任务，不支持 `--dry-run`；该选项会在目标状态发生变化前被拒绝。要预览路由，请直接使用 `omnilane dispatch --dry-run [options] LANE "TASK"`。 直接预览不会继承目标的工作目录；需要时请传入 `--workdir DIR`。
+
+目标预算记录必须使用 JSON 整数，不接受布尔值或数字字符串。可选上限仍是 `null` 或 1..999999999；计数器必须非负且位于支持的数值范围。无效字段会在更新账本或派工前被拒绝。工作目录路径不支持制表符、回车、换行或 NUL；普通空格与 Unicode 仍受支持。
+
+派工报错或结果丢失时，先查看 `goal status` 再决定是否重新提交：再次执行相同命令仍会创建新意图，因此保证的是每个意图最多启动一次，而不是所有相同命令自动去重。对账需要有效的已有任务 PID／退出码证据；若在对账前清理证据，预留名额会保持未确认。已完成对账的目标历史不受清理任务文件影响。旧目标仍可读取，不会自动回收过期锁或恢复结果不明的意图。
+
+后台任务开始收尾后，HUP/TERM 不会改写已选定的退出状态。完成通知会跳过已消费记录，每次提示最多发送十条，包括无法读取记录的通知。
 
 目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；传入预算参数后，对应的上限是硬限制，并不保证任务完成。
 

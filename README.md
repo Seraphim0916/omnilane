@@ -527,7 +527,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
 dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
 jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done]  # filter the listing
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # filter the listing
 jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
 jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
 jobs.sh rm ID                                     # delete one finished/dead job (refuses a running job)
@@ -538,6 +538,26 @@ jobs.sh prune [--keep N] [--apply]                # preview by default; complete
 configure.sh                                        # interactive lane menu
 configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```
+
+`configure diff` keeps the same machine-specific availability settings from `local.sh` in both views, so its comparison reflects routing overrides rather than missing local binaries. If either inspection fails, it returns that exit status and names the failed stage instead of printing a comparison.
+
+`configure get` propagates a failed inspection’s status instead of returning partial data or calling the lane unknown. `configure list` reports presence-check errors; genuinely missing or empty overrides still succeed.
+
+`configure set` validates a temporary candidate before publishing it and preserves an existing file’s permission mode. Failures reading existing routing content, unexpected validator failures, or structural errors in the target lane leave the previous configuration untouched; availability warnings and unrelated-lane errors retain their existing handling.
+
+`configure unset` finishes reading and filtering before changing the destination, then retains its existing in-place write behavior. Read/filter errors leave the original content unchanged; write errors are reported without a rollback guarantee.
+
+Bash, Zsh and Fish completion include the documented top-level, goal and job command groups. Choosing a completion only fills command text; it does not run a job action.
+
+Without `--vendor`, `benchmark` discovers vendors from the effective routing list and ignores its `unavailable` display markers. If no benchmark vendor remains, it exits 2 with a no-configured-vendors diagnostic; the default remains a dry-run without provider calls.
+
+Job `list` and `status` use the same observed state. `dead` means the worker PID is invalid or no longer exists and no exit was recorded; it is excluded from `--status running` and selectable with `--status dead`. `result` reports that no exit was recorded instead of calling the dead worker running. A missing PID still uses the existing startup `running` state; no exit code is invented.
+
+Dispatch requires Python 3.9+ supervision so cancellation can terminate its
+owned process groups. Supervision alone adds no whole-job deadline; when
+no job timeout applies, metadata remains `job_timeout: null`. The supervised
+per-call watchdog uses a separate monotonic supervisor and returns 142 on
+expiry; the whole-job deadline returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
 
 `--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
 single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
@@ -576,6 +596,49 @@ voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
 lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
 code passes through.
 
+
+### Cancellation and descendant ownership
+
+Every dispatch, including foreground work without a whole-job budget, now uses
+the shared Python 3.9+ supervisor. Existing Perl entry points remain available
+for compatibility, but dispatch does not require Perl for supervision.
+A keeper reserves each owned process group until bounded TERM/KILL cleanup has
+finished. Cancellation records its time, verified OS caller identity, signal
+attempts, final exit and any known survivors in the job directory. Foreground
+TERM also publishes the job exit and completion record. Missing supervision
+dependencies fail closed; there is no unguarded fallback.
+
+macOS cannot atomically identify arbitrary escaped PIDs with the portable APIs
+used here. A descendant that leaves the owned process group/session is therefore
+not signalled merely because its PID still matches. Known escapes are listed by
+PID, start identity and command name (never full arguments). Linux uses the same conservative
+behavior. Snapshot polling cannot discover a double-fork that
+escapes and is reparented entirely between samples; this is not a containment
+sandbox and cannot promise discovery of every possible escape.
+
+Known survivors or unconfirmed cleanup produce state `incomplete` and exit 125,
+distinct from successful cancellation (normally 143), per-call timeout 142 and
+whole-job timeout 124. Grok treats 125 as non-retryable, including a provider
+returning that status, so an unconfirmed writer cannot overlap a new retry.
+`jobs status` and `jobs result` expose the residual count
+and safe process summary. If enumeration fails, the report says “residual
+unknown” and retains the last-observed identities instead of claiming zero.
+Cancellation/timeout completion is never inferred from
+an exit file alone. A stuck or failed completion publisher is also reported as
+incomplete rather than receiving an unsafe guessed-PID kill.
+
+`jobs result` returns available late output by default while preserving the
+cancellation exit code and printing provenance on stderr (also included in JSON).
+“Completed after cancellation” requires a successful provider/runner completion
+record and matching output fingerprint; a leftover `.tmp` without that evidence
+is explicitly partial or of unknown completeness. Reading results never renames
+or overwrites the original artifacts. Completion observation time is not a
+precise kernel exit timestamp; coarse filesystem timestamps or clock changes
+can conservatively leave provenance unknown. Fingerprinting is capped at 16 MiB
+and a short time budget so cleanup never chases growing output; larger output
+remains retrievable with unknown completeness.
+
+
 ## 🎭 Modes
 
 - **advise** (default): read-only local analysis with native web/search tools where the vendor supports them. Model/provider traffic stays available; agent mutation tools are restricted. This is not a promise of identical X/web capabilities across vendors.
@@ -593,9 +656,9 @@ Codex and Claude have distinct policies for all three modes. Agy advise/sysops u
 - **Serialized codex** — same-target-directory codex dispatches queue behind a
   lock keyed on the normalized workdir; stale locks from crashed jobs are
   detected by owner PID and stolen safely.
-- **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
-  fallback when neither exists (stock macOS), so a hung CLI cannot block
-  forever. The cap applies to **each CLI invocation**, highest priority first:
+- **Watchdog** — every worker uses the shared Python 3.9+ supervisor with a
+  monotonic deadline and owned-group cleanup. Missing supervision support fails
+  closed. The cap applies to **each CLI invocation**, highest priority first:
   `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
   upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
   global `OMNILANE_TIMEOUT`, default 600s. It is a per-call hang-guard, not a
@@ -608,9 +671,8 @@ Codex and Claude have distinct policies for all three modes. Agy advise/sysops u
   with one automatic exception: Codex `work` outside a Git worktree uses the
   resolved per-call watchdog as its whole-job fuse when none was configured,
   capped at the supervisor's 999999999-second maximum. This automatic guard
-  needs the bundled Perl supervisor; if unavailable, dispatch warns and keeps
-  non-Git work running through the existing per-call watchdog path, which emits
-  its own warning if no watchdog tool exists.
+  uses the bundled Python supervisor. Missing Python/POSIX supervision support
+  fails closed rather than starting an unguarded provider.
   Expiry cleans the supervised process group and returns 124. For a deep audit
   of a large repository, start around 2–4 hours (7200–14400s)
   with a 30-minute per-call watchdog; these are recommendations, not defaults.
@@ -634,6 +696,8 @@ scripts/jobs.sh close "$ID"
 scripts/jobs.sh retry "$ID" --background
 ```
 
+Foreground dispatch and foreground `jobs retry` print the stored public output even when the job fails, then return its nonzero exit code. Background dispatch keeps its job-ID output.
+
 `watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude, Gemini, Codex, and Grok. Automatic selection remains single-shot for Codex/Grok; only explicit `--live` opts them in. Grok advise rejects `--live` because ACP does not enforce its read-only boundary; normal advise uses single-shot native tool allow/deny rules. `--live` fails fast for unsupported vendors. `--single-shot` forces one-shot execution for every vendor. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
 
 An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
@@ -653,6 +717,26 @@ omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
 ```
 
 Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly. When budget flags are supplied, those caps are hard bounds, not completion promises.
+
+Failure counts are rebuilt from durable job records after an interrupted refresh, without counting a failure twice. `goal close` seals the goal only after publishing its report; if publication fails, correct the error and retry close.
+
+A busy goal prints read-only lock-owner diagnostics and keeps exit code 75. Locks are never automatically removed; a recorded PID is not proof of ownership, so manual verification is required before recovery.
+
+Goal status and reports preserve `dead` and `missing` states instead of calling them running. Unavailable or inconsistent job-status evidence is `unknown`, with no invented exit or failure count. Per-job seconds remain elapsed time since submission, not measured active runtime; goal budgets are unchanged. Incomplete jobs each require one local status check, bounded to two seconds.
+
+After normal cleanup of completed job artifacts, the goal retains its validated exit, completion time and elapsed-to-finish duration. Status and reports mark `artifacts=missing` separately. A job with no recorded completion remains missing or unknown; cleanup never creates a terminal result.
+
+Goal dispatch first journals an intent and reserves one job slot. A one-time claim binds that intent to the generated job ID before launch. `spent_jobs` still counts recorded jobs; `reserved_jobs` covers unresolved submissions. An unresolved or corrupt journal blocks new dispatch and close. Reconciliation repairs records without launching work; it never invents an exit or retries an ambiguous submission.
+
+For threaded goal dispatch, stdout is the exact job ID; the matching thread notice is shown on stderr after the ID is verified. Direct background dispatch keeps its existing notice-and-ID stdout format.
+
+`goal dispatch` launches a background job and does not support `--dry-run`; the option is rejected before goal state changes. To preview routing, use `omnilane dispatch --dry-run [options] LANE "TASK"` directly. Direct previews do not inherit the goal’s working directory; pass `--workdir DIR` when needed.
+
+Persisted goal budgets require JSON integers, not booleans or numeric strings. Optional limits remain `null` or 1..999999999; counters must be nonnegative and fit the supported numeric range. Invalid fields are rejected before ledger updates or dispatch. Workdir paths containing tabs, carriage returns, newlines or NUL are unsupported; ordinary spaces and Unicode remain supported.
+
+If dispatch errors or its result is lost, inspect `goal status` before submitting again: a fresh identical command creates a new intent, so the guarantee is one launch per intent, not global command deduplication. Valid existing worker PID/exit evidence is needed to reconcile a claim; pruning that evidence before reconciliation leaves the reservation unresolved. Already-reconciled goal history survives pruning. Old goals remain readable. No automatic stale-lock or ambiguous-intent recovery is performed.
+
+Background finalization preserves its chosen exit status when HUP/TERM arrives. Completion hooks skip already-consumed records and deliver at most ten records per prompt, including unreadable-record notices.
 
 Do not use goal orchestration for a single obvious task; dispatch that task directly. The default unlimited budgets let the caller keep exploring without omnilane imposing a cap; pass either budget flag only when that limit is wanted.
 

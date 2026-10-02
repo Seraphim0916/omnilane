@@ -127,6 +127,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     echo "omnilane: unsafe Gemini live event path" >&2
     exit 125
   fi
+  private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   finalize_live_output() {
@@ -135,6 +136,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
       echo "omnilane: cannot extract Gemini live result: python3 not found" >> "$STDERR_FILE"
       return 1
     fi
+    private_job_files "$tmp"
     if ! python3 - "$EVENTS_FILE" "$tmp" <<'PY'
 import json
 import pathlib
@@ -177,7 +179,11 @@ PY
     local signal_rc="$1" waited=0
     trap - TERM HUP INT
     set +e
-    if [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
+    if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+      # The owning supervisor already received cancellation and pins its group.
+      # Bash may reap asynchronously, so do not signal a remembered numeric PID.
+      [[ -z "$LIVE_CHILD_PID" ]] || wait "$LIVE_CHILD_PID" 2>/dev/null
+    elif [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
       kill -TERM "-$LIVE_CHILD_PID" 2>/dev/null || kill -TERM "$LIVE_CHILD_PID" 2>/dev/null || true
       while kill -0 "$LIVE_CHILD_PID" 2>/dev/null && [[ "$waited" -lt 50 ]]; do
         sleep 0.1
@@ -193,7 +199,8 @@ PY
     exit "$signal_rc"
   }
 
-  set -m
+  # The supervisor owns the whole tree; a nested group would escape its signals.
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set -m; fi
   (
     cd "$RUN_DIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
@@ -205,7 +212,7 @@ PY
       < "$LIVE_INBOX" > "$EVENTS_FILE" 2> "$STDERR_FILE"
   ) &
   LIVE_CHILD_PID=$!
-  set +m
+  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then set +m; fi
   trap 'stop_live_child 143' TERM
   trap 'stop_live_child 129' HUP
   trap 'stop_live_child 130' INT
@@ -227,10 +234,11 @@ PY
 fi
 
 if [[ -n "$THREAD_MODE" ]]; then
+  private_job_files "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.stderr.log"
   set +e
   (
     cd "$RUN_DIR" || exit 127
-    env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
+    run_with_timeout "$RUN_TIMEOUT" env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
       NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
       "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
       "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
@@ -241,6 +249,7 @@ if [[ -n "$THREAD_MODE" ]]; then
   RC=$?
   set -e
   if [[ "$RC" -eq 0 ]]; then
+    private_job_files "${OUTPUT_FILE}.tmp"
     if ! python3 - "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.tmp" <<'PY'
 import json
 import pathlib
@@ -264,7 +273,8 @@ set +e
   # Headless cannot answer OAuth prompts; strip API keys to stay on CLI login.
   # --add-dir registers RUN_DIR as the active workspace; without it agy's
   # sandbox denies every tool call (run_command/view_file) in print mode.
-  env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
+  private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
+  run_with_timeout "$RUN_TIMEOUT" env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
     NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
     "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
     "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \

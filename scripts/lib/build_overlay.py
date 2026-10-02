@@ -103,14 +103,24 @@ for effort in ["max", "xhigh", "high", "medium", "low"]:
 PROVEN["claude/claude-fable-5"] = (
     "model_and_effort", "claude-fable-5", "cl-claude-fable-5-max")
 
+# The same per-host overrides scripts/lib/common.sh vendor_bin() gives the runners.
+BIN_ENV = {"codex": "CODEX_BIN", "claude": "CLAUDE_BIN", "grok": "GROK_BIN", "agy": "AGY_BIN"}
+
+
+def cli_command(name: str) -> str:
+    """The command dispatch runs for this CLI: its *_BIN override, else the bare name."""
+    return os.environ.get(BIN_ENV.get(name, ""), "") or name
+
+
 def cli_path(name: str) -> Path:
     """Anchor the executable the runners resolve, not a version pinned here.
 
-    The runners invoke bare names, so a pinned path can name a binary that has
-    not run since the last self-update; the overlay must hash what answers.
-    aa_policy opens evidence with O_NOFOLLOW, so this resolves past the symlink.
+    The runners invoke the *_BIN override when a host sets one and the bare name
+    otherwise, so the overlay must hash that same binary: a second install on PATH
+    is not the one that answers a dispatch. aa_policy opens evidence with
+    O_NOFOLLOW, so this resolves past the symlink.
     """
-    found = shutil.which(name)
+    found = shutil.which(cli_command(name))
     if not found:
         raise SystemExit(f"cannot resolve the {name} CLI to anchor its evidence")
     return Path(found).resolve()
@@ -126,7 +136,7 @@ def core_evidence() -> list[tuple[Path, str]]:
     still load this module to read PROVEN."""
     anchors = []
     for vendor in ("grok", "codex", "claude", "gemini"):
-        if shutil.which(CLI_NAMES[vendor]) is None:
+        if shutil.which(cli_command(CLI_NAMES[vendor])) is None:
             continue  # not installed here: main() signs nothing for it
         anchors += [(cli_path(CLI_NAMES[vendor]), vendor),
                     (REPO / "scripts/runners" / RUNNERS[vendor], vendor)]

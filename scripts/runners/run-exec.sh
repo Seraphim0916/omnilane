@@ -22,6 +22,7 @@ SCRIPT="$(expand_home_path "$SCRIPT")"
 
 truncate_payload "$PROMPT_FILE" 140000
 
+private_job_files "${OUTPUT_FILE}.stderr.log"
 set +e
 OMNILANE_DEPTH=1 run_with_timeout "$RUN_TIMEOUT" \
   "$SCRIPT" "$MODE" "$WORKDIR" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" \

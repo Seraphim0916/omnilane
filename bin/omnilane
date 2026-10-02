@@ -82,6 +82,18 @@ case "$cmd" in
       )"
       export OMNILANE_AA_TRANSPORT_OVERLAY
     fi
+    # Probe and anchor the binaries dispatch runs: local.sh may point a vendor at
+    # a specific install, and a re-sign that follows PATH instead proves another one.
+    for bin_name in CODEX_BIN CLAUDE_BIN GROK_BIN AGY_BIN; do
+      [[ -z "${!bin_name:-}" ]] || continue
+      bin_value="$(
+        set +u
+        home="${OMNILANE_HOME:-$HOME/.omnilane}"
+        [[ -f "$home/local.sh" ]] && . "$home/local.sh" 2>/dev/null
+        printf '%s' "${!bin_name:-}"
+      )"
+      [[ -z "$bin_value" ]] || export "$bin_name=$bin_value"
+    done
     exec python3 "$REPO/scripts/lib/resign.py" "$@"
     ;;
   benchmark)
@@ -111,6 +123,7 @@ omnilane — one routing table, every harness
                                         open a goal; budgets default to unlimited
   omnilane goal dispatch GOAL_ID [dispatch.sh args...]
                                          budget-gate and start one background job
+                                         --dry-run unsupported; preview with omnilane dispatch --dry-run
   omnilane goal note GOAL_ID "TEXT"       append a timestamped foreman note
   omnilane goal status GOAL_ID           inspect budgets, fuse trips, and recorded jobs
   omnilane goal close GOAL_ID [--summary "TEXT"]

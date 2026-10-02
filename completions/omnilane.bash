@@ -1,4 +1,4 @@
-# Bash completion for omnilane. This file reads routing/job names only; it never
+# Bash completion for omnilane. This file reads routing/job/goal names only; it never
 # invokes dispatch, provider CLIs, or the executable machine-local overlay.
 
 _omnilane_repo() {
@@ -51,14 +51,35 @@ _omnilane_job_ids() {
   done
 }
 
+_omnilane_goal_ids() {
+  local home root dir id count=0
+  home="${OMNILANE_HOME:-$HOME/.omnilane}"
+  root="$home/goals"
+  [[ -d "$root" && ! -L "$root" ]] || return 0
+  for dir in "$root"/*; do
+    [[ -d "$dir" && ! -L "$dir" ]] || continue
+    id="${dir##*/}"
+    if [[ "$id" =~ ^[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+$ ]]; then
+      printf '%s\n' "$id"
+      ((count += 1))
+      [[ "$count" -lt 1000 ]] || break
+    fi
+  done
+}
+
 _omnilane() {
-  local cur prev command sub words sub_index reply_line
+  local cur prev command sub words sub_index reply_line thread_sub thread_index
+  local goal_dispatch=0
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   prev="${COMP_WORDS[COMP_CWORD-1]:-}"
   command="${COMP_WORDS[1]:-}"
+  if [[ "$command" == goal && "${COMP_WORDS[2]:-}" == dispatch && "$COMP_CWORD" -gt 3 ]]; then
+    command=dispatch
+    goal_dispatch=1
+  fi
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-      words="version list route dispatch jobs doctor whoami native-context resign benchmark release-audit ui configure completion help"
+      words="version list route dispatch goal jobs mcp doctor whoami native-context resign benchmark release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)
@@ -73,8 +94,34 @@ _omnilane() {
             done < <(compgen -d -- "$cur")
             return ;;
       --model|--timeout|--job-timeout|--thread) return ;;
-      *) words="--background --dry-run --thread --help --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)" ;;
+          *)
+            words="--background --thread --mode --workdir --vendor --model --effort --timeout --job-timeout $(_omnilane_lanes)"
+            [[ "$goal_dispatch" -eq 1 ]] || words="--dry-run --help $words"
+            ;;
         esac
+        ;;
+      goal)
+        sub="${COMP_WORDS[2]:-}"
+        if [[ "$COMP_CWORD" -eq 2 ]]; then
+          words="open dispatch note status close"
+        elif [[ "$COMP_CWORD" -eq 3 &&
+                ( "$sub" == dispatch || "$sub" == note || "$sub" == status || "$sub" == close ) ]]; then
+          words="$(_omnilane_goal_ids)"
+        elif [[ "$sub" == open && "$COMP_CWORD" -gt 3 ]]; then
+          case "$prev" in
+            --budget-jobs|--budget-seconds) return ;;
+            --workdir)
+              while IFS= read -r reply_line; do
+                COMPREPLY+=("$reply_line")
+              done < <(compgen -d -- "$cur")
+              return ;;
+            *) words="--budget-jobs --budget-seconds --workdir" ;;
+          esac
+        elif [[ "$sub" == close && "$COMP_CWORD" -eq 4 ]]; then
+          words="--summary"
+        else
+          return
+        fi
         ;;
       jobs)
         sub="${COMP_WORDS[2]:-}"
@@ -84,13 +131,40 @@ _omnilane() {
           sub="${COMP_WORDS[3]:-}"
         fi
         if [[ "$COMP_CWORD" -eq "$sub_index" ]]; then
-          words="list status result tail retry stats recommend wait audit prune help"
+          words="list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help"
         elif [[ "$COMP_CWORD" -eq $((sub_index + 1)) &&
                 ( "$sub" == status || "$sub" == result || "$sub" == wait ||
-                  "$sub" == tail || "$sub" == retry ) ]]; then
+                  "$sub" == tail || "$sub" == retry || "$sub" == complete-native ||
+                  "$sub" == send || "$sub" == watch || "$sub" == close ||
+                  "$sub" == cancel || "$sub" == rm ) ]]; then
           words="$(_omnilane_job_ids)"
+        elif [[ "$sub" == complete-native && "$COMP_CWORD" -eq $((sub_index + 2)) ]]; then
+          while IFS= read -r reply_line; do
+            COMPREPLY+=("$reply_line")
+          done < <(compgen -f -- "$cur")
+          return
+        elif [[ "$sub" == threads ]]; then
+          thread_index=$((sub_index + 1))
+          thread_sub="${COMP_WORDS[thread_index]:-}"
+          if [[ "$thread_sub" == --json ]]; then
+            thread_index=$((thread_index + 1))
+            thread_sub="${COMP_WORDS[thread_index]:-}"
+          fi
+          if [[ "$COMP_CWORD" -eq "$thread_index" ]]; then
+            words="list show rm"
+          elif [[ "$thread_sub" == list ||
+                  ( "$thread_sub" == show && "$COMP_CWORD" -gt $((thread_index + 1)) ) ]]; then
+            words="--json"
+          else
+            return
+          fi
         elif [[ "$sub" == list ]]; then
-          words="--json"
+          case "$prev" in
+            --status) words="running done dead pending cancelled expired" ;;
+            --lane) words="$(_omnilane_lanes)" ;;
+            --vendor) words="codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras exec" ;;
+            *) words="--lane --vendor --status --json" ;;
+          esac
         elif [[ "$sub" == status || "$sub" == result ]]; then
           words="--json"
         elif [[ "$sub" == tail ]]; then
@@ -125,7 +199,7 @@ _omnilane() {
         ;;
       release-audit) words="--target --allow-dirty --require-tag --manifest --json" ;;
       ui) words="start status url stop" ;;
-      completion) words="bash zsh" ;;
+      completion) words="bash zsh fish" ;;
       *) return ;;
     esac
   fi

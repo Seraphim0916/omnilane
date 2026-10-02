@@ -42,12 +42,15 @@ report_completions() {
       } readdir $dh;
       closedir $dh;
 
-      my (@matches, @unreadable);
+      my @matches;
       for my $name (@names) {
         my $source = "$inbox/$name";
+        # A replay of an already claimed record must not use a delivery slot.
+        my $destination = "$consumed/$name";
+        next if -e $destination || -l $destination;
         if (-s $source > 65536) {
           (my $job = $name) =~ s/\.json\z//;
-          push @unreadable, [$name, {
+          push @matches, [$name, {
             job_id => $job, lane => "unknown", vendor => "unknown",
             exit => 1, tail => "record was unreadable",
           }];
@@ -68,7 +71,7 @@ report_completions() {
         }
         unless (ref($record) eq "HASH") {
           (my $job = $name) =~ s/\.json\z//;
-          push @unreadable, [$name, {
+          push @matches, [$name, {
             job_id => $job, lane => "unknown", vendor => "unknown",
             exit => 1, tail => "record was unreadable",
           }];
@@ -92,7 +95,6 @@ report_completions() {
 
       my $withheld = @matches > 10 ? @matches - 10 : 0;
       splice @matches, 10 if @matches > 10;
-      unshift @matches, @unreadable;
       my @claimed;
       for my $item (@matches) {
         my ($name, $record) = @$item;

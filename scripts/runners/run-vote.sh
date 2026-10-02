@@ -62,6 +62,7 @@ run_voter() { # vendor, prompt_file, out_file -> rc
 
 truncate_payload "$PROMPT_FILE" 100000
 
+private_job_files "$OUTPUT_FILE"
 : > "$OUTPUT_FILE"
 printf '# Round 1 — independent opinions\n\n' >> "$OUTPUT_FILE"
 ok=0; requested=0; OK_VOTERS=()

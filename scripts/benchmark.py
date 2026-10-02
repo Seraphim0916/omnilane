@@ -98,6 +98,8 @@ def parse_plan(text):
 def load_workloads(path):
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise BenchmarkError("workloads must be UTF-8") from exc
     except OSError as exc:
         raise BenchmarkError(f"cannot read workloads: {path}: {exc}") from exc
 
@@ -192,6 +194,7 @@ def list_routes(dispatch, env):
             "off",
             "exec",
             "vote",
+            "unavailable",
         }:
             vendors.append(fields[0])
     return unique(lanes), unique(vendors)
@@ -259,7 +262,7 @@ def run_one(repo, vendor, plan, workload, timeout, env):
         "weight": workload["weight"],
     }
     if not runner.is_file() or not os.access(runner, os.X_OK):
-        return dict(base, status="runner_error", duration_seconds=0.0, response_bytes=0), True
+        return dict(base, status="runner_error", duration_seconds=0.0, response_bytes=0), True, False
 
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="omnilane-benchmark-") as temporary:
@@ -288,7 +291,10 @@ def run_one(repo, vendor, plan, workload, timeout, env):
             )
         except subprocess.TimeoutExpired:
             elapsed = round(time.monotonic() - started, 3)
-            return dict(base, status="runner_error", duration_seconds=elapsed, response_bytes=0), True
+            return dict(base, status="runner_error", duration_seconds=elapsed, response_bytes=0), True, True
+        except OSError:
+            elapsed = round(time.monotonic() - started, 3)
+            return dict(base, status="runner_error", duration_seconds=elapsed, response_bytes=0), True, False
         elapsed = round(time.monotonic() - started, 3)
         try:
             body = output_file.read_text(encoding="utf-8")
@@ -307,7 +313,7 @@ def run_one(repo, vendor, plan, workload, timeout, env):
             status=status,
             duration_seconds=elapsed,
             response_bytes=response_bytes,
-        ), runner_error
+        ), runner_error, True
 
 
 def execute(args):
@@ -382,10 +388,11 @@ def execute(args):
                     }
                 )
                 continue
-            provider_invoked = True
-            item, runner_error = run_one(
+            item, runner_error, invoked = run_one(
                 repo, vendor, plan, workload, args.timeout, env
             )
+            # This records runner execution, not confirmation of provider receipt.
+            provider_invoked = provider_invoked or invoked
             items.append(item)
             had_error = had_error or runner_error
             if item["status"] == "passed":

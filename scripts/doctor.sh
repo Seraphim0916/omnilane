@@ -309,14 +309,14 @@ if [[ -L "$OMNILANE_HOME/locks" ||
   report FAIL lock-store "$OMNILANE_HOME/locks must be a real directory, not a symlink or file"
 fi
 
-if command -v timeout >/dev/null 2>&1; then
-  report PASS watchdog "timeout is available"
-elif command -v gtimeout >/dev/null 2>&1; then
-  report PASS watchdog "gtimeout is available"
-elif command -v perl >/dev/null 2>&1; then
-  report PASS watchdog "Perl alarm fallback is available"
+if ! command -v python3 >/dev/null 2>&1; then
+  report FAIL watchdog "Python 3.9+ is required for owned-process supervision"
+elif ! python3 -c 'import os,signal,sys,time; assert sys.version_info >= (3,9) and hasattr(os,"fork") and hasattr(signal,"pthread_sigmask")' >/dev/null 2>&1; then
+  report FAIL watchdog "Python lacks required POSIX supervision support"
+elif [[ ! -f "$REPO/scripts/lib/process_tree.py" ]]; then
+  report FAIL watchdog "shared process supervisor is missing"
 else
-  report FAIL watchdog "timeout, gtimeout, and perl are all unavailable"
+  report PASS watchdog "Python owned-process supervisor is available (per-call 142; whole-job 124)"
 fi
 
 # Vendor CLI availability. Runners resolve each vendor's binary through a *_BIN
@@ -457,6 +457,37 @@ if [[ -n "$PROBE_VENDOR" ]]; then
   fi
 fi
 
+# An installed copy of the skill is what each harness actually reads. It is a
+# separate file per surface, so a release that skips the deploy step leaves
+# agents on an old lane table while dispatch follows the current one.
+skill_digest() {
+  if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" 2>/dev/null | awk '{print $1}'
+  fi
+}
+repo_skill="$REPO/skills/omnilane/SKILL.md"
+repo_skill_digest=""
+[[ -f "$repo_skill" ]] && repo_skill_digest="$(skill_digest "$repo_skill")"
+installed_skill_seen=0
+if [[ -n "$repo_skill_digest" ]]; then
+  for skill_surface in "claude:$HOME/.claude/skills/omnilane" "codex:$HOME/.codex/skills/omnilane" \
+                       "grok:$HOME/.grok/skills/omnilane" "gemini:$HOME/.gemini/skills/omnilane" \
+                       "antigravity:$HOME/.gemini/config/skills/omnilane" \
+                       "openclaw:$HOME/.openclaw/skills/omnilane" "agents:$HOME/.agents/skills/omnilane"; do
+    skill_name="${skill_surface%%:*}"; skill_file="${skill_surface#*:}/SKILL.md"
+    [[ -f "$skill_file" ]] || continue
+    installed_skill_seen=1
+    if [[ "$(skill_digest "$skill_file")" == "$repo_skill_digest" ]]; then
+      report PASS installed-skill "$skill_name reads the skill this checkout ships"
+    else
+      report WARN installed-skill "$skill_name reads a different skill than this checkout ships; redeploy the skill to that surface"
+    fi
+  done
+  if [[ "$installed_skill_seen" -eq 0 ]]; then
+    report PASS installed-skill "no installed copy of the skill on this host"
+  fi
+fi
+
 if command -v python3 >/dev/null 2>&1; then
   if python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)' \
       >/dev/null 2>&1; then
@@ -466,7 +497,7 @@ if command -v python3 >/dev/null 2>&1; then
     report WARN live-ui "Python 3.9 or newer is required for the optional UI"
   fi
 else
-  report WARN live-ui "python3 is absent; model routing still works"
+  report WARN live-ui "python3 is absent; UI unavailable (watchdog check reports dispatch dependency)"
 fi
 
 if [[ "$JSON_MODE" -eq 1 ]]; then

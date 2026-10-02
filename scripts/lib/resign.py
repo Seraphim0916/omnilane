@@ -53,7 +53,7 @@ def current_anchors() -> dict[str, dict[str, Path]]:
     """What the runners would execute right now, per vendor."""
     anchors = {}
     for vendor in VENDORS:
-        found = shutil.which(build_overlay.CLI_NAMES[vendor])
+        found = shutil.which(build_overlay.cli_command(build_overlay.CLI_NAMES[vendor]))
         anchors[vendor] = {
             "cli": Path(found).resolve() if found else None,
             "runner": build_overlay.REPO / "scripts/runners" / build_overlay.RUNNERS[vendor],
@@ -73,7 +73,7 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
         reasons = []
         cli, runner = anchors[vendor]["cli"], anchors[vendor]["runner"]
         if cli is None:
-            reasons.append(f"{build_overlay.CLI_NAMES[vendor]} is not on PATH")
+            reasons.append(f"{build_overlay.cli_command(build_overlay.CLI_NAMES[vendor])} is not on PATH")
         elif recorded_cli is None:
             reasons.append("the overlay pins no executable for this vendor")
         elif str(cli) != recorded_cli["path"]:

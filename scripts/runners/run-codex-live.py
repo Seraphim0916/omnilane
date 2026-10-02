@@ -407,7 +407,10 @@ class CodexLiveClient:
         # file-object lock and defeat the bounded shutdown contract.
         if self.process.stdout is not None and self.server_stdout_eof.is_set():
             self.process.stdout.close()
-        self.terminate_tracked_descendants(tracked_descendants)
+        if os.environ.get("OMNILANE_JOB_SUPERVISED") != "1" and os.environ.get("OMNILANE_PROCESS_OWNED") != "1":
+            self.terminate_tracked_descendants(tracked_descendants)
+        # Supervised calls leave descendant cleanup to the pinned owner; the
+        # standalone legacy helper cannot atomically authorize arbitrary PIDs.
 
     def run(self) -> int:
         pathlib.Path(self.args.output).write_text("", encoding="utf-8")

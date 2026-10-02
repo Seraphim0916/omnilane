@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -euo pipefail
 unset OMNILANE_DEPTH
 unset CLAUDE_CODE_SESSION_ID
@@ -66,7 +74,9 @@ test_completion_settings_detection() {
   bin="$home/bin"
   config="$home/claude-config"
   marker="$home/claude-spawned"
-  mkdir -p "$repo/scripts" "$repo/hooks" "$bin" "$config" "$home/state/inbox"
+  mkdir -p "$repo/scripts/lib" "$repo/hooks" "$bin" "$config" "$home/state/inbox"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
+  cp "$ROOT/scripts/lib/goal-loop.sh" "$repo/scripts/lib/goal-loop.sh"
 
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/bin/sh
@@ -98,7 +108,7 @@ EOF
 EOF
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
     OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
-    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
   [[ "$rc" -eq 0 && "$out" == *"PASS  completion-plugin"* &&
      "$out" == *"PASS  completion-hook"* && "$out" == *"PASS  completion-manifest"* &&
      "$out" == *"PASS  completion-inbox"* && "$out" == *"PASS  completion-notice"* &&
@@ -109,7 +119,7 @@ EOF
   printf '{}\n' > "$config/settings.local.json"
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
     OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
-    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
   [[ "$rc" -eq 0 && "$out" == *"WARN  completion-plugin"* &&
      "$out" == *"WARN  completion-notice"* && "$out" == *inactive* &&
      "$out" == *"claude plugin install omnilane@omnilane"* && ! -e "$marker" ]] ||
@@ -121,7 +131,7 @@ EOF
   printf '{broken json\n' > "$config/settings.local.json"
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
     OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
-    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
   [[ "$rc" -eq 0 && "$out" == *"WARN  completion-plugin"* &&
      "$out" == *"Claude Code plugin state is unknown"* &&
      "$out" != *"missing or disabled"* && ! -e "$marker" ]] ||
@@ -134,7 +144,7 @@ EOF
   chmod -x "$repo/hooks/report-completions.sh"
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
     OMNILANE_HOME="$home/state" OMNILANE_DOCTOR_REPO="$repo" \
-    PATH="$bin:/usr/bin:/bin" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" /bin/bash "$ROOT/scripts/doctor.sh" 2>&1)"; rc=$?
   [[ "$rc" -eq 0 && "$out" == *"WARN  completion-hook"* &&
      "$out" == *"WARN  completion-manifest"* && "$out" == *"WARN  completion-notice"* &&
      "$out" == *"$repo/hooks/hooks.json"* && ! -e "$marker" ]] ||
@@ -157,7 +167,7 @@ EOF
 
   before="$(find "$home" -mindepth 1 -print | sort)"
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
-    PATH="$bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --check 2>&1)" || true
   after="$(find "$home" -mindepth 1 -print | sort)"
   [[ "$before" == "$after" && ! -e "$marker" && ! -e "$config" &&
@@ -166,7 +176,7 @@ EOF
 
   before="$after"
   out="$(HOME="$home" CLAUDE_CONFIG_DIR="$config" CLAUDE_MARKER="$marker" \
-    PATH="$bin:/usr/bin:/bin" OMNILANE_HOOKS=none \
+    PATH="$bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=none \
     /bin/bash "$ROOT/install.sh" --dry-run 2>&1)"; rc=$?
   after="$(find "$home" -mindepth 1 -print | sort)"
   [[ "$rc" -eq 0 && "$before" == "$after" && ! -e "$marker" && ! -e "$config" &&
@@ -409,7 +419,7 @@ grep -q 'record-foreman-session\.sh' "$ROOT/hooks/hooks.json" ||
   fail "SessionStart recorder is not registered"
 
 CLAUDE_CODE_HOST_SESSION_ID="wrong-parent-session" OMNILANE_HOME="$session_home" \
-  PATH="$session_bin:/usr/bin:/bin" FAKE_FOREMAN_PID="$$" \
+  PATH="$session_bin:$OMNILANE_TEST_UTIL_PATH" FAKE_FOREMAN_PID="$$" \
   "$ROOT/hooks/record-foreman-session.sh" \
   <<< "{\"session_id\":\"$session_id\"}"
 session_entry="$session_home/sessions/$$.json"
@@ -425,7 +435,7 @@ SESSION_ENTRY="$session_entry" EXPECTED_PID="$$" EXPECTED_SESSION="$session_id" 
   ' || fail "SessionStart entry content is wrong"
 
 session_job_id="$(CLAUDE_CODE_HOST_SESSION_ID="wrong-parent-session" \
-  OMNILANE_HOME="$session_home" GATE_EXIT=0 PATH="$session_bin:/usr/bin:/bin" \
+  OMNILANE_HOME="$session_home" GATE_EXIT=0 PATH="$session_bin:$OMNILANE_TEST_UTIL_PATH" \
   FAKE_FOREMAN_PID="$$" \
   "$ROOT/scripts/dispatch.sh" --background --workdir "$session_workdir" \
   session-lane "session-owned task")"
@@ -503,7 +513,7 @@ STALE_ENTRY="$stale_home/sessions/$$.json" STALE_PID="$$" \
     close $fh or die $!;
   '
 chmod 600 "$stale_home/sessions/$$.json"
-stale_job_id="$(OMNILANE_HOME="$stale_home" PATH="$session_bin:/usr/bin:/bin" \
+stale_job_id="$(OMNILANE_HOME="$stale_home" PATH="$session_bin:$OMNILANE_TEST_UTIL_PATH" \
   FAKE_FOREMAN_PID="$$" \
   "$ROOT/scripts/dispatch.sh" --background --workdir "$stale_workdir" \
   stale-lane "stale task")"
