@@ -310,15 +310,10 @@ test_background_worker_uses_readonly_snapshot() {
   local job job_dir source_hash
   mkdir -p "$fixture/scripts/lib" "$fixture/scripts/runners" "$home" "$workdir"
   cp "$ROOT/scripts/dispatch.sh" "$fixture/scripts/dispatch.sh"
-  cp "$ROOT/scripts/lib/common.sh" "$fixture/scripts/lib/common.sh"
-  cp "$ROOT/scripts/lib/grok-work.sh" "$fixture/scripts/lib/grok-work.sh"
-  cp "$ROOT/scripts/lib/aa_policy.py" "$fixture/scripts/lib/aa_policy.py"
+  # The snapshot needs dispatch's entire runtime library, including new helpers.
+  cp -R "$ROOT/scripts/lib/." "$fixture/scripts/lib/"
   mkdir -p "$fixture/config"
   cp "$ROOT/config/aa-model-policy.json" "$fixture/config/aa-model-policy.json"
-  cp "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
-  cp "$ROOT/scripts/lib/job-timeout.pl" "$fixture/scripts/lib/job-timeout.pl"
-  cp "$ROOT/scripts/lib/call-timeout.pl" "$fixture/scripts/lib/call-timeout.pl"
-  cp "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
   cp "$ROOT/scripts/runners/run-exec.sh" "$fixture/scripts/runners/run-exec.sh"
   chmod +x "$fixture/scripts/dispatch.sh" "$fixture/scripts/lib/job-worker.sh" \
     "$fixture/scripts/runners/run-exec.sh" "$fixture/scripts/lib/job-timeout.pl"

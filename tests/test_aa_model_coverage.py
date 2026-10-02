@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline contract checks for the full AA/catalog coverage inventory."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import math
 import re

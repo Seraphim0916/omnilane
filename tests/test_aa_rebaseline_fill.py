@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 from pathlib import Path
 import subprocess

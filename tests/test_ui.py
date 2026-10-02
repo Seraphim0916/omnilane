@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the optional local Omnilane Live UI."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 import importlib.util
 import http.client
 import json
@@ -17,6 +18,7 @@ import threading
 import time
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tests.ui_browser_harness import BrowserHarness, browser_available
 
 
@@ -483,12 +485,18 @@ class LifecycleTests(unittest.TestCase):
             timeout=timeout,
         )
         if check and result.returncode != 0:
-            self.fail(
-                "ui command failed {}: {}{}".format(
-                    result.returncode, result.stderr or result.stdout, self.server_log_tail()
-                )
-            )
+            self.fail(self.ui_failure_message(result))
         return result
+
+    def ui_failure_message(self, child, *, stdout=None, stderr=None):
+        """Capture all diagnostics before tearDown removes the fixture home."""
+        stdout = child.stdout if stdout is None else stdout
+        stderr = child.stderr if stderr is None else stderr
+        return (
+            "ui command failed {}:\n--- child stdout ---\n{}"
+            "\n--- child stderr ---\n{}{}"
+        ).format(child.returncode, stdout or "(empty)", stderr or "(empty)",
+                 self.server_log_tail())
 
     def server_log_tail(self, lines=40):
         # The temporary home is removed in tearDown, so the log the failure
@@ -501,11 +509,11 @@ class LifecycleTests(unittest.TestCase):
         tail = "\n".join(text.splitlines()[-lines:])
         return "\n--- server.log (last {} lines) ---\n{}".format(lines, tail or "(empty)")
 
-    @staticmethod
-    def url_from_output(output):
+    def url_from_output(self, output, stderr=""):
         match = re.search(r"http://127\.0\.0\.1:[0-9]+/#token=[A-Za-z0-9_-]+", output)
         if not match:
-            raise AssertionError("missing Live UI URL: " + output)
+            child = subprocess.CompletedProcess(["ui"], 0, output, stderr)
+            raise AssertionError("missing Live UI URL: " + self.ui_failure_message(child))
         return match.group(0)
 
     @staticmethod
@@ -542,30 +550,33 @@ class LifecycleTests(unittest.TestCase):
         finally:
             busy.close()
 
-        url = self.url_from_output(started.stdout)
+        url = self.url_from_output(started.stdout, started.stderr)
         state_path = self.home / "ui" / "state.json"
         log_path = self.home / "ui" / "server.log"
         lock_path = self.home / "ui" / "lifecycle.lock"
         state = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertNotEqual(busy_port, state["port"])
-        self.assertEqual(0o700, stat.S_IMODE((self.home / "ui").stat().st_mode))
+        self.assertNotEqual(busy_port, state["port"], self.ui_failure_message(started))
+        self.assertEqual(0o700, stat.S_IMODE((self.home / "ui").stat().st_mode),
+                         self.ui_failure_message(started))
         for path in (state_path, log_path, lock_path):
-            self.assertEqual(0o600, stat.S_IMODE(path.stat().st_mode), str(path))
+            self.assertEqual(0o600, stat.S_IMODE(path.stat().st_mode),
+                             str(path) + "\n" + self.ui_failure_message(started))
         command = subprocess.check_output(
             ["ps", "-p", str(state["pid"]), "-o", "command="], text=True
         )
         self.assertNotIn(state["token"], command)
 
         status_result = self.run_ui("status")
-        self.assertIn("running", status_result.stdout)
-        self.assertNotIn("http://", status_result.stdout)
-        self.assertNotIn(state["token"], status_result.stdout)
+        self.assertIn("running", status_result.stdout, self.ui_failure_message(status_result))
+        self.assertNotIn("http://", status_result.stdout, self.ui_failure_message(status_result))
+        self.assertNotIn(state["token"], status_result.stdout, self.ui_failure_message(status_result))
         url_result = self.run_ui("url")
-        self.assertEqual(url, url_result.stdout.strip())
+        self.assertEqual(url, url_result.stdout.strip(), self.ui_failure_message(url_result))
         reused = self.run_ui("start")
-        self.assertEqual(url, self.url_from_output(reused.stdout))
+        self.assertEqual(url, self.url_from_output(reused.stdout, reused.stderr), self.ui_failure_message(reused))
         state_after = json.loads(state_path.read_text(encoding="utf-8"))
-        self.assertEqual(state["serverId"], state_after["serverId"])
+        self.assertEqual(state["serverId"], state_after["serverId"],
+                         self.ui_failure_message(reused))
 
         connection = http.client.HTTPConnection(
             "127.0.0.1", state["port"], timeout=3
@@ -586,7 +597,7 @@ class LifecycleTests(unittest.TestCase):
         stream.close()
 
         stopped = self.run_ui("stop")
-        self.assertIn("stopped", stopped.stdout)
+        self.assertIn("stopped", stopped.stdout, self.ui_failure_message(stopped))
         self.assertFalse(state_path.exists())
         with self.assertRaises(OSError):
             socket.create_connection(("127.0.0.1", state["port"]), timeout=0.5)
@@ -615,11 +626,16 @@ class LifecycleTests(unittest.TestCase):
         )
         first_out, first_err = first.communicate(timeout=12)
         second_out, second_err = second.communicate(timeout=12)
-        self.assertEqual(0, first.returncode, first_err)
-        self.assertEqual(0, second.returncode, second_err)
-        self.assertEqual(self.url_from_output(first_out), self.url_from_output(second_out))
+        self.assertEqual(0, first.returncode, self.ui_failure_message(
+            first, stdout=first_out, stderr=first_err))
+        self.assertEqual(0, second.returncode, self.ui_failure_message(
+            second, stdout=second_out, stderr=second_err))
+        diagnostics = self.ui_failure_message(first, stdout=first_out, stderr=first_err)
+        diagnostics += "\n" + self.ui_failure_message(second, stdout=second_out, stderr=second_err)
+        self.assertEqual(self.url_from_output(first_out, first_err),
+                         self.url_from_output(second_out, second_err), diagnostics)
         new_servers = self.matching_server_processes() - before
-        self.assertEqual(1, len(new_servers))
+        self.assertEqual(1, len(new_servers), diagnostics)
 
         self.run_ui("stop")
         deadline = time.time() + 3
@@ -650,7 +666,7 @@ class LifecycleTests(unittest.TestCase):
         state_path.chmod(0o600)
         try:
             result = self.run_ui("stop")
-            self.assertIn("stale", result.stdout)
+            self.assertIn("stale", result.stdout, self.ui_failure_message(result))
             self.assertIsNone(sleeper.poll())
             self.assertFalse(state_path.exists())
         finally:
@@ -664,9 +680,9 @@ class LifecycleTests(unittest.TestCase):
         os.kill(state["pid"], signal.SIGSTOP)
         try:
             stopped = self.run_ui("stop", check=False)
-            self.assertEqual(1, stopped.returncode)
-            self.assertIn("state retained", stopped.stderr)
-            self.assertTrue(state_path.exists())
+            self.assertEqual(1, stopped.returncode, self.ui_failure_message(stopped))
+            self.assertIn("state retained", stopped.stderr, self.ui_failure_message(stopped))
+            self.assertTrue(state_path.exists(), self.ui_failure_message(stopped))
         finally:
             os.kill(state["pid"], signal.SIGCONT)
             deadline = time.time() + 3
@@ -683,11 +699,12 @@ class LifecycleTests(unittest.TestCase):
         os.kill(state["pid"], signal.SIGSTOP)
         try:
             restarted = self.run_ui("start", "--port", "0", check=False)
-            self.assertEqual(1, restarted.returncode)
-            self.assertIn("state retained", restarted.stderr)
+            self.assertEqual(1, restarted.returncode, self.ui_failure_message(restarted))
+            self.assertIn("state retained", restarted.stderr, self.ui_failure_message(restarted))
             retained = json.loads(state_path.read_text(encoding="utf-8"))
-            self.assertEqual(state["serverId"], retained["serverId"])
-            self.assertEqual(state["pid"], retained["pid"])
+            self.assertEqual(state["serverId"], retained["serverId"],
+                             self.ui_failure_message(restarted))
+            self.assertEqual(state["pid"], retained["pid"], self.ui_failure_message(restarted))
         finally:
             os.kill(state["pid"], signal.SIGCONT)
             deadline = time.time() + 3
@@ -706,6 +723,46 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("ui command failed", str(raised.exception))
         self.assertIn("why it died", str(raised.exception))
 
+    def test_failed_run_ui_reports_both_child_streams(self):
+        from unittest.mock import patch
+        child = subprocess.CompletedProcess(["ui"], 9, "child-out", "child-err")
+        with patch("subprocess.run", return_value=child):
+            with self.assertRaises(AssertionError) as raised:
+                self.run_ui("start")
+        message = str(raised.exception)
+        self.assertIn("child-out", message)
+        self.assertIn("child-err", message)
+        self.assertIn("server.log unavailable", message)
+
+    def test_direct_start_failure_reports_log_and_both_child_streams(self):
+        child = subprocess.Popen(
+            [sys.executable, "-I", "-c",
+             "import sys; print('direct-out'); print('direct-err', file=sys.stderr); sys.exit(7)"],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = child.communicate(timeout=12)
+        message = self.ui_failure_message(child, stdout=stdout, stderr=stderr)
+        self.assertIn("server.log unavailable", message)
+        runtime = self.home / "ui"
+        runtime.mkdir(parents=True, exist_ok=True)
+        (runtime / "server.log").write_text(
+            "\n".join("log-line-{}".format(n) for n in range(45)), encoding="utf-8")
+        with self.assertRaises(AssertionError) as raised:
+            self.assertEqual(0, child.returncode, self.ui_failure_message(
+                child, stdout=stdout, stderr=stderr))
+        message = str(raised.exception)
+        self.assertIn("direct-out", message)
+        self.assertIn("direct-err", message)
+        self.assertIn("log-line-44", message)
+        self.assertNotIn("log-line-0\n", message)
+
+    def test_missing_ui_url_reports_log_and_both_child_streams(self):
+        with self.assertRaises(AssertionError) as raised:
+            self.url_from_output("no URL stdout", "no URL stderr")
+        message = str(raised.exception)
+        self.assertIn("no URL stdout", message)
+        self.assertIn("no URL stderr", message)
+        self.assertIn("server.log unavailable", message)
+
     def test_global_entrypoint_routes_ui(self):
         result = subprocess.run(
             [str(ROOT / "bin" / "omnilane"), "ui", "status"],
@@ -715,8 +772,8 @@ class LifecycleTests(unittest.TestCase):
             stderr=subprocess.PIPE,
             timeout=5,
         )
-        self.assertEqual(1, result.returncode)
-        self.assertIn("stopped", result.stdout)
+        self.assertEqual(1, result.returncode, self.ui_failure_message(result))
+        self.assertIn("stopped", result.stdout, self.ui_failure_message(result))
         help_result = subprocess.run(
             [str(ROOT / "bin" / "omnilane"), "help"],
             env=self.env,
@@ -725,7 +782,7 @@ class LifecycleTests(unittest.TestCase):
             stderr=subprocess.PIPE,
             timeout=5,
         )
-        self.assertIn("omnilane ui", help_result.stdout)
+        self.assertIn("omnilane ui", help_result.stdout, self.ui_failure_message(help_result))
 
 
 @unittest.skipUnless(browser_available, "a Playwright browser is required")

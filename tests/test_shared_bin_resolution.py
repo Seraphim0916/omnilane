@@ -1,5 +1,6 @@
 """Shell/Python executable agreement using isolated homes and fake CLIs only."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 import os
 from pathlib import Path
 import shlex

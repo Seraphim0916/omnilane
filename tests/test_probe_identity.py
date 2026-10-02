@@ -1,6 +1,7 @@
 """Offline probe identity and overlay regression tests; never call a provider."""
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
 import copy
 import importlib.util
 import json

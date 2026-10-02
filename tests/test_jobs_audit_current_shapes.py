@@ -1,5 +1,6 @@
 """jobs audit accepts what dispatch writes today: the read-only worker copy, the
 executor fields in meta.json, and a native handoff that has no pid."""
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import os
 from pathlib import Path

@@ -118,3 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+else:
+    # Import-time bootstrap works for plain discovery and direct test files.
+    from home_isolation import activate
+    SUITE_ROOT = activate()

@@ -6,6 +6,7 @@ dispatch are all replaced, and every file lives under .sandbox-tmp.
 """
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
 import hashlib
 import json
 import os

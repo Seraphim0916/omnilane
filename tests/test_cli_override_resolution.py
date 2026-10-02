@@ -1,4 +1,5 @@
 """Re-sign anchors and probes the binary dispatch runs: the host's *_BIN override when set."""
+import offline_env  # Activate suite isolation for direct file execution.
 import os
 from pathlib import Path
 import stat

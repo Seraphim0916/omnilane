@@ -1,4 +1,5 @@
 """A lane whose whole chain is "off" is reported as disabled, not as an unprovable target."""
+import offline_env  # Activate suite isolation for direct file execution.
 import os
 from pathlib import Path
 import subprocess

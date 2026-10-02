@@ -1,4 +1,5 @@
 """CLI contract tests; only synthetic public metadata is used."""
+import offline_env  # Activate suite isolation for direct file execution.
 import concurrent.futures
 import hashlib
 import json

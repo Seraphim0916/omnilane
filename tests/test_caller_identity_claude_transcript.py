@@ -1,6 +1,7 @@
 """Offline Claude current-turn identity; no real session data is read."""
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
 import contextlib
 import copy
 import io
