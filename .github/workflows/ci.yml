@@ -41,9 +41,6 @@ jobs:
         run: |
           shellcheck --version
           shellcheck -S warning bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
-          # Temporary failure proof: only this runner-local fixture is intentionally invalid.
-          printf '#!/usr/bin/env bash\nunused=1\n' > "$RUNNER_TEMP/ci-parity-intentional-failure.sh"
-          shellcheck -S warning "$RUNNER_TEMP/ci-parity-intentional-failure.sh"
       - name: Python syntax
         run: python -m py_compile scripts/ui.py scripts/benchmark.py tests/test_ui.py tests/test_benchmark.py tests/test_ci_policy.py
       - name: no stale project name
