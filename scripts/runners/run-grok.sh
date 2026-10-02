@@ -39,6 +39,10 @@ fi
 
 # Subscription OAuth path: an exhausted API key in env causes 403s.
 unset XAI_API_KEY 2>/dev/null || true
+# Grok Build treats a Claude Code plugin environment as its own: with
+# CLAUDE_PLUGIN_ROOT set, `grok -p` ends at once with stopReason "cancelled",
+# empty text and exit 0. A dispatch from a Claude Code session inherits it.
+unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA 2>/dev/null || true
 
 truncate_payload "$PROMPT_FILE" 140000
 
