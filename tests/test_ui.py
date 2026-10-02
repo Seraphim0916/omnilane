@@ -484,11 +484,22 @@ class LifecycleTests(unittest.TestCase):
         )
         if check and result.returncode != 0:
             self.fail(
-                "ui command failed {}: {}".format(
-                    result.returncode, result.stderr or result.stdout
+                "ui command failed {}: {}{}".format(
+                    result.returncode, result.stderr or result.stdout, self.server_log_tail()
                 )
             )
         return result
+
+    def server_log_tail(self, lines=40):
+        # The temporary home is removed in tearDown, so the log the failure
+        # message points at is gone by the time anyone can inspect it.
+        log = self.home / "ui" / "server.log"
+        try:
+            text = log.read_text(encoding="utf-8", errors="replace")
+        except OSError as error:
+            return "\n--- server.log unavailable: {} ---".format(error)
+        tail = "\n".join(text.splitlines()[-lines:])
+        return "\n--- server.log (last {} lines) ---\n{}".format(lines, tail or "(empty)")
 
     @staticmethod
     def url_from_output(output):
@@ -685,6 +696,15 @@ class LifecycleTests(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.run_ui("stop", check=False)
+
+    def test_failed_command_reports_server_log(self):
+        self.assertIn("server.log unavailable", self.server_log_tail())
+        (self.home / "ui").mkdir(parents=True, exist_ok=True)
+        (self.home / "ui" / "server.log").write_text("first\nwhy it died\n", encoding="utf-8")
+        with self.assertRaises(AssertionError) as raised:
+            self.run_ui("no-such-command")
+        self.assertIn("ui command failed", str(raised.exception))
+        self.assertIn("why it died", str(raised.exception))
 
     def test_global_entrypoint_routes_ui(self):
         result = subprocess.run(
