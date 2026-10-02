@@ -6,6 +6,24 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+
+- Registry snapshot `aa-v4.3.2-2026-10-02-v1` on the 2026-10-02 AA capture (index
+  version unchanged). Twelve GPT-6 Sol and GPT-6 Luna rows are re-scored, seven of
+  them by one point. `grok/grok-4-7-low` is added to the registry only. AA withdrew
+  `claude-sonnet-5-5-low`, so that row moves to `unknown_configs` and leaves
+  `triage` and `bulk-mechanical`. **Every host must run `omnilane resign` once
+  after upgrading.** Details: `docs/reports/aa-rebaseline-2026-10-02.md`.
+- `fast-agentic` puts GPT-6.1 Sol low ahead of GPT-6 Sol low. The old order left
+  the GPT-6.1 Sol low row unreachable: every caller that could reach it was
+  served the lower-scored GPT-6 Sol low first.
+
+### Fixed
+
+- `scripts/aa_rebaseline.py build` no longer aborts when AA withdraws a row that an
+  earlier snapshot added through `NEW_ROWS`; the row stays in `unknown_configs`
+  and is not put back among its alias's candidates.
+
 ## [0.51.1] - 2026-10-01
 
 ### Fixed

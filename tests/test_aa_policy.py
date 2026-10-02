@@ -79,7 +79,7 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertEqual(len(validated["scored_configs"]), 117)
         self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 26)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 57, "claude": 41, "gemini": 8, "grok": 11,
+            "codex": 57, "claude": 40, "gemini": 8, "grok": 12,
         })
 
     def test_same_score_is_allowed(self):
