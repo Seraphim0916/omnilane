@@ -227,10 +227,17 @@ parse_stats_metadata() {
 }
 
 parse_audit_metadata() {
-  local value="$1" current_re legacy_re
+  local value="$1" current_re legacy_re native_re
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
-  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
+  current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"executor\":\"cli\",\"executor_reason\":\"${json_string}\")?(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",(\"job_worker_source_path\":\"${json_string}\",\"job_worker_source_sha256\":\"[0-9a-f]{64}\",\"job_worker_path\":\"${json_string}\",)?\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
+  # A native handoff has no worker, timeout or candidate of its own.
+  native_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"executor\":\"native\",\"executor_reason\":\"${json_string}\",\"aa_policy_code\":\"${json_string}\",\"aa_effective_ceiling\":(null|0|[1-9][0-9]*),\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\",\"session_mode\":\"native\"\\}$"
   legacy_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",(\"foreman_session\":\"${json_string}\",)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"\\}$"
+  AUDIT_METADATA_NATIVE=0
+  if [[ "$value" =~ $native_re ]]; then
+    AUDIT_METADATA_NATIVE=1
+    return 0
+  fi
   [[ "$value" =~ $current_re || "$value" =~ $legacy_re ]]
 }
 
@@ -694,7 +701,9 @@ case "${1:-}" in
         fi
       elif [[ -f "$artifact" ]]; then
             mode="$(path_mode "$artifact" 2>/dev/null || true)"
-            if [[ "$mode" != "600" ]]; then
+            # dispatch stores the worker copy read-only so a running job cannot be rewritten.
+            if [[ "$mode" != "600" &&
+                  ! ( "${artifact##*/}" == "job-worker.sh" && "$mode" == "400" ) ]]; then
               audit_emit "$id" unsafe-file-mode
               findings=$((findings + 1)); job_failed=1
             fi
@@ -707,6 +716,7 @@ case "${1:-}" in
           audit_emit "$id" missing-task
           findings=$((findings + 1)); job_failed=1
         fi
+        AUDIT_METADATA_NATIVE=0
         if ! read_public_metadata "$job_dir/meta.json" ||
            ! parse_audit_metadata "$PUBLIC_METADATA"; then
           audit_emit "$id" invalid-metadata
@@ -717,7 +727,8 @@ case "${1:-}" in
             audit_emit "$id" invalid-pid
             findings=$((findings + 1)); job_failed=1
           fi
-        else
+        elif [[ "$AUDIT_METADATA_NATIVE" -ne 1 ]]; then
+          # The caller's own sub-agent runs a native handoff; omnilane starts no process for it.
           audit_emit "$id" missing-pid
           findings=$((findings + 1)); job_failed=1
         fi
