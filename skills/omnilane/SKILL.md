@@ -306,6 +306,7 @@ operator's rules say a reroute needs their approval.
 | `caller-identity` · `invalid-degraded-caller` | a context file is marked `effort_unverified` but is not its model's lowest row | use the file `whoami` writes; do not edit it |
 | `downward-ceiling` · `target-above-effective-ceiling` | the target scores above you | a fitting lane from `eligible_lanes`, or report `required_caller_effort` to the operator |
 | `target-transport` · `runtime-mapping-unverified` / `unknown-target-runtime` | you are identified; this host has not (or no longer) proven that target. Usually a vendor CLI updated itself | tell the operator to run `omnilane resign`; meanwhile a fitting lane from `eligible_lanes` whose `transport_verified` is true |
+| `lane-disabled` · `lane-disabled` | the lane's whole chain is `off` (for example `arbitrate` by default); nothing is wrong with you or the transport | pick another lane that fits, or tell the operator the lane has to be enabled in `routing.local.yaml`; `omnilane resign` does not help |
 | `native-capability` · `native-inherit-unavailable` | your capability file does not allow the inherited worker; `reason` says why | fix the file (`omnilane native-context …`) or drop the CLI-only flag named in `reason` |
 | `invalid-policy-input` "transport contract evidence changed" | the overlay will not load; nothing is wrong with you or your target | `omnilane doctor`, then the operator runs `omnilane resign` |
 | `inherit-requires-model-caller` | a human has no runtime to inherit | dispatch a lane |

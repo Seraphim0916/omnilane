@@ -385,6 +385,20 @@ routing_candidate_available() {
   fi
 }
 
+chain_is_disabled() {
+  # True when every candidate of the chain is "off": the lane is switched off,
+  # which is different from a lane whose real candidates are all unreachable.
+  local chain="$1" seg first found=0
+  local IFS='|'
+  for seg in $chain; do
+    first="$(printf '%s' "$seg" | awk '{print $1}')"
+    [[ -n "$first" ]] || continue
+    [[ "$first" == "off" ]] || return 1
+    found=1
+  done
+  [[ "$found" -eq 1 ]]
+}
+
 aa_print_refusal() {
   # Refusal JSON on stderr, with the lanes this caller can still reach appended.
   local helper="$OMNILANE_REPO/scripts/lib/aa_lanes.py"
@@ -909,6 +923,13 @@ if [[ -n "$OVERRIDE_VENDOR" ]]; then
     esac
   fi
 else
+  # A forced native executor keeps its own refusal for an off lane (exit 2).
+  if [[ "${EXECUTOR:-}" != "native" ]] && chain_is_disabled "$CHAIN"; then
+    # Not a refusal about the caller or the transport: the lane has no target at all.
+    echo "omnilane: lane '$LANE' is disabled in routing config (chain:$CHAIN). Enable it in $OMNILANE_HOME/routing.local.yaml; 'omnilane list' shows the effective table." >&2
+    printf '{"allowed":false,"code":"lane-disabled","failed_gate":"lane-disabled","lane":"%s","next_command":"omnilane list"}\n' "$LANE" >&2
+    exit 3
+  fi
   resolve_rc=0
   resolve_chain "$CHAIN" || resolve_rc=$?
   if [[ "$resolve_rc" -eq 6 ]]; then
