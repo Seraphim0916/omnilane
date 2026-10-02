@@ -131,7 +131,8 @@ def unprobed(overlay: dict, vendor: str) -> list[str]:
     mapped = {m.get("config_id") for m in overlay.get("mappings", [])}
     reasons = {u.get("config_id"): u.get("verdict_reason") for u in overlay.get("unproven", [])}
     return sorted(cid for cid in build_overlay.PROVEN
-                  if build_overlay.ROWS[cid]["vendor"] == vendor and cid not in mapped
+                  if cid in build_overlay.ROWS
+                  and build_overlay.ROWS[cid]["vendor"] == vendor and cid not in mapped
                   and reasons.get(cid, NOT_PROBED) == NOT_PROBED)
 
 
