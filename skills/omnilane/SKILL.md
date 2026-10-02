@@ -418,6 +418,12 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
+Snapshot `aa-v4.3.2-2026-10-02-v2` retires all three `gpt-5.4-mini` rows to
+`unknown_configs`: Codex returns HTTP 400 with a ChatGPT account even though AA
+still scores the model. They grant no authority, and the configure alias and probe
+candidates are removed. All other scores and ordering stay unchanged (114 scored
+rows). Every host must run `omnilane resign` because the snapshot id changed.
+
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
 | Opus | claude | claude-opus-5 | high |

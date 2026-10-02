@@ -76,10 +76,10 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_frozen_registry_coverage_and_estimates(self):
         validated = aa_policy._validate_registry(copy.deepcopy(self.real))
-        self.assertEqual(len(validated["scored_configs"]), 117)
-        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 26)
+        self.assertEqual(len(validated["scored_configs"]), 114)
+        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 24)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 57, "claude": 40, "gemini": 8, "grok": 12,
+            "codex": 54, "claude": 40, "gemini": 8, "grok": 12,
         })
 
     def test_same_score_is_allowed(self):
@@ -238,7 +238,7 @@ class ExactAAPolicyTests(unittest.TestCase):
 REGISTRY_PATH = ROOT / "config" / "aa-model-policy.json"
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TARGETS = {
-    "codex": ("codex/gpt-5-4-mini", "gpt-5.4-mini", "xhigh", "model_and_effort"),
+    "codex": ("codex/gpt-5-6-luna-low", "gpt-5.6-luna", "low", "model_and_effort"),
     "claude": ("claude/claude-4-5-haiku-reasoning", "claude-haiku-4-5", None, "model_and_effort"),
     "grok": ("grok/grok-4-5", "grok-4.5", "high", "cli_reasoning_effort"),
     "gemini": ("gemini/gemini-3-6-flash", "gemini-3.6-flash-high", "high", "model_id_encoded_effort"),

@@ -43,9 +43,6 @@ for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6.1-sol", "gpt-6_1-sol
         ev = f"cx-avail-{model.replace('.', '_')}" if effort == "high" else f"cx-{model.replace('.', '_')}-{effort}"
         PROVEN[cid] = ("model_and_effort", model, ev)
 
-for effort in ["xhigh", "medium"]:
-    PROVEN[f"codex/gpt-5-4-mini" + ("" if effort == "xhigh" else f"-{effort}")] = (
-        "model_and_effort", "gpt-5.4-mini", f"cx-gpt-5_4-mini-{effort}")
 
 PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "gk-grok-4_6-high")
 for effort in ["xhigh", "medium", "low"]:
@@ -75,7 +72,7 @@ for model in ["claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5"]:
         PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-{effort}")
 # gpt-6-astra rejects effort "none" upstream ("Unsupported value: 'none' is not
 # supported with the 'gpt-6-astra' model"), so it has no non-reasoning selector.
-for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini"]:
+for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]:
     PROVEN[f"codex/{model.replace('.', '-')}-non-reasoning"] = (
         "model_and_effort", model, f"cx-{model.replace('.', '_')}-none")
 

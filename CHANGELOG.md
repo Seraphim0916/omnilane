@@ -8,6 +8,15 @@ semantic version tags.
 
 ### Changed
 
+- Snapshot `aa-v4.3.2-2026-10-02-v2` retires `codex/gpt-5-4-mini`,
+  `codex/gpt-5-4-mini-medium` and `codex/gpt-5-4-mini-non-reasoning` from the
+  scored table: Codex returns HTTP 400, "not supported when using Codex with a
+  ChatGPT account", although AA still lists the model. The rows are now unscored
+  in `unknown_configs`; their configure alias and probe candidates are removed.
+  Every other score and ordering is unchanged (117 -> 114 scored, Codex 57 -> 54).
+  **Every host must run `omnilane resign` because the snapshot id changed.**
+  Details: `docs/reports/aa-rebaseline-2026-10-02-v2.md`.
+
 - Registry snapshot `aa-v4.3.2-2026-10-02-v1` on the 2026-10-02 AA capture (index
   version unchanged). Twelve GPT-6 Sol and GPT-6 Luna rows are re-scored, seven of
   them by one point. `grok/grok-4-7-low` is added to the registry only. AA withdrew
