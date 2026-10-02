@@ -553,11 +553,11 @@ Without `--vendor`, `benchmark` discovers vendors from the effective routing lis
 
 Job `list` and `status` use the same observed state. `dead` means the worker PID is invalid or no longer exists and no exit was recorded; it is excluded from `--status running` and selectable with `--status dead`. `result` reports that no exit was recorded instead of calling the dead worker running. A missing PID still uses the existing startup `running` state; no exit code is invented.
 
-Background jobs require Perl supervision so cancellation can terminate the
-supervised process group. Supervision alone adds no whole-job deadline; when
+Dispatch requires Python 3.9+ supervision so cancellation can terminate its
+owned process groups. Supervision alone adds no whole-job deadline; when
 no job timeout applies, metadata remains `job_timeout: null`. The supervised
-per-call watchdog uses Perl's alarm and can return 142; whole-job deadline
-expiry returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
+per-call watchdog uses a separate monotonic supervisor and returns 142 on
+expiry; the whole-job deadline returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
 
 `--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
 single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
@@ -596,6 +596,49 @@ voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
 lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
 code passes through.
 
+
+### Cancellation and descendant ownership
+
+Every dispatch, including foreground work without a whole-job budget, now uses
+the shared Python 3.9+ supervisor. Existing Perl entry points remain available
+for compatibility, but dispatch does not require Perl for supervision.
+A keeper reserves each owned process group until bounded TERM/KILL cleanup has
+finished. Cancellation records its time, verified OS caller identity, signal
+attempts, final exit and any known survivors in the job directory. Foreground
+TERM also publishes the job exit and completion record. Missing supervision
+dependencies fail closed; there is no unguarded fallback.
+
+macOS cannot atomically identify arbitrary escaped PIDs with the portable APIs
+used here. A descendant that leaves the owned process group/session is therefore
+not signalled merely because its PID still matches. Known escapes are listed by
+PID, start identity and command name (never full arguments). Linux uses the same conservative
+behavior. Snapshot polling cannot discover a double-fork that
+escapes and is reparented entirely between samples; this is not a containment
+sandbox and cannot promise discovery of every possible escape.
+
+Known survivors or unconfirmed cleanup produce state `incomplete` and exit 125,
+distinct from successful cancellation (normally 143), per-call timeout 142 and
+whole-job timeout 124. Grok treats 125 as non-retryable, including a provider
+returning that status, so an unconfirmed writer cannot overlap a new retry.
+`jobs status` and `jobs result` expose the residual count
+and safe process summary. If enumeration fails, the report says “residual
+unknown” and retains the last-observed identities instead of claiming zero.
+Cancellation/timeout completion is never inferred from
+an exit file alone. A stuck or failed completion publisher is also reported as
+incomplete rather than receiving an unsafe guessed-PID kill.
+
+`jobs result` returns available late output by default while preserving the
+cancellation exit code and printing provenance on stderr (also included in JSON).
+“Completed after cancellation” requires a successful provider/runner completion
+record and matching output fingerprint; a leftover `.tmp` without that evidence
+is explicitly partial or of unknown completeness. Reading results never renames
+or overwrites the original artifacts. Completion observation time is not a
+precise kernel exit timestamp; coarse filesystem timestamps or clock changes
+can conservatively leave provenance unknown. Fingerprinting is capped at 16 MiB
+and a short time budget so cleanup never chases growing output; larger output
+remains retrievable with unknown completeness.
+
+
 ## 🎭 Modes
 
 - **advise** (default): read-only local analysis with native web/search tools where the vendor supports them. Model/provider traffic stays available; agent mutation tools are restricted. This is not a promise of identical X/web capabilities across vendors.
@@ -613,9 +656,9 @@ Codex and Claude have distinct policies for all three modes. Agy advise/sysops u
 - **Serialized codex** — same-target-directory codex dispatches queue behind a
   lock keyed on the normalized workdir; stale locks from crashed jobs are
   detected by owner PID and stolen safely.
-- **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
-  fallback when neither exists (stock macOS), so a hung CLI cannot block
-  forever. The cap applies to **each CLI invocation**, highest priority first:
+- **Watchdog** — every worker uses the shared Python 3.9+ supervisor with a
+  monotonic deadline and owned-group cleanup. Missing supervision support fails
+  closed. The cap applies to **each CLI invocation**, highest priority first:
   `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
   upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
   global `OMNILANE_TIMEOUT`, default 600s. It is a per-call hang-guard, not a
@@ -628,9 +671,8 @@ Codex and Claude have distinct policies for all three modes. Agy advise/sysops u
   with one automatic exception: Codex `work` outside a Git worktree uses the
   resolved per-call watchdog as its whole-job fuse when none was configured,
   capped at the supervisor's 999999999-second maximum. This automatic guard
-  needs the bundled Perl supervisor; if unavailable, dispatch warns and keeps
-  non-Git work running through the existing per-call watchdog path, which emits
-  its own warning if no watchdog tool exists.
+  uses the bundled Python supervisor. Missing Python/POSIX supervision support
+  fails closed rather than starting an unguarded provider.
   Expiry cleans the supervised process group and returns 124. For a deep audit
   of a large repository, start around 2–4 hours (7200–14400s)
   with a 30-minute per-call watchdog; these are recommendations, not defaults.
