@@ -45,6 +45,7 @@ NEW_ROWS = [
     # (id, vendor, model, effort, reasoning, aa_slug, copy transport/shape from)
     ("grok/grok-4-7", "grok", "grok-4.7", "xhigh", "reasoning", "grok-4-7", "grok/grok-4-6-xhigh"),
     ("grok/grok-4-7-high", "grok", "grok-4.7", "high", "reasoning", "grok-4-7-high", "grok/grok-4-6"),
+    ("grok/grok-4-7-low", "grok", "grok-4.7", "low", "reasoning", "grok-4-7-low", "grok/grok-4-6-low"),
     ("claude/claude-sonnet-5-xhigh", "claude", "claude-sonnet-5", "xhigh", "adaptive",
      "claude-sonnet-5-xhigh", "claude/claude-sonnet-5"),
     ("claude/claude-sonnet-5-high", "claude", "claude-sonnet-5", "high", "adaptive",
@@ -226,8 +227,13 @@ def cmd_build(args) -> int:
         rescore(row, record, version, as_of, report(row["vendor"]))
         scored.append(row)
     by_id = {row["id"]: row for row in old["scored_configs"]}
+    withdrawn: set[tuple] = set()
     for cid, vendor, model, effort, reasoning, slug, shape in NEW_ROWS:
         if cid in {row["id"] for row in scored}:
+            continue
+        if cid in {row["id"] for row in dropped}:
+            # AA withdrew a row an earlier snapshot added: it stays in unknown_configs, unscored.
+            withdrawn.add((vendor, model, effort, reasoning))
             continue
         if slug not in records:
             sys.exit(f"build: {slug} is not in the extract")
@@ -241,7 +247,7 @@ def cmd_build(args) -> int:
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
     new["scored_configs"] = scored
 
-    added = {(v, m, e, r) for _, v, m, e, r, _, _ in NEW_ROWS}
+    added = {(v, m, e, r) for _, v, m, e, r, _, _ in NEW_ROWS} - withdrawn
     unknown = [row for row in new["unknown_configs"]
                if (row["vendor"], row["model"], row["effort"], row["reasoning"]) not in added]
     for row in unknown:
@@ -268,7 +274,7 @@ def cmd_build(args) -> int:
         alias["candidate_config_ids"] = [cid for cid in alias["candidate_config_ids"] if cid in live_ids]
         for cid, vendor, model, *_ in NEW_ROWS:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
-                    and cid not in alias["candidate_config_ids"]:
+                    and cid in live_ids and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
     # aliases mirror scripts/configure.sh's catalog, so a new alias needs the model there too.
     have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
