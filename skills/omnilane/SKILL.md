@@ -140,6 +140,16 @@ Useful flags:
 | `--mode sysops` | unrestricted native policy for service/host operations; per dispatch only, never a default, and the brief must name the allowed operations |
 | `--dry-run` | print the decision without calling anything |
 
+**A `work` worker cannot commit in a linked git worktree, and cannot run every
+test.** Its sandbox writes only inside `--workdir`. A directory made by
+`git worktree add` keeps its index under the main repository's `.git`, outside
+that sandbox, so `git add` and `git commit` fail there with `index.lock:
+Operation not permitted`; the sandbox also denies `ps` and local servers, so
+tests that need them fail for the worker and pass for you. In such a brief say:
+do not commit, run the new tests and the directly related test files, and
+report exactly which ran. You then run the full suite outside the sandbox and
+make the commit yourself. Do not widen the sandbox to the shared `.git`.
+
 `work` confines file and command changes to `--workdir` and disables the
 worker's tool networking (not the model connection); `advise` is read-only with
 the vendor's native web tools. Neither turns into `sysops` by itself. macOS Grok
