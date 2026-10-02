@@ -426,6 +426,7 @@ omnilane ui status                             # Live UI の稼働状態を表�
 omnilane ui url                                # 現在の認証済みローカル URL を表示
 omnilane ui stop                               # Live UI を停止
 omnilane doctor [--json]                       # ルーティングとローカル実行環境を読み取り専用で診断
+# transport-overlay：実行ファイルのパス不一致は FAIL、ベンダーのハッシュやランナーの変更は従来どおり WARN
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]   # who is asking

@@ -418,6 +418,7 @@ omnilane ui status                             # Live UI 실행 상태 표시
 omnilane ui url                                # 현재 인증된 로컬 URL 표시
 omnilane ui stop                               # Live UI 중지
 omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
+# transport-overlay: 실행 파일 경로 불일치는 FAIL, 공급업체 해시 또는 실행기 변경은 기존대로 WARN
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]   # who is asking

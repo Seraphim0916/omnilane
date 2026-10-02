@@ -401,6 +401,7 @@ omnilane ui status                             # 查看 Live UI 是否正在运�
 omnilane ui url                                # 输出当前通过认证的本地链接
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 只读检查路由与本地运行环境
+# transport-overlay：可执行文件路径不符为 FAIL；供应商哈希或运行器变动仍为 WARN
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目录]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]   # who is asking

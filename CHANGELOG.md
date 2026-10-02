@@ -15,6 +15,12 @@ semantic version tags.
   exposure; list and doctor show the option, and strict doctor warns/fails when
   enabled. See [the operator guide and required worker brief](docs/grok-unconfined-work.md).
 
+### Fixed
+
+- `doctor` reports `FAIL transport-overlay` when dispatch resolves a different
+  executable path than the overlay pinned, naming the vendor and both paths with
+  `omnilane resign` guidance. Vendor hash drift and runner-only drift remain `WARN`.
+
 ## [0.51.1] - 2026-10-01
 
 ### Fixed

@@ -407,6 +407,7 @@ omnilane ui status                             # 查看 Live UI 是否運作中
 omnilane ui url                                # 印出目前通過驗證的本機網址
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # 實際探測必須明確選用
+# transport-overlay：執行檔路徑不符為 FAIL；供應商雜湊或執行器變動維持 WARN
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # 預設只乾跑
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]

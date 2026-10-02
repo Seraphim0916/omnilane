@@ -517,7 +517,7 @@ omnilane ui status                             # report whether the Live UI is r
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
-                                               # transport-overlay check names a stale vendor
+                                               # transport-overlay: path mismatch FAIL; vendor hash or runner drift WARN
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]

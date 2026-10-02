@@ -93,10 +93,15 @@ def main() -> None:
     # The gate hashes the path the overlay recorded. An update that installs beside
     # the old executable leaves that path intact, so only this comparison sees it.
     moved = []
+    mismatched = []
     try:
         import resign
         report = resign.detect(overlay, resign.current_anchors())
         for vendor, entry in report.items():
+            if (entry["cli"] and entry["recorded_cli_path"]
+                    and entry["cli"] != entry["recorded_cli_path"]):
+                mismatched.append(f"{vendor}: runs {entry['cli']}, "
+                                  f"overlay pins {entry['recorded_cli_path']}")
             # Only what the overlay actually pinned can have moved.
             reasons = [reason for reason in entry["reasons"]
                        if reason.startswith("runs ") or reason.endswith(" changed")]
@@ -104,6 +109,10 @@ def main() -> None:
                 moved.append(f"{vendor}: {'; '.join(reasons)}")
     except Exception:  # noqa: BLE001 - a health line must never raise
         moved = []
+        mismatched = []
+    if mismatched:
+        emit("FAIL", f"the runners no longer execute what the overlay pinned ({' | '.join(mismatched)}); "
+                     f"run `omnilane resign`; still loading: {summary}{extra}")
     if moved and not stale:
         emit("WARN", f"the runners no longer execute what the overlay pinned ({' | '.join(moved)}); "
                      f"run `omnilane resign`; still loading: {summary}{extra}")
