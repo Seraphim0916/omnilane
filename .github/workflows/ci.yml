@@ -28,7 +28,9 @@ jobs:
       - name: perl syntax
         run: perl -c scripts/lib/job-timeout.pl
       - name: shellcheck
-        run: shellcheck -S warning bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
+        run: |
+          shellcheck --version
+          shellcheck -S warning bin/omnilane scripts/*.sh scripts/lib/*.sh scripts/runners/*.sh install.sh
       - name: routing table smoke
         run: |
           out="$(bash scripts/dispatch.sh --list)"
