@@ -1579,7 +1579,7 @@ test_job_timeout_supervisor_forwards_term() {
 }
 
 test_supervised_calls_bypass_nested_gnu_timeout_group() {
-  local name="supervised calls stay in the outer process group"
+  local name="supervised calls bypass an unowned GNU timeout group"
   local home fake marker rc
   home="$TEST_ROOT/supervised-timeout-backend"; mkdir -p "$home/bin"
   fake="$home/bin/timeout"; marker="$home/gnu-timeout-ran"
@@ -1597,7 +1597,7 @@ EOF
   rc=$?
 
   if [[ "$rc" -ne 0 ]]; then
-    fail "$name" "same-group Perl watchdog failed with $rc"
+    fail "$name" "owned-group watchdog failed with $rc"
   elif [[ -e "$marker" ]]; then
     fail "$name" "nested GNU timeout process group was used"
   else
@@ -1907,7 +1907,7 @@ EOF
 }
 
 test_codex_nongit_without_perl_keeps_work_available() {
-  local name="non-Git Codex work stays available without the Perl supervisor"
+  local name="non-Git Codex work keeps Python supervision without Perl"
   local home workdir fakebin rc job_dir=""
   home="$TEST_ROOT/codex-nongit-no-perl"; workdir="$home/plain-dir"
   fakebin="$home/bin"
@@ -1931,12 +1931,11 @@ EOF
   job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
 
   if [[ "$rc" -ne 0 ]]; then
-    fail "$name" "expected fallback success, got $rc"
-  elif [[ -z "$job_dir" ]] || ! grep -q '"job_timeout":null' "$job_dir/meta.json"; then
-    fail "$name" "fallback did not leave the automatic whole-job fuse disabled"
-  elif ! grep -q 'automatic non-Git Codex job guard.*unavailable.*per-call watchdog path' \
-    "$home/stderr"; then
-    fail "$name" "fallback did not explain its reduced protection"
+    fail "$name" "expected Python-supervised success, got $rc"
+  elif [[ -z "$job_dir" ]] || ! grep -q '"job_timeout":7' "$job_dir/meta.json"; then
+    fail "$name" "Python supervision did not preserve the automatic whole-job fuse"
+  elif [[ ! -f "$job_dir/process-cleanup.json" ]]; then
+    fail "$name" "Python supervision did not record its cleanup"
   else
     pass "$name"
   fi
@@ -2201,6 +2200,7 @@ EOF
   chmod +x "$good/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$good/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$good/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$good/scripts/lib/process_tree.py"
 
   out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$good" \
     /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
@@ -2268,6 +2268,7 @@ EOF
   chmod +x "$repo/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
   printf 'current skill\n' > "$repo/skills/omnilane/SKILL.md"
 
   out_none="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
@@ -2309,6 +2310,7 @@ EOF
   chmod +x "$repo/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
 
   out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor 2>&1)"
@@ -2382,6 +2384,7 @@ EOF
     "$fake/stat" "$fake/codex" "$fake/claude"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
 
   # A human-operated host needs no transport overlay, so --strict stays green.
   json="$(PATH="$fake:$PATH" CLAUDE_CONFIG_DIR="$config" \
@@ -2426,6 +2429,7 @@ printf 'PRIVATE-PROVIDER-RESPONSE\n' > "$6"
 EOF
   chmod +x "$repo/scripts/dispatch.sh" "$repo/scripts/runners/run-codex.sh"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
   printf 'probe: codex "probe model" medium\n' > "$repo/routing.yaml"
 
   OMNILANE_DOCTOR_REPO="$repo" OMNILANE_HOME="$TEST_ROOT/provider-probe-default-home" \
@@ -4445,6 +4449,7 @@ EOF
   chmod +x "$repo/scripts/dispatch.sh"
   printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
   printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
 
   out="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/scripts/doctor.sh" --json 2>&1)" || rc=$?

@@ -1118,7 +1118,7 @@ if [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDL
   echo "omnilane: --timeout is ${TIMEOUT}s, but the independent live mailbox idle cap remains ${IDLE_TIMEOUT}s; adjust it with --idle-timeout SECONDS" >&2
 fi
 
-JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
+JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/process_tree.py"
 JOB_WORKER_SOURCE="$OMNILANE_REPO/scripts/lib/job-worker.sh"
 # Pinned deliberately: /bin/bash is 3.2 on macOS while a PATH bash is typically
 # 5.x, so the worker and every library it sources must stay bash-3.2 compatible.
@@ -1147,8 +1147,8 @@ if [[ "$VENDOR" == "codex" && ( "$MODE" == "work" || "$MODE" == "sysops" ) ]]; t
   if [[ "$GIT_WORKTREE_STATE" != "true" ]]; then
     CODEX_NONGIT_WORK=1
     if [[ -z "$JOB_TIMEOUT" ]]; then
-      if [[ -f "$JOB_SUPERVISOR" ]] && command -v perl &>/dev/null &&
-         perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
+      if [[ -f "$JOB_SUPERVISOR" ]] && command -v python3 &>/dev/null &&
+         python3 -c 'import os,signal,time; assert hasattr(os,"fork") and hasattr(signal,"pthread_sigmask")' \
            >/dev/null 2>&1; then
         CODEX_NONGIT_AUTO_JOB_TIMEOUT=1
         # Preserve the per-call budget while adding process-group cleanup. The
@@ -1172,11 +1172,11 @@ fi
 JOB_TIMEOUT_JSON="${JOB_TIMEOUT:-null}"
 unset OMNILANE_JOB_SUPERVISED
 [[ -x "$JOB_WORKER_SOURCE" ]] || { echo "omnilane: internal job worker is unavailable" >&2; exit 2; }
-if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+if true; then
   [[ -f "$JOB_SUPERVISOR" ]] || { echo "omnilane: job supervisor is unavailable" >&2; exit 2; }
-  command -v perl &>/dev/null || { echo "omnilane: background jobs and --job-timeout require perl" >&2; exit 2; }
-  perl -MPOSIX=setsid -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC -e 'exit 0' \
-    >/dev/null 2>&1 || { echo "omnilane: perl lacks whole-job timeout support" >&2; exit 2; }
+  command -v python3 &>/dev/null || { echo "omnilane: process supervision requires python3" >&2; exit 2; }
+  python3 -c 'import os,signal,sys,time; assert sys.version_info >= (3,9) and hasattr(os,"fork") and hasattr(signal,"pthread_sigmask")' \
+    >/dev/null 2>&1 || { echo "omnilane: Python 3.9+ with POSIX supervision is required" >&2; exit 2; }
 fi
 
 JOBS_ROOT="$OMNILANE_HOME/jobs"
@@ -1270,6 +1270,11 @@ if [[ -f "$JOB_DIR/aa-child-context.json" ]]; then
   OMNILANE_AA_CALLER_SHA256="$(file_sha256 "$JOB_DIR/aa-child-context.json")"
   export OMNILANE_AA_CALLER_SHA256
 fi
+# Identify new tracked jobs before exposing their PID or starting a worker.
+# Cancellation during startup can then queue a request rather than treating it
+# as an untracked historical job.
+(umask 077; printf '1\n' > "$JOB_DIR/process-supervision-version")
+
 JOB_WORKER="$JOB_DIR/job-worker.sh"
 JOB_WORKER_TMP="$JOB_DIR/.job-worker.tmp.$$-$RANDOM"
 (umask 077; cat "$JOB_WORKER_SOURCE" > "$JOB_WORKER_TMP")
@@ -1451,7 +1456,7 @@ finish_job() {
   # Otherwise HUP/TERM can re-enter while an atomic completion rename returns,
   # overwrite exit, advance a thread twice, or replay an already consumed record.
   # jobs cancel retains its bounded SIGKILL escalation for a stuck finalizer.
-  if [[ "$BACKGROUND" == "1" ]]; then trap '' HUP TERM; fi
+  trap '' HUP TERM
   local rc="$1"
   if [[ -n "$THREAD_NAME" ]]; then
     if [[ "$rc" -eq 0 ]]; then
@@ -1463,31 +1468,56 @@ finish_job() {
   secure_job_files
   (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
   if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
-    write_completion_record "$rc" >/dev/null || true
+    if ! write_completion_record "$rc" >/dev/null; then
+      echo "omnilane: completion publication incomplete" >&2
+      (umask 077; printf '%s\n' 'completion publication failed' > "$JOB_DIR/finalization-error")
+      FINISHED_RC="$rc"
+      return 0
+    fi
   fi
   FINISHED_RC="$rc"
+  (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/finalized")
+}
+
+# shellcheck disable=SC2329
+forward_job_signal() {
+  JOB_WAIT_INTERRUPTED=1
+  [[ "$JOB_SIGNAL_RC" -ne 0 ]] || JOB_SIGNAL_RC="$1"
+  # Bash can reap an asynchronous child before explicit wait; $! is therefore
+  # not a pinned process identity. Send a private cooperative request instead.
+  python3 "$OMNILANE_REPO/scripts/lib/process_tree.py" request "$JOB_DIR" "$1" || true
 }
 
 run_job() {
   local rc=0 entry_shell_options="$-"
-  write_current_pid_file "$JOB_DIR/pid"
   set +e
-  if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
-    # Supervise every background tree so cancel reaches its descendants even
-    # where GNU timeout would otherwise create a separate, untracked group.
-    # No configured budget still means no deadline and job_timeout:null.
-    OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
-      OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
-      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
-      "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
-      "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
-  else
-    OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
-      OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
-      "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
-      "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
-  fi
-  rc=$?
+  # Run asynchronously only so bash can service TERM/HUP while wait is pending.
+  # Request cleanup cooperatively, never signal the foreground caller's group.
+  JOB_SUPERVISOR_PID=""
+  JOB_SIGNAL_RC=0
+  JOB_WAIT_INTERRUPTED=0
+  trap 'forward_job_signal 129 HUP' HUP
+  trap 'forward_job_signal 143 TERM' TERM
+  write_current_pid_file "$JOB_DIR/pid"
+  OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
+    OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
+    OMNILANE_PROCESS_JOB_DIR="$JOB_DIR" OMNILANE_JOB_SUPERVISED=1 \
+    python3 "$JOB_SUPERVISOR" job "${JOB_TIMEOUT:---no-deadline}" \
+    "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
+    "$JOB_DIR/task.txt" "$JOB_DIR/out.txt" <&0 &
+  JOB_SUPERVISOR_PID=$!
+  while true; do
+    wait "$JOB_SUPERVISOR_PID"
+    rc=$?
+    # An interrupted wait does not reap our child; wait again for cleanup.
+    if [[ "$rc" -gt 128 && "$JOB_WAIT_INTERRUPTED" -eq 1 ]]; then
+      JOB_WAIT_INTERRUPTED=0
+      continue
+    fi
+    break
+  done
+  JOB_SUPERVISOR_PID=""
+  if [[ "$JOB_SIGNAL_RC" -ne 0 && "$rc" -eq 0 ]]; then rc="$JOB_SIGNAL_RC"; fi
   set -e
   if [[ "$CODEX_NONGIT_WORK" -eq 1 && "$rc" -eq 124 ]]; then
     echo "omnilane: Codex work in a non-Git directory timed out after ${JOB_TIMEOUT}s; the supervised process group was terminated" >&2
@@ -1511,8 +1541,6 @@ if [[ "$BACKGROUND" == "1" ]]; then
   set -m
   (umask 077; : > "$JOB_DIR/worker.log")
   (
-    trap 'finish_job 129; exit 129' HUP
-    trap 'finish_job 143; exit 143' TERM
     run_job
   ) < /dev/null > "$JOB_DIR/worker.log" 2>&1 &
   disown

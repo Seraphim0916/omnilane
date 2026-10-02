@@ -38,6 +38,29 @@ class JobLifecycleTests(unittest.TestCase):
 
     def stop_worker(self):
         (self.root / "publish.release").touch()
+        if getattr(self, 'cooperative_cleanup', False):
+            deadline = time.monotonic() + 6
+            identities = []
+            if self.worker_pid:
+                identities.append({'pid': self.worker_pid})
+            gate = self.root / 'gate.started'
+            if gate.exists():
+                identities.append(json.loads(gate.read_text()))
+            publisher = self.root / 'publisher.pid'
+            if publisher.exists():
+                identities.append({'pid': int(publisher.read_text())})
+            while time.monotonic() < deadline:
+                running = False
+                for identity in identities:
+                    state = subprocess.run(['ps', '-o', 'stat=', '-p', str(identity['pid'])],
+                                           env=self.env, text=True, capture_output=True, timeout=2)
+                    running |= bool(state.stdout.strip()) and not state.stdout.lstrip().startswith('Z')
+                if not running:
+                    break
+                time.sleep(.02)
+            for identity in identities:
+                self.assert_process_stopped(identity)
+            return
         owned = []
         if self.worker_pid:
             owned.append((self.worker_pid, self.worker_pid))
@@ -226,14 +249,21 @@ raise SystemExit(97)
         self.check_alarm_mutating_background("signal.alarm(0)", job_timeout="1", per_call="5", expected=124)
 
     def test_background_missing_supervisor_support_fails_before_job_creation(self):
-        gate = self.executable("gate", "raise SystemExit('fixture must not launch')\n")
-        self.executable("perl", "raise SystemExit(127)\n")
+        # Fail the actual Python/POSIX capability probe, while retaining Python
+        # for unrelated routing/metadata. The Perl compatibility entry is no
+        # longer the dispatch dependency.
+        fake = self.bins / "python3"
+        real = Path(self.env["OMNILANE_TEST_UTIL_PATH"]) / "python3"
+        fake.write_text("#!/bin/sh\ncase \"$*\" in *pthread_sigmask*) exit 1 ;; esac\n"
+                        + "exec \"" + str(real) + "\" \"$@\"\n")
+        fake.chmod(0o755)
+        gate = self.executable("gate", "raise SystemExit(0)\n")
         (self.home / "routing.local.yaml").write_text(f'fixture: exec "{gate}" -\n')
         dispatched = subprocess.run(
             ["bash", str(ROOT / "scripts/dispatch.sh"), "--background", "fixture", "offline fixture"],
             env=self.env, text=True, capture_output=True, timeout=15)
         self.assertEqual(dispatched.returncode, 2, dispatched.stderr)
-        self.assertIn("perl lacks whole-job timeout support", dispatched.stderr)
+        self.assertIn("Python 3.9+ with POSIX supervision is required", dispatched.stderr)
         self.assertFalse((self.home / "jobs").exists())
 
     def check_completion_signal_reentry(self, signum, consume):
@@ -303,16 +333,19 @@ if Path(sys.argv[-1]).parent == Path(os.environ['OMNILANE_HOME']) / 'inbox':
     def test_cancel_allows_completion_publication_during_term_grace(self):
         self.check_completion_grace()
 
-    def test_cancel_still_kills_stuck_signal_immune_finalizer_within_bound(self):
+    def test_cancel_reports_stuck_finalizer_incomplete_within_bound(self):
         self.check_completion_grace(stuck=True)
 
     def check_completion_grace(self, stuck=False):
-        gate = self.executable("gate", """import json, os, signal
+        self.cooperative_cleanup = True
+        gate = self.executable("gate", """import json, os, signal, time
 from pathlib import Path
 ready = Path(os.environ['FIXTURE_ROOT'], 'gate.started')
 ready.with_suffix('.tmp').write_text(json.dumps({'pid': os.getpid(), 'pgid': os.getpgrp()}))
 ready.with_suffix('.tmp').replace(ready)
-signal.pause()
+deadline = time.monotonic() + 25
+while not (ready.parent / "publish.release").exists() and time.monotonic() < deadline:
+    time.sleep(.02)
 """)
         (self.home / "routing.local.yaml").write_text(f'fixture: exec "{gate}" -\n')
         # Pause the actual completion rename after finish_job has written exit.
@@ -324,7 +357,7 @@ root = Path(os.environ['FIXTURE_ROOT'])
 if Path(sys.argv[-1]).parent == Path(os.environ['OMNILANE_HOME']) / 'inbox':
     (root / 'publisher.pid').write_text(str(os.getpid()))
     (root / 'publish.waiting').touch()
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 25
     while not (root / 'publish.release').exists():
         if time.monotonic() >= deadline:
             sys.exit(98)
@@ -342,52 +375,46 @@ os.execv(os.environ['FIXTURE_REAL_MV'], ['mv', *sys.argv[1:]])
         self.remember_worker(job_dir)
         self.wait_for_file(self.root / "gate.started")
 
-        # Release the publisher during the second grace wait. On the buggy
-        # path this is the post-SIGKILL wait, so publication has already died.
-        cancel_bins = self.root / "cancel-bin"
-        cancel_bins.mkdir()
-        sleep = cancel_bins / "sleep"
-        sleep.write_text("""#!/usr/bin/env python3
-import os, time
-from pathlib import Path
-root = Path(os.environ['FIXTURE_ROOT'])
-count_file = root / 'cancel.waits'
-count = int(count_file.read_text()) + 1 if count_file.exists() else 1
-count_file.write_text(str(count))
-if count >= 2 and not os.environ.get("FIXTURE_STUCK_PUBLISHER"):
-    (root / 'publish.release').touch()
-else:
-    deadline = time.monotonic() + 5
-    while not (root / 'publish.waiting').exists():
-        if time.monotonic() >= deadline:
-            raise SystemExit('publisher did not reach the cancellation barrier')
-        time.sleep(0.02)
-time.sleep(1)
-""")
-        sleep.chmod(0o755)
-        cancel_env = dict(self.env, PATH=str(cancel_bins) + os.pathsep + self.env["PATH"])
-        if stuck:
-            cancel_env["FIXTURE_STUCK_PUBLISHER"] = "1"
+        # Synchronize on the actual publication event, not implementation-
+        # specific Bash sleep calls. Cancel must wait for confirmed publication.
         began = time.monotonic()
-        cancelled = self.job("cancel", job_id, env=cancel_env)
-        elapsed = time.monotonic() - began
-        self.assertEqual(cancelled.returncode, 0, cancelled.stderr + cancelled.stdout)
-        self.assertTrue((self.root / "publish.waiting").exists(), "completion publisher never started")
-        self.assertEqual((job_dir / "exit").read_text().strip(), "143")
-        record = self.home / "inbox" / (job_id + ".json")
-        if stuck:
-            self.assertLess(elapsed, 9, "cancel exceeded bounded TERM/KILL grace")
-            self.assert_process_stopped({"pid": self.worker_pid})
-            self.assert_process_stopped({"pid": int((self.root / "publisher.pid").read_text())})
-            self.assertFalse(record.exists())
-            return
-        self.assertTrue(record.exists(), "cancel killed the completion publisher during TERM grace")
-        self.assertEqual(json.loads(record.read_text())["exit"], 143)
-        original = record.read_bytes()
-        repeated = self.job("cancel", job_id)
-        self.assertEqual(repeated.returncode, 0, repeated.stderr)
-        self.assertIn("already finished (exit 143)", repeated.stdout)
-        self.assertEqual(record.read_bytes(), original)
+        cancel = subprocess.Popen(['bash', str(ROOT / 'scripts/jobs.sh'), 'cancel', job_id],
+                                  env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            self.wait_for_file(self.root / 'publish.waiting')
+            if not stuck:
+                (self.root / 'publish.release').touch()
+            stdout, stderr = cancel.communicate(timeout=12)
+            elapsed = time.monotonic() - began
+            self.assertEqual(cancel.returncode, 125 if stuck else 0, stdout + stderr)
+            audit = json.loads((job_dir / 'cancel.json').read_text())
+            record = self.home / 'inbox' / (job_id + '.json')
+            self.assertEqual((job_dir / 'exit').read_text().strip(), '143')
+            if stuck:
+                self.assertEqual(cancel.returncode, 125, stdout + stderr)
+                self.assertEqual(audit['status'], 'incomplete')
+                self.assertIn('incomplete', stderr)
+                self.assertNotIn('cancelled (', stdout)
+                self.assertLess(elapsed, 10, 'cancel exceeded its bounded confirmation wait')
+                self.assertFalse(record.exists())
+            else:
+                self.assertEqual(cancel.returncode, 0, stdout + stderr)
+                self.assertEqual(audit['status'], 'complete')
+                self.assertTrue(record.exists(), 'completion was not published before success')
+                self.assertEqual(json.loads(record.read_text())['exit'], 143)
+                original = record.read_bytes()
+                repeated = self.job('cancel', job_id)
+                self.assertEqual(repeated.returncode, 0, repeated.stderr)
+                self.assertIn('already finished (exit 143)', repeated.stdout)
+                self.assertEqual(record.read_bytes(), original)
+        finally:
+            # The blocked publisher is ours and watches this private release.
+            # Never signal its stored numeric PID or a potentially reused group.
+            (self.root / 'publish.release').touch()
+            if cancel.poll() is None:
+                cancel.communicate(timeout=12)
+            cancel.stdout.close()
+            cancel.stderr.close()
         self.assertFalse(self.violations.exists())
 
 

@@ -51,6 +51,7 @@ run_single_shot() {
   )
   rc=$?
   set -e
+  python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" record-completion "${OUTPUT_FILE%/*}" "$rc" || true
   emit_mode_notice "$notice"
   return "$rc"
 }
@@ -517,5 +518,6 @@ if [[ -n "$close_reason" ]]; then
   printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
   emit_mode_notice "$close_reason" || true
 fi
+python3 "$OMNILANE_REPO/scripts/lib/job_cancel.py" record-completion "$JOB_DIR" "$rc" || true
 trap - USR1 PIPE
 exit "$rc"

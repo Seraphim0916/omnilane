@@ -309,14 +309,14 @@ if [[ -L "$OMNILANE_HOME/locks" ||
   report FAIL lock-store "$OMNILANE_HOME/locks must be a real directory, not a symlink or file"
 fi
 
-if command -v timeout >/dev/null 2>&1; then
-  report PASS watchdog "timeout is available"
-elif command -v gtimeout >/dev/null 2>&1; then
-  report PASS watchdog "gtimeout is available"
-elif command -v perl >/dev/null 2>&1; then
-  report PASS watchdog "Perl alarm fallback is available"
+if ! command -v python3 >/dev/null 2>&1; then
+  report FAIL watchdog "Python 3.9+ is required for owned-process supervision"
+elif ! python3 -c 'import os,signal,sys,time; assert sys.version_info >= (3,9) and hasattr(os,"fork") and hasattr(signal,"pthread_sigmask")' >/dev/null 2>&1; then
+  report FAIL watchdog "Python lacks required POSIX supervision support"
+elif [[ ! -f "$REPO/scripts/lib/process_tree.py" ]]; then
+  report FAIL watchdog "shared process supervisor is missing"
 else
-  report FAIL watchdog "timeout, gtimeout, and perl are all unavailable"
+  report PASS watchdog "Python owned-process supervisor is available (per-call 142; whole-job 124)"
 fi
 
 # Vendor CLI availability. Runners resolve each vendor's binary through a *_BIN
@@ -497,7 +497,7 @@ if command -v python3 >/dev/null 2>&1; then
     report WARN live-ui "Python 3.9 or newer is required for the optional UI"
   fi
 else
-  report WARN live-ui "python3 is absent; model routing still works"
+  report WARN live-ui "python3 is absent; UI unavailable (watchdog check reports dispatch dependency)"
 fi
 
 if [[ "$JSON_MODE" -eq 1 ]]; then

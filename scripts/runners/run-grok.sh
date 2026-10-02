@@ -179,6 +179,13 @@ while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
     "$GROK_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
   RC=$?
   set -e
+  # 125 is a reserved supervision/cleanup failure. Starting another attempt
+  # could overlap a known escaped writer and reuse its output files. Treat even
+  # a provider's own 125 conservatively as terminal; never guess it is retryable.
+  if [[ "$RC" -eq 125 ]]; then
+    echo "omnilane: grok exit 125 is not retryable; inspect cleanup evidence before retrying" >> "${OUTPUT_FILE}.stderr.log"
+    break
+  fi
   grep -q '[^[:space:]]' "${OUTPUT_FILE}.tmp" 2>/dev/null && break
   # Usage-limit / auth errors will not heal on retry — surface them immediately.
   if grep -Eiq 'usage limit|rate limit|401|403|SuperGrok' "${OUTPUT_FILE}.stderr.log" 2>/dev/null; then
@@ -189,7 +196,9 @@ done
 
 # Empty output after all retries is a failure, not a silent rc=0 success.
 if ! grep -q '[^[:space:]]' "${OUTPUT_FILE}.tmp" 2>/dev/null; then
-  echo "omnilane: grok produced no output after $MAX_ATTEMPTS attempts" >> "${OUTPUT_FILE}.stderr.log"
+  completed_attempts="$attempt"
+  [[ "$completed_attempts" -le "$MAX_ATTEMPTS" ]] || completed_attempts="$MAX_ATTEMPTS"
+  echo "omnilane: grok produced no output after $completed_attempts attempts" >> "${OUTPUT_FILE}.stderr.log"
   [[ "$RC" -eq 0 ]] && RC=1
 fi
 

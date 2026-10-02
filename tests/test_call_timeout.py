@@ -83,10 +83,10 @@ class CallTimeoutTests(unittest.TestCase):
             process.stdout.close()
             process.stderr.close()
 
-    def test_child_stays_in_callers_process_group(self):
+    def test_child_has_owned_isolated_process_group(self):
         result, _ = self.run_call("import os\nprint(os.getpgrp())\n", "5")
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertEqual(os.getpgrp(), int(result.stdout))
+        self.assertNotEqual(os.getpgrp(), int(result.stdout))
 
     def test_missing_command_preserves_exec_failure(self):
         result = subprocess.run(
@@ -130,23 +130,38 @@ class CallTimeoutTests(unittest.TestCase):
                 self.assertEqual(expected, result.returncode, result.stderr)
 
     def test_interrupted_wait_retries_and_preserves_child_status(self):
-        # Inject one EINTR at the actual Perl wait seam; subsequent waits use
-        # the real owned child. No unrelated PID or extra signal is involved.
-        launcher = r'''
-use Errno qw(EINTR);
-BEGIN {
-    *CORE::GLOBAL::waitpid = sub {
-        if (!$main::injected++) { $! = EINTR; return -1; }
-        return CORE::waitpid($_[0], $_[1]);
-    };
-}
-END { print STDERR "injected-waitpid\n" if $main::injected; }
-do shift @ARGV;
-die $@ if $@;
-'''
+        # Exercise the actual shared engine's wait seam after the Perl wrapper
+        # delegates. Both keeper and supervisor retain their own wait ownership.
+        launcher = """
+import os, runpy, sys
+real_wait = os.waitpid
+injected = False
+def wait(pid, flags):
+    global injected
+    if not injected:
+        injected = True
+        print('injected-waitpid', file=sys.stderr)
+        raise InterruptedError()
+    return real_wait(pid, flags)
+os.waitpid = wait
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
         result = subprocess.run(
-            ["perl", "-e", launcher, str(ROOT / "scripts/lib/call-timeout.pl"), "5",
-             sys.executable, "-c", "raise SystemExit(7)"],
+            [sys.executable, "-c", launcher, str(ROOT / "scripts/lib/process_tree.py"),
+             "call", "5", sys.executable, "-c", "raise SystemExit(7)"],
             env=self.env, text=True, capture_output=True, timeout=8)
         self.assertEqual(7, result.returncode, result.stderr)
         self.assertIn("injected-waitpid", result.stderr)
+
+    def test_missing_python_fails_closed(self):
+        import shutil
+        utilities = self.root / "perl-only"
+        utilities.mkdir()
+        (utilities / "perl").symlink_to(shutil.which("perl", path=self.env["PATH"]))
+        environment = dict(self.env, PATH=str(utilities))
+        result = subprocess.run(
+            [str(utilities / "perl"), str(ROOT / "scripts/lib/call-timeout.pl"), "1", "anything"],
+            env=environment, text=True, capture_output=True, timeout=5)
+        self.assertEqual(125, result.returncode, result.stderr)
+        self.assertIn("requires python3", result.stderr)

@@ -179,7 +179,11 @@ PY
     local signal_rc="$1" waited=0
     trap - TERM HUP INT
     set +e
-    if [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
+    if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+      # The owning supervisor already received cancellation and pins its group.
+      # Bash may reap asynchronously, so do not signal a remembered numeric PID.
+      [[ -z "$LIVE_CHILD_PID" ]] || wait "$LIVE_CHILD_PID" 2>/dev/null
+    elif [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
       kill -TERM "-$LIVE_CHILD_PID" 2>/dev/null || kill -TERM "$LIVE_CHILD_PID" 2>/dev/null || true
       while kill -0 "$LIVE_CHILD_PID" 2>/dev/null && [[ "$waited" -lt 50 ]]; do
         sleep 0.1
@@ -234,7 +238,7 @@ if [[ -n "$THREAD_MODE" ]]; then
   set +e
   (
     cd "$RUN_DIR" || exit 127
-    env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
+    run_with_timeout "$RUN_TIMEOUT" env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
       NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
       "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
       "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \
@@ -270,7 +274,7 @@ set +e
   # --add-dir registers RUN_DIR as the active workspace; without it agy's
   # sandbox denies every tool call (run_command/view_file) in print mode.
   private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
-  env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
+  run_with_timeout "$RUN_TIMEOUT" env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
     NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
     "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \
     "${MODE_ARGS[@]}" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} \

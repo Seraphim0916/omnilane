@@ -317,6 +317,8 @@ test_background_worker_uses_readonly_snapshot() {
   cp "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
   cp "$ROOT/scripts/lib/job-timeout.pl" "$fixture/scripts/lib/job-timeout.pl"
   cp "$ROOT/scripts/lib/call-timeout.pl" "$fixture/scripts/lib/call-timeout.pl"
+  cp "$ROOT/scripts/lib/process_tree.py" "$fixture/scripts/lib/process_tree.py"
+  cp "$ROOT/scripts/lib/job_cancel.py" "$fixture/scripts/lib/job_cancel.py"
   cp "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
   cp "$ROOT/scripts/runners/run-exec.sh" "$fixture/scripts/runners/run-exec.sh"
   chmod +x "$fixture/scripts/dispatch.sh" "$fixture/scripts/lib/job-worker.sh" \

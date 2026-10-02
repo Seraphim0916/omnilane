@@ -74,7 +74,9 @@ test_completion_settings_detection() {
   bin="$home/bin"
   config="$home/claude-config"
   marker="$home/claude-spawned"
-  mkdir -p "$repo/scripts" "$repo/hooks" "$bin" "$config" "$home/state/inbox"
+  mkdir -p "$repo/scripts/lib" "$repo/hooks" "$bin" "$config" "$home/state/inbox"
+  cp "$ROOT/scripts/lib/process_tree.py" "$repo/scripts/lib/process_tree.py"
+  cp "$ROOT/scripts/lib/goal-loop.sh" "$repo/scripts/lib/goal-loop.sh"
 
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
 #!/bin/sh

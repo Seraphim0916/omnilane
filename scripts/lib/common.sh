@@ -159,35 +159,18 @@ resolve_timeout_cmd() {
   else echo ""; fi
 }
 
-# Portable watchdog: timeout/gtimeout when present, perl alarm otherwise
-# (stock macOS has perl but no coreutils timeout). Warns when neither exists
-# so a hung vendor CLI cannot silently block forever.
+# Every call owns an isolated, pinned group, even without a whole-job budget.
+# The shared engine preserves per-call 142 independently of whole-job 124.
 run_with_timeout() { # seconds, command...
   local secs="$1"; shift
-  # GNU timeout creates a nested process group. Under the whole-job supervisor,
-  # keep calls in its isolated group so one outer signal reaches every runner.
-  if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
-    command -v perl &>/dev/null || {
-      echo "omnilane: supervised timeout requires perl" >&2; return 125
-    }
-    local watchdog="$OMNILANE_REPO/scripts/lib/call-timeout.pl"
-    [[ -f "$watchdog" ]] || {
-      echo "omnilane: supervised per-call watchdog is unavailable" >&2; return 125
-    }
-    # A separate parent owns the deadline; a CLI cannot disable it with alarm(0)
-    # or a SIGALRM handler. It stays in the outer group and retains exit 142.
-    perl "$watchdog" "$secs" "$@"
-    return $?
-  fi
-  local t; t="$(resolve_timeout_cmd)"
-  if [[ -n "$t" ]]; then
-    "$t" "$secs" "$@"
-  elif command -v perl &>/dev/null; then
-    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
-  else
-    echo "omnilane: no timeout/gtimeout/perl — running without a watchdog" >&2
-    "$@"
-  fi
+  command -v python3 &>/dev/null || {
+    echo "omnilane: process supervision requires python3" >&2; return 125
+  }
+  local watchdog="$OMNILANE_REPO/scripts/lib/process_tree.py"
+  [[ -f "$watchdog" ]] || {
+    echo "omnilane: per-call watchdog is unavailable" >&2; return 125
+  }
+  python3 "$watchdog" call "$secs" "$@"
 }
 
 hash_str() { # stdin -> short stable token (sha256sum/shasum/cksum fallback)

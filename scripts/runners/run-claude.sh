@@ -125,7 +125,11 @@ finalize_live_output() {
     local signal_rc="$1" waited=0
     trap - TERM HUP INT
     set +e
-    if [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
+    if [[ "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+      # The owning supervisor already received cancellation and pins its group.
+      # Bash may reap asynchronously, so do not signal a remembered numeric PID.
+      [[ -z "$LIVE_CHILD_PID" ]] || wait "$LIVE_CHILD_PID" 2>/dev/null
+    elif [[ -n "$LIVE_CHILD_PID" ]] && kill -0 "$LIVE_CHILD_PID" 2>/dev/null; then
       kill -TERM "-$LIVE_CHILD_PID" 2>/dev/null || kill -TERM "$LIVE_CHILD_PID" 2>/dev/null || true
       while kill -0 "$LIVE_CHILD_PID" 2>/dev/null && [[ "$waited" -lt 50 ]]; do
         sleep 0.1
