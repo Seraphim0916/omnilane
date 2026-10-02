@@ -697,6 +697,13 @@ class LifecycleTests(unittest.TestCase):
                 time.sleep(0.05)
             self.run_ui("stop", check=False)
 
+    def test_server_id_is_always_a_plain_argv_value(self):
+        refused = self.run_ui("serve", "--server-id", "-starts-with-a-dash", "--port", "0", check=False)
+        self.assertEqual(2, refused.returncode)
+        self.assertIn("argument --server-id: expected one argument", refused.stderr)
+        for _ in range(200):
+            self.assertRegex(ui.new_server_id(), r"\A[0-9a-f]{36}\Z")
+
     def test_failed_command_reports_server_log(self):
         self.assertIn("server.log unavailable", self.server_log_tail())
         (self.home / "ui").mkdir(parents=True, exist_ok=True)

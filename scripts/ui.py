@@ -988,6 +988,13 @@ def utc_now():
     )
 
 
+def new_server_id():
+    # The id travels as its own argv word after --server-id. A urlsafe token
+    # starts with "-" once in 64, and argparse then reads it as an option, so
+    # the server child exits with a usage error.
+    return secrets.token_hex(18)
+
+
 def start_ui(runtime, requested_port):
     with runtime.lifecycle_lock():
         state_value = runtime.read_state()
@@ -1003,7 +1010,7 @@ def start_ui(runtime, requested_port):
             )
         runtime.clear_state()
 
-        server_id = secrets.token_urlsafe(18)
+        server_id = new_server_id()
         token = secrets.token_urlsafe(32)
         initial_state = {
             "apiVersion": 1,
