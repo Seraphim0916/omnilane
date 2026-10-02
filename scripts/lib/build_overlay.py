@@ -9,10 +9,12 @@ the whole set.
 from __future__ import annotations
 
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 import os
 import shutil
+import subprocess
 import socket
 from collections import Counter
 from datetime import datetime, timezone
@@ -104,12 +106,22 @@ PROVEN["claude/claude-fable-5"] = (
     "model_and_effort", "claude-fable-5", "cl-claude-fable-5-max")
 
 # The same per-host overrides scripts/lib/common.sh vendor_bin() gives the runners.
-BIN_ENV = {"codex": "CODEX_BIN", "claude": "CLAUDE_BIN", "grok": "GROK_BIN", "agy": "AGY_BIN"}
+@lru_cache(maxsize=None)
+def _shell_vendor_bin(name: str, environment: tuple[tuple[str, str], ...]) -> str:
+    """Cache the shell's rule for this process environment, including local.sh."""
+    vendor = "gemini" if name == "agy" else name
+    result = subprocess.run(
+        ["bash", "-uc", 'source "$1" >&2 || exit; vendor_bin "$2"',
+         "omnilane-vendor-bin", str(Path(__file__).with_name("common.sh")), vendor],
+        env=dict(environment), stdin=subprocess.DEVNULL,
+        capture_output=True, text=True, check=True,
+    )
+    return result.stdout.rstrip("\n")
 
 
 def cli_command(name: str) -> str:
     """The command dispatch runs for this CLI: its *_BIN override, else the bare name."""
-    return os.environ.get(BIN_ENV.get(name, ""), "") or name
+    return _shell_vendor_bin(name, tuple(sorted(os.environ.items()))) or name
 
 
 def cli_path(name: str) -> Path:

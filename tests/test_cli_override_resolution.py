@@ -24,6 +24,8 @@ class CliOverrideResolutionTests(unittest.TestCase):
         self.pinned = self.fake("pinned/codex-pinned")
         self.clean = {key: value for key, value in os.environ.items() if key not in BINS}
         self.clean["PATH"] = f"{self.on_path.parent}{os.pathsep}{self.clean.get('PATH', '')}"
+        # The resolver reads the host's local.sh; point it at a home that has none.
+        self.clean["OMNILANE_HOME"] = str(self.root / "home")
 
     def fake(self, relative: str) -> Path:
         path = self.root / relative

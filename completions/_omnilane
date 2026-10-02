@@ -69,7 +69,7 @@ _omnilane() {
   local command="${words[2]:-}" sub sub_index=3 goal_dispatch=0 thread_sub thread_index
   local -a lanes ids dispatch_options goal_words
   if (( CURRENT == 2 )); then
-    _values 'command' version list route dispatch goal jobs mcp doctor whoami native-context resign benchmark release-audit ui configure completion help
+    _values 'command' version list route dispatch goal jobs mcp doctor which-bin whoami native-context resign benchmark release-audit ui configure completion help
     return
   fi
   if [[ "$command" == goal && "${words[3]:-}" == dispatch ]] && (( CURRENT > 4 )); then
@@ -179,6 +179,9 @@ _omnilane() {
       _arguments '--json[versioned JSON output]' '--strict[fail on warnings]' \
         '--probe[run one opt-in live provider probe]:vendor:' \
         '--probe-timeout[probe timeout in seconds]:seconds:'
+      ;;
+    which-bin)
+      _values 'CLI vendor' codex claude grok gemini kimi qwen opencode
       ;;
     benchmark)
       _arguments '--json[versioned JSON output]' '--run[invoke providers in advise mode]' \

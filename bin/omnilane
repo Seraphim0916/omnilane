@@ -53,6 +53,23 @@ case "$cmd" in
     ;;
   release-audit) exec bash "$REPO/scripts/release-audit.sh" "$@" ;;
   doctor)    exec bash "$REPO/scripts/doctor.sh" "$@" ;;
+  which-bin)
+    [[ "$#" -eq 1 ]] || { echo "usage: omnilane which-bin VENDOR" >&2; exit 2; }
+    # shellcheck source=../scripts/lib/common.sh
+    source "$REPO/scripts/lib/common.sh"
+    binary="$(vendor_bin "$1")"
+    [[ -n "$binary" ]] || { echo "omnilane: unknown CLI vendor '$1'" >&2; exit 2; }
+    resolved="$(command -v "$binary")" || {
+      echo "omnilane: executable not found for '$1': $binary" >&2; exit 1
+    }
+    [[ -f "$resolved" && -x "$resolved" ]] || {
+      echo "omnilane: not an executable file for '$1': $binary" >&2; exit 1
+    }
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: which-bin requires Python 3.9 or newer" >&2; exit 1
+    }
+    exec python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$resolved"
+    ;;
   whoami)
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: whoami requires Python 3.9 or newer" >&2
@@ -82,18 +99,6 @@ case "$cmd" in
       )"
       export OMNILANE_AA_TRANSPORT_OVERLAY
     fi
-    # Probe and anchor the binaries dispatch runs: local.sh may point a vendor at
-    # a specific install, and a re-sign that follows PATH instead proves another one.
-    for bin_name in CODEX_BIN CLAUDE_BIN GROK_BIN AGY_BIN; do
-      [[ -z "${!bin_name:-}" ]] || continue
-      bin_value="$(
-        set +u
-        home="${OMNILANE_HOME:-$HOME/.omnilane}"
-        [[ -f "$home/local.sh" ]] && . "$home/local.sh" 2>/dev/null
-        printf '%s' "${!bin_name:-}"
-      )"
-      [[ -z "$bin_value" ]] || export "$bin_name=$bin_value"
-    done
     exec python3 "$REPO/scripts/lib/resign.py" "$@"
     ;;
   benchmark)
@@ -133,6 +138,7 @@ omnilane — one routing table, every harness
   omnilane completion bash|zsh|fish      print a shell completion script
   omnilane release-audit [flags]          offline, read-only release gate
   omnilane doctor [--json] [--strict] [--probe V]  local health / opt-in live probe
+  omnilane which-bin VENDOR              resolved executable dispatch would run (read-only)
   omnilane whoami                       caller-context file for the CLI this runs under
   omnilane native-context [--workdir DIR] [--mode M] [--inherits-caller-runtime]
                                          capability file that lets dispatch use this harness's own sub-agents
