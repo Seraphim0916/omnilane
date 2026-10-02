@@ -187,6 +187,44 @@ raise SystemExit(97)
         for name in ("gate.started", "child.started"):
             self.assert_process_stopped(json.loads((self.root / name).read_text()))
 
+    def check_alarm_mutating_background(self, alarm_action, *, job_timeout=None, per_call="1", expected=142):
+        gate = self.executable("alarm-gate", "import signal,time\n" + alarm_action + "\ntime.sleep(4)\n")
+        (self.home / "routing.local.yaml").write_text(f'fixture: exec "{gate}" -\n')
+        args = ["bash", str(ROOT / "scripts/dispatch.sh"), "--background", "--single-shot",
+                "--timeout", per_call]
+        if job_timeout is not None:
+            args += ["--job-timeout", job_timeout]
+        started = time.monotonic()
+        dispatched = subprocess.run(args + ["fixture", "owned alarm-reset fixture"],
+                                    env=self.env, text=True, capture_output=True, timeout=15)
+        self.assertEqual(0, dispatched.returncode, dispatched.stderr)
+        job_id = dispatched.stdout.strip()
+        job_dir = self.home / "jobs" / job_id
+        self.remember_worker(job_dir)
+        self.wait_for_file(job_dir / "exit", timeout=8)
+        self.assertLess(time.monotonic() - started, 7)
+        self.assertEqual(str(expected), (job_dir / "exit").read_text().strip())
+        record = self.home / "inbox" / (job_id + ".json")
+        self.wait_for_file(record)
+        self.assertEqual(expected, json.loads(record.read_text())["exit"])
+        status = subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "--json", "status", job_id],
+                                env=self.env, text=True, capture_output=True, timeout=5)
+        self.assertEqual(0, status.returncode, status.stderr)
+        self.assertEqual("done", json.loads(status.stdout)["job"]["state"])
+        self.assertEqual(expected, json.loads(status.stdout)["job"]["exit_code"])
+        self.assertEqual(None if job_timeout is None else int(job_timeout),
+                         json.loads((job_dir / "meta.json").read_text())["job_timeout"])
+
+    def test_background_alarm_clear_does_not_disable_per_call_timeout(self):
+        self.check_alarm_mutating_background("signal.alarm(0)")
+
+    def test_background_alarm_ignore_does_not_use_longer_job_timeout(self):
+        self.check_alarm_mutating_background("signal.signal(signal.SIGALRM,signal.SIG_IGN)",
+                                            job_timeout="10")
+
+    def test_shorter_whole_job_timeout_keeps_124(self):
+        self.check_alarm_mutating_background("signal.alarm(0)", job_timeout="1", per_call="5", expected=124)
+
     def test_background_missing_supervisor_support_fails_before_job_creation(self):
         gate = self.executable("gate", "raise SystemExit('fixture must not launch')\n")
         self.executable("perl", "raise SystemExit(127)\n")

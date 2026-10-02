@@ -158,7 +158,13 @@ run_with_timeout() { # seconds, command...
     command -v perl &>/dev/null || {
       echo "omnilane: supervised timeout requires perl" >&2; return 125
     }
-    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
+    local watchdog="$OMNILANE_REPO/scripts/lib/call-timeout.pl"
+    [[ -f "$watchdog" ]] || {
+      echo "omnilane: supervised per-call watchdog is unavailable" >&2; return 125
+    }
+    # A separate parent owns the deadline; a CLI cannot disable it with alarm(0)
+    # or a SIGALRM handler. It stays in the outer group and retains exit 142.
+    perl "$watchdog" "$secs" "$@"
     return $?
   fi
   local t; t="$(resolve_timeout_cmd)"
