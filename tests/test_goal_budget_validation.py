@@ -1,4 +1,5 @@
 """Defensive schema checks before goal consumers use persisted budget fields."""
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import hashlib
 import subprocess

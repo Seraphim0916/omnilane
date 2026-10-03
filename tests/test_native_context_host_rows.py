@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Host-declared native capability rows merged by `omnilane native-context`."""
+import offline_env  # Activate suite isolation for direct file execution.
 import contextlib
 import importlib.util
 import io

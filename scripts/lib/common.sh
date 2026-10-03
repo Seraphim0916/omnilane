@@ -9,6 +9,17 @@ export OMNILANE_REPO
 # Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
 [[ -f "$OMNILANE_HOME/local.sh" ]] && source "$OMNILANE_HOME/local.sh"
 
+strip_caller_claude_env() {
+  # Claude plugin variables cancel Grok prompts; caller tokens must not reach other vendors.
+  local name
+  while IFS= read -r name; do
+    case "$name" in
+      CLAUDECODE|CLAUDE*|ANTHROPIC_*) unset "$name" ;;
+    esac
+  done < <(compgen -e)
+  return 0
+}
+
 private_job_files() (
   # Only this subshell changes umask; vendor-created project files keep theirs.
   umask 077

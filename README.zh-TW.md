@@ -154,6 +154,9 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 20 | 有一家需要你：簽署者是新的或沒紀錄、執行檔沒簽章或在本機被改過、換了安裝目錄，或供應商這次拒絕了上次通過的探測 | 讀訊息。它會印「稍後重試」，或印出你看過之後該執行的那一行 `omnilane resign --vendor V --approve V` |
 | 30 | 重簽後的覆蓋檔沒通過真實派工，已還原成前一份 | 沒有東西壞掉，讀紀錄即可 |
 | 2 | 沒有設定覆蓋檔 | 做第 2 步 |
+| 40 (`EXIT_HOST_CONFIG`) | 主機設定載入失敗，或已設定的覆蓋檔無法讀取、JSON 不合法；不做變更 | 修正 stderr 指出的路徑與原因；每日工作的通知方式由負責人決定 |
+
+argparse 的用法錯誤也回傳 2；已設定但讀不到的覆蓋檔回傳 40，不是 2。
 
 兩個限制要知道。簽署者檢查用的是 macOS 的程式碼簽章，所以在 Linux 上，每次 CLI 變動都會停在結束碼 20 等你 `--approve`。另外，沒有真正簽章的執行檔（例如在本機修補過的 CLI）一定會停下來等核准：沒有任何東西能證明它來自原廠，而這正是這項檢查存在的理由。
 
@@ -407,6 +410,7 @@ omnilane ui status                             # 查看 Live UI 是否運作中
 omnilane ui url                                # 印出目前通過驗證的本機網址
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # 實際探測必須明確選用
+# transport-overlay：執行檔路徑不符為 FAIL；供應商雜湊或執行器變動維持 WARN
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # 預設只乾跑
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目錄]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]

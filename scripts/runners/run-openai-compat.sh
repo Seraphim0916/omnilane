@@ -14,6 +14,7 @@ set -euo pipefail
 # builds/parses the JSON so prompt content never needs shell escaping.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+strip_caller_claude_env
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
 : "$WORKDIR" "$EFFORT" # parity with the uniform runner interface

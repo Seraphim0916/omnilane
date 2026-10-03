@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
+import home_isolation
 import copy
 import hashlib
 import importlib.util
@@ -408,6 +410,19 @@ class TransportOverlayEvidenceTests(unittest.TestCase):
             present = mapping["config_id"] in reported
             self.assertEqual(present, mapping["identity"]["vendor"] != "codex")
 
+    def test_live_overlay_default_skip_explains_host_opt_in(self) -> None:
+        with patch.dict(os.environ):
+            os.environ.pop("OMNILANE_TEST_LIVE_OVERLAY", None)
+            result = unittest.TestResult()
+            case = type(self)("test_live_overlay_loads_and_verifies_every_unstale_mapping")
+            case.run(result)
+        self.assertEqual(result.testsRun, 1)
+        self.assertEqual(result.errors + result.failures, [])
+        self.assertEqual(len(result.skipped), 1)
+        self.assertEqual(result.skipped[0][1],
+                         "Set OMNILANE_TEST_LIVE_OVERLAY=1 to run this test; "
+                         "it reads the host's real transport overlay and referenced evidence.")
+
     def test_live_overlay_loads_and_verifies_every_unstale_mapping(self) -> None:
         """Assert the signed file, and only the host state omnilane controls.
 
@@ -416,32 +431,37 @@ class TransportOverlayEvidenceTests(unittest.TestCase):
         mapping count is deterministic; how many of them a given minute's
         binaries still match is not, so staleness is reported, not failed.
         """
-        live_overlay = Path.home() / ".omnilane" / "transport-contracts.local.json"
-        if not live_overlay.is_file():
-            self.skipTest("host-local transport overlay is unavailable")
-        overlay = json.loads(live_overlay.read_text())
-        # Every probed configuration is either signed or recorded as unproven.
-        # A count of signed mappings alone would drop silently when a model goes
-        # away upstream, which is how the gate stops noticing.
-        self.assertEqual(len(overlay["mappings"]) + len(overlay["unproven"]),
-                         len(builder.PROVEN))
+        if os.environ.get("OMNILANE_TEST_LIVE_OVERLAY") != "1":
+            self.skipTest(
+                "Set OMNILANE_TEST_LIVE_OVERLAY=1 to run this test; "
+                "it reads the host's real transport overlay and referenced evidence.")
+        with home_isolation.allow_real_omnilane_reads() as real_omnilane:
+            live_overlay = real_omnilane / "transport-contracts.local.json"
+            if not live_overlay.is_file():
+                self.skipTest("host-local transport overlay is unavailable")
+            overlay = json.loads(live_overlay.read_text())
+            # Every probed configuration is either signed or recorded as unproven.
+            # A count of signed mappings alone would drop silently when a model goes
+            # away upstream, which is how the gate stops noticing.
+            self.assertEqual(len(overlay["mappings"]) + len(overlay["unproven"]),
+                             len(builder.PROVEN))
 
-        with patch.dict(os.environ, self._environment(live_overlay), clear=True):
-            registry, _ = aa_policy.load_registry(REGISTRY_PATH)
+            with patch.dict(os.environ, self._environment(live_overlay), clear=True):
+                registry, _ = aa_policy.load_registry(REGISTRY_PATH)
 
-        stale = registry["_stale_transport_vendors"]
-        expected = sum(1 for mapping in overlay["mappings"]
-                       if mapping["identity"]["vendor"] not in stale)
-        verified = sum(
-            1
-            for row in registry["scored_configs"]
-            if row["transport_mapping"].get("runtime_verified") is True
-        )
-        self.assertEqual(verified, expected,
-                         f"stale vendors {stale} should degrade only themselves")
-        if stale:
-            print(f"\nnote: {', '.join(stale)} evidence has drifted since the last "
-                  f"sweep; {verified}/49 mappings still dispatch")
+            stale = registry["_stale_transport_vendors"]
+            expected = sum(1 for mapping in overlay["mappings"]
+                           if mapping["identity"]["vendor"] not in stale)
+            verified = sum(
+                1
+                for row in registry["scored_configs"]
+                if row["transport_mapping"].get("runtime_verified") is True
+            )
+            self.assertEqual(verified, expected,
+                             f"stale vendors {stale} should degrade only themselves")
+            if stale:
+                print(f"\nnote: {', '.join(stale)} evidence has drifted since the last "
+                      f"sweep; {verified}/49 mappings still dispatch")
 
 
 if __name__ == "__main__":

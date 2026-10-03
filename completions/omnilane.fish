@@ -28,6 +28,8 @@ complete -c omnilane -f -n __fish_use_subcommand -a goal          -d 'budgeted g
 complete -c omnilane -f -n __fish_use_subcommand -a jobs          -d 'inspect background jobs'
 complete -c omnilane -f -n __fish_use_subcommand -a mcp           -d 'MCP stdio server'
 complete -c omnilane -f -n __fish_use_subcommand -a doctor        -d 'read-only health report'
+complete -c omnilane -f -n __fish_use_subcommand -a which-bin -d 'resolved dispatch executable'
+complete -c omnilane -f -n '__fish_seen_subcommand_from which-bin' -a 'codex claude grok gemini kimi qwen opencode'
 complete -c omnilane -f -n __fish_use_subcommand -a whoami        -d 'caller-context file for the launching CLI'
 complete -c omnilane -f -n __fish_use_subcommand -a resign        -d 're-probe and re-sign the transport overlay'
 complete -c omnilane -f -n __fish_use_subcommand -a native-context -d 'capability file for this harness sub-agents'

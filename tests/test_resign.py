@@ -6,6 +6,7 @@ dispatch are all replaced, and every file lives under .sandbox-tmp.
 """
 from __future__ import annotations
 
+import offline_env  # Activate suite isolation for direct file execution.
 import hashlib
 import json
 import os
@@ -284,7 +285,7 @@ class ResignTests(unittest.TestCase):
         self.bins[vendor] = path
         return path
 
-    def run_resign(self, *, outcome="done", outcomes=None, smoke=(True, "ok"), failing=(), **flags):
+    def run_resign(self, *, outcome="done", outcomes=None, smoke=(True, "ok"), failing=(), canary=(True, "v"), **flags):
         def sweep(vendor, root, log=print, only_missing=False, **_):
             self.sweeps.append(vendor)
             self.only_missing[vendor] = only_missing
@@ -309,10 +310,213 @@ class ResignTests(unittest.TestCase):
             setattr(args, key, value)
         self.lines = []
         with patch.object(probe_sweep, "sweep", sweep), \
-                patch.object(resign, "canary", lambda cli: (True, "v")), \
+                patch.object(resign, "canary", lambda cli: canary), \
                 patch.object(resign, "smoke", lambda *a, **k: smoke), \
                 patch("builtins.print"):
             return resign.resign(args, log=self.lines.append)
+
+    def missing_cli(self, vendor):
+        return patch.object(resign.shutil, "which", lambda name:
+                            None if self.vendor_of(name) == vendor
+                            else str(self.bins[self.vendor_of(name)]))
+
+    def vendor_mappings(self, vendor):
+        return [m for m in json.loads(self.live.read_text())["mappings"]
+                if m["identity"]["vendor"] == vendor]
+
+    def test_missing_cli_keeps_installed_mappings_when_another_vendor_proceeds(self):
+        before = self.vendor_mappings("grok")
+        evidence = [e for e in json.loads(self.live.read_text())["evidence"]
+                    if e.get("vendor") == "grok"]
+        self.update("codex")
+        with self.missing_cli("grok"):
+            self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR, self.lines)
+        after = self.vendor_mappings("grok")
+        self.assertEqual(len(after), len(before), "installed overlay lost grok mappings")
+        self.assertEqual([{k: v for k, v in m.items() if k != "pending_recheck"}
+                          for m in after], before)
+        self.assertTrue(all(m["pending_recheck"]["consecutive_runs"] == 1 for m in after))
+        self.assertEqual([e for e in json.loads(self.live.read_text())["evidence"]
+                          if e.get("vendor") == "grok"], evidence)
+
+    def test_only_missing_cli_advances_pending_without_rebuilding(self):
+        before = self.vendor_mappings("grok")
+        with self.missing_cli("grok"), patch.object(build_overlay, "main") as builder:
+            self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR, self.lines)
+            builder.assert_not_called()
+        after = self.vendor_mappings("grok")
+        self.assertEqual(len(after), len(before))
+        self.assertTrue(all("pending_recheck" in m for m in after),
+                        "held-only run leaves mappings unchanged with no pending counter")
+        self.assertEqual(after[0]["pending_recheck"]["consecutive_runs"], 1)
+
+    def assert_pending(self, vendor, reason, count, before):
+        mappings = self.vendor_mappings(vendor)
+        self.assertEqual([{k: v for k, v in m.items() if k != "pending_recheck"}
+                          for m in mappings],
+                         [{k: v for k, v in m.items() if k != "pending_recheck"}
+                          for m in before])
+        for mapping in mappings:
+            mark = mapping["pending_recheck"]
+            self.assertEqual((mark["reason"], mark["consecutive_runs"]), (reason, count))
+            self.assertTrue(mark["at"])
+        self.assertEqual(resign.verified(self.live)[vendor], len(before))
+
+    def test_two_missing_cli_runs_remove_mappings_even_without_other_work(self):
+        before = self.vendor_mappings("grok")
+        with self.missing_cli("grok"), patch.object(build_overlay, "main") as builder:
+            self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+            self.assert_pending("grok", "CLI not found", 1, before)
+            self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+            builder.assert_not_called()
+        self.assertEqual(self.vendor_mappings("grok"), [])
+        self.assertFalse(any(e.get("vendor") == "grok"
+                             for e in json.loads(self.live.read_text())["evidence"]))
+        self.assertTrue(any("grok mappings removed after two consecutive runs" in l
+                            for l in self.lines), self.lines)
+        self.assertEqual(len(list(self.home.glob(self.live.name + ".before-*"))), 2)
+
+    def test_two_missing_cli_runs_remove_mappings_alongside_successful_reprobes(self):
+        with self.missing_cli("grok"):
+            for count in (1, 2):
+                new = self.update("codex", version=f"1.{count}.0")
+                self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR, self.lines)
+                self.assertEqual(self.pinned("codex"), str(new))
+                mappings = self.vendor_mappings("grok")
+                self.assertEqual(bool(mappings), count == 1)
+        self.assertTrue(any("grok mappings removed after two consecutive runs" in l
+                            for l in self.lines))
+
+    def repeat_hold(self, reason, **flags):
+        before = self.vendor_mappings("grok")
+        evidence = [e for e in json.loads(self.live.read_text())["evidence"]
+                    if e.get("vendor") == "grok"]
+        for count in (1, 2, 3):
+            self.assertEqual(self.run_resign(vendor=["grok"], **flags), resign.EXIT_OPERATOR)
+            self.assert_pending("grok", reason, count, before)
+            self.assertEqual([e for e in json.loads(self.live.read_text())["evidence"]
+                              if e.get("vendor") == "grok"], evidence)
+
+    def test_signer_holds_never_retire_mappings(self):
+        self.update("grok")
+        self.signers["grok"] = "OTHER"
+        self.repeat_hold("signer gate refused")
+
+    def test_canary_holds_never_retire_mappings(self):
+        self.update("grok")
+        self.repeat_hold("canary failed", canary=(False, "version failed"))
+
+    def test_unprobeable_holds_never_retire_mappings(self):
+        self.update("grok")
+        self.repeat_hold("sweep unfinished", outcome="unprobeable")
+
+    def test_unfinished_holds_never_retire_mappings(self):
+        self.update("grok")
+        self.repeat_hold("sweep unfinished", outcome="partial")
+
+    def test_regressed_holds_never_retire_mappings(self):
+        self.update("grok")
+        self.repeat_hold("regressed", failing=("grok/grok-4-6",))
+
+    def test_missing_cli_retirement_requires_two_consecutive_missing_reasons(self):
+        before = self.vendor_mappings("grok")
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+        self.update("grok")
+        self.signers["grok"] = "OTHER"
+        self.run_resign(vendor=["grok"])
+        self.assert_pending("grok", "signer gate refused", 2, before)
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+            self.assert_pending("grok", "CLI not found", 3, before)
+            self.run_resign(vendor=["grok"])
+        self.assertEqual(self.vendor_mappings("grok"), [])
+
+    def test_success_clears_pending_even_if_the_executable_did_not_change(self):
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+        self.assertEqual(self.run_resign(vendor=["grok"]), resign.EXIT_OK, self.lines)
+        self.assertEqual(self.sweeps, ["grok"])
+        self.assertTrue(all("pending_recheck" not in m for m in self.vendor_mappings("grok")))
+
+    def test_pending_check_is_read_only_and_policy_digest_checks_still_apply(self):
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+        before = self.live.read_bytes()
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
+        self.assertEqual(self.live.read_bytes(), before)
+        with patch.dict(os.environ, {"OMNILANE_AA_OVERLAY_SHA256": digest(self.live)}):
+            registry, _ = resign.aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
+            self.assertTrue(all(r["transport_mapping"].get("runtime_verified")
+                                for r in registry["scored_configs"]
+                                if r["id"] in {m["config_id"] for m in self.vendor_mappings("grok")}))
+        with patch.dict(os.environ, {"OMNILANE_AA_OVERLAY_SHA256": "0" * 64}):
+            with self.assertRaises(resign.aa_policy.PolicyError):
+                resign.aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
+
+    def test_signer_recording_and_adhoc_trust_preserve_pending_counter(self):
+        self.update("claude")
+        self.run_resign(vendor=["claude"], canary=(False, "offline"))
+        before = self.vendor_mappings("claude")
+        self.assertEqual(self.run_resign(record_signers=True), resign.EXIT_OK)
+        self.assertEqual(self.vendor_mappings("claude"), before)
+        self.assertEqual(self.run_resign(trust_adhoc=["claude"]), resign.EXIT_OK)
+        self.assertEqual(self.vendor_mappings("claude"), before)
+        self.assertEqual(self.run_resign(vendor=["claude"]), resign.EXIT_OK)
+        self.assertTrue(all("pending_recheck" not in m for m in self.vendor_mappings("claude")))
+
+    def test_unselected_pending_vendor_is_preserved_without_advancing(self):
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+        before = self.vendor_mappings("grok")
+        self.update("codex")
+        self.assertEqual(self.run_resign(vendor=["codex"]), resign.EXIT_OK)
+        self.assertEqual(self.vendor_mappings("grok"), before)
+
+    def test_smoke_failure_restores_exact_bytes_including_previous_pending_mark(self):
+        with self.missing_cli("grok"):
+            self.run_resign(vendor=["grok"])
+        before = self.live.read_bytes()
+        self.update("codex")
+        with self.missing_cli("grok"):
+            self.assertEqual(self.run_resign(smoke=(False, "fixture failure")),
+                             resign.EXIT_ROLLED_BACK)
+        self.assertEqual(self.live.read_bytes(), before)
+        self.assertFalse(any("marked pending" in l or "mappings removed" in l for l in self.lines))
+
+    def test_no_held_vendor_is_byte_identical_to_untouched_builder_for_same_inputs(self):
+        self.update("codex")
+        self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
+        installed = self.live.read_bytes()
+        overlay = json.loads(installed)
+        root = resign.previous_root(overlay)
+        # build_overlay.py is untouched. Rebuild with the identical evidence and source.
+        with patch("builtins.print"):
+            build_overlay.main(["--root", str(root), "--source", overlay["source"]])
+        self.assertEqual(installed, (root / "transport-contracts.local.json").read_bytes())
+
+    def test_a_held_vendor_without_mappings_does_not_claim_pending_contracts(self):
+        overlay = json.loads(self.live.read_text())
+        overlay["mappings"] = [m for m in overlay["mappings"]
+                               if m["identity"]["vendor"] != "gemini"]
+        self.live.write_text(json.dumps(overlay))
+        self.update("codex")
+        with self.missing_cli("gemini"):
+            self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+        self.assertEqual(self.vendor_mappings("gemini"), [])
+        self.assertTrue(any("gemini was not re-signed; no verified mappings to retain" in l
+                            for l in self.lines), self.lines)
+
+    def test_removal_keeps_existing_unproven_findings(self):
+        self.never_probed("grok", verdict="fail")
+        findings = json.loads(self.live.read_text())["unproven"]
+        with self.missing_cli("grok"):
+            for count in (1, 2):
+                self.update("codex", version=f"1.{count}.0")
+                self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
+        overlay = json.loads(self.live.read_text())
+        self.assertEqual(self.vendor_mappings("grok"), [])
+        self.assertTrue(all(finding in overlay["unproven"] for finding in findings))
 
     def pinned(self, vendor):
         overlay = json.loads(self.live.read_text())
@@ -438,9 +642,10 @@ class ResignTests(unittest.TestCase):
         self.never_probed()
         new = self.update("claude")
         self.signers["claude"] = "adhoc"
-        before = digest(self.live)
+        before = self.vendor_mappings("claude")
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
-        self.assertEqual((self.sweeps, digest(self.live)), ([], before))
+        self.assertEqual(self.sweeps, [])
+        self.assert_pending("claude", "signer gate refused", 1, before)
         self.assertTrue(any("--approve claude" in line for line in self.lines), self.lines)
         self.assertEqual(self.run_resign(approve=["claude"]), resign.EXIT_OK, self.lines)
         self.assertIs(self.only_missing["claude"], False)
@@ -468,9 +673,10 @@ class ResignTests(unittest.TestCase):
         old = self.pinned("codex")
         self.update("codex")
         self.signers["codex"] = "SOMEONEELSE"
-        before = digest(self.live)
+        before = self.vendor_mappings("codex")
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
-        self.assertEqual((self.sweeps, digest(self.live), self.pinned("codex")), ([], before, old))
+        self.assertEqual((self.sweeps, self.pinned("codex")), ([], old))
+        self.assert_pending("codex", "signer gate refused", 1, before)
         self.assertTrue(any("--approve codex" in line for line in self.lines), self.lines)
 
     def test_an_adhoc_binary_is_held_until_approved(self):
@@ -559,9 +765,10 @@ class ResignTests(unittest.TestCase):
     def test_a_provider_bad_hour_does_not_shrink_the_overlay(self):
         old = self.pinned("grok")
         self.update("grok")
-        before = digest(self.live)
+        before = self.vendor_mappings("grok")
         self.assertEqual(self.run_resign(failing=("grok/grok-4-6",)), resign.EXIT_OPERATOR)
-        self.assertEqual((digest(self.live), self.pinned("grok")), (before, old))
+        self.assertEqual(self.pinned("grok"), old)
+        self.assert_pending("grok", "regressed", 1, before)
         self.assertTrue(any("--allow-shrink" in line for line in self.lines), self.lines)
         self.assertFalse(any("--approve grok" in line for line in self.lines), self.lines)
 
@@ -576,14 +783,15 @@ class ResignTests(unittest.TestCase):
 
     def test_an_unprobeable_vendor_is_not_installed(self):
         self.update("grok")
-        before = digest(self.live)
+        before = self.vendor_mappings("grok")
         self.assertEqual(self.run_resign(outcome="unprobeable"), resign.EXIT_OPERATOR)
-        self.assertEqual(digest(self.live), before)
+        self.assert_pending("grok", "sweep unfinished", 1, before)
         # Not "retry later": nothing changes until the CLI is logged in again.
         held = [l for l in self.lines if "grok was not re-signed" in l]
         self.assertEqual(len(held), 1, self.lines)
         self.assertNotIn("Retry later", held[0])
-        self.assertIn("omnilane resign --vendor grok", held[0])
+        self.assertIn("marked pending", held[0])
+        self.assertTrue(any("omnilane resign --vendor grok" in l for l in self.lines))
 
     def test_a_failed_smoke_restores_the_previous_overlay(self):
         self.update("grok")
@@ -595,6 +803,28 @@ class ResignTests(unittest.TestCase):
     def test_no_configured_overlay_is_not_an_error_to_retry(self):
         with patch.dict(os.environ, {"OMNILANE_AA_TRANSPORT_OVERLAY": ""}):
             self.assertEqual(self.run_resign(), resign.EXIT_UNCONFIGURED)
+
+
+class RetainHeldRegistryDriftTests(unittest.TestCase):
+    """An overlay signed against an older registry can name rows that are gone."""
+
+    def test_rows_the_registry_dropped_do_not_break_or_survive_retention(self):
+        kept = next(iter(build_overlay.ROWS))
+        vendor = build_overlay.ROWS[kept]["vendor"]
+        gone = f"{vendor}/row-the-registry-dropped"
+        overlay = {
+            "mappings": [{"config_id": kept, "identity": {"vendor": vendor}},
+                         {"config_id": gone, "identity": {"vendor": vendor}}],
+            "evidence": [],
+            "unproven": [{"config_id": gone, "verdict_reason": "upstream refused it"}],
+        }
+        staged = {"mappings": [], "evidence": [], "unproven": []}
+
+        status = resign.retain_held(staged, overlay, [vendor], {vendor: "sweep unfinished"}, "now")
+
+        self.assertEqual(status[vendor]["consecutive_runs"], 1)
+        self.assertEqual([m["config_id"] for m in staged["mappings"]], [kept])
+        self.assertEqual(staged["unproven"], [])
 
 
 if __name__ == "__main__":

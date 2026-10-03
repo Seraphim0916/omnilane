@@ -12,7 +12,7 @@ from offline_env import isolated_environment
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TOP_COMMANDS = set("version list route dispatch goal jobs mcp completion release-audit doctor whoami native-context resign benchmark ui configure help".split())
+TOP_COMMANDS = set("version list route dispatch goal jobs mcp completion release-audit doctor which-bin whoami native-context resign benchmark ui configure help".split())
 GOAL_COMMANDS = set("open dispatch note status close".split())
 JOB_COMMANDS = set("list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help".split())
 ID_COMMANDS = set("status result complete-native tail send watch close retry wait cancel rm".split())

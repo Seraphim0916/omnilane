@@ -727,6 +727,9 @@ case "${1:-}" in
       emit_json_inspection list print_effective_routing "$LIST_DEFAULTS_ONLY"
     fi
     print_effective_routing "$LIST_DEFAULTS_ONLY"
+    if [[ -n "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]] && command -v python3 >/dev/null 2>&1; then
+      python3 "$OMNILANE_REPO/scripts/lib/overlay_health.py" "$OMNILANE_REPO" --pending || true
+    fi
     exit 0
     ;;
   --explain)

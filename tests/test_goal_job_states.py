@@ -1,4 +1,5 @@
 """Goal reporting uses the existing offline job-status contract."""
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import os
 from pathlib import Path

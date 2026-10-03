@@ -49,6 +49,35 @@ rebuilds the overlay for the new snapshot.
 
 ## Re-signing with `omnilane resign`
 
+Every mode loads `scripts/lib/common.sh` (including `$OMNILANE_HOME/local.sh`)
+with dispatch's shell settings before reading an overlay. A shell load failure
+stops before any overlay read, staging or write; a configured but unreadable or
+invalid-JSON overlay also stops without writes. One line on stderr names the
+configuration/overlay path and reason, including with `--json` (stdout stays
+JSON or empty). A missing vendor CLI retains the existing drift/held behavior.
+
+| Exit | Meaning |
+|---|---|
+| 0 | nothing changed, or re-signed and verified |
+| 10 | `--check` found drift |
+| 20 | drift needs an operator |
+| 30 | attempted and rolled back |
+| 40 (`EXIT_HOST_CONFIG`) | host configuration failed, or configured overlay could not be read as JSON |
+| 2 | genuinely no overlay configured; argparse usage errors also use 2 |
+
+Daily-job owners should decide notification policy for the new code 40. An
+explicitly configured but unreadable overlay is not an unconfigured host.
+
+A vendor that a run could not re-sign (its CLI was not found, the signer check
+refused it, the canary or the probes failed) keeps the mappings it had. Each one
+gains a `pending_recheck` object with `reason`, `at` and `consecutive_runs`;
+`omnilane doctor` reports them as a warning, `omnilane list` ends with a
+`pending re-check:` line, and the next `omnilane resign` treats the vendor as
+drifted and tries again. The mark disappears when the vendor is re-signed. The
+mappings are removed, and listed as unproven, only after two consecutive runs
+whose reason is that the CLI could not be found. When no vendor can be re-signed
+at all, the run updates these marks in place and rebuilds nothing.
+
 `omnilane resign` does the re-signing described below in one command, and is what
 an operator (or a daily job in the operator's GUI session) runs when doctor
 reports a stale or moved vendor. `omnilane resign --check` only reports. It

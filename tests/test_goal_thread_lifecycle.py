@@ -1,4 +1,5 @@
 """Ordinary threaded goals retain completion history through cleanup and close."""
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import shlex
 import subprocess

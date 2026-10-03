@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Keep every user-visible release version on one source of truth."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 from pathlib import Path
 import re

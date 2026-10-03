@@ -1,4 +1,5 @@
 """The value rule's candidate pool holds every vendor the default chains route to."""
+import offline_env  # Activate suite isolation for direct file execution.
 import importlib.util
 import json
 import unittest

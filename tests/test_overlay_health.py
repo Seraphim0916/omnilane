@@ -13,20 +13,29 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from offline_env import isolated_environment
+
 ROOT = Path(__file__).resolve().parents[1]
 HEALTH = ROOT / "scripts" / "lib" / "overlay_health.py"
 REGISTRY = json.loads((ROOT / "config" / "aa-model-policy.json").read_text())
 
 
 def run(overlay_path, **extra):
-    env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_AA_")}
-    env.update(extra)
-    if overlay_path is None:
-        env.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
-    else:
-        env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(overlay_path)
-    proc = subprocess.run([sys.executable, str(HEALTH), str(ROOT)],
-                          capture_output=True, text=True, env=env)
+    sandbox = ROOT / ".sandbox-tmp"
+    sandbox.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="overlay-health-tools-", dir=sandbox) as directory:
+        env, violations = isolated_environment(Path(directory), os.environ["PATH"])
+        env = {k: v for k, v in env.items() if not k.startswith("OMNILANE_AA_")}
+        env["OMNILANE_HOME"] = str(Path(directory) / "omnilane")
+        env.update(extra)
+        if overlay_path is None:
+            env.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
+        else:
+            env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(overlay_path)
+        proc = subprocess.run([sys.executable, str(HEALTH), str(ROOT)],
+                              capture_output=True, text=True, env=env)
+        if violations.exists():
+            raise AssertionError("unmocked network command")
     level, _, message = proc.stdout.strip().partition("\t")
     return proc.returncode, level, message
 
@@ -80,6 +89,44 @@ class OverlayHealthTests(unittest.TestCase):
         self.assertEqual(level, "PASS", message)
         self.assertIn("verified mappings", message)
 
+    def test_pending_mappings_warn_in_doctor_and_are_visible_in_list(self):
+        env, overlay = self.vendor_fixture()
+        value = json.loads(overlay.read_text())
+        reasons = {"codex": "canary failed", "grok": "CLI not found"}
+        for vendor, config_id in (("codex", "codex/gpt-6-astra"), ("grok", "grok/grok-4-6")):
+            row = next(r for r in REGISTRY["scored_configs"] if r["id"] == config_id)
+            value["mappings"].append({
+                "config_id": config_id,
+                "identity": {k: row[k] for k in ("vendor", "model", "effort", "reasoning", "fallback")},
+                "runtime_model": row["model"], "runtime_effort": row["effort"],
+                "selector_type": "model_and_effort", "verification": "request-selector-contract",
+                "evidence_tier": "billed-model",
+                "pending_recheck": {"reason": reasons[vendor], "at": "2026-10-03T00:00:00+00:00",
+                                    "consecutive_runs": 1},
+            })
+        overlay.write_text(json.dumps(value))
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "WARN"), message)
+        self.assertIn("verified mappings: codex 1 billed-model, grok 1 billed-model", message)
+        expected = "pending re-check: codex: canary failed; grok: CLI not found"
+        self.assertIn(expected, message)
+        doctor = self.doctor(env, overlay)
+        lines = [line for line in doctor.stdout.splitlines() if "transport-overlay" in line]
+        self.assertEqual(len(lines), 1, doctor.stdout)
+        self.assertIn("WARN", lines[0])
+        self.assertIn(expected, lines[0])
+        env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(overlay)
+        result = subprocess.run(["/bin/bash", str(ROOT / "bin/omnilane"), "list"],
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([line for line in result.stdout.splitlines()
+                          if "pending re-check:" in line], [expected])
+        structured = subprocess.run(["/bin/bash", str(ROOT / "scripts/dispatch.sh"), "--list", "--json"],
+                                    env=env, capture_output=True, text=True)
+        self.assertEqual(structured.returncode, 0, structured.stderr)
+        self.assertTrue(structured.stdout.startswith("{"), repr(structured.stdout))
+        json.loads(structured.stdout)  # No extra text may corrupt structured inspection.
+
     def test_untagged_drift_fails_and_names_the_file(self):
         """The 2026-09-09 incident: one drifted hash refused every dispatch."""
         overlay = self.overlay(evidence={"sha256": "0" * 64})
@@ -108,6 +155,106 @@ class OverlayHealthTests(unittest.TestCase):
         rc, level, message = run(overlay)
         self.assertEqual(level, "PASS", message)
         self.assertIn("unproven", message)
+
+    def vendor_fixture(self):
+        env, violations = isolated_environment(self.base / "tools", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(violations.exists(), "unmocked network command"))
+        env["OMNILANE_HOME"] = str(self.base / "omnilane")
+        Path(env["OMNILANE_HOME"]).mkdir()
+        self.evidence.write_text("#!/bin/sh\nprintf 'fake codex A\\n'\n")
+        self.evidence.chmod(0o755)
+        self.digest = hashlib.sha256(self.evidence.read_bytes()).hexdigest()
+        self.local = Path(env["OMNILANE_HOME"]) / "local.sh"
+        self.local.write_text(f"export CODEX_BIN='{self.evidence}'\n")
+        return env, self.overlay(evidence={"vendor": "codex"})
+
+    def doctor(self, env, overlay, *options):
+        env = dict(env, OMNILANE_AA_TRANSPORT_OVERLAY=str(overlay))
+        return subprocess.run(["/bin/bash", str(ROOT / "bin/omnilane"),
+                               "doctor", *options], env=env, capture_output=True, text=True)
+
+    def test_different_resolved_path_fails_and_names_both_paths(self):
+        env, overlay = self.vendor_fixture()
+        replacement = self.base / "replacement-cli"
+        replacement.write_bytes(self.evidence.read_bytes())
+        replacement.chmod(0o755)
+        self.local.write_text(f"export CODEX_BIN='{replacement}'\n")
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "FAIL"), message)
+        self.assertIn("codex", message)
+        self.assertIn(f"runs {replacement}, overlay pins {self.evidence}", message)
+        self.assertIn("omnilane resign", message)
+        for options in ((), ("--strict",), ("--json",), ("--strict", "--json")):
+            with self.subTest(options=options):
+                result = self.doctor(env, overlay, *options)
+                self.assertEqual(result.returncode, 1, result.stderr + result.stdout)
+                if "--json" in options:
+                    payload = json.loads(result.stdout)
+                    report = next(r for r in payload["checks"] if r["check"] == "transport-overlay")
+                    self.assertEqual(report["level"], "FAIL")
+                    self.assertFalse(payload["ok"])
+                    message = report["message"]
+                else:
+                    message = result.stdout
+                    self.assertRegex(message, r"(?m)^FAIL\s+transport-overlay\s")
+                self.assertIn(f"runs {replacement}, overlay pins {self.evidence}", message)
+                self.assertIn("omnilane resign", message)
+
+    def test_same_path_changed_content_keeps_vendor_warning(self):
+        env, overlay = self.vendor_fixture()
+        self.evidence.write_text("#!/bin/sh\nprintf 'fake codex updated\\n'\n")
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "WARN"), message)
+        self.assertIn("stale vendor(s) codex degraded to unverified", message)
+        self.assertNotIn("runs ", message)
+        self.assertNotIn("overlay pins", message)
+
+    def test_matching_executable_keeps_exact_pass_message(self):
+        env, overlay = self.vendor_fixture()
+        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+
+    def test_symlink_to_pinned_executable_is_not_a_path_mismatch(self):
+        env, overlay = self.vendor_fixture()
+        alias = self.base / "cli-alias"
+        alias.symlink_to(self.evidence)
+        self.local.write_text(f"export CODEX_BIN='{alias}'\n")
+        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+
+    def test_path_mismatch_fails_even_when_pinned_evidence_is_stale(self):
+        env, overlay = self.vendor_fixture()
+        replacement = self.base / "replacement-cli"
+        replacement.write_bytes(self.evidence.read_bytes())
+        replacement.chmod(0o755)
+        self.local.write_text(f"export CODEX_BIN='{replacement}'\n")
+        self.evidence.write_text("#!/bin/sh\nprintf 'stale pinned codex\\n'\n")
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "FAIL"), message)
+        self.assertIn(f"runs {replacement}, overlay pins {self.evidence}", message)
+
+    def test_unresolvable_cli_is_not_a_path_mismatch(self):
+        env, overlay = self.vendor_fixture()
+        self.local.write_text("export CODEX_BIN='not-installed-c2'\n")
+        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+
+    def test_no_overlay_keeps_exact_warning_and_human_pass(self):
+        env, _ = self.vendor_fixture()
+        env.pop("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN", None)
+        self.assertEqual(run(None, **env), run(None))
+        self.assertEqual(run(None, **dict(env, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1")),
+                         run(None, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1"))
+
+    def test_runner_only_drift_keeps_vendor_warning(self):
+        env, overlay = self.vendor_fixture()
+        value = json.loads(overlay.read_text())
+        runner = ROOT / "scripts/runners/codex.sh"
+        value["evidence"].append({"vendor": "codex", "path": str(runner), "sha256": "0" * 64})
+        overlay.write_text(json.dumps(value))
+        rc, level, message = run(overlay, **env)
+        self.assertEqual((rc, level), (0, "WARN"), message)
+        self.assertIn("stale vendor(s) codex degraded to unverified", message)
+        self.assertIn(str(runner), message)
+        self.assertNotIn("runs ", message)
+        self.assertNotIn("overlay pins", message)
 
 
 if __name__ == "__main__":

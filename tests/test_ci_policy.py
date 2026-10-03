@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Static least-privilege contract for the GitHub Actions workflow."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 from pathlib import Path
 import re
 import unittest

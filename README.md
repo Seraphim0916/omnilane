@@ -185,6 +185,9 @@ What `omnilane resign` exits with:
 | 20 | a vendor needs you: new or missing signer, unsigned or locally patched binary, new install directory, or the provider refused probes that passed last time | read the message. It prints either "retry later" or the exact `omnilane resign --vendor V --approve V` to run after you have looked |
 | 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
 | 2 | no overlay is configured | do Step 2 |
+| 40 (`EXIT_HOST_CONFIG`) | dispatch's host configuration could not load, or the configured overlay is unreadable or invalid JSON; nothing read/staged/written after a shell failure | fix the path/error on stderr; daily-job owners decide notification policy |
+
+Exit 2 also covers argparse usage errors; a configured but unreadable overlay is exit 40, not 2.
 
 Two limits to know. Signer checks use macOS code signatures, so on Linux every
 changed CLI stops at exit 20 for your `--approve`. And a binary with no real
@@ -517,7 +520,7 @@ omnilane ui status                             # report whether the Live UI is r
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
 omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
-                                               # transport-overlay check names a stale vendor
+                                               # transport-overlay: path mismatch FAIL; vendor hash or runner drift WARN
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]

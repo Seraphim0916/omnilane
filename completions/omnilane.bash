@@ -79,7 +79,7 @@ _omnilane() {
     goal_dispatch=1
   fi
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-      words="version list route dispatch goal jobs mcp doctor whoami native-context resign benchmark release-audit ui configure completion help"
+      words="version list route dispatch goal jobs mcp doctor which-bin whoami native-context resign benchmark release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)
@@ -186,6 +186,7 @@ _omnilane() {
         fi
         ;;
       doctor) words="--json --strict --probe --probe-timeout" ;;
+      which-bin) words="codex claude grok gemini kimi qwen opencode" ;;
       benchmark)
         case "$prev" in
           --vendor) words="codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras" ;;

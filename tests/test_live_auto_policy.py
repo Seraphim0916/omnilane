@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Dry-run compatibility matrix; fake CLIs never call a provider."""
+import offline_env  # Activate suite isolation for direct file execution.
 import os
 import platform
 from pathlib import Path

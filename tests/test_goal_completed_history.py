@@ -1,4 +1,5 @@
 """Completed goal history remains useful after normal job artifact cleanup."""
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 from pathlib import Path
 import subprocess

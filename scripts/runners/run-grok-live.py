@@ -407,6 +407,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    # Standalone entry also excludes caller Claude context from vendor children.
+    for name in list(os.environ):
+        if name.startswith(("CLAUDE", "ANTHROPIC_")):
+            del os.environ[name]
     args = parse_args()
     if args.mode != "sysops":
         print(

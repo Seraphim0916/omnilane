@@ -1,4 +1,5 @@
 """Ownership and race contracts for per-run native AGY workspace policies."""
+import offline_env  # Activate suite isolation for direct file execution.
 import importlib.util
 from pathlib import Path
 import tempfile

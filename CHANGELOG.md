@@ -15,6 +15,24 @@ semantic version tags.
   exposure; list and doctor show the option, and strict doctor warns/fails when
   enabled. See [the operator guide and required worker brief](docs/grok-unconfined-work.md).
 
+### Fixed
+
+- Non-Claude runners strip inherited Claude/Anthropic environment variables before vendor calls, preventing Grok plugin cancellation and caller-token exposure; standalone Codex/Grok live bridges do the same.
+- A vendor `resign` could not handle in a run no longer loses its verified
+  mappings when another vendor is re-signed. They stay, marked
+  `pending_recheck` (reason, time, consecutive runs), `doctor` warns and `list`
+  names them, and the next `resign` retries. Only two consecutive runs that
+  cannot find the CLI remove them. An overlay naming rows the registry has since
+  dropped no longer aborts the run.
+- `resign` loads dispatch's host configuration before reading any overlay in all
+  modes. Shell configuration failures and configured but unreadable or invalid-JSON
+  overlays stop without writes at exit 40 (`EXIT_HOST_CONFIG`), with one diagnostic
+  on stderr and no traceback. Exit 2 is only an unconfigured overlay or argparse
+  usage error; daily-job owners can decide how to notify on the new code.
+- `doctor` reports `FAIL transport-overlay` when dispatch resolves a different
+  executable path than the overlay pinned, naming the vendor and both paths with
+  `omnilane resign` guidance. Vendor hash drift and runner-only drift remain `WARN`.
+
 ## [0.51.1] - 2026-10-01
 
 ### Fixed

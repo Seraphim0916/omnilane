@@ -154,6 +154,9 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 20 | 有一家需要你：签署者是新的或没有记录、可执行文件没有签名或在本地被改过、换了安装目录，或者供应商这次拒绝了上次通过的探测 | 读消息。它会打印“稍后重试”，或打印出你看过之后应执行的那一行 `omnilane resign --vendor V --approve V` |
 | 30 | 重签后的覆盖文件没通过真实派工，已恢复为前一份 | 没有东西损坏，读日志即可 |
 | 2 | 没有配置覆盖文件 | 做第 2 步 |
+| 40 (`EXIT_HOST_CONFIG`) | 主机配置加载失败，或已配置的覆盖文件无法读取、JSON 无效；不做更改 | 修正 stderr 指出的路径与原因；每日任务的通知方式由负责人决定 |
+
+argparse usage errors also return 2; a configured but unreadable overlay returns 40, not 2.
 
 有两个限制要知道。签署者检查用的是 macOS 的代码签名，所以在 Linux 上，每次 CLI 变动都会停在退出码 20 等你 `--approve`。另外，没有真正签名的可执行文件（例如在本地打过补丁的 CLI）一定会停下来等批准：没有任何东西能证明它来自原厂，而这正是这项检查存在的理由。
 
@@ -401,6 +404,7 @@ omnilane ui status                             # 查看 Live UI 是否正在运�
 omnilane ui url                                # 输出当前通过认证的本地链接
 omnilane ui stop                               # 停止 Live UI
 omnilane doctor [--json]                       # 只读检查路由与本地运行环境
+# transport-overlay：可执行文件路径不符为 FAIL；供应商哈希或运行器变动仍为 WARN
 dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目录]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]   # who is asking

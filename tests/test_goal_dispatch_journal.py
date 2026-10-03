@@ -1,4 +1,5 @@
 """Hermetic crash/race matrix for goal dispatch's durable intent protocol."""
+import offline_env  # Activate suite isolation for direct file execution.
 import hashlib
 import json
 import os

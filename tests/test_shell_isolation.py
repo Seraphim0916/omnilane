@@ -12,6 +12,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import offline_env  # Activate suite isolation for direct file execution.
+
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "tests/offline_env.py"
 VENDORS = ("codex", "claude", "grok", "agy", "gemini", "kimi", "qwen", "opencode")
