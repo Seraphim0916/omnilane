@@ -559,8 +559,11 @@ EOF
 python3 - "$@" <<'PYJSON'
 import json
 import sys
-print(json.dumps({"type": "result", "is_error": False,
-                  "result": "claude selected " + " ".join(sys.argv[1:])}))
+text = "claude selected " + " ".join(sys.argv[1:])
+if "--output-format text" in " ".join(sys.argv[1:]):
+    print(text)
+else:
+    print(json.dumps({"type": "result", "is_error": False, "result": text}))
 PYJSON
 EOF
   chmod +x "$bin/fake-codex" "$bin/fake-claude"
