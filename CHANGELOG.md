@@ -6,6 +6,10 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- CI now runs the behaviour checks on macOS alongside Linux (routing smoke, strict doctor, Python and shell unit tests); the job prints which Bash it used.
+
 ## [0.51.1] - 2026-10-01
 
 ### Fixed
