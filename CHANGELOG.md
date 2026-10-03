@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-10-03
+
 ### Added
 
 - Operator-only `option.grok-macos-work: unconfined` in local routing enables
@@ -14,6 +16,13 @@ semantic version tags.
   Dispatch, dry-run, job metadata/inspection and completion notices disclose the
   exposure; list and doctor show the option, and strict doctor warns/fails when
   enabled. See [the operator guide and required worker brief](docs/grok-unconfined-work.md).
+- `omnilane doctor` compares each harness's installed copy of the skill with the
+  checkout and names the copies that differ, so a release that skipped the skill
+  deploy no longer leaves agents on an old lane table unnoticed.
+- Jobs whose worker PID is gone and that recorded no exit are `dead`. `jobs list`
+  and `jobs status` share one observed state, `--status dead` selects them, and
+  `stats`, `recommend` and `list --status running` no longer count dead,
+  expired or never-completed native jobs as running.
 
 ### Changed
 
@@ -25,7 +34,6 @@ semantic version tags.
   Every other score and ordering is unchanged (117 -> 114 scored, Codex 57 -> 54).
   **Every host must run `omnilane resign` because the snapshot id changed.**
   Details: `docs/reports/aa-rebaseline-2026-10-02-v2.md`.
-
 - Registry snapshot `aa-v4.3.2-2026-10-02-v1` on the 2026-10-02 AA capture (index
   version unchanged). Twelve GPT-6 Sol and GPT-6 Luna rows are re-scored, seven of
   them by one point. `grok/grok-4-7-low` is added to the registry only. AA withdrew
@@ -36,6 +44,11 @@ semantic version tags.
   the GPT-6.1 Sol low row unreachable: every caller that could reach it was
   served the lower-scored GPT-6 Sol low first.
 - CI now runs the behaviour checks on macOS alongside Linux (routing smoke, strict doctor, Python and shell unit tests); the job prints which Bash it used.
+- `jobs close` waits up to 11 seconds (was 10), which now includes the
+  supervisor's final process-group cleanup; a stuck runner is budgeted at 9.85 s.
+- The skill tells the commander what a `--mode work` worker cannot do inside a
+  linked `git worktree` (commit, tests that need `ps` or a local server), and to
+  verify and commit outside the sandbox.
 
 ### Fixed
 
@@ -54,11 +67,47 @@ semantic version tags.
 - `doctor` reports `FAIL transport-overlay` when dispatch resolves a different
   executable path than the overlay pinned, naming the vendor and both paths with
   `omnilane resign` guidance. Vendor hash drift and runner-only drift remain `WARN`.
-
 - `scripts/aa_rebaseline.py build` no longer aborts when AA withdraws a row that an
   earlier snapshot added through `NEW_ROWS`; the row stays in `unknown_configs`
   and is not put back among its alias's candidates.
-
+- Supervised background calls keep their per-call deadline in a separate Perl
+  parent, so a provider can no longer switch it off with `alarm(0)` or its own
+  `SIGALRM` handling.
+- Claude Code caller identity stops at the latest transcript record even when it
+  is incomplete: a missing model or unknown effort is refused and a missing
+  effort is held to the model's lowest row, instead of falling back to stale
+  launch flags.
+- `resign` anchors and probes the binary dispatch actually runs when `local.sh`
+  sets `CODEX_BIN`, `CLAUDE_BIN`, `GROK_BIN` or `AGY_BIN`.
+- A live job closed by the idle cap keeps the vendor's result; the idle notice is
+  appended after result recovery instead of before it.
+- Runner output, stderr and progress files are created `0600`, so running and
+  killed jobs no longer leave world-readable task output; `jobs audit` accepts
+  the file modes, metadata fields and native handoffs dispatch writes today.
+- A lane whose whole chain is `off` reports `lane-disabled` instead of
+  `unknown-target-runtime`, which pointed callers at `omnilane resign`.
+- The value rule's candidate pool includes Gemini rows again.
+- Foreground dispatch and foreground `jobs retry` print the stored public output
+  even when the job fails, then return its nonzero exit code; background
+  lifecycle is supervised so cancellation reaches the whole process group.
+- Completion delivery is bounded and skips replays that were already consumed.
+- Goal dispatch is journaled and its budgets are validated; failure counts are
+  rebuilt from durable job records without double counting, a busy goal prints
+  read-only lock-owner diagnostics with exit 75, and goal status keeps `dead`
+  and `missing` instead of calling them running.
+- `configure set`, `get`, `unset`, `list` and `diff` keep the existing file and its
+  permission mode on failure and report inspection errors instead of partial
+  data.
+- Bash, Zsh and Fish completion cover the documented top-level, goal and job
+  command groups.
+- `benchmark` returns input error 2 for non-UTF-8 workloads, reports a provider
+  as invoked only after its runner started, and ignores the routing list's
+  `unavailable` markers when discovering vendors.
+- Thread metadata reports stay valid UTF-8.
+- `ui start` no longer fails where reverse-resolving `127.0.0.1` is slow (about
+  35 s on the GitHub macOS runner): the server binds without that lookup. It
+  also no longer fails one start in 64 when the generated server id began with a
+  dash.
 
 ## [0.51.1] - 2026-10-01
 
@@ -1570,7 +1619,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...v0.52.0
 [0.51.1]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/Seraphim0916/omnilane/compare/v0.47.0...v0.50.0

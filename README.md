@@ -897,6 +897,16 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.52.0
+
+- After upgrading, run `omnilane resign` on every host once, from a GUI terminal: the registry snapshot is now `aa-v4.3.2-2026-10-02-v2` and the runner scripts changed, so dispatch refuses until the overlay is re-signed.
+- The snapshot retires the three `gpt-5.4-mini` Codex rows (Codex rejects them on a ChatGPT account) and re-scores twelve GPT-6 Sol and Luna rows; `fast-agentic` puts GPT-6.1 Sol low ahead of GPT-6 Sol low.
+- Operator-only `option.grok-macos-work: unconfined` lets single-shot Grok work run on macOS without isolation. It is off by default and every surface discloses it.
+- `resign` keeps a vendor's verified mappings as `pending_recheck` when it cannot re-probe them, stops with exit 40 on a broken host configuration, and anchors the binary dispatch runs. `doctor` fails when dispatch resolves a different executable than the overlay pinned, and compares installed skill copies with the checkout.
+- Jobs gain a `dead` state, `jobs close` waits up to 11 seconds, a live job closed by the idle cap keeps its result, and runner files are private from the start.
+- CI runs the behaviour checks on macOS as well as Linux.
+- Upgrade: `npm i -g omnilane@0.52.0`, then `omnilane resign`.
+
 ## What's new in v0.51.1
 
 - After upgrading, run `omnilane resign` on every host once; a host that skipped probing a new model (for example Sonnet 5.5 after an ssh re-sign) now probes just those rows. Run it from a GUI terminal so the Claude, Gemini and Grok logins are reachable.

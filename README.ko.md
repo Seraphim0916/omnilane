@@ -734,6 +734,16 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.52.0 새 기능
+
+- 업그레이드 후 각 호스트에서 GUI 터미널로 `omnilane resign`을 한 번 실행하세요. 평가표 스냅샷이 `aa-v4.3.2-2026-10-02-v2`로 바뀌고 runner 스크립트도 바뀌어, 재서명 전까지 디스패치가 거부됩니다.
+- 이 스냅샷은 Codex의 `gpt-5.4-mini` 3개 행을 제외하고(ChatGPT 계정에서 Codex가 거부), GPT-6 Sol과 Luna 12개 행을 다시 평가합니다. `fast-agentic`은 GPT-6.1 Sol low를 GPT-6 Sol low보다 앞에 둡니다.
+- 운영자 전용 `option.grok-macos-work: unconfined`로 macOS에서 단발 Grok 작업을 격리 없이 실행할 수 있습니다. 기본값은 꺼짐이며, 켜면 모든 곳에 표시됩니다.
+- `resign`은 다시 프로브하지 못한 벤더의 검증된 매핑을 `pending_recheck`로 유지하고, 호스트 설정이 깨졌으면 종료 코드 40으로 멈추며, 디스패치가 실제로 실행하는 바이너리를 고정합니다. `doctor`는 디스패치가 해석한 실행 파일이 overlay에 고정된 것과 다르면 실패를 보고하고, 설치된 스킬 사본과 checkout을 비교합니다.
+- 작업에 `dead` 상태가 추가되고, `jobs close`는 최대 11초 기다리며, 유휴 상한으로 닫힌 live 작업은 결과를 유지하고, runner 파일은 생성 시점부터 비공개입니다.
+- CI가 Linux와 함께 macOS에서도 동작 검사를 실행합니다.
+- 업그레이드: `npm i -g omnilane@0.52.0` 후 `omnilane resign`.
+
 ## v0.51.1 새 기능
 
 - 업그레이드 후 각 호스트에서 `omnilane resign`을 한 번 실행하세요. 새 모델 프로브를 빠뜨린 호스트(예: ssh로 재서명한 뒤의 Sonnet 5.5)는 그 행만 프로브합니다. Claude, Gemini, Grok 로그인에 접근할 수 있도록 GUI 터미널에서 실행하세요.

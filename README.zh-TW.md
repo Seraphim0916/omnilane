@@ -738,6 +738,16 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.52.0 新功能
+
+- 升級後每台主機在圖形終端機跑一次 `omnilane resign`：評分表快照換成 `aa-v4.3.2-2026-10-02-v2`，runner 腳本也改了，重簽前派工會被拒。
+- 這份快照撤下三列 `gpt-5.4-mini` 的 Codex 設定（Codex 在 ChatGPT 帳號下拒用），重新評分 GPT-6 Sol 與 Luna 共十二列；`fast-agentic` 改成 GPT-6.1 Sol low 排在 GPT-6 Sol low 之前。
+- 新增只限操作者設定的 `option.grok-macos-work: unconfined`，讓 macOS 上的單次 Grok 工作不經隔離執行。預設關閉，開啟後各處都會標示。
+- `resign` 探測不到某家時，把它已驗證的對映保留並標 `pending_recheck`；主機設定壞掉時以 40 結束；錨定派工實際執行的那個執行檔。`doctor` 在派工解析到的執行檔與 overlay 釘的不同時回報失敗，並比對已安裝的技能檔與 checkout。
+- 工作新增 `dead` 狀態；`jobs close` 最多等 11 秒；被閒置上限關掉的 live 工作保留結果；runner 的檔案一建立就是私有權限。
+- CI 除了 Linux，也在 macOS 上跑行為檢查。
+- 升級：`npm i -g omnilane@0.52.0`，接著 `omnilane resign`。
+
 ## v0.51.1 新功能
 
 - 升級後每台主機跑一次 `omnilane resign`；先前漏測新模型的主機（例如經 ssh 重簽後的 Sonnet 5.5）只會補測那幾列。請在圖形終端機執行，才讀得到 Claude、Gemini、Grok 的登入。
