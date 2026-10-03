@@ -17,8 +17,8 @@ from offline_env import isolated_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Resident (stream-json) mode answers the first message and then keeps reading
-# until stdin closes, like the real CLIs; one-shot mode answers and exits.
+# Resident (stream-json input) mode answers the first message and then keeps
+# reading until stdin closes, like the real CLIs; one-shot mode answers and exits.
 FAKE_AGY = r'''#!/usr/bin/env python3
 import json, sys
 if "--input-format" in sys.argv[1:]:
@@ -29,6 +29,19 @@ if "--input-format" in sys.argv[1:]:
     sys.exit(0)
 print("OK")
 '''
+
+FAKE_CLAUDE = r'''#!/usr/bin/env python3
+import json, sys
+if "--input-format" in sys.argv[1:]:
+    sys.stdin.readline()
+    print(json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "OK"}), flush=True)
+    for _ in sys.stdin:
+        pass
+    sys.exit(0)
+print("OK")
+'''
+
+LANES = {"gemini": "fg-gemini", "claude": "fg-claude"}
 
 
 class ForegroundResidentExitTests(unittest.TestCase):
@@ -42,41 +55,51 @@ class ForegroundResidentExitTests(unittest.TestCase):
         for directory in (self.home, bins, self.work):
             directory.mkdir()
         (Path(self.env["HOME"]) / ".gemini").mkdir(parents=True, exist_ok=True)
-        agy = bins / "agy"
+        agy, claude = bins / "agy", bins / "claude"
         agy.write_text(FAKE_AGY)
-        agy.chmod(0o755)
-        (self.home / "routing.local.yaml").write_text("fg-gemini: gemini gemini-3.7-flash-medium -\n")
+        claude.write_text(FAKE_CLAUDE)
+        for fake in (agy, claude):
+            fake.chmod(0o755)
+        (self.home / "routing.local.yaml").write_text(
+            "fg-gemini: gemini gemini-3.7-flash-medium -\n"
+            "fg-claude: claude claude-sonnet-5 -\n")
         for key in list(self.env):
             if key.startswith("OMNILANE_"):
                 self.env.pop(key)
         self.env.update(OMNILANE_HOME=str(self.home), OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
-                        AGY_BIN=str(agy), GEMINI_BIN=str(agy), PYTHONDONTWRITEBYTECODE="1",
-                        PATH=str(bins) + os.pathsep + self.env["PATH"])
+                        AGY_BIN=str(agy), GEMINI_BIN=str(agy), CLAUDE_BIN=str(claude),
+                        PYTHONDONTWRITEBYTECODE="1", PATH=str(bins) + os.pathsep + self.env["PATH"])
 
-    def dispatch(self, *flags):
+    def run_dispatch(self, vendor, *flags, timeout=90):
+        return subprocess.run(
+            ["bash", str(ROOT / "scripts/dispatch.sh"), "--workdir", str(self.work), *flags,
+             "--vendor", vendor, LANES[vendor], "Reply OK"],
+            env=self.env, capture_output=True, text=True, timeout=timeout)
+
+    def check_foreground(self, vendor):
+        jobs = self.home / "jobs"
+        before = set(jobs.iterdir()) if jobs.exists() else set()
         started = time.monotonic()
-        result = subprocess.run(
-            ["bash", str(ROOT / "scripts/dispatch.sh"), "--timeout", "20", "--workdir", str(self.work),
-             *flags, "--vendor", "gemini", "fg-gemini", "Reply OK"],
-            env=self.env, capture_output=True, text=True, timeout=90)
-        return result, time.monotonic() - started
+        result = self.run_dispatch(vendor, "--timeout", "20")
+        elapsed = time.monotonic() - started
+        self.assertEqual(result.returncode, 0, f"{vendor}: {result.stderr}")
+        self.assertEqual(result.stdout.strip(), "OK", vendor)
+        self.assertLess(elapsed, 15, f"{vendor}: foreground dispatch waited for the call timeout")
+        (job,) = set(jobs.iterdir()) - before
+        self.assertEqual(json.loads((job / "meta.json").read_text())["session_mode"], "single-shot", vendor)
+        self.assertEqual((job / "exit").read_text(), "0\n", vendor)
 
     def test_foreground_gemini_exits_after_answer(self):
-        result, elapsed = self.dispatch()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "OK")
-        self.assertLess(elapsed, 15, "foreground dispatch waited for the call timeout")
-        (job,) = (self.home / "jobs").iterdir()
-        self.assertEqual(json.loads((job / "meta.json").read_text())["session_mode"], "single-shot")
-        self.assertEqual((job / "exit").read_text(), "0\n")
+        self.check_foreground("gemini")
 
-    def test_background_gemini_still_resident_by_default(self):
-        result = subprocess.run(
-            ["bash", str(ROOT / "scripts/dispatch.sh"), "--dry-run", "--background", "--workdir", str(self.work),
-             "--vendor", "gemini", "fg-gemini", "Reply OK"],
-            env=self.env, capture_output=True, text=True, timeout=30)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("session_mode=live", result.stdout.splitlines())
+    def test_foreground_claude_exits_after_answer(self):
+        self.check_foreground("claude")
+
+    def test_background_still_resident_by_default(self):
+        for vendor in LANES:
+            result = self.run_dispatch(vendor, "--dry-run", "--background", timeout=30)
+            self.assertEqual(result.returncode, 0, f"{vendor}: {result.stderr}")
+            self.assertIn("session_mode=live", result.stdout.splitlines(), vendor)
 
 
 if __name__ == "__main__":
