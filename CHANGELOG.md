@@ -6,6 +6,13 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `resign` smoke dispatch asks the cheapest verified row for a fresh three-digit
+  sum instead of a verbatim string. `claude-haiku-4-5` refused "Reply with exactly
+  the text …" as prompt injection, so the Claude smoke failed and every vendor in
+  the run was rolled back although the probes had passed.
+
 ## [0.52.0] - 2026-10-03
 
 ### Added

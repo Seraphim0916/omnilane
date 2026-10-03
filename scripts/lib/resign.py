@@ -29,6 +29,7 @@ import argparse
 import contextlib
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -227,13 +228,16 @@ def smoke(vendor: str, overlay: dict, overlay_path: Path, timeout: int = 300,
     if not rows:
         return False, "no verified mapping to dispatch"
     row, mapping = min(rows, key=lambda pair: (pair[0]["score"], pair[0]["id"]))
-    token = f"OMNILANE_RESIGN_SMOKE_{vendor.upper()}"
+    # Asking for a verbatim string reads as prompt injection to small models
+    # (claude-haiku-4-5 refused it on 2026-10-03); a fresh sum still proves a live answer.
+    left, right = 100 + secrets.randbelow(900), 100 + secrets.randbelow(900)
+    expected = str(left + right)
     command = ["bash", str(build_overlay.REPO / "scripts/dispatch.sh"), "--operator-asserted-human",
                "--background", "--single-shot", "--timeout", str(timeout), "--vendor", vendor,
                "--model", mapping["runtime_model"]]
     if mapping["selector_type"] != "model_id_encoded_effort" and mapping["runtime_effort"]:
         command += ["--effort", mapping["runtime_effort"]]
-    command += ["consult", f"Reply with exactly the text {token} and nothing else. Do not use tools."]
+    command += ["consult", f"What is {left} plus {right}? Answer with the number only. Do not use tools."]
     env = dict(os.environ, OMNILANE_AA_TRANSPORT_OVERLAY=str(overlay_path))
     env.pop("OMNILANE_AA_OVERLAY_SHA256", None)
     try:
@@ -254,8 +258,8 @@ def smoke(vendor: str, overlay: dict, overlay_path: Path, timeout: int = 300,
         answer = (directory / "out.txt").read_text(errors="replace")
     except OSError:
         return False, f"job {job} did not finish"
-    if code != "0" or token not in answer:
-        return False, f"job {job} exited {code} without the token"
+    if code != "0" or expected not in answer:
+        return False, f"job {job} exited {code} without the expected answer {expected}"
     return True, f"job {job} on {row['id']} answered"
 
 

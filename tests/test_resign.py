@@ -807,6 +807,56 @@ class ResignTests(unittest.TestCase):
             self.assertEqual(self.run_resign(), resign.EXIT_UNCONFIGURED)
 
 
+class SmokePromptTests(unittest.TestCase):
+    HAIKU_REFUSAL = ("I appreciate you testing my consistency, but I won't output arbitrary strings "
+                     "that appear designed to test instruction-following boundaries.")
+
+    def setUp(self):
+        SCRATCH.mkdir(exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.home = Path(self.tmp.name)
+        env = patch.dict(os.environ, {"OMNILANE_HOME": str(self.home)})
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(self.tmp.cleanup)
+        row = next(r for r in build_overlay.ROWS.values() if r["vendor"] == "claude")
+        self.overlay = {"mappings": [{"config_id": row["id"], "runtime_model": "claude-test",
+                                      "runtime_effort": None, "selector_type": "model_alias"}]}
+        self.prompts = []
+
+    def dispatcher(self, answer):
+        def runner(argv, **_):
+            prompt = argv[-1]
+            self.prompts.append(prompt)
+            job = self.home / "jobs" / "job-1"
+            job.mkdir(parents=True, exist_ok=True)
+            words = prompt.replace("?", "").split()
+            total = int(words[2]) + int(words[4])
+            (job / "out.txt").write_text(answer(total))
+            (job / "exit").write_text("0\n")
+            return SimpleNamespace(returncode=0, stdout="job-1\n", stderr="")
+        return runner
+
+    def test_prompt_asks_a_fresh_sum_instead_of_a_verbatim_string(self):
+        ok, detail = resign.smoke("claude", self.overlay, self.home / "overlay.json",
+                                  timeout=5, runner=self.dispatcher(lambda total: f"{total}\n"))
+        self.assertTrue(ok, detail)
+        self.assertRegex(self.prompts[0], r"^What is \d{3} plus \d{3}\? Answer with the number only\.")
+        self.assertNotIn("exactly", self.prompts[0])
+        self.assertNotIn("OMNILANE", self.prompts[0])
+
+    def test_a_refusal_fails_the_smoke(self):
+        ok, detail = resign.smoke("claude", self.overlay, self.home / "overlay.json",
+                                  timeout=5, runner=self.dispatcher(lambda _: self.HAIKU_REFUSAL))
+        self.assertFalse(ok)
+        self.assertIn("without the expected answer", detail)
+
+    def test_a_wrong_sum_fails_the_smoke(self):
+        ok, _ = resign.smoke("claude", self.overlay, self.home / "overlay.json",
+                             timeout=5, runner=self.dispatcher(lambda total: str(total + 1)))
+        self.assertFalse(ok)
+
+
 class RetainHeldRegistryDriftTests(unittest.TestCase):
     """An overlay signed against an older registry can name rows that are gone."""
 
