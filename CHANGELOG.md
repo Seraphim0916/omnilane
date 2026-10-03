@@ -17,6 +17,7 @@ semantic version tags.
 
 ### Fixed
 
+- Non-Claude runners strip inherited Claude/Anthropic environment variables before vendor calls, preventing Grok plugin cancellation and caller-token exposure; standalone Codex/Grok live bridges do the same.
 - A vendor `resign` could not handle in a run no longer loses its verified
   mappings when another vendor is re-signed. They stay, marked
   `pending_recheck` (reason, time, consecutive runs), `doctor` warns and `list`

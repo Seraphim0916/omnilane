@@ -10,6 +10,7 @@ set -euo pipefail
 # Qwen Code has no reasoning-effort knob, so EFFORT is parity-only.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+strip_caller_claude_env
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
 : "$EFFORT" # parity with the uniform runner interface
