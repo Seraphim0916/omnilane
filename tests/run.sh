@@ -52,6 +52,9 @@ export GIT_CONFIG_KEY_0=core.excludesFile
 export GIT_CONFIG_VALUE_0="$TEST_EXCLUDES"
 export GIT_CEILING_DIRECTORIES="$TEST_BASE${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
 TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-tests.XXXXXX")"
+# jobs rm/prune move jobs to the trash; keep that inside the scratch root even if
+# HOME isolation ever fails.
+export OMNILANE_TRASH_DIR="$TEST_ROOT/trash"
 PASS=0
 FAIL=0
 
