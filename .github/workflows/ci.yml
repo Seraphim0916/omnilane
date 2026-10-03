@@ -38,7 +38,15 @@ jobs:
             for i in 1 2 3 4 5 6 7 8 9 10; do
               out="$RUNNER_TEMP/$label-$i.out"
               rc=0
-              "$@" > "$out" 2>&1 || rc=$?
+              # Same isolation as tests/run.sh: offline_env.py, no inherited
+              # OMNILANE_* timing or AA context, a synthetic human operator.
+              python -I tests/offline_env.py /bin/bash -c '
+                unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
+                unset OMNILANE_JOB_TIMEOUT OMNILANE_JOB_SUPERVISED OMNILANE_IDLE_TIMEOUT OMNILANE_SESSION_MODE
+                for v in "${!OMNILANE_AA_@}" "${!OMNILANE_TIMEOUT_@}" "${!OMNILANE_JOB_TIMEOUT_@}"; do unset "$v"; done
+                export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
+                mkdir -p .test-scratch
+                exec "$@"' child "$@" > "$out" 2>&1 || rc=$?
               printf '%s run %d: rc=%d load=%s\n' "$label" "$i" "$rc" "$(sysctl -n vm.loadavg)"
               grep -E 'close_elapsed=|^PASS|AssertionError|did not terminate|User defined signal' "$out" | mask | tail -n 12 | sed 's/^/    /' || true
               if [ "$rc" -ne 0 ]; then
