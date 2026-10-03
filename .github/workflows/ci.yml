@@ -135,6 +135,8 @@ jobs:
       - name: Python unit tests
         run: python -m unittest discover -s tests -p 'test_*.py'
       - name: shell unit tests
+        # Report shell results even when Python unit tests failed; skip on cancel.
+        if: success() || failure()
         run: |
           OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
             bash tests/run.sh
