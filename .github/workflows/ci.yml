@@ -24,7 +24,8 @@ jobs:
       - name: rerun the two macOS close flakes x10
         shell: bash
         run: |
-          set -u
+          # The default bash shell runs with -e -o pipefail; a grep with no match must not end the step.
+          set -u +e +o pipefail
           mask() {
             sed -E -e 's#(https?://)[^[:space:]]*#\1<url>#g' \
                    -e 's#([Tt]oken|TOKEN|[Ss]ecret|SECRET|[Kk]ey|KEY|[Pp]assword)([=:][[:space:]]*)[^[:space:],}]*#\1\2<masked>#g' \
@@ -39,7 +40,7 @@ jobs:
               rc=0
               "$@" > "$out" 2>&1 || rc=$?
               printf '%s run %d: rc=%d load=%s\n' "$label" "$i" "$rc" "$(sysctl -n vm.loadavg)"
-              grep -E 'close_elapsed=|^PASS|AssertionError|did not terminate|User defined signal' "$out" | mask | tail -n 12 | sed 's/^/    /'
+              grep -E 'close_elapsed=|^PASS|AssertionError|did not terminate|User defined signal' "$out" | mask | tail -n 12 | sed 's/^/    /' || true
               if [ "$rc" -ne 0 ]; then
                 echo "    --- last 20 lines (masked)"
                 tail -n 20 "$out" | mask | sed 's/^/    /'
