@@ -225,7 +225,9 @@ try:
         # one scheduling turn to persist its exit code and reap that worker.
         wait_for(job / 'exit', timeout=3)
         proc.wait(timeout=1)
-        assert elapsed < 9.0, (mode, elapsed, result.stdout, result.stderr)
+        # job-worker.sh budgets a stuck runner at up to 9.85s; close must still
+        # beat jobs close's shortest ~10s (integer SECONDS + 11) deadline.
+        assert elapsed < 10.0, (mode, elapsed, result.stdout, result.stderr)
         expected = (1, 137) if mode == 'idle-exit' else ((1,) if mode in ('empty', 'flow', 'epipe') else (0,))
         assert result.returncode == proc.returncode and result.returncode in expected, (mode, result.returncode, proc.returncode, result.stdout, result.stderr, (case / 'stderr').read_text())
         assert 'invalid timeout specification' not in (case / 'stderr').read_text()
