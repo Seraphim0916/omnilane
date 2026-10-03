@@ -72,7 +72,7 @@ complete -c omnilane -f \
 # jobs list / stats filters.
 complete -c omnilane -n '__omnilane_command_path jobs list; or __omnilane_command_path jobs stats; or __omnilane_command_path jobs recommend' -l lane -x -d 'filter by lane'
 complete -c omnilane -n '__omnilane_command_path jobs list; or __omnilane_command_path jobs stats' -l vendor -x -a 'codex claude grok gemini kimi qwen opencode openrouter deepseek zai mistral groq cerebras exec' -d 'filter by vendor'
-complete -c omnilane -n '__omnilane_command_path jobs list'       -l status -x -a 'running done dead pending cancelled'                                             -d 'filter by status'
+complete -c omnilane -n '__omnilane_command_path jobs list'       -l status -x -a 'running done dead pending cancelled expired'                                             -d 'filter by status'
 complete -c omnilane -n '__omnilane_command_path jobs stats; or __omnilane_command_path jobs recommend; or __omnilane_command_path jobs audit' -l last -x -d 'maximum recent jobs'
 complete -c omnilane -n '__omnilane_command_path jobs recommend' -l min-samples -x -d 'minimum completed samples'
 

@@ -151,7 +151,7 @@ _omnilane() {
         fi
       elif [[ "$sub" == list ]]; then
         _arguments '--lane[filter by lane]:lane:' '--vendor[filter by vendor]:vendor:' \
-          '--status[filter by status]:status:(running done dead pending cancelled)' \
+          '--status[filter by status]:status:(running done dead pending cancelled expired)' \
           '--json[versioned metadata output]'
       elif [[ "$sub" == status || "$sub" == result ]]; then
         _values 'option' --json

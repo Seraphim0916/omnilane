@@ -127,6 +127,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     echo "omnilane: unsafe Gemini live event path" >&2
     exit 125
   fi
+  private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   finalize_live_output() {
@@ -135,6 +136,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
       echo "omnilane: cannot extract Gemini live result: python3 not found" >> "$STDERR_FILE"
       return 1
     fi
+    private_job_files "$tmp"
     if ! python3 - "$EVENTS_FILE" "$tmp" <<'PY'
 import json
 import pathlib
@@ -228,6 +230,7 @@ PY
 fi
 
 if [[ -n "$THREAD_MODE" ]]; then
+  private_job_files "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.stderr.log"
   set +e
   (
     cd "$RUN_DIR" || exit 127
@@ -242,6 +245,7 @@ if [[ -n "$THREAD_MODE" ]]; then
   RC=$?
   set -e
   if [[ "$RC" -eq 0 ]]; then
+    private_job_files "${OUTPUT_FILE}.tmp"
     if ! python3 - "${OUTPUT_FILE}.result.json" "${OUTPUT_FILE}.tmp" <<'PY'
 import json
 import pathlib
@@ -265,6 +269,7 @@ set +e
   # Headless cannot answer OAuth prompts; strip API keys to stay on CLI login.
   # --add-dir registers RUN_DIR as the active workspace; without it agy's
   # sandbox denies every tool call (run_command/view_file) in print mode.
+  private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
   env -u GEMINI_API_KEY -u GOOGLE_API_KEY -u GOOGLE_AI_API_KEY \
     NO_BROWSER=1 OMNILANE_DEPTH=1 ${AGY_WORK_ENV[@]+"${AGY_WORK_ENV[@]}"} \
     "$AGY_BIN" "${APP_DATA_ARGS[@]}" --add-dir "$RUN_DIR" \

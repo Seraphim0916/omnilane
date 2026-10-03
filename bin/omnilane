@@ -82,6 +82,18 @@ case "$cmd" in
       )"
       export OMNILANE_AA_TRANSPORT_OVERLAY
     fi
+    # Probe and anchor the binaries dispatch runs: local.sh may point a vendor at
+    # a specific install, and a re-sign that follows PATH instead proves another one.
+    for bin_name in CODEX_BIN CLAUDE_BIN GROK_BIN AGY_BIN; do
+      [[ -z "${!bin_name:-}" ]] || continue
+      bin_value="$(
+        set +u
+        home="${OMNILANE_HOME:-$HOME/.omnilane}"
+        [[ -f "$home/local.sh" ]] && . "$home/local.sh" 2>/dev/null
+        printf '%s' "${!bin_name:-}"
+      )"
+      [[ -z "$bin_value" ]] || export "$bin_name=$bin_value"
+    done
     exec python3 "$REPO/scripts/lib/resign.py" "$@"
     ;;
   benchmark)

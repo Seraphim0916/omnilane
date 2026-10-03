@@ -23,6 +23,7 @@ ARGS=(-p "$(cat "$PROMPT_FILE")" --output-format text)
 [[ -n "$MODEL" && "$MODEL" != "-" ]] && ARGS+=(-m "$MODEL")
 [[ "$MODE" == "work" ]] && ARGS+=(--approval-mode yolo)
 
+private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
 set +e
 (
   cd "$WORKDIR" || exit 127

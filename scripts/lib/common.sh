@@ -9,6 +9,18 @@ export OMNILANE_REPO
 # Publishable default is plain CLIs on PATH; power users add ~/.omnilane/local.sh.
 [[ -f "$OMNILANE_HOME/local.sh" ]] && source "$OMNILANE_HOME/local.sh"
 
+private_job_files() (
+  # Only this subshell changes umask; vendor-created project files keep theirs.
+  umask 077
+  local path
+  for path in "$@"; do
+    if [[ ! -e "$path" ]]; then
+      : >> "$path" || return $?
+    fi
+    chmod 600 "$path" || return $?
+  done
+)
+
 # The unquoted backslash case pattern intentionally matches one backslash.
 # shellcheck disable=SC1003
 json_escape() {

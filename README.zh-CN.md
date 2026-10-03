@@ -409,7 +409,7 @@ dispatch.sh [--json] --list [--json]
 dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
 dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，不调用模型
 jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]  # 过滤列表
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 过滤列表
 jobs.sh wait 作业ID [--timeout N]                  # 作业退出码；124 超时；125 工作进程消失
 jobs.sh cancel 作业ID                              # 停止运行中的作业:整组 SIGTERM,再 SIGKILL
 jobs.sh rm 作业ID                                  # 删除单个已完成/已死作业(运行中会被拒绝)

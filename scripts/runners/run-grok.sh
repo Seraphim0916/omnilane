@@ -39,6 +39,10 @@ fi
 
 # Subscription OAuth path: an exhausted API key in env causes 403s.
 unset XAI_API_KEY 2>/dev/null || true
+# Grok Build treats a Claude Code plugin environment as its own: with
+# CLAUDE_PLUGIN_ROOT set, `grok -p` ends at once with stopReason "cancelled",
+# empty text and exit 0. A dispatch from a Claude Code session inherits it.
+unset CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA 2>/dev/null || true
 
 truncate_payload "$PROMPT_FILE" 140000
 
@@ -169,6 +173,7 @@ while [[ "$attempt" -le "$MAX_ATTEMPTS" ]]; do
   # frozen decision.  In model-caller mode this also rejects Grok effort rows:
   # the current runner accepts EFFORT only for parity and discards it.
   aa_policy_gate grok "$MODEL" "$EFFORT" || exit $?
+  private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
   set +e
   OMNILANE_DEPTH=1 run_with_timeout "$RUN_TIMEOUT" \
     "$GROK_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"

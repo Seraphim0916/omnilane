@@ -93,6 +93,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     echo "omnilane: unsafe Claude live event path" >&2
     exit 125
   fi
+  private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
 
   LIVE_ARGS=(--disable-slash-commands --model "$MODEL")
@@ -103,6 +104,7 @@ LIVE_ARGS+=(-p --verbose --input-format stream-json --output-format stream-json)
 finalize_live_output() {
   local tmp="${OUTPUT_FILE}.tmp"
   if command -v python3 >/dev/null 2>&1; then
+    private_job_files "$tmp"
     if python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
       "$EVENTS_FILE" "$tmp"; then
       mv "$tmp" "$OUTPUT_FILE"
@@ -183,10 +185,12 @@ set +e
 (
   cd "$WORKDIR" || exit 127
   if [[ -n "$THREAD_MODE" ]]; then
+    private_job_files "${OUTPUT_FILE}.events.jsonl" "${OUTPUT_FILE}.stderr.log"
     run_with_timeout "$RUN_TIMEOUT" env \
       "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.events.jsonl" 2> "${OUTPUT_FILE}.stderr.log"
   else
+    private_job_files "${OUTPUT_FILE}.tmp" "${OUTPUT_FILE}.stderr.log"
     run_with_timeout "$RUN_TIMEOUT" env \
       "${MODE_ENV[@]}" \
       "$CLAUDE_BIN" "${ARGS[@]}" > "${OUTPUT_FILE}.tmp" 2> "${OUTPUT_FILE}.stderr.log"
@@ -196,6 +200,7 @@ RC=$?
 set -e
 
 if [[ -n "$THREAD_MODE" ]]; then
+  private_job_files "${OUTPUT_FILE}.tmp"
   if [[ "$RC" -eq 0 ]] && ! python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
     "$OUTPUT_FILE.events.jsonl" "${OUTPUT_FILE}.tmp"; then
     echo "omnilane: Claude thread stream without successful result or top-level assistant text" >> "${OUTPUT_FILE}.stderr.log"

@@ -45,19 +45,19 @@ def command(vendor: str, model: str, effort: str | None, app_data: str | None = 
     text = prompt(vendor)
     if vendor == "claude":
         selector = ["--model", model] + (["--effort", effort] if effort else [])
-        return ["claude", "--disable-slash-commands", *selector, "--permission-mode", "dontAsk",
+        return [build_overlay.cli_command("claude"), "--disable-slash-commands", *selector, "--permission-mode", "dontAsk",
                 "--tools", "", "--output-format", "json", "-p", text]
     if vendor == "codex":
-        return ["codex", "exec", "--json", "--skip-git-repo-check", "-m", model,
+        return [build_overlay.cli_command("codex"), "exec", "--json", "--skip-git-repo-check", "-m", model,
                 "-c", f'model_reasoning_effort="{effort or "none"}"',
                 "-c", 'approval_policy="never"', "-c", 'sandbox_mode="read-only"', text]
     if vendor == "grok":
-        return ["grok", "--no-memory", "--no-subagents", "--no-plan", "--no-alt-screen",
+        return [build_overlay.cli_command("grok"), "--no-memory", "--no-subagents", "--no-plan", "--no-alt-screen",
                 "--output-format", "json", "--verbatim", "--permission-mode", "dontAsk",
                 "--tools", "Read", "--deny", "Bash", "--deny", "Edit", "--disable-web-search",
                 "-m", model, "--reasoning-effort", effort or "high", "-p", text]
     if vendor == "gemini":
-        return ["agy", f"--app_data_dir={app_data}", "--model", model, "-p", text]
+        return [build_overlay.cli_command("agy"), f"--app_data_dir={app_data}", "--model", model, "-p", text]
     raise ValueError(f"unsupported vendor: {vendor}")
 
 
