@@ -63,6 +63,7 @@ JSON or empty). A missing vendor CLI retains the existing drift/held behavior.
 | 20 | drift needs an operator |
 | 30 | attempted and rolled back |
 | 40 (`EXIT_HOST_CONFIG`) | host configuration failed, or configured overlay could not be read as JSON |
+| 50 (`EXIT_BUSY`) | another resign holds this host's resign lock; nothing read or written |
 | 2 | genuinely no overlay configured; argparse usage errors also use 2 |
 
 Daily-job owners should decide notification policy for the new code 40. An

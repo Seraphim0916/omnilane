@@ -186,6 +186,7 @@ What `omnilane resign` exits with:
 | 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
 | 2 | no overlay is configured | do Step 2 |
 | 40 (`EXIT_HOST_CONFIG`) | dispatch's host configuration could not load, or the configured overlay is unreadable or invalid JSON; nothing read/staged/written after a shell failure | fix the path/error on stderr; daily-job owners decide notification policy |
+| 50 (`EXIT_BUSY`) | another `omnilane resign` is already running on this host; nothing read or written | let it finish, then run this one |
 
 Exit 2 also covers argparse usage errors; a configured but unreadable overlay is exit 40, not 2.
 

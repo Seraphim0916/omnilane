@@ -7,6 +7,7 @@ dispatch are all replaced, and every file lives under .sandbox-tmp.
 from __future__ import annotations
 
 import offline_env  # Activate suite isolation for direct file execution.
+import fcntl
 import hashlib
 import json
 import os
@@ -321,6 +322,29 @@ class ResignTests(unittest.TestCase):
         return patch.object(resign.shutil, "which", lambda name:
                             None if self.vendor_of(name) == vendor
                             else str(self.bins[self.vendor_of(name)]))
+
+    def hold_resign_lock(self):
+        lock = os.open(self.live.with_name(self.live.name + ".resign.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+        self.addCleanup(os.close, lock)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return lock
+
+    def test_a_second_resign_is_refused_while_another_holds_the_lock(self):
+        self.update("codex")
+        before = self.live.read_bytes()
+        lock = self.hold_resign_lock()
+        self.assertEqual(self.run_resign(), resign.EXIT_BUSY)
+        self.assertEqual(self.sweeps, [])
+        self.assertEqual(self.live.read_bytes(), before)
+        self.assertTrue(any("already running" in line for line in self.lines), self.lines)
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        self.assertEqual(self.run_resign(), resign.EXIT_OK)
+        self.assertEqual(self.sweeps, ["codex"])
+
+    def test_check_reports_drift_while_another_resign_holds_the_lock(self):
+        self.update("codex")
+        self.hold_resign_lock()
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_DRIFT)
 
     def vendor_mappings(self, vendor):
         return [m for m in json.loads(self.live.read_text())["mappings"]

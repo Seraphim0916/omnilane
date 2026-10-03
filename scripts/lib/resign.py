@@ -21,12 +21,14 @@ same-signer.
 
 Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check);
 20 drift needs an operator; 30 attempted and rolled back; 40 host configuration
-failed (EXIT_HOST_CONFIG); 2 no overlay configured (also argparse usage errors).
+failed (EXIT_HOST_CONFIG); 50 another resign is running on this host (EXIT_BUSY);
+2 no overlay configured (also argparse usage errors).
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
+import fcntl
 import json
 import os
 import secrets
@@ -45,6 +47,7 @@ import probe_sweep  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
 EXIT_HOST_CONFIG = 40
+EXIT_BUSY = 50
 VENDORS = probe_sweep.VENDORS
 
 
@@ -431,6 +434,27 @@ def install_pending(live: Path, overlay: dict, held: dict[str, str],
     return EXIT_OK, status
 
 
+@contextlib.contextmanager
+def resign_lock(live: Path):
+    """Yield None when this run holds the host's resign lock, else the holder's pid text.
+
+    Each run builds its staged overlay from the live one it read at the start and
+    installs it minutes later, so a concurrent run would overwrite the other's result.
+    """
+    fd = os.open(live.with_name(live.name + ".resign.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield os.pread(fd, 32, 0).decode(errors="replace").strip() or "unknown"
+            return
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, f"{os.getpid()}\n".encode(), 0)
+        yield None
+    finally:
+        os.close(fd)
+
+
 def resign(args, log=print) -> int:
     try:
         overlay_env, anchors = load_host_configuration()
@@ -442,6 +466,17 @@ def resign(args, log=print) -> int:
             "there is nothing to re-sign. See the README, 'Let your AI assistant drive omnilane', Step 2.")
         return EXIT_UNCONFIGURED
     live = Path(overlay_env).expanduser()
+    if args.check:
+        return _resign(args, live, anchors, log)
+    with resign_lock(live) as holder:
+        if holder is not None:
+            log(f"omnilane: another omnilane resign is already running on this host (pid {holder}); "
+                "run this one after it finishes, so neither install overwrites the other")
+            return EXIT_BUSY
+        return _resign(args, live, anchors, log)
+
+
+def _resign(args, live: Path, anchors, log) -> int:
     try:
         overlay = json.loads(live.read_text())
     except (OSError, ValueError) as error:

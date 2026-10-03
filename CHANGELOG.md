@@ -12,6 +12,11 @@ semantic version tags.
   sum instead of a verbatim string. `claude-haiku-4-5` refused "Reply with exactly
   the text …" as prompt injection, so the Claude smoke failed and every vendor in
   the run was rolled back although the probes had passed.
+- Two `omnilane resign` runs on one host no longer overwrite each other. Each run
+  stages from the live overlay it read at the start and installs minutes later,
+  so the later install discarded the earlier one's re-signed vendors. A run that
+  writes now takes an exclusive lock next to the overlay; a second one exits 50
+  (`EXIT_BUSY`) without reading or writing. `--check` takes no lock.
 
 ## [0.52.0] - 2026-10-03
 
