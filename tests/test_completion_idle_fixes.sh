@@ -311,6 +311,7 @@ test_background_worker_uses_readonly_snapshot() {
   mkdir -p "$fixture/scripts/lib" "$fixture/scripts/runners" "$home" "$workdir"
   cp "$ROOT/scripts/dispatch.sh" "$fixture/scripts/dispatch.sh"
   cp "$ROOT/scripts/lib/common.sh" "$fixture/scripts/lib/common.sh"
+  cp "$ROOT/scripts/lib/grok-work.sh" "$fixture/scripts/lib/grok-work.sh"
   cp "$ROOT/scripts/lib/aa_policy.py" "$fixture/scripts/lib/aa_policy.py"
   mkdir -p "$fixture/config"
   cp "$ROOT/config/aa-model-policy.json" "$fixture/config/aa-model-policy.json"

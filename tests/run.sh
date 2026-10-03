@@ -4533,5 +4533,10 @@ test_caller_identity() {
 }
 test_caller_identity
 
+if grok_option_output="$(python3 -m unittest discover -s "$ROOT/tests" -p test_grok_unconfined.py 2>&1)"; then
+  pass "Grok macOS unconfined operator option"
+else
+  fail "Grok macOS unconfined operator option" "$grok_option_output"
+fi
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

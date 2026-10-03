@@ -36,6 +36,8 @@ GOAL_LOOP="${OMNILANE_DOCTOR_GOAL_LOOP:-$REPO/scripts/lib/goal-loop.sh}"
 OVERLAY_HEALTH="${OMNILANE_DOCTOR_OVERLAY_HEALTH:-$REPO/scripts/lib/overlay_health.py}"
 # shellcheck disable=SC1091
 source "$SCRIPT_ROOT/scripts/lib/live-protocol.sh"
+# shellcheck disable=SC1091
+source "$SCRIPT_ROOT/scripts/lib/grok-work.sh"
 PASS_COUNT=0
 WARN_COUNT=0
 FAIL_COUNT=0
@@ -88,6 +90,11 @@ report() {
 }
 
 DISPATCH="$REPO/scripts/dispatch.sh"
+if grok_macos_work_enabled; then
+  report WARN grok-macos-work "$(grok_work_option_status)"
+else
+  report PASS grok-macos-work "$(grok_work_option_status)"
+fi
 if [[ -x "$DISPATCH" ]]; then
   report PASS dispatch "$DISPATCH is executable"
 else
@@ -103,9 +110,9 @@ fi
 if [[ -x "$DISPATCH" ]]; then
   route_output="$(OMNILANE_HOME="$OMNILANE_HOME" /bin/bash "$DISPATCH" --list 2>&1)"
   route_rc=$?
-  route_count="$(printf '%s\n' "$route_output" | awk 'NF { count++ } END { print count + 0 }')"
+  route_count="$(printf '%s\n' "$route_output" | awk '/^[a-z][a-z0-9-]*:/ { count++ } END { print count + 0 }')"
   usable_count="$(printf '%s\n' "$route_output" | awk \
-    'NF && $0 !~ /unavailable/ && $0 !~ /^[^:]+:[[:space:]]+off([[:space:]]|$)/ { count++ } END { print count + 0 }')"
+    '/^[a-z][a-z0-9-]*:/ && $0 !~ /unavailable/ && $0 !~ /^[^:]+:[[:space:]]+off([[:space:]]|$)/ { count++ } END { print count + 0 }')"
   if [[ "$route_rc" -ne 0 ]]; then
     first_error="$(printf '%s\n' "$route_output" | sed -n '1p')"
     report FAIL routing "effective routing failed: ${first_error:-unknown error}"

@@ -67,10 +67,19 @@ case "$MODE" in
     # Grok child-network restriction is Linux-only. macOS work therefore
     # fails before provider startup instead of silently weakening policy.
     if [[ "$(uname -s)" == "Darwin" ]]; then
+      if [[ "${OMNILANE_GROK_MACOS_WORK_UNCONFINED:-0}" == "1" ]]; then
+        [[ -z "${OMNILANE_INBOX:-}" ]] || {
+          echo 'omnilane: Grok macOS unconfined opt-in covers single-shot work only; --live ACP work is unsupported' >&2
+          exit 2
+        }
+        MODE_ARGS=(--always-approve --sandbox off)
+      else
       echo "omnilane: Grok work requires enforced agent-tool network isolation; Grok sandbox network isolation is unavailable on macOS (use explicit --mode sysops or another work-capable vendor)" >&2
       exit 2
+      fi
+    else
+      MODE_ARGS=(--permission-mode acceptEdits --sandbox strict --disable-web-search)
     fi
-    MODE_ARGS=(--permission-mode acceptEdits --sandbox strict --disable-web-search)
     ;;
   sysops)
     MODE_ARGS=(--always-approve --sandbox off)

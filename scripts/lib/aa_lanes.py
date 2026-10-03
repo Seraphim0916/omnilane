@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -33,7 +34,7 @@ def lanes(paths: list[Path]) -> dict[str, list[list[str]]]:
                 continue
             name, chain = line.split(":", 1)
             name = name.strip()
-            if not name or name in table or not chain.strip():
+            if not re.fullmatch(r"[a-z][a-z0-9-]*", name) or name in table or not chain.strip():
                 continue
             segments = []
             for segment in chain.split("|"):

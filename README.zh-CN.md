@@ -458,7 +458,9 @@ Bash、Zsh 和 Fish 补全包含文档中的顶层命令、目标命令和作业
 
 CLI 省略 `--workdir` 时默认使用调用端当前目录；任务说明仍应明确工作目录。MCP `route`／`dry_run` 的 work 接口则单独要求明确的 `workdir`。
 
-Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
+Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work (default) 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
+
+macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 中加入 `option.grok-macos-work: unconfined`，启用**没有隔离**的单次 work。默认关闭；关闭时，macOS 的 work 候选链会跳过 Grok。开启时 `doctor --strict` 会失败。详见[选项、风险与 Grok 工作者必须使用的任务书模板](docs/grok-unconfined-work.md)。
 
 ## 🔒 内置安全机制
 

@@ -33,6 +33,14 @@ unset OMNILANE_GOAL_INTENT
 export -n GOAL_INTENT_REF
 GOAL_STDIN_CAPTURED=0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# shellcheck disable=SC1091
+source "$OMNILANE_REPO/scripts/lib/grok-work.sh"
+# Dispatch owns this decision; an inherited flag is never an opt-in.
+export OMNILANE_GROK_MACOS_WORK_UNCONFINED=0
+if grok_macos_work_enabled; then
+  export OMNILANE_GROK_MACOS_WORK_UNCONFINED=1
+fi
+GROK_WORK_UNCONFINED=0
 # Private configure diff input: used only by an explicit --list inspection.
 # Consume it here so normal dispatch and its workers never inherit the switch.
 LIST_DEFAULTS_ONLY="${OMNILANE_CONFIGURE_DEFAULTS_ONLY:-0}"
@@ -309,6 +317,7 @@ print_dry_run_plan() {
   [[ "$MODE" == "work" || "$MODE" == "sysops" ]] && write_worktree=yes
   [[ -n "$JOB_TIMEOUT" ]] && job_timeout="$JOB_TIMEOUT"
   printf 'dry_run=yes\n'
+  [[ "$GROK_WORK_UNCONFINED" -eq 0 ]] || grok_work_notice
   print_dry_run_value lane "$LANE"
   print_dry_run_value vendor "$VENDOR"
   print_dry_run_value model "$MODEL"
@@ -503,7 +512,9 @@ resolve_chain() {
       [[ "$AA_EXPLICIT_TARGET" -eq 1 ]] && return 6
       continue
     fi
-    if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 || "$vendor" == "off" ]] || routing_candidate_available "$vendor" "$model"; then
+    # The mode capability check belongs with candidate eligibility, not selection.
+    if [[ "$vendor" != "grok" || "$MODE" != "work" || "$OMNILANE_GROK_MACOS_WORK_UNCONFINED" == "1" || "$(uname -s)" != "Darwin" ]] &&
+       { [[ "$RESOLVE_WITH_CONTEXT" -eq 1 || "$vendor" == "off" ]] || routing_candidate_available "$vendor" "$model"; }; then
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}")
       AA_SELECTED_DECISION="$AA_LAST_DECISION"
       RESOLVED_IDX="$i"; return 0
@@ -515,6 +526,7 @@ resolve_chain() {
 }
 
 print_effective_routing() {
+  grok_work_option_status
   local defaults_only="${1:-0}" seen=" " f line lane chain spec note
   for f in "$OMNILANE_HOME/routing.local.yaml" "$OMNILANE_REPO/routing.yaml"; do
     [[ "$defaults_only" == "1" && "$f" == "$OMNILANE_HOME/routing.local.yaml" ]] && continue
@@ -602,6 +614,13 @@ validate_routing() {
       line_no=$((line_no + 1))
       content="${line%%#*}"
       [[ -n "${content//[[:space:]]/}" ]] || continue
+      if [[ "$content" == option.grok-macos-work:* ]]; then
+        if [[ "$f" != "$local_file" ]] || ! grok_macos_work_enabled "$f"; then
+          printf 'FAIL option.grok-macos-work local-only-unconfined-required\n'
+          invalid=$((invalid + 1))
+        fi
+        continue
+      fi
       if ! [[ "$content" =~ ^([a-z][a-z0-9-]*):[[:space:]]*(.*)$ ]]; then
         printf 'FAIL line-%d invalid-line\n' "$line_no"
         invalid=$((invalid + 1))
@@ -1068,8 +1087,17 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # Fail closed before creating job state or starting a provider when the selected
 # runtime cannot enforce the requested mode. Dry-run reports the same gap.
 if [[ "$VENDOR" == "grok" && "$MODE" == "work" && "$(uname -s)" == "Darwin" ]]; then
+  if [[ "$OMNILANE_GROK_MACOS_WORK_UNCONFINED" == "1" ]]; then
+    [[ "$SESSION_REQUEST" != "live" ]] || {
+      echo 'omnilane: Grok macOS unconfined opt-in covers single-shot work only; --live ACP work is unsupported' >&2
+      exit 2
+    }
+    GROK_WORK_UNCONFINED=1
+    grok_work_notice >&2
+  else
   echo "omnilane: Grok work requires disabled agent-tool network; xAI CLI child-network restrictions are not enforced on macOS" >&2
   exit 2
+  fi
 fi
 
 SESSION_MODE="single-shot"
@@ -1329,6 +1357,7 @@ if [[ "$META_BASE" != *'}' ]]; then
 fi
 META_BASE="${META_BASE%\}}"
 META_BASE="$META_BASE,\"executor\":\"cli\",\"executor_reason\":\"$(json_escape "$EXECUTOR_REASON")\""
+[[ "$GROK_WORK_UNCONFINED" -eq 0 ]] || META_BASE="$META_BASE,\"isolation\":\"none\""
 printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_source_path":"%s","job_worker_source_sha256":"%s","job_worker_path":"%s","job_worker_sha256":"%s"}\n' \
   "$META_BASE" "$(json_escape "$JOB_WORKER_BASH")" \
   "$(json_escape "$JOB_WORKER_BASH_VERSION")" "$(json_escape "$JOB_WORKER_SOURCE")" \
@@ -1408,27 +1437,28 @@ completion_tail() {
 write_completion_record() {
   local rc="$1" inbox="$OMNILANE_HOME/inbox"
   local final="$inbox/$JOB_ID.json" tmp="$inbox/.$JOB_ID.tmp.$$-$RANDOM"
-  local tail_value finished old_umask write_rc=0 sentinel=$'\001'
+  local tail_value finished old_umask write_rc=0 sentinel=$'\001' isolation_json=""
 
   prepare_inbox_store || return 1
   tail_value="$(completion_tail "$JOB_DIR/out.txt"; printf '%s' "$sentinel")" || return 1
   tail_value="${tail_value%"$sentinel"}"
+  [[ "$GROK_WORK_UNCONFINED" -eq 0 ]] || isolation_json=',"isolation":"none"'
   finished="$(date -u +%FT%TZ)" || return 1
   old_umask="$(umask)"
   umask 077
   if [[ -n "$THREAD_NAME" ]]; then
-    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","thread":"%s","thread_turn":%s,"exit":%s,"finished":"%s","tail":"%s"}\n' \
+    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","thread":"%s","thread_turn":%s,"exit":%s,"finished":"%s","tail":"%s"%s}\n' \
       "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
       "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
       "$(json_escape "$FOREMAN_SESSION")" "$(json_escape "$THREAD_NAME")" \
       "$THREAD_TURN_JSON" "$rc" "$(json_escape "$finished")" \
-      "$(json_escape "$tail_value")" > "$tmp" || write_rc=$?
+      "$(json_escape "$tail_value")" "$isolation_json" > "$tmp" || write_rc=$?
   else
-    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","exit":%s,"finished":"%s","tail":"%s"}\n' \
+    printf '{"job_id":"%s","lane":"%s","vendor":"%s","model":"%s","mode":"%s","workdir":"%s","foreman_session":"%s","exit":%s,"finished":"%s","tail":"%s"%s}\n' \
       "$(json_escape "$JOB_ID")" "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" \
       "$(json_escape "$MODEL")" "$(json_escape "$MODE")" "$(json_escape "$WORKDIR")" \
       "$(json_escape "$FOREMAN_SESSION")" \
-      "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" \
+      "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" "$isolation_json" \
       > "$tmp" || write_rc=$?
   fi
   if [[ "$write_rc" -eq 0 ]] && ! json_file_round_trip_valid "$tmp"; then
@@ -1523,5 +1553,6 @@ fi
 
 [[ -z "$GOAL_INTENT_REF" ]] || { echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
 set +e; run_job; RC=$?; set -e
+[[ "$GROK_WORK_UNCONFINED" -eq 0 ]] || grok_work_notice >&2
 [[ -f "$JOB_DIR/out.txt" ]] && cat "$JOB_DIR/out.txt"
 exit "$RC"

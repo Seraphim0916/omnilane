@@ -6,6 +6,15 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- Operator-only `option.grok-macos-work: unconfined` in local routing enables
+  single-shot Grok work on macOS without isolation. Off by default; work chains
+  skip unsupported Grok candidates while explicit selection retains its refusal.
+  Dispatch, dry-run, job metadata/inspection and completion notices disclose the
+  exposure; list and doctor show the option, and strict doctor warns/fails when
+  enabled. See [the operator guide and required worker brief](docs/grok-unconfined-work.md).
+
 ## [0.51.1] - 2026-10-01
 
 ### Fixed

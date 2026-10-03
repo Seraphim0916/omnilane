@@ -153,7 +153,13 @@ make the commit yourself. Do not widen the sandbox to the shared `.git`.
 `work` confines file and command changes to `--workdir` and disables the
 worker's tool networking (not the model connection); `advise` is read-only with
 the vendor's native web tools. Neither turns into `sysops` by itself. macOS Grok
-`work` is blocked (its child-network isolation is Linux-only). Same-directory
+`work` is blocked by default (its child-network isolation is Linux-only). The
+operator may enable single-shot work **without isolation** using
+`option.grok-macos-work: unconfined` in local routing only. When off, macOS work
+chains skip Grok; explicit selection still refuses. When on, `doctor --strict`
+fails. **Commander: when this host has the option on, every brief sent to Grok
+must follow the ordered [worker-brief template](../../docs/grok-unconfined-work.md#required-task-brief-template).**
+Same-directory
 Codex dispatches are serialized by a lock; do not parallelize them yourself.
 
 ### When the target is your own harness, use your own sub-agent tool
