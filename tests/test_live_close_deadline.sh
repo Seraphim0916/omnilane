@@ -110,7 +110,7 @@ def fill_fifo(fd, limit=8 * 1024 * 1024, timeout=2):
     raise AssertionError(f'runner FIFO did not reach bounded backpressure: {written}')
 
 try:
-    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,ordered,partial,flow,epipe,idle-exit,stuck,full-grace').split(',')
+    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,ordered,partial,flow,epipe,idle-exit,stuck,full-grace,repeat-close').split(',')
     for number, mode in enumerate(modes, 1):
         case = scratch / mode
         home = case / 'home'
@@ -137,6 +137,17 @@ try:
         holder = int((job / 'inbox.holder.pid').read_text())
         stop = threading.Event()
         producer = None
+        hammer = None
+        if mode == 'repeat-close':
+            # A second close (two jobs close calls, or a retry) can land while the
+            # worker is already shutting down; it must never kill the worker.
+            def hammer_usr1():
+                while True:
+                    try: os.kill(holder, signal.SIGUSR1)
+                    except ProcessLookupError: return
+                    time.sleep(.0005)
+            hammer = threading.Thread(target=hammer_usr1, daemon=True)
+            hammer.start()
         if mode in ('queued', 'flow', 'epipe'):
             if mode in ('flow', 'epipe'):
                 wait_for(case / 'runner-stopped-reading')
@@ -209,6 +220,7 @@ try:
         result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
                                 env=env, capture_output=True, text=True, timeout=11)
         elapsed = time.monotonic() - started
+        if hammer: hammer.join(timeout=3)
         if second_close:
             second_close.communicate(timeout=2)
             assert second_close.returncode == result.returncode

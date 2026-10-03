@@ -517,5 +517,9 @@ if [[ -n "$close_reason" ]]; then
   printf '\n%s\n' "$close_reason" >> "$OUTPUT_FILE"
   emit_mode_notice "$close_reason" || true
 fi
-trap - USR1 PIPE
+# Ignore, not default: a late close (a second jobs close, or a retry) can land
+# while the EXIT trap cleans up, and the default USR1 action would end the worker
+# with 158 instead of $rc.
+trap '' USR1
+trap - PIPE
 exit "$rc"
