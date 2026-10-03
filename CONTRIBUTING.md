@@ -26,6 +26,8 @@ the stock macOS and Linux environments the project supports.
 
 ## Required checks
 
+CI runs the behaviour checks on both ubuntu-latest and macos-latest. Standard GitHub-hosted runners are free for public repositories.
+
 Run the closest local equivalent of CI:
 
 ```bash

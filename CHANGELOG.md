@@ -35,6 +35,7 @@ semantic version tags.
 - `fast-agentic` puts GPT-6.1 Sol low ahead of GPT-6 Sol low. The old order left
   the GPT-6.1 Sol low row unreachable: every caller that could reach it was
   served the lower-scored GPT-6 Sol low first.
+- CI now runs the behaviour checks on macOS alongside Linux (routing smoke, strict doctor, Python and shell unit tests); the job prints which Bash it used.
 
 ### Fixed
 
