@@ -23,6 +23,11 @@ semantic version tags.
 - `jobs close` waits its full 11 seconds before giving up with 124. The
   deadline counted whole wall-clock seconds, so it could give up after barely
   10 seconds, too close to a stuck runner's 9.85-second shutdown budget.
+- A foreground Claude or Gemini dispatch no longer opens a resident session.
+  The caller cannot send follow-ups, and the session only closed on the idle
+  cap or the call timeout, so a finished answer was reported as exit 124 after
+  the full timeout. Foreground dispatch now runs single-shot; background
+  dispatch keeps its auto-selected resident session.
 
 ### Changed
 

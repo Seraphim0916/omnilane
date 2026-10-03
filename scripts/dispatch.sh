@@ -1104,10 +1104,14 @@ if [[ "$VENDOR" == "grok" && "$MODE" == "work" && "$(uname -s)" == "Darwin" ]]; 
 fi
 
 SESSION_MODE="single-shot"
-if [[ -z "$THREAD_NAME" && "$SESSION_REQUEST" != "single-shot" ]] && live_vendor_capable "$VENDOR" &&
+if [[ -z "$THREAD_NAME" && "$SESSION_REQUEST" != "single-shot" && "$BACKGROUND" -eq 1 ]] &&
+   live_vendor_capable "$VENDOR" &&
    [[ "$SESSION_REQUEST" == "live" || "$VENDOR" == "claude" || "$VENDOR" == "gemini" ]]; then
   # Preserve established auto behavior: Codex/Grok require an explicit --live.
-  # Claude/Gemini retain their existing auto-selected resident sessions.
+  # Claude/Gemini retain their existing auto-selected resident sessions, but
+  # only in the background: a foreground caller cannot send follow-ups, and a
+  # resident session there only closes on the idle cap or the call timeout,
+  # turning a finished answer into exit 124.
     # Grok ACP currently exposes no enforceable restricted policy.
     # Only explicit sysops dispatch may use its resident ACP session.
     if [[ "$VENDOR" != "grok" || "$MODE" == "sysops" ]]; then
