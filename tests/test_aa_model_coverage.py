@@ -56,6 +56,11 @@ class AAModelCoverageTest(unittest.TestCase):
 
     def test_every_catalog_value_and_alias_has_mapping_or_exception(self):
         documented = {(row["vendor"], row["catalogModel"]) for row in self.data["catalogMappings"]}
+        # Keep the historical inventory, but operator-retired models leave today's catalog.
+        registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
+        retired = {(row["vendor"], row["model"]) for row in registry["unknown_configs"]
+                   if row["reason"].startswith("Omnilane operator-approved retirement ")}
+        documented -= retired
         self.assertEqual(documented, configured_models())
         for row in self.data["catalogMappings"]:
             self.assertTrue(row["mappingStatus"])

@@ -179,16 +179,18 @@ class SweepTests(unittest.TestCase):
 
     def test_a_real_selector_failure_is_recorded_not_retried(self):
         def verdicts(name, _attempt):
-            if "5_4-mini" in name:
+            if "5_6-terra" in name:
                 return "fail", "upstream 400: model is not supported", ""
             return "pass", "", ""
+        refused = [entry["name"] for entry in probe_sweep.plan("codex") if "5_6-terra" in entry["name"]]
+        self.assertIn("cx-gpt-5_6-terra-none", refused)
         run, calls = self.prober(verdicts)
         report = probe_sweep.sweep("codex", self.root, run_probe=run,
                                    manager=lambda: "Aqua", log=lambda _: None)
         self.assertEqual(report["outcome"], "done")
-        self.assertEqual(len(report["failed"]), 3)
-        self.assertEqual(calls.count("cx-gpt-5_4-mini-none"), 1)
-        self.assertTrue((self.root / "evidence/cx-gpt-5_4-mini-none.json").exists())
+        self.assertEqual(len(report["failed"]), len(refused))
+        self.assertEqual(calls.count("cx-gpt-5_6-terra-none"), 1)
+        self.assertTrue((self.root / "evidence/cx-gpt-5_6-terra-none.json").exists())
 
     def test_only_missing_probes_just_the_rows_without_evidence(self):
         names = [entry["name"] for entry in probe_sweep.plan("grok")]

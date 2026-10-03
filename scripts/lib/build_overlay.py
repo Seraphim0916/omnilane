@@ -45,9 +45,6 @@ for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6.1-sol", "gpt-6_1-sol
         ev = f"cx-avail-{model.replace('.', '_')}" if effort == "high" else f"cx-{model.replace('.', '_')}-{effort}"
         PROVEN[cid] = ("model_and_effort", model, ev)
 
-for effort in ["xhigh", "medium"]:
-    PROVEN[f"codex/gpt-5-4-mini" + ("" if effort == "xhigh" else f"-{effort}")] = (
-        "model_and_effort", "gpt-5.4-mini", f"cx-gpt-5_4-mini-{effort}")
 
 PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "gk-grok-4_6-high")
 for effort in ["xhigh", "medium", "low"]:
@@ -56,6 +53,7 @@ PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high
 # AA scores grok-4.7 at xhigh and high only; its base row is the xhigh one.
 PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
 PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
+PROVEN["grok/grok-4-7-low"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-low")
 
 for cid, rid, ev in [
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
@@ -71,10 +69,12 @@ for cid, rid, ev in [
 for model in ["claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5"]:
     for effort in ["max", "xhigh", "high", "medium", "low"]:
         cid = f"claude/{model}" + ("" if effort == "max" else f"-{effort}")
+        if cid == "claude/claude-sonnet-5-5-low":
+            continue  # unscored since the 2026-10-02 capture: nothing to prove
         PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-{effort}")
 # gpt-6-astra rejects effort "none" upstream ("Unsupported value: 'none' is not
 # supported with the 'gpt-6-astra' model"), so it has no non-reasoning selector.
-for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini"]:
+for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]:
     PROVEN[f"codex/{model.replace('.', '-')}-non-reasoning"] = (
         "model_and_effort", model, f"cx-{model.replace('.', '_')}-none")
 
@@ -163,6 +163,16 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def unscored_proven(probe_runs, rows=None) -> list[str]:
+    """Probed rows the registry does not score, e.g. one the benchmark withdrew.
+
+    Their old evidence maps to nothing, so they are left out of the overlay
+    instead of aborting the build on a missing registry row.
+    """
+    rows = ROWS if rows is None else rows
+    return sorted(cid for cid in PROVEN if cid in probe_runs and cid not in rows)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -224,8 +234,9 @@ def main(argv: list[str] | None = None) -> None:
     anchors = core_evidence()
     anchored = {vendor for _, vendor in anchors}
     mappings = []
+    unscored = unscored_proven(manifest["probe_runs"])
     for cid, (selector, runtime_model, _) in sorted(PROVEN.items()):
-        if cid not in manifest["probe_runs"]:
+        if cid not in manifest["probe_runs"] or cid in unscored:
             continue
         row = ROWS[cid]
         if row["vendor"] not in anchored:
@@ -269,6 +280,8 @@ def main(argv: list[str] | None = None) -> None:
     spread = Counter(m["evidence_tier"] for m in mappings)
     print(f"wrote {out} with {len(mappings)} mappings and {len(evidence)} evidence anchors")
     print("  evidence tiers: " + ", ".join(f"{tier} {count}" for tier, count in sorted(spread.items())))
+    if unscored:
+        print("  left out, not scored by the registry: " + ", ".join(unscored))
 
 
 if __name__ == "__main__":

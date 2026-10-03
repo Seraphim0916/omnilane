@@ -45,6 +45,7 @@ NEW_ROWS = [
     # (id, vendor, model, effort, reasoning, aa_slug, copy transport/shape from)
     ("grok/grok-4-7", "grok", "grok-4.7", "xhigh", "reasoning", "grok-4-7", "grok/grok-4-6-xhigh"),
     ("grok/grok-4-7-high", "grok", "grok-4.7", "high", "reasoning", "grok-4-7-high", "grok/grok-4-6"),
+    ("grok/grok-4-7-low", "grok", "grok-4.7", "low", "reasoning", "grok-4-7-low", "grok/grok-4-6-low"),
     ("claude/claude-sonnet-5-xhigh", "claude", "claude-sonnet-5", "xhigh", "adaptive",
      "claude-sonnet-5-xhigh", "claude/claude-sonnet-5"),
     ("claude/claude-sonnet-5-high", "claude", "claude-sonnet-5", "high", "adaptive",
@@ -94,6 +95,14 @@ NEW_ROWS = [
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5"}  # new catalog model -> alias entry to clone
+
+# Operator-approved retirements, independent of whether AA still publishes a score.
+# config id -> (retirement date, one-line reason)
+RETIRED_ROWS = {
+    "codex/gpt-5-4-mini": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
+    "codex/gpt-5-4-mini-medium": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
+    "codex/gpt-5-4-mini-non-reasoning": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
+}
 
 
 def half_up(value: float) -> int:
@@ -209,6 +218,9 @@ def rescore(row: dict, record: dict, version: str, as_of: str, report: str) -> N
 
 
 def cmd_build(args) -> int:
+    overlap = set(RETIRED_ROWS) & {row[0] for row in NEW_ROWS}
+    if overlap:
+        sys.exit(f"build: retired rows cannot also be in NEW_ROWS: {', '.join(sorted(overlap))}")
     extract = json.loads(Path(args.extract).read_text())
     records, version, as_of = extract["records"], extract["benchmark_version"], args.as_of
     old = json.loads(Path(args.base).read_text())
@@ -220,14 +232,22 @@ def cmd_build(args) -> int:
     scored, dropped = [], []
     for row in new["scored_configs"]:
         record = records.get(row["aa_slug"])
-        if record is None:
+        if row["id"] in RETIRED_ROWS or record is None:
             dropped.append(row)
             continue
         rescore(row, record, version, as_of, report(row["vendor"]))
         scored.append(row)
     by_id = {row["id"]: row for row in old["scored_configs"]}
+    already_unknown = {(row["vendor"], row["model"], row["effort"], row["reasoning"])
+                       for row in old["unknown_configs"]}
+    withdrawn: set[tuple] = set()
     for cid, vendor, model, effort, reasoning, slug, shape in NEW_ROWS:
         if cid in {row["id"] for row in scored}:
+            continue
+        if cid in {row["id"] for row in dropped} or (
+                (vendor, model, effort, reasoning) in already_unknown and slug not in records):
+            # AA withdrew a row an earlier snapshot added: it stays in unknown_configs, unscored.
+            withdrawn.add((vendor, model, effort, reasoning))
             continue
         if slug not in records:
             sys.exit(f"build: {slug} is not in the extract")
@@ -241,19 +261,23 @@ def cmd_build(args) -> int:
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
     new["scored_configs"] = scored
 
-    added = {(v, m, e, r) for _, v, m, e, r, _, _ in NEW_ROWS}
+    added = {(v, m, e, r) for _, v, m, e, r, _, _ in NEW_ROWS} - withdrawn
     unknown = [row for row in new["unknown_configs"]
                if (row["vendor"], row["model"], row["effort"], row["reasoning"]) not in added]
     for row in unknown:
         row["benchmark_version"], row["as_of"] = version, as_of
         row["evidence_report"] = report(row["vendor"])
     for row in dropped:
+        retirement = RETIRED_ROWS.get(row["id"])
+        reason = (f"Omnilane operator-approved retirement {retirement[0]}: {retirement[1]}; "
+                  "AA still lists the model; earlier score is not carried over" if retirement else
+                  f"AA v{version} no longer lists {row['aa_slug']}; the earlier score is not carried over")
         unknown.append({
             "id": "/".join(str(row[key]) for key in ("vendor", "model", "effort", "reasoning")).replace("None", "none"),
             **{key: row[key] for key in ("vendor", "model", "effort", "reasoning", "fallback")},
             "score": None, "estimated": None, "benchmark_version": version, "as_of": as_of,
             "status": "unknown", "authority_eligible": False,
-            "reason": f"AA v{version} no longer lists {row['aa_slug']}; the earlier score is not carried over",
+            "reason": reason,
             "source_urls": [], "evidence_report": report(row["vendor"]), "mapping_status": "unknown",
             "transport_mapping": {"status": "unknown", "runtime_verified": False, "resolved_config_id": None},
         })
@@ -264,11 +288,15 @@ def cmd_build(args) -> int:
             rescore(row, records[row["aa_slug"]], version, as_of, report(row["vendor"]))
 
     live_ids = {row["id"] for row in scored}
+    # An alias made entirely of retired rows also leaves the configure catalog.
+    new["aliases"] = [alias for alias in new["aliases"]
+                      if not (alias["candidate_config_ids"] and
+                              set(alias["candidate_config_ids"]) <= RETIRED_ROWS.keys())]
     for alias in new["aliases"]:
         alias["candidate_config_ids"] = [cid for cid in alias["candidate_config_ids"] if cid in live_ids]
         for cid, vendor, model, *_ in NEW_ROWS:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
-                    and cid not in alias["candidate_config_ids"]:
+                    and cid in live_ids and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
     # aliases mirror scripts/configure.sh's catalog, so a new alias needs the model there too.
     have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
@@ -324,8 +352,13 @@ def cmd_report(args) -> int:
                          f"{before['score'] if before else 'new'} | {row['source_urls'][0]} |")
         gone = [cid for cid, row in old.items() if row["vendor"] == vendor
                 and cid not in {r["id"] for r in new["scored_configs"]}]
-        if gone:
-            lines += ["", "No longer listed by AA, moved to unknown_configs: " + ", ".join(gone)]
+        retired = [cid for cid in gone if cid in RETIRED_ROWS]
+        withdrawn = [cid for cid in gone if cid not in RETIRED_ROWS]
+        if withdrawn:
+            lines += ["", "No longer listed by AA, moved to unknown_configs: " + ", ".join(withdrawn)]
+        if retired:
+            lines += ["", "Retired by omnilane while still listed by AA, moved to unknown_configs:"]
+            lines += [f"- {cid} ({RETIRED_ROWS[cid][0]}): {RETIRED_ROWS[cid][1]}" for cid in retired]
         # write where the rows point, so a same-day second snapshot never overwrites the first's report
         target = next((REPO / r["evidence_report"] for r in new["scored_configs"] if r["vendor"] == vendor),
                       out / f"aa-{vendor}-evidence-{as_of}.md")

@@ -15,6 +15,27 @@ semantic version tags.
   exposure; list and doctor show the option, and strict doctor warns/fails when
   enabled. See [the operator guide and required worker brief](docs/grok-unconfined-work.md).
 
+### Changed
+
+- Snapshot `aa-v4.3.2-2026-10-02-v2` retires `codex/gpt-5-4-mini`,
+  `codex/gpt-5-4-mini-medium` and `codex/gpt-5-4-mini-non-reasoning` from the
+  scored table: Codex returns HTTP 400, "not supported when using Codex with a
+  ChatGPT account", although AA still lists the model. The rows are now unscored
+  in `unknown_configs`; their configure alias and probe candidates are removed.
+  Every other score and ordering is unchanged (117 -> 114 scored, Codex 57 -> 54).
+  **Every host must run `omnilane resign` because the snapshot id changed.**
+  Details: `docs/reports/aa-rebaseline-2026-10-02-v2.md`.
+
+- Registry snapshot `aa-v4.3.2-2026-10-02-v1` on the 2026-10-02 AA capture (index
+  version unchanged). Twelve GPT-6 Sol and GPT-6 Luna rows are re-scored, seven of
+  them by one point. `grok/grok-4-7-low` is added to the registry only. AA withdrew
+  `claude-sonnet-5-5-low`, so that row moves to `unknown_configs` and leaves
+  `triage` and `bulk-mechanical`. **Every host must run `omnilane resign` once
+  after upgrading.** Details: `docs/reports/aa-rebaseline-2026-10-02.md`.
+- `fast-agentic` puts GPT-6.1 Sol low ahead of GPT-6 Sol low. The old order left
+  the GPT-6.1 Sol low row unreachable: every caller that could reach it was
+  served the lower-scored GPT-6 Sol low first.
+
 ### Fixed
 
 - Non-Claude runners strip inherited Claude/Anthropic environment variables before vendor calls, preventing Grok plugin cancellation and caller-token exposure; standalone Codex/Grok live bridges do the same.
@@ -32,6 +53,11 @@ semantic version tags.
 - `doctor` reports `FAIL transport-overlay` when dispatch resolves a different
   executable path than the overlay pinned, naming the vendor and both paths with
   `omnilane resign` guidance. Vendor hash drift and runner-only drift remain `WARN`.
+
+- `scripts/aa_rebaseline.py build` no longer aborts when AA withdraws a row that an
+  earlier snapshot added through `NEW_ROWS`; the row stays in `unknown_configs`
+  and is not put back among its alias's candidates.
+
 
 ## [0.51.1] - 2026-10-01
 

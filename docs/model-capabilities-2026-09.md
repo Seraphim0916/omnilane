@@ -7,6 +7,31 @@ of 2026-09-23 it extends, the best-first decision made earlier that day, the
 v4.1.1-era snapshot are kept as historical evidence. The v4.2 and older scores are
 on other scales and are not comparable with the v4.3.2 figures.
 
+## Re-score — 2026-10-02 (no new routing decision)
+
+Same-day revision `aa-v4.3.2-2026-10-02-v2` retires the three `gpt-5.4-mini` rows
+with operator approval: Codex returns HTTP 400 with a ChatGPT account, although
+AA still lists them. They move to `unknown_configs` without authority; the alias
+and probe candidates are removed. The remaining 114 scores and their ordering
+are identical to v1 (Codex 57 -> 54); `routing.yaml` does not change. Every host
+must run `omnilane resign` because the snapshot id changed. v1 reports remain
+historical evidence; v2 details: `docs/reports/aa-rebaseline-2026-10-02-v2.md`.
+
+The 2026-10-02 capture keeps every ordering below except three edits; the tables in
+the 2026-09-30 section still describe each lane. Full account:
+`docs/reports/aa-rebaseline-2026-10-02.md`.
+
+- AA withdrew Claude Sonnet 5.5 low. It is unscored, so it left `triage` and
+  `bulk-mechanical`; Sonnet 5 low is the Claude row in `triage` again.
+- `fast-agentic` now lists GPT-6.1 Sol low before GPT-6 Sol low, so a caller that can
+  reach the GPT-6.1 row gets it and GPT-6 Sol low serves the callers below.
+- GPT-6 Sol and GPT-6 Luna were re-measured (seven rows move by one point). Grok 4.7
+  low is scored and in no chain. Gemini 4 Argon is scored by AA but not added: no
+  local CLI lists it and the value rule picks it in no lane.
+
+Regenerate the per-lane tables with
+`scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-10-02.json`.
+
 ## Current routing decision — 2026-09-30 (value-first, Claude Sonnet 5.5 and GPT-6.1 Sol added)
 
 Anthropic released Claude Sonnet 5.5 and OpenAI released GPT-6.1 Sol, and AA

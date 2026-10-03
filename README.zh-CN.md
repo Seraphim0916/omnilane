@@ -215,14 +215,14 @@ flowchart LR
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-6 Astra (xhigh) | GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 最难的实现、深度调试、正确性关键的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → Claude Sonnet 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | 重构、迁移、测试、大范围扫描——机械耐力活 |
-| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
 | ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | 架构裁决、深度推理、第二意见 |
 | ✒️ taste-final | Claude Opus 5.5 (xhigh) | Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | 对外文字、提示词／文档润色、风格裁决 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
 | 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 3.8 Flash (High) | 仅在提供设计系统／参考图时生成 UI 草稿 |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6 Sol (low) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
 | 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 实时 X／网页搜索与社交上下文 |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Codex 配额耗尽时的中量级编码安全阀 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
@@ -865,7 +865,7 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 - **等级跟着证据走，不跟着厂商走。** 本次发布之前的探测会重判为 `selector-only`；哪天某支 CLI 开始汇报计费模型，不改代码就自动升级。
 - **`omnilane doctor` 显示分布**，并点名哪几家值得重探。
 - **overlay 锚定的是真正在跑的可执行文件。** 过去路径写死在 `build_overlay.py` 里，会无声地锚到没在用的版本——线上 overlay 哈希的是 claude `2.1.263`，但每次派工跑的都是 `2.1.266`。
-- **抓到三条已死的车道。** `gpt-5.4-mini` 在 2026-09-07 探测还会过，现在回 HTTP 400——「ChatGPT 账号使用 Codex 时不支持此模型」。签好的 overlay 永远不会发现某条车道在上游死掉，重探才会。那三条移进 `unproven[]` 并附上原因，映射剩 46 条。
+- **抓到三条已死的车道。** `gpt-5.4-mini` 在 2026-09-07 探测还会过，现在回 HTTP 400——「ChatGPT 账号使用 Codex 时不支持此模型」。签好的 overlay 永远不会发现某条车道在上游死掉，重探才会。那三条移进 `unproven[]` 并附上原因，映射剩 46 条。 现行快照 `aa-v4.3.2-2026-10-02-v2` 已把这三行移到不具权限的 `unknown_configs`，并移除配置菜单别名与探测候选。其他分数和顺序不变（计分行 117 -> 114，Codex 57 -> 54）。快照 ID 已改变，每台主机都必须运行 `omnilane resign`；详情见 `docs/reports/aa-rebaseline-2026-10-02-v2.md`。
 - **升级。** npm 发布后运行 `npm i -g omnilane@0.42.6`。既有的 repo symlink 安装更新检出后确认 `omnilane --version` 即可。
 
 ## v0.42.5 新功能

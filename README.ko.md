@@ -222,14 +222,14 @@ flowchart LR
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-6 Astra (xhigh) | GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → Claude Sonnet 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
-| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
 | ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | 아키텍처 판정, 심층 추론, 2차 의견 |
 | ✒️ taste-final | Claude Opus 5.5 (xhigh) | Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
 | 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6 Sol (low) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
@@ -881,7 +881,7 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 - **등급은 공급업체가 아니라 증거를 따릅니다.** 이번 릴리스 이전의 프로브는 `selector-only`로 재판정되며, 과금 모델을 보고하기 시작한 CLI는 코드 변경 없이 승격됩니다.
 - **`omnilane doctor`가 분포를 표시**하고 다시 프로브할 공급업체를 지목합니다.
 - **overlay는 실제로 실행되는 바이너리를 고정합니다.** 기존에는 경로가 `build_overlay.py`에 하드코딩되어 사용되지 않는 버전을 조용히 가리켰습니다. 모든 디스패치가 claude `2.1.266`을 실행하는 동안 overlay는 `2.1.263`을 해시하고 있었습니다.
-- **죽은 레인 3개를 찾았습니다.** `gpt-5.4-mini`는 2026-09-07 프로브에서는 통과했지만 지금은 HTTP 400(ChatGPT 계정의 Codex에서는 미지원)을 반환합니다. 서명된 overlay는 레인이 상류에서 사라져도 알아차리지 못합니다. 해당 3개 구성은 이유와 함께 `unproven[]`으로 이동했고, 매핑은 46개가 되었습니다.
+- **죽은 레인 3개를 찾았습니다.** `gpt-5.4-mini`는 2026-09-07 프로브에서는 통과했지만 지금은 HTTP 400(ChatGPT 계정의 Codex에서는 미지원)을 반환합니다. 서명된 overlay는 레인이 상류에서 사라져도 알아차리지 못합니다. 해당 3개 구성은 이유와 함께 `unproven[]`으로 이동했고, 매핑은 46개가 되었습니다. 현재 스냅샷 `aa-v4.3.2-2026-10-02-v2`에서는 세 행을 권한 없는 `unknown_configs`로 옮기고 설정 메뉴 별칭과 프로브 후보도 제거했습니다. 다른 점수와 순서는 그대로입니다(채점 행 117 -> 114, Codex 57 -> 54). 스냅샷 ID가 바뀌었으므로 모든 호스트에서 `omnilane resign`을 실행해야 합니다. 자세한 내용: `docs/reports/aa-rebaseline-2026-10-02-v2.md`.
 - **업그레이드.** npm 게시 후 `npm i -g omnilane@0.42.6`를 실행하세요.
 
 ## v0.42.5 새 기능

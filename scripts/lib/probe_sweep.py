@@ -65,7 +65,9 @@ def plan(vendor: str) -> list[dict]:
     """One entry per evidence file this vendor's PROVEN rows point at."""
     entries: dict[str, dict] = {}
     for config_id, (_, runtime_model, evidence) in sorted(build_overlay.PROVEN.items()):
-        row = build_overlay.ROWS[config_id]
+        row = build_overlay.ROWS.get(config_id)
+        if row is None:
+            continue  # the registry no longer scores it: nothing to probe
         if row["vendor"] != vendor or evidence in entries:
             continue
         entries[evidence] = {"name": evidence, "config_id": config_id, "model": runtime_model,

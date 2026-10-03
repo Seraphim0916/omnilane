@@ -215,14 +215,14 @@ flowchart LR
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
 | 🔥 hardest-coding | GPT-6 Astra（xhigh） | GPT-6.1 Sol（xhigh）→ Claude Opus 5.5（medium）→ GPT-6.1 Sol（high）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（medium）→ Claude Fable 5.1（medium）→ Claude Opus 5（high）→ Claude Sonnet 5.5（high）→ GPT-6 Astra（low）→ Claude Opus 5（medium）→ Claude Opus 5.5（low）→ Claude Sonnet 5.5（medium）→ Claude Opus 5（low）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol（medium） | Claude Opus 5.5（medium）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（high）→ Claude Sonnet 5.5（high）→ GPT-6.1 Sol（low）→ GPT-6 Astra（low）→ GPT-6 Sol（high）→ GPT-5.6 Sol（high）→ Claude Opus 5.5（low）→ Claude Sonnet 5.5（medium）→ Claude Sonnet 5.5（low）→ GPT-6 Sol（medium）→ Claude Opus 5（low）→ GPT-6 Sol（low）→ Gemini 3.8 Flash（High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
-| 🧹 triage | GPT-6 Luna（high） | GPT-5.6 Luna（high）→ Gemini 3.8 Flash（Low）→ Claude Sonnet 5.5（low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol（medium） | Claude Opus 5.5（medium）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（high）→ Claude Sonnet 5.5（high）→ GPT-6.1 Sol（low）→ GPT-6 Astra（low）→ GPT-6 Sol（high）→ GPT-5.6 Sol（high）→ Claude Opus 5.5（low）→ Claude Sonnet 5.5（medium）→ GPT-6 Sol（medium）→ Claude Opus 5（low）→ GPT-6 Sol（low）→ Gemini 3.8 Flash（High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🧹 triage | GPT-6 Luna（high） | GPT-5.6 Luna（high）→ Gemini 3.8 Flash（Low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
 | ⚖️ hard-judgment | Claude Opus 5.5（xhigh） | Claude Fable 5.1（xhigh）→ Claude Opus 5.5（medium）→ Claude Fable 5.1（medium）→ Claude Opus 5（high）→ Claude Opus 5（medium）→ Claude Opus 5.5（low）→ GPT-6.1 Sol（xhigh）→ GPT-6 Astra（high）→ Grok 4.7 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |
 | ✒️ taste-final | Claude Opus 5.5（xhigh） | Claude Sonnet 5.5（xhigh）→ Claude Opus 5.5（high）→ Claude Sonnet 5.5（high）→ Claude Opus 5.5（medium）→ Grok 4.7 → Grok 4.6 → GPT-6 Astra（xhigh）→ Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
 | 💬 consult | GPT-6 Astra（xhigh） | Claude Opus 5.5（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
 | 🎨 ui-draft | Claude Opus 5.5（high） | GPT-6.1 Sol（high）→ Claude Opus 5.5（medium）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（medium）→ GPT-6.1 Sol（low）→ Claude Opus 5.5（low）→ GPT-6 Astra（low）→ GPT-6 Sol（medium）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
 | 📚 long-context | Claude Opus 5（high） | Claude Opus 5（medium）→ Claude Opus 5（low）→ GPT-5.6 Terra（xhigh）→ Gemini 3.8 Flash（High） | 長文件整合；上下文容量本身不證明任務品質 |
-| ⚡ fast-agentic | GPT-6.1 Sol（medium） | GPT-6 Astra（medium）→ GPT-6 Sol（low）→ GPT-6.1 Sol（low）→ GPT-6 Astra（low）→ Gemini 3.8 Flash（Medium）→ Claude Sonnet 5.5（medium）→ Claude Opus 5.5（low） | 高速多步驟工具迴圈、多模態檢查 |
+| ⚡ fast-agentic | GPT-6.1 Sol（medium） | GPT-6 Astra（medium）→ GPT-6.1 Sol（low）→ GPT-6 Sol（low）→ GPT-6 Astra（low）→ Gemini 3.8 Flash（Medium）→ Claude Sonnet 5.5（medium）→ Claude Opus 5.5（low） | 高速多步驟工具迴圈、多模態檢查 |
 | 📡 live-search | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Claude Opus 5.5（low）→ off | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
 | 🚰 coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 3.8 Flash（High）→ Kimi K3 → Qwen3 Coder Plus → OpenCode → off | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
@@ -874,7 +874,7 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 - **等級跟著證據走，不跟著廠商走。** 本次發布之前的探測會重判為 `selector-only`；哪天某支 CLI 開始回報計費模型，不改程式就自動升級。
 - **`omnilane doctor` 顯示分佈**，並點名哪幾家值得重探。
 - **overlay 錨定的是真正在跑的執行檔。** 過去路徑寫死在 `build_overlay.py` 裡，會無聲地錨到沒在用的版本——線上 overlay 雜湊的是 claude `2.1.263`，但每次派工跑的都是 `2.1.266`。現在改用 runner 實際解析到的執行檔。
-- **抓到三條已死的車道。** `gpt-5.4-mini` 在 2026-09-07 探測還會過，現在回 HTTP 400——「ChatGPT 帳號使用 Codex 時不支援此模型」。簽好的 overlay 永遠不會發現某條車道在上游死掉，重探才會。那三條移進 `unproven[]` 並附上原因，映射剩 46 條。
+- **抓到三條已死的車道。** `gpt-5.4-mini` 在 2026-09-07 探測還會過，現在回 HTTP 400——「ChatGPT 帳號使用 Codex 時不支援此模型」。簽好的 overlay 永遠不會發現某條車道在上游死掉，重探才會。那三條移進 `unproven[]` 並附上原因，映射剩 46 條。 現行快照 `aa-v4.3.2-2026-10-02-v2` 已把這三列移到不具權限的 `unknown_configs`，並移除設定選單別名與探測候選。其他分數和順序不變（計分列 117 -> 114，Codex 57 -> 54）。快照 ID 已改變，每台主機都必須執行 `omnilane resign`；詳見 `docs/reports/aa-rebaseline-2026-10-02-v2.md`。
 - **升級。** npm 發布後執行 `npm i -g omnilane@0.42.6`。既有的 repo symlink 安裝更新檢出後確認 `omnilane --version` 即可，不需重跑安裝。
 
 ## v0.42.5 新功能
