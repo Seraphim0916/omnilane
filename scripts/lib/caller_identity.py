@@ -471,6 +471,10 @@ def _claude_start_second(value: str | datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc).replace(microsecond=0)
 
 
+class _IncompleteClaudeIdentity(ValueError):
+    """A bound current transcript cannot safely reuse the launch identity."""
+
+
 def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
     """Read at most 4 MiB; inspect identity fields only and never return content."""
     with path.open("rb") as stream:
@@ -481,6 +485,7 @@ def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
     if offset:
         # The first line may be incomplete. Do not interpret a truncated record.
         tail = tail.partition(b"\n")[2]
+    unverified = None
     for line in reversed(tail.splitlines()):
         try:
             record = json.loads(line)
@@ -492,16 +497,32 @@ def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
             continue
         message = record.get("message")
         model = message.get("model") if isinstance(message, dict) else None
+        if unverified is not None:
+            # A known model's floor is not necessarily below another model's
+            # last proven ceiling. Refuse that ambiguous model-switch case.
+            previous_efforts = [record.get(key) for key in ("perTurnEffort", "effort")
+                                if isinstance(record.get(key), str) and record[key]]
+            if (not isinstance(model, str) or not model or not previous_efforts
+                    or any(value not in _CLAUDE_EFFORTS for value in previous_efforts)):
+                continue
+            if re.sub(r"-[0-9]{8}$", "", model) != unverified[1]:
+                raise _IncompleteClaudeIdentity("latest assistant effort missing after model switch")
+            return unverified, "latest assistant effort missing"
         if not isinstance(model, str) or not model:
-            continue
+            raise _IncompleteClaudeIdentity("latest assistant model missing")
         efforts = [record.get(key) for key in ("perTurnEffort", "effort")
                    if isinstance(record.get(key), str) and record[key]]
         if not efforts:
+            # Missing identity on the latest main record must not resurrect a
+            # previous turn's model or ceiling after a mid-session switch.
+            unverified = ("claude", re.sub(r"-[0-9]{8}$", "", model), None)
             continue
         if any(effort not in _CLAUDE_EFFORTS for effort in efforts):
-            return None, "unknown effort"
+            raise _IncompleteClaudeIdentity("latest assistant effort unrecognized")
         effort = min(efforts, key=_CLAUDE_EFFORTS.index)
         return ("claude", re.sub(r"-[0-9]{8}$", "", model), effort), ""
+    if unverified is not None:
+        return unverified, "latest assistant effort missing"
     return None, "no qualifying assistant in transcript tail"
 
 
@@ -556,6 +577,8 @@ def _claude_transcript_overlay(
             return selector, prefix + "matches launch flags"
         return current, (prefix + f"{current[1]} at {current[2]} "
                          f"(launch flags said {selector[1]} at {selector[2] or 'none'})")
+    except _IncompleteClaudeIdentity:
+        raise
     except (OSError, ValueError, TypeError, OverflowError, RecursionError,
             subprocess.SubprocessError):
         # Do not interpolate exception text: paths or decoded records may be private.
@@ -688,7 +711,11 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         return 3
     row, reason = resolve(registry, vendor, model, effort)
     degraded = False
-    if row is None and vendor == "codex" and model and effort is None:
+    # Nonempty Claude provenance only comes from a successfully bound current
+    # transcript. Launch-only missing effort keeps its existing resolution.
+    # Even a scored default must degrade: the transcript did not verify it.
+    if model and effort is None and (
+            (row is None and vendor == "codex") or (vendor == "claude" and source)):
         row = floor_row(registry, vendor, model)
         degraded = row is not None
     if row is None:

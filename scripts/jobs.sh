@@ -31,7 +31,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|pending|cancelled]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -119,6 +119,35 @@ read_job_pid() {
   [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
   [[ "$value" =~ ^[1-9][0-9]{0,9}$ ]] || return 2
   RECORDED_PID="$value"
+}
+
+read_cli_job_state() {
+  local directory="$1"
+  JOB_STATE="running"
+  JOB_STATE_EXIT="null"
+  JOB_STATE_REASON=""
+  # A recorded exit wins over PID observations. Reads never synthesize one.
+  if [[ -e "$directory/exit" || -L "$directory/exit" ]]; then
+    if read_exit_code "$directory/exit"; then
+      JOB_STATE="done"
+      JOB_STATE_EXIT="$RECORDED_EXIT"
+    else
+      JOB_STATE="invalid"
+      JOB_STATE_REASON="invalid recorded exit status"
+    fi
+    return 0
+  fi
+  # No PID can be the startup window before the worker publishes its identity.
+  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then
+    if ! read_job_pid "$directory/pid"; then
+      JOB_STATE="dead"
+      JOB_STATE_REASON="invalid pid metadata"
+    elif ! kill -0 "$RECORDED_PID" 2>/dev/null; then
+      JOB_STATE="dead"
+      JOB_STATE_REASON="worker gone, no exit recorded"
+    fi
+  fi
+  return 0
 }
 
 load_job_vendor() {
@@ -477,10 +506,11 @@ case "${1:-}" in
     holder_pid="$RECORDED_PID"
     kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
     kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
-    close_deadline=$((SECONDS + 10))
+    # Include the supervisor's final 1s process-group cleanup after live close.
+    close_deadline=$((SECONDS + 11))
     while [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; do
       if [[ "$SECONDS" -ge "$close_deadline" ]]; then
-        die 124 "close signal sent, but the live worker did not terminate within 10s"
+        die 124 "close signal sent, but the live worker did not terminate within 11s"
       fi
       sleep 0.1
     done
@@ -923,8 +953,8 @@ case "${1:-}" in
     [[ -z "$filter_lane" || "$filter_lane" =~ ^[a-z][a-z0-9-]*$ ]] || die 2 "invalid --lane value"
     [[ -z "$filter_vendor" ]] || omnilane_known_vendor "$filter_vendor" || die 2 "invalid --vendor value"
     case "$filter_status" in
-      ""|running|done|pending|cancelled) ;;
-      *) die 2 "invalid --status value (want running, done, pending or cancelled)" ;;
+      ""|running|done|dead|pending|cancelled) ;;
+      *) die 2 "invalid --status value (want running, done, dead, pending or cancelled)" ;;
     esac
     if [[ ! -d "$JOBS" ]]; then
       [[ "$JSON_MODE" -eq 0 ]] || printf '{"schema_version":1,"command":"list","ok":true,"jobs":[]}\n'
@@ -945,21 +975,6 @@ case "${1:-}" in
     json_first=1
     shown=0
     while IFS= read -r id; do
-      state="running"
-      exit_json="null"
-      exit_path="$JOBS/$id/exit"
-      if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-        if read_exit_code "$exit_path"; then
-          state="done(exit $RECORDED_EXIT)"
-          json_state="done"
-          exit_json="$RECORDED_EXIT"
-        else
-          state="done(invalid exit metadata)"
-          json_state="invalid"
-        fi
-      else
-        json_state="running"
-      fi
       if [[ -e "$JOBS/$id/native.json" || -L "$JOBS/$id/native.json" || -e "$JOBS/$id/native.lock" ]]; then
         json_state="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" list-state "$id")" || die 1 "invalid native state"
         state="$json_state"
@@ -969,6 +984,15 @@ case "${1:-}" in
           native_status="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" job --home "$OMNILANE_HOME" --json status "$id")" || die 1 "invalid native state"
           exit_json="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["job"]["exit_code"])' "$native_status")"
         fi
+      else
+        read_cli_job_state "$JOBS/$id"
+        json_state="$JOB_STATE"
+        exit_json="$JOB_STATE_EXIT"
+        case "$JOB_STATE" in
+          done) state="done(exit $JOB_STATE_EXIT)" ;;
+          invalid) state="done(invalid exit metadata)" ;;
+          *) state="$JOB_STATE" ;;
+        esac
       fi
       metadata=""
       metadata_json="null"
@@ -993,7 +1017,7 @@ case "${1:-}" in
       if [[ -n "$filter_status" ]]; then
         case "$json_state" in
           done) [[ "$filter_status" == "done" ]] || continue ;;
-          running) [[ "$filter_status" == "running" ]] || continue ;;
+          running|dead) [[ "$filter_status" == "$json_state" ]] || continue ;;
           pending|cancelled) [[ "$filter_status" == "$json_state" ]] || continue ;;
           *) continue ;;
         esac
@@ -1021,43 +1045,26 @@ case "${1:-}" in
   status)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
-    exit_path="$JOB_DIR/exit"
-    if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-      read_exit_code "$exit_path" || {
-        die 1 "invalid recorded exit status"
-      }
+    read_cli_job_state "$JOB_DIR"
+    [[ "$JOB_STATE" != "invalid" ]] || die 1 "$JOB_STATE_REASON"
+    if [[ "$JOB_STATE" == "done" ]]; then
       if [[ "$JSON_MODE" -eq 1 ]]; then
         printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s}}\n' \
-          "$(json_escape "$2")" "$RECORDED_EXIT"
+          "$(json_escape "$2")" "$JOB_STATE_EXIT"
       else
-        echo "done exit=$RECORDED_EXIT"
+        echo "done exit=$JOB_STATE_EXIT"
       fi
     else
-      pid=""; pid_state="missing"
-      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
-        if read_job_pid "$JOB_DIR/pid"; then
-          pid="$RECORDED_PID"; pid_state="valid"
-        else
-          pid_state="invalid"
-        fi
-      fi
-      if [[ "$pid_state" == "invalid" ]]; then
-        state="dead"; reason="invalid pid metadata"
-      elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then
-        state="dead"; reason="worker gone, no exit recorded"
-      else
-        state="running"; reason=""
-      fi
       if [[ "$JSON_MODE" -eq 1 ]]; then
-        if [[ -n "$reason" ]]; then
+        if [[ -n "$JOB_STATE_REASON" ]]; then
           printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"%s","exit_code":null,"reason":"%s"}}\n' \
-            "$(json_escape "$2")" "$state" "$(json_escape "$reason")"
+            "$(json_escape "$2")" "$JOB_STATE" "$(json_escape "$JOB_STATE_REASON")"
         else
           printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"running","exit_code":null}}\n' \
             "$(json_escape "$2")"
         fi
-      elif [[ -n "$reason" ]]; then
-        printf 'dead (%s)\n' "$reason"
+      elif [[ -n "$JOB_STATE_REASON" ]]; then
+        printf 'dead (%s)\n' "$JOB_STATE_REASON"
       else
         echo "running"
       fi
@@ -1157,7 +1164,8 @@ case "${1:-}" in
     kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     cancel_waited=0
     while [[ "$cancel_waited" -lt 5 ]]; do
-      if [[ -e "$exit_path" || -L "$exit_path" ]]; then break; fi
+      # finish_job records exit before publishing its completion inbox record.
+      # Give the worker the full grace period to finish that cleanup as well.
       if ! kill -0 "$pid" 2>/dev/null; then break; fi
       sleep 1; cancel_waited=$((cancel_waited + 1))
     done
@@ -1200,14 +1208,13 @@ case "${1:-}" in
   result)
     [[ $# -eq 2 ]] || usage
     select_job "$2"
-    exit_path="$JOB_DIR/exit"
-    [[ -e "$exit_path" || -L "$exit_path" ]] || {
-      die 1 "still running"
-    }
-    read_exit_code "$exit_path" || {
-      die 1 "invalid recorded exit status"
-    }
-    rc="$RECORDED_EXIT"
+    read_cli_job_state "$JOB_DIR"
+    case "$JOB_STATE" in
+      running) die 1 "still running" ;;
+      dead) die 1 "job is dead ($JOB_STATE_REASON); no recorded result available" ;;
+      invalid) die 1 "$JOB_STATE_REASON" ;;
+    esac
+    rc="$JOB_STATE_EXIT"
     if [[ "$JSON_MODE" -eq 1 ]]; then
       output_available=false
       stderr_available=false

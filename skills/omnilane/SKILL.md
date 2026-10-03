@@ -359,6 +359,13 @@ When the next step depends on the previous result, group the dispatches:
 `goal note`, `goal status`, `goal close --summary`. A single obvious task is
 dispatched directly.
 
+If `goal dispatch` fails or its reply is lost, inspect `goal status` and the
+associated job before submitting again. Journal reconciliation never launches
+work; a new invocation, even with identical task text, is a new submission.
+Unresolved reservations block further dispatch and closing. Do not delete or
+rewrite ambiguous intent/claim records to force progress, and do not infer a
+worker started from its allocated job directory or claim alone.
+
 `omnilane doctor` reports health without repairing anything (offline unless
 `--probe V`). `omnilane benchmark` prints a no-call route plan. `omnilane ui
 start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.

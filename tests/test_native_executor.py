@@ -14,6 +14,8 @@ from types import SimpleNamespace
 import unittest
 
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -31,7 +33,7 @@ class NativeExecutorTests(unittest.TestCase):
             path = self.bins / vendor
             path.write_text(f"#!/bin/sh\necho called >> '{self.marker}'\nexit 91\n")
             path.chmod(0o755)
-        self.env = {k: v for k, v in os.environ.items()
+        self.env = {k: v for k, v in fixture_environment_with_isolated_tools(self).items()
                     if not k.startswith("OMNILANE_") and k not in ("CODEX_BIN", "CLAUDE_BIN")}
         self.env.update(OMNILANE_HOME=str(self.home), PATH=str(self.bins) + os.pathsep + self.env["PATH"],
                         CODEX_BIN=str(self.bins / "codex"), CLAUDE_BIN=str(self.bins / "claude"),
@@ -316,8 +318,15 @@ class NativeExecutorTests(unittest.TestCase):
         result = self.run_cli("scripts/jobs.sh", ["--json", "list"])
         states = {v["id"]: v["state"] for v in json.loads(result.stdout)["jobs"]}
         self.assertEqual([states[p["job_id"]] for p in plans], ["pending", "done", "cancelled"])
-        result = self.run_cli("scripts/jobs.sh", ["--json", "list", "--status", "pending"])
-        self.assertEqual(len(json.loads(result.stdout)["jobs"]), 1)
+        for state, expected_ids in (("pending", [plans[0]["job_id"]]),
+                                    ("done", [plans[1]["job_id"]]),
+                                    ("cancelled", [plans[2]["job_id"]]),
+                                    ("running", []), ("dead", [])):
+            with self.subTest(state=state):
+                result = self.run_cli("scripts/jobs.sh", ["--json", "list", "--status", state])
+                self.assertEqual([job["id"] for job in json.loads(result.stdout)["jobs"]], expected_ids)
+                result = self.run_cli("scripts/jobs.sh", ["list", "--status", state])
+                self.assertEqual([line.split()[0] for line in result.stdout.splitlines()], expected_ids)
 
     def test_pending_rejects_cli_lifecycle_commands(self):
         plan = self.pending()

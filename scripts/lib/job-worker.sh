@@ -446,8 +446,8 @@ if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
 set +e
 if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
-  # With the input pump's 1s read + 0.05s write, 8.85s also precedes
-  # the shortest ~9s interval of jobs close's integer SECONDS + 10 deadline.
+  # With the input pump's 1s read + 0.05s write and supervisor's 1s cleanup,
+  # 9.85s precedes jobs close's shortest ~10s (integer SECONDS + 11) deadline.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
   if ! perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '

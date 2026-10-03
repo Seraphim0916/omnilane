@@ -13,6 +13,8 @@ import sys
 import tempfile
 import unittest
 
+from offline_env import fixture_environment_with_isolated_tools
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts/lib'))
 import aa_policy
@@ -51,7 +53,7 @@ if '-o' in sys.argv:
         overlay={'schema_version':1,'snapshot_id':self.registry['snapshot']['id'],'host':socket.gethostname(),
             'evidence':[{'path':str(spy),'sha256':hashlib.sha256(spy.read_bytes()).hexdigest()}],'mappings':mappings}
         self.runtime_overlay.write_text(json.dumps(overlay))
-        self.env={k:v for k,v in os.environ.items() if not k.startswith('OMNILANE_') and k not in ('CODEX_BIN','CLAUDE_BIN')}
+        self.env={k:v for k,v in fixture_environment_with_isolated_tools(self).items() if not k.startswith('OMNILANE_') and k not in ('CODEX_BIN','CLAUDE_BIN')}
         self.env.update(OMNILANE_HOME=str(self.home), CODEX_BIN=str(spy), AA_SPY=str(self.marker), PATH=str(self.bins)+os.pathsep+self.env['PATH'], OMNILANE_INBOX='0', OMNILANE_AA_TRANSPORT_OVERLAY=str(self.runtime_overlay))
         (self.home/'routing.local.yaml').write_text('aa-unit: codex gpt-6-astra xhigh | codex gpt-5.6-sol high\naa-vote: vote codex,claude 2\n')
 

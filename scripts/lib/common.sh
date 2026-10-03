@@ -158,7 +158,13 @@ run_with_timeout() { # seconds, command...
     command -v perl &>/dev/null || {
       echo "omnilane: supervised timeout requires perl" >&2; return 125
     }
-    perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$secs" "$@"
+    local watchdog="$OMNILANE_REPO/scripts/lib/call-timeout.pl"
+    [[ -f "$watchdog" ]] || {
+      echo "omnilane: supervised per-call watchdog is unavailable" >&2; return 125
+    }
+    # A separate parent owns the deadline; a CLI cannot disable it with alarm(0)
+    # or a SIGALRM handler. It stays in the outer group and retains exit 142.
+    perl "$watchdog" "$secs" "$@"
     return $?
   fi
   local t; t="$(resolve_timeout_cmd)"
@@ -465,6 +471,7 @@ read_thread_state() { # path, expected name; populates THREAD_STATE_*
       die "invalid timestamp\n" unless $state->{$key} =~ /\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\z/;
     }
     die "field too long\n" if length($state->{model}) > 512 || length($state->{effort}) > 128 || length($state->{workdir}) > 4096;
+    binmode STDOUT, ":encoding(UTF-8)";
     print join(chr(28), map { $state->{$_} } qw(name vendor model effort workdir session_id turns last_job_id created updated));
   ' "$path" "$expected_name" 2>/dev/null)" || return 1
 

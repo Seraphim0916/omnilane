@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -euo pipefail
 
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_JOB_TIMEOUT
@@ -308,6 +316,7 @@ test_background_worker_uses_readonly_snapshot() {
   cp "$ROOT/config/aa-model-policy.json" "$fixture/config/aa-model-policy.json"
   cp "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
   cp "$ROOT/scripts/lib/job-timeout.pl" "$fixture/scripts/lib/job-timeout.pl"
+  cp "$ROOT/scripts/lib/call-timeout.pl" "$fixture/scripts/lib/call-timeout.pl"
   cp "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
   cp "$ROOT/scripts/runners/run-exec.sh" "$fixture/scripts/runners/run-exec.sh"
   chmod +x "$fixture/scripts/dispatch.sh" "$fixture/scripts/lib/job-worker.sh" \

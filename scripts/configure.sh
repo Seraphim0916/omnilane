@@ -45,7 +45,7 @@ cfg_lane_is_known() {
 
 cfg_valid_lane() { [[ "$1" =~ ^[a-z][a-z0-9-]*$ ]]; }
 
-cfg_set() {
+cfg_set() (
   local lane="${1:-}"; shift || true
   local spec="$*"
   cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
@@ -54,74 +54,169 @@ cfg_set() {
   cfg_spec_is_safe "$spec" || { echo 'omnilane: unsafe routing spec (not allowed: $ ` \ # ; & < > newlines)' >&2; exit 2; }
 
   mkdir -p "$OMNILANE_HOME"
-  local had_file=0
-  if [[ -f "$LOCAL_FILE" ]]; then had_file=1; cp "$LOCAL_FILE" "$LOCAL_FILE.bak"; fi
-  local tmp="$LOCAL_FILE.tmp.$$"
+  local had_file=0 file_mode="" tmp retain_status
+  if [[ -f "$LOCAL_FILE" ]]; then
+    had_file=1
+    # GNU and BSD stat use different flags for the existing permission mode.
+    file_mode="$(stat -c '%a' "$LOCAL_FILE" 2>/dev/null || stat -f '%Lp' "$LOCAL_FILE")"
+  fi
+  tmp="$(mktemp "$LOCAL_FILE.tmp.XXXXXX")"
+  # Keep cleanup local to this command, including validation/publication errors.
+  trap '/bin/rm -f -- "$tmp"' EXIT
   {
     echo "# updated by 'configure set' on $(date +%F) — first match per lane wins"
     echo "$lane: $spec"
     # Drop only our own stamp line and the lane being replaced; the user's own
-    # comments in routing.local.yaml survive a set.
-    [[ "$had_file" -eq 1 ]] && grep -v "^# updated by 'configure set'" "$LOCAL_FILE.bak" | grep -v "^$lane:" || true
+    # comments in routing.local.yaml survive a set. Empty retained output is
+    # valid, but a failed read must not publish a partially retained file.
+    if [[ "$had_file" -eq 1 ]]; then
+      if awk -v stamp="# updated by 'configure set'" -v lane="$lane:" \
+        'index($0, stamp) != 1 && index($0, lane) != 1' "$LOCAL_FILE" 2>/dev/null; then
+        :
+      else
+        retain_status=$?
+        printf 'omnilane: configure set: failed to retain existing routing content (exit %s)\n' "$retain_status" >&2
+        exit "$retain_status"
+      fi
+    fi
   } > "$tmp"
-  mv "$tmp" "$LOCAL_FILE"
 
-  # Semantic guard: reject only a structural FAIL on THIS lane. Availability
-  # WARN (validate exit 4) is fine — the vendor CLI may be legitimately absent.
-  local validate_out
-  validate_out="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --validate 2>&1)" || true
+  # Validate the private candidate with the real local.sh configuration before
+  # publishing. Known lint statuses still reject only a FAIL on THIS lane;
+  # availability WARN and unrelated-lane errors remain acceptable.
+  local validate_out validate_status=0
+  validate_out="$(OMNILANE_HOME="$OMNILANE_HOME" OMNILANE_CONFIGURE_VALIDATE_FILE="$tmp" \
+    bash "$OMNILANE_REPO/scripts/dispatch.sh" --validate 2>&1)" || validate_status=$?
+  case "$validate_status" in
+    0|2|4) ;;
+    *)
+      printf 'omnilane: configure set: failed to validate routing candidate (exit %s)\n' "$validate_status" >&2
+      exit "$validate_status"
+      ;;
+  esac
   if printf '%s\n' "$validate_out" | grep -q "^FAIL $lane "; then
-    if [[ "$had_file" -eq 1 ]]; then mv "$LOCAL_FILE.bak" "$LOCAL_FILE"; else /bin/rm -f "$LOCAL_FILE"; fi
     echo "omnilane: rejected — $(printf '%s\n' "$validate_out" | grep "^FAIL $lane " | head -1)" >&2
     exit 2
   fi
-  [[ "$had_file" -eq 1 ]] && /bin/rm -f "$LOCAL_FILE.bak"
+  if [[ "$had_file" -eq 1 ]]; then
+    chmod "$file_mode" "$tmp"
+  else
+    # Omitting 'who' makes chmod honor the caller's umask, like file creation.
+    chmod '=rw' "$tmp"
+  fi
+  mv "$tmp" "$LOCAL_FILE"
   echo "set $lane -> $spec"
-}
+)
 
 cfg_get() {
   local lane="${1:-}"
   cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
-  local line
-  line="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null | grep "^$lane:" | head -1 || true)"
-  [[ -n "$line" ]] || { echo "omnilane: unknown lane '$lane' (see: omnilane list)" >&2; exit 2; }
-  printf '%s\n' "$line"
+  local table line status
+  if table="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null)"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure get: failed to inspect effective routing table (exit %s)\n' "$status" >&2
+    return "$status"
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "$lane":*) printf '%s\n' "$line"; return 0 ;;
+    esac
+  done <<< "$table"
+  echo "omnilane: unknown lane '$lane' (see: omnilane list)" >&2
+  return 2
 }
 
-cfg_unset() {
+cfg_unset() (
   local lane="${1:-}"
   cfg_valid_lane "$lane" || { echo "omnilane: invalid lane '$lane'" >&2; exit 2; }
-  if [[ ! -f "$LOCAL_FILE" ]] || ! grep -q "^$lane:" "$LOCAL_FILE"; then
-    echo "no local override for '$lane'"; return 0
+  if [[ ! -f "$LOCAL_FILE" ]]; then
+    echo "no local override for '$lane'"; exit 0
   fi
-  cp "$LOCAL_FILE" "$LOCAL_FILE.bak"
-  grep -v "^$lane:" "$LOCAL_FILE.bak" > "$LOCAL_FILE" || true
-  /bin/rm -f "$LOCAL_FILE.bak"
+  local status tmp
+  if grep -q "^$lane:" "$LOCAL_FILE" 2>/dev/null; then
+    :
+  else
+    status=$?
+    if [[ "$status" -eq 1 ]]; then
+      echo "no local override for '$lane'"; exit 0
+    fi
+    printf 'omnilane: configure unset: failed to inspect existing routing content (exit %s)\n' "$status" >&2
+    exit "$status"
+  fi
+  if tmp="$(mktemp "$LOCAL_FILE.tmp.XXXXXX" 2>/dev/null)"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure unset: failed to prepare routing candidate (exit %s)\n' "$status" >&2
+    exit "$status"
+  fi
+  trap '/bin/rm -f -- "$tmp"' EXIT
+  # Retain every other row, including all comments and configure-set stamps.
+  # Empty output is valid; a failed read must never reach the public file.
+  if awk -v lane="$lane:" 'index($0, lane) != 1' "$LOCAL_FILE" 2>/dev/null > "$tmp"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure unset: failed to retain existing routing content (exit %s)\n' "$status" >&2
+    exit "$status"
+  fi
+  # Keep the existing in-place publication semantics. A write failure can leave
+  # partial content, but must not report successful removal.
+  if cat "$tmp" 2>/dev/null > "$LOCAL_FILE"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure unset: failed to publish routing content (exit %s)\n' "$status" >&2
+    exit "$status"
+  fi
   echo "unset $lane (local override removed)"
-}
+)
 
 cfg_list() {
-  if [[ -f "$LOCAL_FILE" ]] && grep -qE '^[a-z]' "$LOCAL_FILE"; then
+  local status
+  if [[ ! -f "$LOCAL_FILE" ]]; then
+    echo "no local overrides in $LOCAL_FILE"
+    return 0
+  fi
+  if grep -qE '^[a-z]' "$LOCAL_FILE" 2>/dev/null; then
     cat "$LOCAL_FILE"
   else
+    status=$?
+    if [[ "$status" -ne 1 ]]; then
+      printf 'omnilane: configure list: failed to inspect existing routing content (exit %s)\n' "$status" >&2
+      return "$status"
+    fi
     echo "no local overrides in $LOCAL_FILE"
   fi
 }
 
 # Diff the effective table (local wins) against a defaults-only resolution, so
 # the user sees exactly which lanes their overrides change. Reuses dispatch.sh
-# --list for both, so availability annotation and formatting stay consistent; a
-# throwaway empty OMNILANE_HOME yields the defaults-only table.
+# --list for both, so availability annotation and formatting stay consistent.
+# Keep local.sh for both inspections; only suppress the routing overlay when
+# resolving defaults, so unexported provider paths still affect availability.
 cfg_diff() {
   if [[ ! -f "$LOCAL_FILE" ]] || ! grep -qE '^[a-z]' "$LOCAL_FILE"; then
     echo "no local overrides ($LOCAL_FILE); effective table equals the defaults"
     return 0
   fi
-  local empty eff def changed=0 lane eff_line def_line
-  empty="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-diff.XXXXXX")"
-  eff="$(OMNILANE_HOME="$OMNILANE_HOME" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null || true)"
-  def="$(OMNILANE_HOME="$empty" bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null || true)"
-  /bin/rm -rf "$empty"
+  local eff def changed=0 lane eff_line def_line status
+  if eff="$(OMNILANE_HOME="$OMNILANE_HOME" OMNILANE_CONFIGURE_DEFAULTS_ONLY=0 bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null)"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure diff: failed to inspect effective routing table (exit %s)\n' "$status" >&2
+    return "$status"
+  fi
+  if def="$(OMNILANE_HOME="$OMNILANE_HOME" OMNILANE_CONFIGURE_DEFAULTS_ONLY=1 bash "$OMNILANE_REPO/scripts/dispatch.sh" --list 2>/dev/null)"; then
+    :
+  else
+    status=$?
+    printf 'omnilane: configure diff: failed to inspect defaults routing table (exit %s)\n' "$status" >&2
+    return "$status"
+  fi
   while IFS= read -r eff_line; do
     [[ "$eff_line" =~ ^([a-z][a-z0-9-]*): ]] || continue
     lane="${BASH_REMATCH[1]}"
