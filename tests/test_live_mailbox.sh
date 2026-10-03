@@ -813,6 +813,9 @@ case_codex_shutdown_grace() {
   ln -s "$ROOT/scripts/lib/job-worker.sh" "$fixture/scripts/lib/job-worker.sh"
   ln -s "$ROOT/scripts/lib/common.sh" "$fixture/scripts/lib/common.sh"
   ln -s "$ROOT/scripts/lib/live-protocol.sh" "$fixture/scripts/lib/live-protocol.sh"
+  # job-worker runs the AA policy gate from OMNILANE_REPO before starting the runner.
+  ln -s "$ROOT/scripts/lib/aa_policy.py" "$fixture/scripts/lib/aa_policy.py"
+  ln -s "$ROOT/config" "$fixture/config"
   make_codex "$probe"
   cat > "$runner" <<'EOF'
 #!/usr/bin/env bash
