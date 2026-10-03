@@ -23,6 +23,7 @@ import secrets
 import select
 import signal
 import socket
+import socketserver
 import stat
 import subprocess
 import sys
@@ -459,6 +460,13 @@ class LiveHTTPServer(ThreadingHTTPServer):
         super().__init__(server_address, LiveRequestHandler)
         self.expected_host = "127.0.0.1:{}".format(self.server_address[1])
         self.broadcaster.start()
+
+    def server_bind(self):
+        # HTTPServer.server_bind reverse-resolves the host before listening;
+        # where that lookup of 127.0.0.1 is slow the server never listens.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
 
     def stop(self):
         if self.stop_event.is_set():
