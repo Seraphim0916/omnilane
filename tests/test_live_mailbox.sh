@@ -350,6 +350,7 @@ started = time.monotonic()
 closed = subprocess.run(['bash', sys.argv[1], 'close', sys.argv[2]],
                         text=True, capture_output=True, timeout=12)
 elapsed = time.monotonic() - started
+print(f'close_elapsed={elapsed:.3f} rc={closed.returncode}', file=sys.stderr)
 assert closed.returncode == 0, (closed.returncode, closed.stdout, closed.stderr)
 assert elapsed < 11.0, ('close exceeded its documented bound', elapsed)
 pids = pathlib.Path(sys.argv[3]).read_text().splitlines()
