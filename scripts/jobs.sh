@@ -538,13 +538,16 @@ case "${1:-}" in
     kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
     kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
     # Include the supervisor's final 1s process-group cleanup after live close.
-    close_deadline=$((SECONDS + 11))
-    while [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; do
-      if [[ "$SECONDS" -ge "$close_deadline" ]]; then
-        die 124 "close signal sent, but the live worker did not terminate within 11s"
-      fi
-      sleep 0.1
-    done
+    # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
+    # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
+    # One Perl process waits on a sub-second clock for exactly 11s.
+    if ! perl -MTime::HiRes=time,sleep -e '
+      my ($exit, $limit) = @ARGV;
+      my $end = time + $limit;
+      until (-e $exit || -l $exit) { exit 1 if time >= $end; sleep 0.1 }
+    ' "$JOB_DIR/exit" 11; then
+      die 124 "close signal sent, but the live worker did not terminate within 11s"
+    fi
     read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
     events_path="$JOB_DIR/events.jsonl"
     result_count="$(live_count_result_events "$JOB_VENDOR" "$events_path")"

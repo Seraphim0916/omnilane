@@ -4270,6 +4270,9 @@ test_live_mailbox_case claude-close-recovery "Claude close recovers completed re
 test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
 test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
 test_live_mailbox_case codex-close-deadline "Codex worker close deadline preserves queued input and precedes jobs timeout"
+close_floor_out="$(bash "$ROOT/tests/test_jobs_close_deadline_floor.sh" --omnilane-offline-child 2>&1)" &&
+  pass "jobs close waits its full 11s deadline whatever the wall-clock second" ||
+  fail "jobs close waits its full 11s deadline whatever the wall-clock second" "$close_floor_out"
 test_live_mailbox_case codex-live-fallback "Codex failed handshake degrades to single-shot"
 test_live_mailbox_case grok-killed-runner "killed Grok live runner reaps ACP process group"
 test_live_mailbox_case grok-close-grace-invariant "Grok close grace precedes worker escalation"

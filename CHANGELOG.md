@@ -17,6 +17,12 @@ semantic version tags.
   so the later install discarded the earlier one's re-signed vendors. A run that
   writes now takes an exclusive lock next to the overlay; a second one exits 50
   (`EXIT_BUSY`) without reading or writing. `--check` takes no lock.
+- A second close signal that reaches a live worker while it shuts down (two
+  `jobs close` calls, or a retry) no longer kills it with exit 158; the worker
+  now ignores `USR1` instead of restoring the default action before exit.
+- `jobs close` waits its full 11 seconds before giving up with 124. The
+  deadline counted whole wall-clock seconds, so it could give up after barely
+  10 seconds, too close to a stuck runner's 9.85-second shutdown budget.
 
 ## [0.52.0] - 2026-10-03
 
