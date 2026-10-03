@@ -468,6 +468,14 @@ def resign(args, log=print) -> int:
     live = Path(overlay_env).expanduser()
     if args.check:
         return _resign(args, live, anchors, log)
+    # An unreadable overlay is a host error that must leave nothing behind, so
+    # check it before creating the lock file next to it; _resign reads it again
+    # under the lock.
+    try:
+        json.loads(live.read_text())
+    except (OSError, ValueError) as error:
+        log(f"omnilane: cannot read the live overlay {live}: {error}")
+        return EXIT_HOST_CONFIG
     with resign_lock(live) as holder:
         if holder is not None:
             log(f"omnilane: another omnilane resign is already running on this host (pid {holder}); "
