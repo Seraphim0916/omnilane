@@ -794,7 +794,8 @@ timeouts = {name: float(re.search(r'^' + name + r'=([0-9.]+)$', worker, re.MULTI
 supervisor = (root / 'scripts/lib/job-timeout.pl').read_text(encoding='utf-8')
 supervisor_grace = float(re.search(r'my \$TERM_GRACE_SECONDS = ([0-9.]+);', supervisor).group(1))
 jobs = (root / 'scripts/jobs.sh').read_text(encoding='utf-8')
-close_wait = float(re.search(r'close_deadline=\$\(\(SECONDS \+ ([0-9]+)\)\)', jobs).group(1))
+# jobs close waits on a sub-second Perl clock; its last argument is the wait in seconds.
+close_wait = float(re.search(r'"\$JOB_DIR/exit" ([0-9]+); then', jobs).group(1))
 if close_wait > 11.0:
     raise AssertionError("jobs close must keep its documented 11-second upper bound")
 if not 1.05 + sum(timeouts.values()) + outer_budget + supervisor_grace < close_wait - 1:

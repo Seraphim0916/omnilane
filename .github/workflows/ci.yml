@@ -64,6 +64,12 @@ jobs:
         run: |
           OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
             bash tests/run.sh
+      - name: live mailbox standalone
+        # tests/run.sh runs only selected cases of this file; run every case once.
+        timeout-minutes: 10
+        run: |
+          OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
+            bash tests/test_live_mailbox.sh
       - name: no stale project name
         run: |
           ! grep -ri 'omniroute' --exclude-dir=.git --exclude-dir=.github .
@@ -140,3 +146,10 @@ jobs:
         run: |
           OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
             bash tests/run.sh
+      - name: live mailbox standalone
+        # tests/run.sh runs only selected cases of this file; run every case once.
+        if: success() || failure()
+        timeout-minutes: 10
+        run: |
+          OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
+            bash tests/test_live_mailbox.sh
