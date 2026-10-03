@@ -442,10 +442,10 @@ jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さず�
 jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 一覧を絞り込み
 jobs.sh wait ID [--timeout N]                     # ジョブ終了値。124 はタイムアウト、125 はワーカー消失
 jobs.sh cancel ID                                 # 実行中ジョブを停止:グループに SIGTERM、その後 SIGKILL
-jobs.sh rm ID                                     # 完了/停止ジョブを1件削除(実行中は拒否)
+jobs.sh rm ID                                     # 完了/停止ジョブを1件 ~/.Trash へ移動(実行中は拒否)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # ローカル成功率とルーティング集計
 jobs.sh audit [--last N] [--json]                  # 読み取り専用のジョブ整合性・プライバシー検査
-jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象
+jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象。--apply は ~/.Trash へ移動
 configure.sh                                        # 対話式レーンメニュー
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非対話で編集/確認
 ```

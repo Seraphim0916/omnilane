@@ -58,6 +58,19 @@ select_job() {
   }
 }
 
+# Removed and pruned jobs go to the trash, never rm -rf: deleting them for good
+# is the operator's decision. One directory per invocation, with a manifest.
+TRASH_BATCH=""
+trash_job_dir() {
+  local job_dir="$1" id="${1##*/}"
+  if [[ -z "$TRASH_BATCH" ]]; then
+    TRASH_BATCH="${OMNILANE_TRASH_DIR:-$HOME/.Trash}/omnilane-jobs-$(date +%Y%m%d-%H%M%S)-$$"
+    mkdir -p "$TRASH_BATCH" || return 1
+  fi
+  mv "$job_dir" "$TRASH_BATCH/$id" || return 1
+  printf '%s\t%s\n' "$id" "$job_dir" >> "$TRASH_BATCH/manifest.tsv"
+}
+
 read_exit_code() {
   local path="$1" size value length
   RECORDED_EXIT=""
@@ -1253,8 +1266,8 @@ case "${1:-}" in
       fi
     fi
     # select_job already proved $JOB_DIR is a real child dir, never a symlink.
-    /bin/rm -rf "$JOB_DIR"
-    echo "removed $2"
+    trash_job_dir "$JOB_DIR" || die 1 "could not move job $2 to the trash"
+    echo "removed $2 (moved to $TRASH_BATCH)"
     exit 0 ;;
   result)
     [[ $# -eq 2 ]] || usage
@@ -1355,15 +1368,15 @@ case "${1:-}" in
       for id in "${candidates[@]}"; do
         job_dir="$JOBS/$id"
         if [[ "$apply" -eq 0 ]]; then
-          printf 'would delete %s\n' "$id"
+          printf 'would move %s to the trash\n' "$id"
           continue
         fi
-        # Re-check immediately before deletion so a replaced path or a job whose
+        # Re-check immediately before the move so a replaced path or a job whose
         # completion marker disappeared is never removed.
         if [[ -d "$job_dir" && ! -L "$job_dir" ]] &&
            read_exit_code "$job_dir/exit"; then
-          /bin/rm -rf "$job_dir"
-          printf 'deleted %s\n' "$id"
+          trash_job_dir "$job_dir" || die 1 "could not move job $id to the trash"
+          printf 'moved %s to the trash\n' "$id"
           deleted=$((deleted + 1))
         else
           printf 'skipped changed job %s\n' "$id" >&2
@@ -1372,16 +1385,17 @@ case "${1:-}" in
     fi
     if [[ "$apply" -eq 1 ]]; then
       if [[ -n "$older_than" && "$keep_given" -eq 1 ]]; then
-        printf '%s jobs deleted; kept the newest %s completed jobs and everything newer than %s days\n' \
+        printf '%s jobs moved to the trash; kept the newest %s completed jobs and everything newer than %s days\n' \
           "$deleted" "$keep" "$older_than"
       elif [[ -n "$older_than" ]]; then
-        printf '%s jobs deleted; completed jobs newer than %s days retained\n' \
+        printf '%s jobs moved to the trash; completed jobs newer than %s days retained\n' \
           "$deleted" "$older_than"
       else
-        printf '%s jobs deleted; newest %s completed jobs retained\n' "$deleted" "$keep"
+        printf '%s jobs moved to the trash; newest %s completed jobs retained\n' "$deleted" "$keep"
       fi
+      [[ -z "$TRASH_BATCH" ]] || printf 'trash: %s\n' "$TRASH_BATCH"
     else
-      printf '%s jobs eligible; rerun with --apply to delete\n' "${#candidates[@]}"
+      printf '%s jobs eligible; rerun with --apply to move them to the trash\n' "${#candidates[@]}"
     fi ;;
   *) usage ;;
 esac

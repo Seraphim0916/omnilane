@@ -420,7 +420,7 @@ jobs.sh cancel 作业ID                              # 停止运行中的作业:
 jobs.sh rm 作业ID                                  # 删除单个已完成/已死作业(运行中会被拒绝)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 本机成功率与路由汇总
 jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私
-jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业
+jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业；--apply 移到 ~/.Trash
 configure.sh                                        # 交互通道菜单
 configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 routing.local.yaml
 ```

@@ -534,11 +534,11 @@ jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadat
 jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # filter the listing
 jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
 jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
-jobs.sh rm ID                                     # delete one finished/dead job (refuses a running job)
+jobs.sh rm ID                                     # move one finished/dead job to ~/.Trash (refuses a running job)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
 jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # evidence-gated vendor suggestion
 jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
-jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only
+jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only; --apply moves them to ~/.Trash
 configure.sh                                        # interactive lane menu
 configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
 ```

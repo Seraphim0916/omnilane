@@ -24,6 +24,13 @@ semantic version tags.
   deadline counted whole wall-clock seconds, so it could give up after barely
   10 seconds, too close to a stuck runner's 9.85-second shutdown budget.
 
+### Changed
+
+- `jobs rm` and `jobs prune --apply` move job directories to the trash
+  instead of deleting them: one `omnilane-jobs-<timestamp>-<pid>` directory per
+  run under `${OMNILANE_TRASH_DIR:-~/.Trash}`, with a `manifest.tsv` of job id
+  and original path. Deleting them for good is left to the operator.
+
 ## [0.52.0] - 2026-10-03
 
 ### Added

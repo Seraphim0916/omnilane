@@ -428,7 +428,7 @@ jobs.sh rm 工作ID                                  # 刪除單一已完成/已
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 本機成功率與路由彙整
 jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # 有證據門檻的廠商建議
 jobs.sh audit [--last N] [--json]                  # 唯讀檢查工作完整性與隱私
-jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作
+jobs.sh prune [--keep N] [--apply]                # 預設只預覽；只清理已完成工作；--apply 移到 ~/.Trash
 omnilane mcp                                   # MCP stdio server(需 Node.js)
 omnilane release-audit [--target 版本] [--json]     # 離線、唯讀的發布閘門
 configure.sh                                        # 互動通道選單

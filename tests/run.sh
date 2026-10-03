@@ -1369,13 +1369,13 @@ test_jobs_prune_is_preview_first_and_preserves_running() {
     [[ "$rc_invalid" -eq 2 ]] || invalid_ok=0
   done
 
-  if [[ "$preview" != *'would delete 20260715-120003-123-3'* ||
+  if [[ "$preview" != *'would move 20260715-120003-123-3 to the trash'* ||
         "$preview" != *'3 jobs eligible'* ]]; then
     fail "$name" "preview did not identify exactly the three old completed jobs: $preview"
   elif [[ "$count" -ne 7 ]]; then
     fail "$name" "preview deleted or changed directories (count=$count)"
-  elif [[ "$applied" != *'deleted 20260715-120001-123-1'* ||
-          "$applied" != *'3 jobs deleted'* ]]; then
+  elif [[ "$applied" != *'moved 20260715-120001-123-1 to the trash'* ||
+          "$applied" != *'3 jobs moved to the trash'* ]]; then
     fail "$name" "apply summary was incorrect: $applied"
   elif [[ -d "$home/jobs/20260715-120003-123-3" ||
           -d "$home/jobs/20260715-120002-123-2" ||
@@ -3279,7 +3279,7 @@ test_jobs_prune_older_than_uses_id_timestamps() {
   fi
   rc=0
   out="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" prune --keep 2 --older-than 30 --apply 2>&1)" || rc=$?
-  if [[ "$rc" -ne 0 || "$out" != *'1 jobs deleted'* ]]; then
+  if [[ "$rc" -ne 0 || "$out" != *'1 jobs moved to the trash'* ]]; then
     fail "$name" "--keep 2 AND age should delete exactly one job (rc=$rc, out=$out)"
     return
   fi
@@ -3302,6 +3302,37 @@ test_jobs_prune_older_than_uses_id_timestamps() {
   fi
 }
 
+test_jobs_prune_and_rm_move_jobs_to_trash() {
+  local name="jobs prune and rm move jobs to the trash instead of deleting" home trash out dir
+  home="$TEST_ROOT/jobs-trash"; trash="$TEST_ROOT/jobs-trash-bin"
+  mkdir -p "$home/jobs"
+  for id in 20260715-130002-123-2 20260715-130001-123-1; do
+    mkdir "$home/jobs/$id"
+    printf '0\n' > "$home/jobs/$id/exit"
+    printf 'kept\n' > "$home/jobs/$id/out.txt"
+  done
+  out="$(OMNILANE_HOME="$home" OMNILANE_TRASH_DIR="$trash" /bin/bash "$ROOT/scripts/jobs.sh" \
+    prune --keep 1 --apply 2>&1)" || { fail "$name" "prune --apply failed: $out"; return; }
+  dir="$(find "$trash" -mindepth 2 -maxdepth 2 -type d -name 20260715-130001-123-1 2>/dev/null | head -n 1)"
+  if [[ -e "$home/jobs/20260715-130001-123-1" ]]; then
+    fail "$name" "pruned job is still in the job store"; return
+  fi
+  if [[ -z "$dir" || "$(cat "$dir/out.txt" 2>/dev/null)" != kept ]]; then
+    fail "$name" "pruned job was not moved to the trash intact: $out"; return
+  fi
+  if ! grep -q "^20260715-130001-123-1"$'\t' "${dir%/*}/manifest.tsv" 2>/dev/null; then
+    fail "$name" "trash manifest does not list the pruned job"; return
+  fi
+  out="$(OMNILANE_HOME="$home" OMNILANE_TRASH_DIR="$trash" /bin/bash "$ROOT/scripts/jobs.sh" \
+    rm 20260715-130002-123-2 2>&1)" || { fail "$name" "rm failed: $out"; return; }
+  dir="$(find "$trash" -mindepth 2 -maxdepth 2 -type d -name 20260715-130002-123-2 2>/dev/null | head -n 1)"
+  if [[ -e "$home/jobs/20260715-130002-123-2" || -z "$dir" ||
+        "$(cat "$dir/out.txt" 2>/dev/null)" != kept ]]; then
+    fail "$name" "rm did not move the job to the trash intact: $out"; return
+  fi
+  pass "$name"
+}
+
 test_jobs_prune_survives_empty_candidate_list() {
   local name="prune with no eligible jobs exits cleanly" home out rc
   home="$TEST_ROOT/prune-empty"
@@ -3314,7 +3345,7 @@ test_jobs_prune_survives_empty_candidate_list() {
   fi
   rc=0
   out="$(OMNILANE_HOME="$home" /bin/bash "$ROOT/scripts/jobs.sh" prune --apply 2>&1)" || rc=$?
-  if [[ "$rc" -ne 0 || "$out" != *'0 jobs deleted'* ]]; then
+  if [[ "$rc" -ne 0 || "$out" != *'0 jobs moved to the trash'* ]]; then
     fail "$name" "empty store apply crashed (rc=$rc, out=$out)"
   else
     pass "$name"
@@ -3361,6 +3392,7 @@ test_jobs_tail_is_bounded_and_safe
 test_jobs_retry_replays_completed_job
 test_jobs_prune_older_than_uses_id_timestamps
 test_jobs_prune_survives_empty_candidate_list
+test_jobs_prune_and_rm_move_jobs_to_trash
 test_routing_empty_chain_survives_bash32
 test_configure_rejects_shell_input
 test_configure_quotes_model_with_spaces

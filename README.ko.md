@@ -434,10 +434,10 @@ jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메�
 jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 목록 필터
 jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
 jobs.sh cancel ID                                 # 실행 중 작업 중지: 그룹 SIGTERM 후 SIGKILL
-jobs.sh rm ID                                     # 완료/종료 작업 1건 삭제(실행 중이면 거부)
+jobs.sh rm ID                                     # 완료/종료 작업 1건을 ~/.Trash로 이동(실행 중이면 거부)
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 로컬 성공률과 라우팅 집계
 jobs.sh audit [--last N] [--json]                  # 읽기 전용 작업 무결성/개인정보 검사
-jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리
+jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리; --apply는 ~/.Trash로 이동
 configure.sh                                        # 대화형 레인 메뉴
 configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml 비대화식 편집/확인
 ```
