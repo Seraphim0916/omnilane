@@ -16,6 +16,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 from tests.ui_browser_harness import BrowserHarness, browser_available
 
@@ -459,6 +460,33 @@ class HTTPServerTests(unittest.TestCase):
             if not recovered:
                 time.sleep(0.05)
         self.assertTrue(recovered, "SSE capacity did not recover after clients closed")
+
+
+class ServerBindTests(unittest.TestCase):
+    def test_bind_does_no_reverse_lookup_of_the_loopback_address(self):
+        # A slow reverse lookup of 127.0.0.1 on the GitHub macOS runner kept the
+        # server bound but never listening, so every `ui start` timed out.
+        with tempfile.TemporaryDirectory() as tmp:
+            jobs = Path(tmp) / "jobs"
+            static = Path(tmp) / "static"
+            jobs.mkdir()
+            static.mkdir()
+            with mock.patch("socket.getfqdn", side_effect=AssertionError("reverse lookup during bind")):
+                server = ui.LiveHTTPServer(
+                    ("127.0.0.1", 0),
+                    ui.JobStore(jobs),
+                    "test-token-that-is-not-logged",
+                    "test-server-id",
+                    static,
+                    poll_interval=0.05,
+                )
+            try:
+                self.assertEqual(server.server_name, "127.0.0.1")
+                self.assertEqual(server.server_port, server.server_address[1])
+                self.assertGreater(server.server_port, 0)
+            finally:
+                server.broadcaster.stop()
+                server.server_close()
 
 
 class LifecycleTests(unittest.TestCase):
