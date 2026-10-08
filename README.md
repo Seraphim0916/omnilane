@@ -900,6 +900,17 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.53.0
+
+- After upgrading, run `omnilane resign` on every host once, from a GUI terminal: the registry snapshot is now `aa-v4.3.2-2026-10-08-v1`. All dispatch is blocked with `transport overlay snapshot mismatch` until the overlay is re-signed.
+- Claude Haiku 5.5 adds five scored rows: max 43, xhigh 41, high 38, medium 34 and low 29. Claude Sonnet 5.5 (low) returns at 36, bringing the table to 120 scored configurations. Haiku's model ID and effort levels are confirmed, but host transport remains unprobed.
+- `taste-final` now starts with Claude Sonnet 5.5 (xhigh, 52). Haiku 5.5 joins lower-ceiling coding, bulk, triage and taste candidates; it is not promoted to `fast-agentic`.
+- `resign` tests a fresh three-digit sum instead of a verbatim reply, locks out a concurrent re-sign with exit 50, and leaves no lock file behind on a missing or unreadable overlay (exit 40).
+- Foreground Claude and Gemini dispatch runs single-shot, so a finished answer no longer waits for a resident session to time out with exit 124. Background dispatch keeps its resident session.
+- `jobs close` waits the full 11 seconds; a repeated close signal during worker shutdown no longer kills it with exit 158.
+- `jobs rm` and `jobs prune --apply` move jobs to a per-run trash directory under `${OMNILANE_TRASH_DIR:-~/.Trash}`, with a `manifest.tsv` of job IDs and original paths. Permanent deletion is left to the operator.
+- Upgrade: `npm i -g omnilane@0.53.0`, then `omnilane resign`.
+
 ## What's new in v0.52.0
 
 - After upgrading, run `omnilane resign` on every host once, from a GUI terminal: the registry snapshot is now `aa-v4.3.2-2026-10-02-v2` and the runner scripts changed, so dispatch refuses until the overlay is re-signed.

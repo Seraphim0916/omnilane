@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-10-09
+
 ### Added
 
 - Operator-approved on 2026-10-08: AA v4.3.2 snapshot `aa-v4.3.2-2026-10-08-v1`: five Claude Haiku 5.5
@@ -22,6 +24,9 @@ semantic version tags.
 
 ### Fixed
 
+- `resign` leaves no lock file behind when the transport overlay is missing or
+  unreadable. It exits 40 before acquiring the host lock, preserving the existing
+  host-configuration error message.
 - The `resign` smoke dispatch asks the cheapest verified row for a fresh three-digit
   sum instead of a verbatim string. `claude-haiku-4-5` refused "Reply with exactly
   the text …" as prompt injection, so the Claude smoke failed and every vendor in
@@ -1663,7 +1668,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...v0.52.0
 [0.51.1]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...v0.51.1
 [0.51.0]: https://github.com/Seraphim0916/omnilane/compare/v0.50.0...v0.51.0

@@ -741,6 +741,17 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.53.0 新功能
+
+- 升級後每台主機在圖形終端機跑一次 `omnilane resign`：評分表快照換成 `aa-v4.3.2-2026-10-08-v1`，重簽前所有派工都會被擋，錯誤訊息為 `transport overlay snapshot mismatch`。
+- Claude Haiku 5.5 新增五列評分：max 43、xhigh 41、high 38、medium 34、low 29；Claude Sonnet 5.5（low）以 36 分回到表內，共有 120 列已評分設定。Haiku 的模型識別碼與強度已確認，但主機傳輸仍待探測。
+- `taste-final` 首選改為 Claude Sonnet 5.5（xhigh，52 分）。Haiku 5.5 加入較低分數上限的編碼、批次、初篩與風格裁決候選；未提升為 `fast-agentic` 候選。
+- `resign` 改用新的三位數加法驗證回應，不再要求逐字照抄；同時重簽的第二個程序以 50 結束；覆寫設定檔不存在或無法讀取時以 40 結束，不留下鎖定檔。
+- 前景 Claude 與 Gemini 派工改為單次執行，答案完成後不再等常駐工作階段逾時而以 124 結束；背景派工保留常駐工作階段。
+- `jobs close` 會等滿 11 秒；工人關閉期間再收到關閉訊號，不再被終止而以 158 結束。
+- `jobs rm` 與 `jobs prune --apply` 把工作移到 `${OMNILANE_TRASH_DIR:-~/.Trash}` 下每次執行專屬的垃圾桶目錄，以 `manifest.tsv` 記錄工作識別碼與原路徑；永久刪除留給操作者決定。
+- 升級：`npm i -g omnilane@0.53.0`，接著 `omnilane resign`。
+
 ## v0.52.0 新功能
 
 - 升級後每台主機在圖形終端機跑一次 `omnilane resign`：評分表快照換成 `aa-v4.3.2-2026-10-02-v2`，runner 腳本也改了，重簽前派工會被拒。
