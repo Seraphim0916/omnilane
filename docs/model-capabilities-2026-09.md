@@ -1,14 +1,14 @@
 # Model capabilities — AA routing snapshots
 
-The current proposal is **2026-10-08**, snapshot `aa-v4.3.2-2026-10-08-v1`.
-It is pending operator approval and host transport probes. Earlier sections are historical;
+The current operator-approved snapshot is **2026-10-08**, snapshot `aa-v4.3.2-2026-10-08-v1`.
+The operator approved it on 2026-10-08; host transport probes are still pending. Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Current proposal — 2026-10-08
+## Current approved snapshot — 2026-10-08
 
-The 39-page merge contains 231 vendor records and covers all 120 proposed scored rows.
+The 39-page merge contains 231 vendor records and covers all 120 approved scored rows.
 It adds five Haiku 5.5 rows and restores Sonnet 5.5 low; the three operator-retired
 GPT-5.4 mini rows remain unknown. Anthropic's `claude-haiku-5-5` ID and all five
 effort levels (Claude Code v2.1.293+) were officially confirmed on 2026-10-08 via
@@ -31,7 +31,7 @@ remain unverified. Unknown transport mappings remain fail-closed.
   Missing MMMU-Pro / mlcrOverall prevents UI / long-context placement.
 - Static candidate chains are an approximation where the cheapest acceptable row
   changes non-monotonically with caller ceilings. Preserve the calculator's
-  ceiling mismatch lines below; this proposal does not change the dispatch algorithm.
+  ceiling mismatch lines below; this approval does not change the dispatch algorithm.
 
 ### Computed value picks
 

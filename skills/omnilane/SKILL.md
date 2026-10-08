@@ -400,7 +400,7 @@ lane table; do not assume an older model is equivalent.
   not its xhigh or high rows or Astra xhigh. Send long documents to Opus 5.
 - **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder; mid rungs
   of hardest-coding and bulk-mechanical (high, medium), the quick Claude row in
-  fast-agentic (medium). Its low row is scored again in the 2026-10-08 proposal,
+  fast-agentic (medium). Its low row is scored again in the operator-approved 2026-10-08 snapshot,
   but Haiku 5.5 wins the cheap Claude rows. It has no published
   visual or long-context result, and its knowledge score is low: keep it out of
   ui-draft, long-context and live-search. A host has to prove it with `omnilane
@@ -411,7 +411,7 @@ lane table; do not assume an older model is equivalent.
 - **Claude Opus 5:** leads long-context (high, down to low) and supplies mid rungs
   of hardest-coding and hard-judgment; an independent reviewer when explicitly
   selected.
-- **Claude Haiku 5.5:** proposed lower-ceiling value rows: xhigh in hardest-coding;
+- **Claude Haiku 5.5:** operator-approved (2026-10-08) lower-ceiling value rows: xhigh in hardest-coding;
   xhigh/high/medium/low in bulk-mechanical; medium/low in triage; xhigh/high in taste-final.
   No fast-agentic placement: only low meets the 10-second first-token cap, and its
   automation score falls outside even the lane's doubled quality-gap allowance.
@@ -449,7 +449,7 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Snapshot `aa-v4.3.2-2026-10-08-v1` is **proposed**, not deployed: 120 scored rows.
+Snapshot `aa-v4.3.2-2026-10-08-v1` is **approved by the operator on 2026-10-08**, not deployed: 120 scored rows.
 The merged AA capture restores Sonnet 5.5 low and adds Haiku 5.5 at max/xhigh/high/medium/low.
 The three operator-retired GPT-5.4 mini rows remain unknown and outside aliases/probes.
 Anthropic's `claude-haiku-5-5` ID and all five efforts (Claude Code v2.1.293+) were officially confirmed on 2026-10-08; host transport remains unprobed.

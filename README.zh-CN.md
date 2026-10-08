@@ -213,7 +213,7 @@ flowchart LR
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
-AA `aa-v4.3.2-2026-10-08-v1`：**proposed**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待操作者批准及主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
+AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|

@@ -870,7 +870,7 @@
       ],
       "mappingStatus": "no-aa-row",
       "aaSlugs": [],
-      "mappingReason": "Not among the 643 rows of this historical v4.2 inventory; config/aa-model-policy.json proposes AA v4.3.2 scores for claude-haiku-5-5 (max), -xhigh, -high, -medium and -low. Anthropic's claude-haiku-5-5 ID and all five effort levels (Claude Code v2.1.293+) were officially confirmed on 2026-10-08: https://platform.claude.com/docs/en/models/haiku-5-5/overview ; https://platform.claude.com/docs/en/build-with-claude/effort ; https://code.claude.com/docs/en/model-config . Host transport remains not probed on host; exact per-effort request shapes remain unverified."
+      "mappingReason": "Not among the 643 rows of this historical v4.2 inventory; config/aa-model-policy.json records AA v4.3.2 scores approved by the operator on 2026-10-08 for claude-haiku-5-5 (max), -xhigh, -high, -medium and -low. Anthropic's claude-haiku-5-5 ID and all five effort levels (Claude Code v2.1.293+) were officially confirmed on 2026-10-08: https://platform.claude.com/docs/en/models/haiku-5-5/overview ; https://platform.claude.com/docs/en/build-with-claude/effort ; https://code.claude.com/docs/en/model-config . Host transport remains not probed on host; exact per-effort request shapes remain unverified."
     },
     {
       "vendor": "claude",

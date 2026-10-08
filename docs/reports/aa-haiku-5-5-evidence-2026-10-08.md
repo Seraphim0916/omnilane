@@ -1,14 +1,14 @@
-# Claude Haiku 5.5／AA 多頁快照提案證據（2026-10-08）
+# Claude Haiku 5.5／AA 多頁核准快照證據（2026-10-08）
 
 來源：codex-s／MacStudio；工作樹 `feat/aa-haiku-5-5`，基底 `cc1aecc`。
 
-狀態：**提案已產生，尚未核准或部署**。資料來自主控提供的離線抽取檔，沒有重新連線抓取。
+狀態：**操作者已於 2026-10-08 核准快照，主機尚未部署**。資料來自主控提供的離線抽取檔，沒有重新連線抓取。
 原始 HTML 未隨任務提供，所以頁面雜湊沿用抽取檔記載，本輪未重新計算 HTML 雜湊。
 
 ## 1. 快照與可重現性
 
-- 快照：`aa-v4.3.2-2026-10-08-v1`；`approval.status=proposed`。
-- 政策檔 SHA256：`5c00408010aaaa79478709cb2ece1db0df0f5cf6725ae34ee3d3b56cd9f867f1`。
+- 快照：`aa-v4.3.2-2026-10-08-v1`；`approval.status=approved`。
+- 政策檔 SHA256：`3a7455858d4c2eba255eb57bb1fcf8235fd91cecc4685d9c965a99fb16736ad5`。
 - 合併抽取檔 SHA256：`91450bcb7442b4d6699d779d4951c900485db8058db053c4dbd0880536aba415`。
 - 39 頁、231 筆廠商資料；120 列計分、24 列估計分數、10 列未知。
 - 兩次連續執行下列 build 指令，政策檔 SHA256 相同。
@@ -16,7 +16,7 @@
 
 ```sh
 python3 scripts/aa_rebaseline.py merge --inputs docs/reports/aa-pages-2026-10-08/*.json --out docs/reports/aa-v4.3.2-extract-2026-10-08.json
-python3 scripts/aa_rebaseline.py build --extract docs/reports/aa-v4.3.2-extract-2026-10-08.json --as-of 2026-10-08 --approval proposed
+python3 scripts/aa_rebaseline.py build --extract docs/reports/aa-v4.3.2-extract-2026-10-08.json --as-of 2026-10-08 --approval approved
 python3 scripts/aa_rebaseline.py build --extract docs/reports/aa-v4.3.2-extract-2026-10-08.json --as-of 2026-10-08 --approval proposed
 ```
 
@@ -738,4 +738,4 @@ python3 scripts/aa_rebaseline.py build --extract docs/reports/aa-v4.3.2-extract-
   本機五列仍是「not probed on host」，各強度實際請求形狀與真實派送能力尚未驗證。
   價格僅沿用 AA 列值，未另行確認官方定價。
 - 未 commit、push、打標籤、發布、操作服務；未修改主工作目錄或使用者設定。
-- 核准、正式主機重簽及新模型探測由主控／操作者接續，本工人未執行 `omnilane resign`。
+- 操作者已於 2026-10-08 核准本快照；正式主機重簽及新模型探測由主控／操作者接續，本工人未執行 `omnilane resign`。
