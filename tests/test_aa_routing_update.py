@@ -23,7 +23,7 @@ EXPECTED_DEFAULTS = {
     "bulk-mechanical": "codex gpt-6.1-sol medium",
     "triage": "codex gpt-6-luna high",
     "hard-judgment": "claude claude-opus-5-5 xhigh",
-    "taste-final": "claude claude-opus-5-5 xhigh",
+    "taste-final": "claude claude-sonnet-5-5 xhigh",
     "consult": "codex gpt-6-astra xhigh",
     "ui-draft": "claude claude-opus-5-5 high",
     "long-context": "claude claude-opus-5 high",

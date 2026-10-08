@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 119,
+    "catalogEntries": 120,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -814,6 +814,63 @@
       "mappingStatus": "no-aa-row",
       "aaSlugs": [],
       "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as claude-sonnet-5-5 (max), claude-sonnet-5-5-xhigh, -high, -medium and -low"
+    },
+    {
+      "vendor": "claude",
+      "access": "cli",
+      "catalogModel": "claude-haiku-5-5",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "low"
+        },
+        {
+          "lane": "triage",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "triage",
+          "position": "fallback",
+          "effort": "low"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "high"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this historical v4.2 inventory; config/aa-model-policy.json proposes AA v4.3.2 scores for claude-haiku-5-5 (max), -xhigh, -high, -medium and -low. Anthropic's claude-haiku-5-5 ID and all five effort levels (Claude Code v2.1.293+) were officially confirmed on 2026-10-08: https://platform.claude.com/docs/en/models/haiku-5-5/overview ; https://platform.claude.com/docs/en/build-with-claude/effort ; https://code.claude.com/docs/en/model-config . Host transport remains not probed on host; exact per-effort request shapes remain unverified."
     },
     {
       "vendor": "claude",

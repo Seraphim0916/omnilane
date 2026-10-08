@@ -2,6 +2,7 @@
 """Re-baseline config/aa-model-policy.json onto a newer AA Intelligence Index.
 
     fetch   download one AA model page and save the per-model records as an extract
+    merge   combine saved page extracts with field-level provenance and conflicts
     build   regenerate the registry from a saved extract (never from the network)
     report  write per-vendor evidence tables and the old-vs-new score diff
     matrix  show, per controller, the first reachable target of every lane
@@ -19,9 +20,10 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO = Path(__file__).resolve().parents[1]
 REGISTRY = REPO / "config/aa-model-policy.json"
@@ -88,13 +90,21 @@ NEW_ROWS = [
     *[(f"claude/claude-sonnet-5-5{suffix}", "claude", "claude-sonnet-5-5", effort, "adaptive",
        f"claude-sonnet-5-5{suffix}", f"claude/claude-sonnet-5{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
+    # The AA five-effort shape follows Sonnet 5.5, not Haiku 4.5's no-effort row.
+    # Sonnet 5.5 low was withdrawn; its max sibling has the same transport shape.
+    # All selectors remain unverified pending real host probes.
+    *[(f"claude/claude-haiku-5-5{suffix}", "claude", "claude-haiku-5-5", effort, "adaptive",
+       f"claude-haiku-5-5{suffix}", "claude/claude-sonnet-5-5" if effort == "low"
+       else f"claude/claude-sonnet-5-5{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low")
+      for suffix in ["" if effort == "max" else f"-{effort}"]],
     *[(f"codex/gpt-6-1-sol{suffix}", "codex", "gpt-6.1-sol", effort, "reasoning",
        f"gpt-6-1-sol{suffix}", f"codex/gpt-6-sol{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
-               "claude-sonnet-5-5": "claude-sonnet-5"}  # new catalog model -> alias entry to clone
+               "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5"}  # new catalog model -> alias entry to clone
 
 # Operator-approved retirements, independent of whether AA still publishes a score.
 # config id -> (retirement date, one-line reason)
@@ -182,6 +192,93 @@ def cmd_fetch(args) -> int:
     Path(args.out).write_bytes(dump(extract))
     print(f"fetch: AA v{extract['benchmark_version']}, {len(records)} records on page, "
           f"{len(kept)} vendor records kept -> {args.out}")
+    return 0
+
+
+MERGE_RULE = {
+    "id": "own-page-then-latest-populated-v1",
+    "description": (
+        "For each field, prefer non-null observations; among them prefer the model's "
+        "own page (exact URL slug), then the latest fetched_at instant. Break ties by "
+        "source URL and page SHA256 in ascending order. Null-only fields stay null. "
+        "Fetch time is an observation-time tie-break, not proof of AA revision age. "
+        "Record every unequal observation, including null versus populated values."
+    ),
+}
+
+
+def merge_extracts(paths: list[Path]) -> dict:
+    """Merge offline captures, independent of argument order and local path names."""
+    captures = {}
+    version = None
+    for path in paths:
+        page = json.loads(path.read_text())
+        if version is not None and page["benchmark_version"] != version:
+            raise ValueError("merge: benchmark versions differ")
+        version = page["benchmark_version"]
+        stamp = datetime.fromisoformat(page["fetched_at"].replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            raise ValueError("merge: fetched_at must include a timezone")
+        key = (page["source_url"], page["fetched_at"], page["page_sha256"])
+        if key in captures and captures[key] != page:
+            raise ValueError("merge: identical capture metadata has different records")
+        captures[key] = page
+    if not captures:
+        raise ValueError("merge: no page extracts")
+    pages = [captures[key] for key in sorted(captures)]
+    sources = []
+    observations = {}
+    for number, page in enumerate(pages, 1):
+        source_id = f"page-{number:03d}"
+        sources.append({
+            "id": source_id,
+            **{key: page[key] for key in ("source_url", "fetched_at", "page_sha256", "records_on_page")},
+            "vendor_records": len(page["records"]),
+        })
+        own_slug = urlparse(page["source_url"]).path.rstrip("/").rsplit("/", 1)[-1]
+        instant = datetime.fromisoformat(page["fetched_at"].replace("Z", "+00:00")).timestamp()
+        for slug, record in page["records"].items():
+            observations.setdefault(slug, []).append((
+                (own_slug != slug, -instant, page["source_url"], page["page_sha256"]), source_id, record))
+    records, provenance, conflicts = {}, {}, []
+    for slug, candidates in sorted(observations.items()):
+        candidates.sort()
+        records[slug] = {}
+        provenance[slug] = {"preferred_page": candidates[0][1], "fields": {}}
+        for field in sorted({key for _, _, record in candidates for key in record}):
+            populated = [item for item in candidates if item[2].get(field) is not None]
+            eligible = populated or [item for item in candidates if field in item[2]]
+            _, selected, record = eligible[0]
+            value = copy.deepcopy(record[field])
+            records[slug][field] = value
+            provenance[slug]["fields"][field] = selected
+            variants = {}
+            for _, source_id, observed in candidates:
+                present = field in observed
+                observed_value = observed.get(field)
+                key = json.dumps([present, observed_value], sort_keys=True)
+                variants.setdefault(key, {"present": present, "value": observed_value, "pages": []})["pages"].append(source_id)
+            if len(variants) > 1:
+                conflicts.append({"slug": slug, "field": field, "selected_page": selected,
+                                  "selected_value": value, "rule": MERGE_RULE["id"],
+                                  "observations": [variants[key] for key in sorted(variants)]})
+    return {
+        "benchmark_version": version,
+        "fetched_at": max(datetime.fromisoformat(p["fetched_at"].replace("Z", "+00:00"))
+                          for p in pages).astimezone(timezone.utc).isoformat(timespec="seconds"),
+        "merge_rule": copy.deepcopy(MERGE_RULE), "sources": sources,
+        "records": records, "record_sources": provenance, "conflicts": conflicts,
+    }
+
+
+def cmd_merge(args) -> int:
+    try:
+        merged = merge_extracts([Path(path) for path in args.inputs])
+    except (KeyError, ValueError) as exc:
+        sys.exit(str(exc))
+    Path(args.out).write_bytes(dump(merged))
+    print(f"merge: {len(merged['sources'])} pages, {len(merged['records'])} vendor records, "
+          f"{len(merged['conflicts'])} field conflicts -> {args.out}")
     return 0
 
 
@@ -314,11 +411,16 @@ def cmd_build(args) -> int:
     new["coverage"] = {"scored_configs": len(scored), "reference_configs": len(new["reference_configs"]),
                        "unknown_configs": len(unknown), "aliases": len(new["aliases"]),
                        "by_vendor": {v: vendors[v] for v in old["coverage"]["by_vendor"]}}
+    source = {"extract": str(Path(args.extract).resolve().relative_to(REPO)),
+              "fetched_at": extract["fetched_at"]}
+    if "sources" in extract:
+        source.update(extract_sha256=hashlib.sha256(Path(args.extract).read_bytes()).hexdigest(),
+                      pages=extract["sources"], merge_rule=extract["merge_rule"])
+    else:
+        source.update(page_url=extract["source_url"], page_sha256=extract["page_sha256"])
     new["snapshot"].update(
         id=f"aa-v{version}-{as_of}-v{args.revision}", benchmark_version=version, as_of=as_of,
-        source={"extract": str(Path(args.extract).resolve().relative_to(REPO)),
-                "page_url": extract["source_url"], "page_sha256": extract["page_sha256"],
-                "fetched_at": extract["fetched_at"]},
+        source=source,
         approval={"status": args.approval, "scope": f"aa-v{version}-rebaseline",
                   "source": f"docs/reports/aa-rebaseline-{tag}.md",
                   "estimated_scores": "approved_provisional" if args.approval == "approved"
@@ -341,7 +443,7 @@ def cmd_report(args) -> int:
     for vendor in new["coverage"]["by_vendor"]:
         lines = [f"# AA v{version} evidence: {vendor} ({as_of})", "",
                  f"Generated by `scripts/aa_rebaseline.py report` from `{new['snapshot']['source']['extract']}` "
-                 f"(page sha256 `{new['snapshot']['source']['page_sha256'][:16]}…`).", "",
+                 f"(source sha256 `{new['snapshot']['source'].get('extract_sha256', new['snapshot']['source'].get('page_sha256'))[:16]}…`).", "",
                  "| config | effort | raw | score | estimated | previous | source |", "|---|---|---|---|---|---|---|"]
         for row in new["scored_configs"]:
             if row["vendor"] != vendor:
@@ -471,7 +573,7 @@ VALUE_LANES = {
 VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
 STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-sonnet-5",
-                  "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
+                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
@@ -569,6 +671,9 @@ def main() -> int:
     fetch = sub.add_parser("fetch")
     fetch.add_argument("--slug", default="grok-4-7")
     fetch.add_argument("--out", required=True)
+    merge = sub.add_parser("merge")
+    merge.add_argument("--inputs", nargs="+", required=True, help="saved single-page extracts")
+    merge.add_argument("--out", required=True)
     build = sub.add_parser("build")
     build.add_argument("--extract", required=True)
     build.add_argument("--as-of", required=True)
@@ -595,7 +700,7 @@ def main() -> int:
     lanes.add_argument("--routing", default=str(REPO / "routing.yaml"))
     args = parser.parse_args()
     return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix,
-            "lanes": cmd_lanes, "value": cmd_value, "fill": cmd_fill}[args.command](args)
+            "lanes": cmd_lanes, "value": cmd_value, "fill": cmd_fill, "merge": cmd_merge}[args.command](args)
 
 
 if __name__ == "__main__":

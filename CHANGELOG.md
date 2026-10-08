@@ -6,6 +6,20 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+
+- Proposed AA v4.3.2 snapshot `aa-v4.3.2-2026-10-08-v1`: five Claude Haiku 5.5
+  effort rows, restored Sonnet 5.5 low, 120 scored configurations, and synchronized
+  configurator, probe candidates, aliases and five-language lane tables.
+- Offline `aa_rebaseline.py merge` combines saved page captures with per-field
+  provenance and every conflicting observation. Model-own-page values win among
+  populated fields; remaining ties use capture time, URL and page hash.
+- Haiku 5.5 joins lower-ceiling coding, bulk, triage and taste candidates; Sonnet
+  5.5 xhigh becomes the value-first taste primary. No Haiku fast-agentic promotion.
+  This is an approval proposal only: Anthropic's `claude-haiku-5-5` ID and all five
+  effort levels were officially confirmed on 2026-10-08; host transport remains
+  unprobed, and no host overlay was re-signed or deployed.
+
 ### Fixed
 
 - The `resign` smoke dispatch asks the cheapest verified row for a fresh three-digit

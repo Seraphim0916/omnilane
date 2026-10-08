@@ -213,13 +213,15 @@ flowchart LR
 
 ## 🛤️ 通道一覽(預設值;實際生效值跑 `scripts/dispatch.sh --list` 看)
 
+AA `aa-v4.3.2-2026-10-08-v1`：**proposed**；2026-10-08 已由官方確認 Haiku 5.5 的 `claude-haiku-5-5` 代號與五種強度，仍待操作者核准及主機傳輸探測。[證據](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
+
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra（xhigh） | GPT-6.1 Sol（xhigh）→ Claude Opus 5.5（medium）→ GPT-6.1 Sol（high）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（medium）→ Claude Fable 5.1（medium）→ Claude Opus 5（high）→ Claude Sonnet 5.5（high）→ GPT-6 Astra（low）→ Claude Opus 5（medium）→ Claude Opus 5.5（low）→ Claude Sonnet 5.5（medium）→ Claude Opus 5（low）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol（medium） | Claude Opus 5.5（medium）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（high）→ Claude Sonnet 5.5（high）→ GPT-6.1 Sol（low）→ GPT-6 Astra（low）→ GPT-6 Sol（high）→ GPT-5.6 Sol（high）→ Claude Opus 5.5（low）→ Claude Sonnet 5.5（medium）→ GPT-6 Sol（medium）→ Claude Opus 5（low）→ GPT-6 Sol（low）→ Gemini 3.8 Flash（High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
-| 🧹 triage | GPT-6 Luna（high） | GPT-5.6 Luna（high）→ Gemini 3.8 Flash（Low）→ Claude Sonnet 5（low）→ Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
+| 🔥 hardest-coding | GPT-6 Astra（xhigh） | GPT-6.1 Sol（xhigh）→Claude Opus 5.5（medium）→GPT-6.1 Sol（high）→GPT-6 Astra（medium）→GPT-6.1 Sol（medium）→Claude Fable 5.1（medium）→Claude Opus 5（high）→Claude Sonnet 5.5（high）→GPT-6 Astra（low）→Claude Opus 5（medium）→Claude Opus 5.5（low）→Claude Haiku 5.5（xhigh）→Claude Sonnet 5.5（medium）→Claude Opus 5（low）→Grok 4.7（high）→Grok 4.6（high）→Gemini 3.8 Flash（High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol（medium） | Claude Opus 5.5（medium）→GPT-6 Astra（medium）→GPT-6.1 Sol（high）→Claude Sonnet 5.5（high）→GPT-6.1 Sol（low）→GPT-6 Astra（low）→GPT-6 Sol（high）→GPT-5.6 Sol（high）→Claude Opus 5.5（low）→Claude Haiku 5.5（xhigh）→Claude Sonnet 5.5（medium）→Claude Haiku 5.5（high）→Claude Haiku 5.5（medium）→Claude Haiku 5.5（low）→GPT-6 Sol（medium）→Claude Opus 5（low）→GPT-6 Sol（low）→Gemini 3.8 Flash（High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🧹 triage | GPT-6 Luna（high） | GPT-5.6 Luna（high）→Gemini 3.8 Flash（Low）→Claude Haiku 5.5（medium）→Claude Haiku 5.5（low）→Claude Sonnet 5（low）→Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
 | ⚖️ hard-judgment | Claude Opus 5.5（xhigh） | Claude Fable 5.1（xhigh）→ Claude Opus 5.5（medium）→ Claude Fable 5.1（medium）→ Claude Opus 5（high）→ Claude Opus 5（medium）→ Claude Opus 5.5（low）→ GPT-6.1 Sol（xhigh）→ GPT-6 Astra（high）→ Grok 4.7 → Gemini 3.8 Flash（High） | 架構裁決、深度推理、第二意見 |
-| ✒️ taste-final | Claude Opus 5.5（xhigh） | Claude Sonnet 5.5（xhigh）→ Claude Opus 5.5（high）→ Claude Sonnet 5.5（high）→ Claude Opus 5.5（medium）→ Grok 4.7 → Grok 4.6 → GPT-6 Astra（xhigh）→ Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
+| ✒️ taste-final | Claude Sonnet 5.5（xhigh） | Claude Opus 5.5（xhigh）→Claude Opus 5.5（high）→Claude Sonnet 5.5（high）→Claude Opus 5.5（medium）→Grok 4.7（high）→Grok 4.6（high）→GPT-6 Astra（xhigh）→Claude Haiku 5.5（xhigh）→Claude Haiku 5.5（high）→Gemini 3.8 Flash（High） | 對外文字與風格裁決；評測不等於審美證明 |
 | 💬 consult | GPT-6 Astra（xhigh） | Claude Opus 5.5（xhigh）→ Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash（High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
 | 🎨 ui-draft | Claude Opus 5.5（high） | GPT-6.1 Sol（high）→ Claude Opus 5.5（medium）→ GPT-6 Astra（medium）→ GPT-6.1 Sol（medium）→ GPT-6.1 Sol（low）→ Claude Opus 5.5（low）→ GPT-6 Astra（low）→ GPT-6 Sol（medium）→ Gemini 3.8 Flash（High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
 | 📚 long-context | Claude Opus 5（high） | Claude Opus 5（medium）→ Claude Opus 5（low）→ GPT-5.6 Terra（xhigh）→ Gemini 3.8 Flash（High） | 長文件整合；上下文容量本身不證明任務品質 |

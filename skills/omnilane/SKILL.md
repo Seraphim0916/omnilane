@@ -64,11 +64,11 @@ decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
 | Lane | First choice | Backup | Use for |
 |---|---|---|---|
-| hardest-coding | GPT-6 Astra (xhigh) | GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Sonnet 5.5 (medium) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| hardest-coding | GPT-6 Astra (xhigh) | GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Grok 4.6 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
 | hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Opus 5.5 (xhigh) | Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 → Grok 4.6 → GPT-6 Astra (xhigh) → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → Grok 4.6 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
 | consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 3.8 Flash (High) | Direct named-model consultation; always keep `--vendor` |
 | ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
 | long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 3.8 Flash (High) | Long-context synthesis; context size alone is not a quality result |
@@ -392,16 +392,16 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-- **Claude Opus 5.5:** leads hard-judgment and taste-final (xhigh) and ui-draft
+- **Claude Opus 5.5:** leads hard-judgment (xhigh) and ui-draft
   (high); its medium row stands behind GPT-6.1 Sol in hardest-coding and
   bulk-mechanical until a host proves Sol, and it is the Claude row in consult
   (xhigh) and the Claude fallback in live-search (low). Running at medium your
   ceiling is 51: you reach GPT-6.1 Sol xhigh or Opus 5.5 medium in the hard lanes,
   not its xhigh or high rows or Astra xhigh. Send long documents to Opus 5.
-- **Claude Sonnet 5.5:** the second rung of taste-final (xhigh, then high), mid rungs
+- **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder; mid rungs
   of hardest-coding and bulk-mechanical (high, medium), the quick Claude row in
-  fast-agentic (medium). Its low row is unscored since the benchmark withdrew it,
-  so it cannot be dispatched. It has no published
+  fast-agentic (medium). Its low row is scored again in the 2026-10-08 proposal,
+  but Haiku 5.5 wins the cheap Claude rows. It has no published
   visual or long-context result, and its knowledge score is low: keep it out of
   ui-draft, long-context and live-search. A host has to prove it with `omnilane
   resign` first; until then each chain serves the Opus row right behind it.
@@ -411,7 +411,14 @@ lane table; do not assume an older model is equivalent.
 - **Claude Opus 5:** leads long-context (high, down to low) and supplies mid rungs
   of hardest-coding and hard-judgment; an independent reviewer when explicitly
   selected.
-- **Claude Sonnet 5:** coordination and tools; the Claude row in triage at low.
+- **Claude Haiku 5.5:** proposed lower-ceiling value rows: xhigh in hardest-coding;
+  xhigh/high/medium/low in bulk-mechanical; medium/low in triage; xhigh/high in taste-final.
+  No fast-agentic placement: only low meets the 10-second first-token cap, and its
+  automation score falls outside even the lane's doubled quality-gap allowance.
+  MMMU-Pro and mlcrOverall are absent, so no UI or long-context promotion.
+  Haiku 4.5 stays only as the last low-ceiling / unproven-host triage fallback.
+  Haiku 5.5's `claude-haiku-5-5` ID and five efforts were officially confirmed on 2026-10-08; host transport remains unprobed, and max stays explicit-only.
+- **Claude Sonnet 5:** coordination and tools; a legacy Claude fallback behind Haiku 5.5 in triage.
   Never self-assign judgment, coding or search: its effort rows score low
   there.
 - **GPT Astra:** leads hardest-coding (xhigh) and consult (xhigh); its medium and low
@@ -442,11 +449,12 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Snapshot `aa-v4.3.2-2026-10-02-v2` retires all three `gpt-5.4-mini` rows to
-`unknown_configs`: Codex returns HTTP 400 with a ChatGPT account even though AA
-still scores the model. They grant no authority, and the configure alias and probe
-candidates are removed. All other scores and ordering stay unchanged (114 scored
-rows). Every host must run `omnilane resign` because the snapshot id changed.
+Snapshot `aa-v4.3.2-2026-10-08-v1` is **proposed**, not deployed: 120 scored rows.
+The merged AA capture restores Sonnet 5.5 low and adds Haiku 5.5 at max/xhigh/high/medium/low.
+The three operator-retired GPT-5.4 mini rows remain unknown and outside aliases/probes.
+Anthropic's `claude-haiku-5-5` ID and all five efforts (Claude Code v2.1.293+) were officially confirmed on 2026-10-08; host transport remains unprobed.
+Do not infer dispatchability from these AA scores; approval and host transport probes are still required.
+
 
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
@@ -455,7 +463,8 @@ rows). Every host must run `omnilane resign` because the snapshot id changed.
 | Fable 5.1 | claude | claude-fable-5-1 | xhigh |
 | Sonnet | claude | claude-sonnet-5 | high |
 | Sonnet 5.5 | claude | claude-sonnet-5-5 | high |
-| Haiku | claude | claude-haiku-4-5 | - |
+| Haiku 5.5 | claude | claude-haiku-5-5 | medium |
+| Haiku / Haiku 4.5 (legacy) | claude | claude-haiku-4-5 | - |
 | Sol | codex | gpt-5.6-sol | high |
 | Terra | codex | gpt-5.6-terra | max |
 | Luna | codex | gpt-5.6-luna | high |

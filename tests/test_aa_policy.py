@@ -78,10 +78,10 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_frozen_registry_coverage_and_estimates(self):
         validated = aa_policy._validate_registry(copy.deepcopy(self.real))
-        self.assertEqual(len(validated["scored_configs"]), 114)
+        self.assertEqual(len(validated["scored_configs"]), 120)
         self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 24)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 54, "claude": 40, "gemini": 8, "grok": 12,
+            "codex": 54, "claude": 46, "gemini": 8, "grok": 12,
         })
 
     def test_same_score_is_allowed(self):
