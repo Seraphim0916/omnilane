@@ -833,8 +833,9 @@ case "${FAKE_RUNNER_MODE:?}" in
     ;;
   require-term)
     while IFS= read -r _; do :; done < "${OMNILANE_INBOX:?}"
-    # Let Bash run its deferred TERM trap inside the bounded TERM grace.
-    while :; do /bin/sleep 0.05; done
+    # Block in wait: a trapped TERM interrupts it and the trap runs at once. Behind a
+    # foreground sleep Bash defers the trap, which a slow host stretches past the 0.1s TERM grace.
+    while :; do /bin/sleep 0.05 & wait "$!" || true; done
     ;;
   *)
     exit 2
