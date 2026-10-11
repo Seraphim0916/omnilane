@@ -374,7 +374,7 @@ from history, messages or documentation. `--approve` is one-shot and creates no
 channel. Revocation overrides legacy overlay trust. Do not copy
 `transport-origins.local.json` or evidence between hosts. The first-use policy now covers Developer ID plus self-signed, script and
 no-platform-signature tools at their installation location; it takes effect with
-the phase-2 first probe, and no production code calls the interface yet.
+the phase-2 first probe, and no production code calls the interface yet. First-use trust is currently per vendor with no recorded identity, path or policy entry, not per host; phase-2 wiring will decide whether other vendors' existing records should block it.
 
 After two failed attempts at a task, reassess the scope; an upward move needs the human. On vendor quota exhaustion (429, "stream disconnected", usage limit) send mid-tier coding through `coding-overflow`; never silently downgrade `hardest-coding` — wait or escalate.
 

@@ -243,6 +243,67 @@ class PolicyTests(unittest.TestCase):
                     self.assertFalse(op.record_first_use("claude", sample(kind), self.cli, path=self.path))
                     self.assertEqual(self.path.read_bytes(), before)
 
+    def test_first_use_invalid_path_returns_false(self):
+        for kind in sorted(op.FIRST_USE_KINDS):
+            for index, cli in enumerate((None, "", "relative/cli")):
+                with self.subTest(kind=kind, cli=cli):
+                    path = self.root / (kind + "-" + str(index) + ".json")
+                    self.assertFalse(op.record_first_use("claude", sample(kind), cli, path=path))
+                    self.assertFalse(path.exists())
+                    self.assertTrue(op.record_first_use("claude", sample(kind), self.cli, path=path))
+
+    def test_first_use_invalid_path_preserves_other_vendor_policy(self):
+        for kind in sorted(op.FIRST_USE_KINDS):
+            with self.subTest(kind=kind):
+                original = self.write(vendors={"codex": {"channels": [self.channel()]}})
+                before = self.path.read_bytes()
+                for cli in (None, "", "relative/cli"):
+                    with self.subTest(cli=cli):
+                        self.assertFalse(op.record_first_use("claude", sample(kind), cli, path=self.path))
+                        self.assertEqual(self.path.read_bytes(), before)
+                self.assertTrue(op.record_first_use("claude", sample(kind), self.cli, path=self.path))
+                self.assertEqual(op.load(self.path)["vendors"]["codex"], original["vendors"]["codex"])
+
+    def test_first_use_path_resolution_errors_return_false(self):
+        for kind in sorted(op.FIRST_USE_KINDS):
+            for error in (OSError, RuntimeError):
+                with self.subTest(kind=kind, error=error.__name__):
+                    with patch.object(op.Path, "resolve", side_effect=error("bad path")):
+                        self.assertFalse(op.record_first_use("claude", sample(kind), self.cli, path=self.path))
+                    self.assertFalse(self.path.exists())
+        self.assertTrue(op.record_first_use("claude", self.current, self.cli, path=self.path))
+
+    def test_first_use_invalid_policy_path_returns_false(self):
+        before = self.cli.read_bytes()
+        for kind in sorted(op.FIRST_USE_KINDS):
+            with self.subTest(kind=kind):
+                self.assertFalse(op.record_first_use("claude", sample(kind), self.cli,
+                                                    path=self.cli / "origins.json"))
+                self.assertEqual(self.cli.read_bytes(), before)
+        self.assertTrue(op.record_first_use("claude", self.current, self.cli, path=self.path))
+
+    def test_first_use_invalid_policy_returns_false(self):
+        self.write(vendors={})
+        foreign = dict(schema_version=1, host="another-host", vendors={})
+        for raw in (b"{broken", json.dumps(foreign).encode()):
+            self.path.write_bytes(raw)
+            with self.assertRaises(op.OriginError):
+                op.load(self.path)
+            for kind in sorted(op.FIRST_USE_KINDS):
+                with self.subTest(kind=kind, raw=raw):
+                    self.assertFalse(op.record_first_use("codex", sample(kind), self.cli, path=self.path))
+                    self.assertEqual(self.path.read_bytes(), raw)
+        self.write(vendors={})
+        self.assertTrue(op.record_first_use("codex", self.current, self.cli, path=self.path))
+
+    def test_first_use_is_per_vendor_today(self):
+        # The current rule is per vendor, pending the phase-2 decision.
+        original = self.write()
+        self.assertTrue(op.record_first_use("codex", self.current, self.cli, path=self.path))
+        vendors = op.load(self.path)["vendors"]
+        self.assertEqual(vendors["claude"], original["vendors"]["claude"])
+        self.assertEqual(vendors["codex"]["channels"][0]["approved_via"], "first-use")
+
     def test_first_use_developer_id_malformed_identity_is_refused(self):
         for key, values in (("signer", (None, "adhoc", "short", [], {})),
                             ("identifier", (None, "", "bad\nidentifier", [], {}))):

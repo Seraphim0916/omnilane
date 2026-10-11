@@ -289,26 +289,26 @@ def preserve_before_override(vendor, recorded, recorded_path, path=None):
 
 def record_first_use(vendor, current, current_path, recorded=None, recorded_path=None, path=None):
     """Phase 2 calls this only before the first probe, under its resign lock."""
-    path = Path(path) if path is not None else policy_path()
-    with _lock(path):
-        data = load(path)
-        if vendor not in VENDORS or recorded is not None or recorded_path is not None or vendor in data["vendors"]:
-            return False
-        kind = current.get("kind") if isinstance(current, dict) else None
-        if not isinstance(kind, str):
-            return False
-        if kind not in FIRST_USE_KINDS or kind not in LOCATION_KINDS | {"developer-id"}:
-            return False
-        if kind in ("developer-id", "adhoc") and current.get("valid") is not True:
-            return False
-        if kind == "adhoc" and current.get("signer") != "adhoc":
-            return False
-        if kind == "developer-id" and not _text(current.get("identifier")):
-            return False
-        channel = _channel(kind, current_path, current, "first-use")
-        data["vendors"][vendor] = {"channels": [channel]}
-        try:
+    try:
+        path = Path(path) if path is not None else policy_path()
+        with _lock(path):
+            data = load(path)
+            if vendor not in VENDORS or recorded is not None or recorded_path is not None or vendor in data["vendors"]:
+                return False
+            kind = current.get("kind") if isinstance(current, dict) else None
+            if not isinstance(kind, str):
+                return False
+            if kind not in FIRST_USE_KINDS or kind not in LOCATION_KINDS | {"developer-id"}:
+                return False
+            if kind in ("developer-id", "adhoc") and current.get("valid") is not True:
+                return False
+            if kind == "adhoc" and current.get("signer") != "adhoc":
+                return False
+            if kind == "developer-id" and not _text(current.get("identifier")):
+                return False
+            channel = _channel(kind, current_path, current, "first-use")
+            data["vendors"][vendor] = {"channels": [channel]}
             _save(path, data)
-        except OriginError:
-            return False
-        return True
+            return True
+    except (OriginError, OSError, RuntimeError):
+        return False
