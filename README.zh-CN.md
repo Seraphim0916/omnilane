@@ -680,10 +680,15 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 `omnilane whoami`，它会打印可以带的 `--caller-context FILE`，或说明读不到的确切原因
 （缺 `--effort`、模型别名、查无评分行）。模型不得替自己主张真人豁免。
 
-`runtime-mapping-unverified`——你的身份没问题，但**目标**没有已验证的本机请求
-选择器。可能从未探测过，也可能探测失败；`omnilane doctor` 会报告这类配置的数量，
-overlay 的 `unproven[]` 记录每一条失败的原因。因供应商额度上限造成的拒绝，
-在额度恢复前不会自行解除。
+`runtime-mapping-unverified`: the target has no proven host-local request selector.
+`omnilane doctor` and `--json` show each unproven row as `WARN`: ID, requested and
+observed model/effort (when recorded), failure class/reason, last probe time,
+evidence paths (not contents), and next step. Environment failures name
+`omnilane resign --retry-failed --vendor VENDOR`; conclusive failures never
+auto-retry and require inspection of the request, CLI and provider mapping.
+Damaged evidence diagnostics name the path and explain known-good backup
+restoration or explicit fresh probing into a new directory. Quota refusals
+remain until the provider quota recovers.
 
 `invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
 是 overlay 本身加载失败，因此**所有厂商**都会被拒。常见成因是厂商 CLI 升级：

@@ -107,12 +107,12 @@ def pinned_failures(overlay):
     protected = None
     for anchor in manifests:
         manifest, actual = aa_policy._read_json(anchor["path"])
-        aa_policy._check(actual == anchor["sha256"], "failed probe manifest changed")
+        aa_policy._check(actual == anchor["sha256"], f"failed probe manifest changed: {anchor['path']}")
         if "failure_metadata_version" not in manifest and "failed_probe_runs" not in manifest:
             continue
         aa_policy._check(manifest.get("failure_metadata_version") == 1 and
                          isinstance(manifest.get("failed_probe_runs"), dict),
-                         "failed probe integrity metadata missing or unsupported")
+                         f"failed probe integrity metadata missing or unsupported: {anchor['path']}")
         aa_policy._check(len(manifests) == 1, "failed probe has no unique protected manifest")
         protected = manifest["failed_probe_runs"]
         aa_policy._check(not (set(protected) & set(manifest.get("probe_runs", {}))),
@@ -123,7 +123,9 @@ def pinned_failures(overlay):
             for entry in files.values():
                 aa_policy._check(isinstance(entry, dict) and
                                  aa_policy.evidence_digest(entry["path"]) == entry["sha256"],
-                                 "failed probe evidence changed; timestamp integrity cannot be verified")
+                                 "failed probe evidence changed; timestamp integrity cannot be verified: "
+                                 + str(entry.get("path", "<missing path>")
+                                       if isinstance(entry, dict) else "<invalid entry>"))
     return protected
 
 

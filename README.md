@@ -835,9 +835,14 @@ Every refusal is one JSON line on stderr. Read `failed_gate`, `reason` and
 
 `runtime-mapping-unverified` — your identity is fine, but the *target* has no
 proven host-local request selector. Either it was never probed, or its probe
-failed; `omnilane doctor` reports the count of such configurations and the
-overlay's `unproven[]` records why each one failed. A refusal caused by a
-provider quota limit will not clear until that quota does.
+failed. `omnilane doctor` and `--json` show each unproven row as `WARN`: its ID,
+requested and observed model/effort (when recorded), failure class and reason,
+last probe time, evidence paths (not contents), and next step. Environment
+failures name `omnilane resign --retry-failed --vendor VENDOR`; conclusive
+failures never auto-retry and name the request/CLI/provider mapping to inspect.
+Damaged evidence diagnostics name the affected path and explain restoration
+from a known-good backup or explicit fresh probing into a new directory.
+A provider quota refusal will not clear until that quota does.
 
 `invalid-policy-input` with "transport contract evidence changed" — neither of
 the above. The overlay itself will not load, so *every* vendor is refused. The

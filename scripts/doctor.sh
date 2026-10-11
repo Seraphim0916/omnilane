@@ -71,14 +71,15 @@ json_escape() {
 }
 
 report() {
-  local level="$1" check="$2" message="$3"
+  local level="$1" check="$2" message="$3" details="${4:-}" extra=""
   # Diagnostic inputs include user-controlled paths and routing errors. Strip
   # terminal control bytes so a failed check cannot forge the report display.
   message="$(printf '%s' "$message" | LC_ALL=C tr -d '\000-\010\013\014\016-\037\177')"
   if [[ "$JSON_MODE" -eq 1 ]]; then
     [[ "$JSON_FIRST" -eq 1 ]] || JSON_REPORTS="$JSON_REPORTS,"
     JSON_FIRST=0
-    JSON_REPORTS="$JSON_REPORTS{\"level\":\"$(json_escape "$level")\",\"check\":\"$(json_escape "$check")\",\"message\":\"$(json_escape "$message")\"}"
+    [[ -z "$details" ]] || extra=",\"details\":$details"
+    JSON_REPORTS="$JSON_REPORTS{\"level\":\"$(json_escape "$level")\",\"check\":\"$(json_escape "$check")\",\"message\":\"$(json_escape "$message")\"$extra}"
   else
     printf '%-5s %-12s %s\n' "$level" "$check" "$message"
   fi
@@ -448,12 +449,14 @@ elif [[ ! -r "$OVERLAY_HEALTH" ]]; then
 else
   overlay_line="$(OMNILANE_AA_TRANSPORT_OVERLAY="$overlay_path" \
     python3 "$OVERLAY_HEALTH" "$REPO" 2>&1)"
-  overlay_level="${overlay_line%%	*}"
-  overlay_message="${overlay_line#*	}"
-  case "$overlay_level" in
-    PASS|WARN|FAIL) report "$overlay_level" transport-overlay "$overlay_message" ;;
-    *) report WARN transport-overlay "unreadable overlay health output: $overlay_line" ;;
-  esac
+  while IFS=$'\t' read -r overlay_level overlay_message overlay_details; do
+    overlay_check=transport-overlay
+    [[ -z "$overlay_details" ]] || overlay_check=transport-unproven
+    case "$overlay_level" in
+      PASS|WARN|FAIL) report "$overlay_level" "$overlay_check" "$overlay_message" "$overlay_details" ;;
+      *) report WARN transport-overlay "unreadable overlay health output: $overlay_line" ;;
+    esac
+  done <<< "$overlay_line"
 fi
 
 if [[ -n "$PROBE_VENDOR" ]]; then

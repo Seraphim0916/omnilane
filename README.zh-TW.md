@@ -693,9 +693,12 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析後的計畫,
 （缺 `--effort`、模型別名、查無評分列）。模型不得替自己主張真人豁免。
 
 `runtime-mapping-unverified`——你的身分沒問題，但**目標**沒有已驗證的本機請求
-選擇器。可能從未探測過，也可能探測失敗；`omnilane doctor` 會回報這類設定的數量，
-overlay 的 `unproven[]` 記錄每一條失敗的原因。因供應商額度上限造成的拒絕，
-在額度恢復前不會自行解除。
+選擇器。可能從未探測過，也可能探測失敗；`omnilane doctor` 與 `--json` 會以 `WARN`
+逐列顯示代號、請求與實測模型／強度（有紀錄時）、失敗類別與原因、最後探測時間、
+證據路徑（不印內容）及下一步。環境類失敗會列出
+`omnilane resign --retry-failed --vendor VENDOR`；結論類不會自動重試，會提示核對原始
+請求、工具參數及供應端模型對應。證據損壞時會指出位置，並說明從已知良好備份還原，
+或明確執行探測、在新目錄建立證據的方式。因額度上限造成的拒絕，仍須等額度恢復。
 
 `invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
 是 overlay 本身載不起來，因此**所有廠商**都會被拒。常見成因是廠商 CLI 升級：

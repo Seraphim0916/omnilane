@@ -8,6 +8,7 @@ semantic version tags.
 
 ### Fixed
 
+- Show each unproven configuration as a doctor warning in text and JSON, including requested/observed identity, failure class, reason, probe time, evidence paths and next steps; identify damaged evidence and explain backup restoration or explicit fresh probing without weakening retry or integrity gates.
 - Fix a pre-existing evidence-laundering bug present in base `15d5c99`: missing
   probe verdicts are re-judged from raw request/response evidence against the
   source model and effort, never assumed successful, including snapshot carry.

@@ -348,6 +348,13 @@ never retry automatically, including with `--retry-failed`: run `omnilane doctor
 inspect the original request and CLI/provider routing, and correct the cause
 before explicitly arranging fresh verification.
 
+`doctor` and `doctor --json` report each unproven row as `WARN`, with its ID,
+requested/observed model and effort (when recorded), failure class/reason,
+last probe time, evidence paths only, and next step. An integrity refusal names
+the affected evidence path and offers known-good backup restoration or explicit
+fresh probing into a new directory. Follow those recovery steps; do not edit
+digests or remove integrity fields, and preserve the existing signer approvals.
+
 `omnilane resign --approve …`, `--record-signers` and `--trust-adhoc …` are
 operator actions. A model never runs them. After two failed attempts at a task, reassess the scope;
 an upward move needs the human. On vendor quota exhaustion (429, "stream

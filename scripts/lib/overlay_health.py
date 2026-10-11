@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Report whether the configured AA transport overlay still loads.
 
-Prints one `LEVEL<TAB>message` line for `omnilane doctor`. Always exits 0; the
+Prints `LEVEL<TAB>message[<TAB>row JSON]` lines for `omnilane doctor`. Always exits 0; the
 caller decides how to grade the level. Nothing here contacts a provider.
 
 Exists because no other doctor check observes the AA gate: every vendor CLI can
@@ -17,10 +17,18 @@ from pathlib import Path
 
 REPO = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts" / "lib"))
+from overlay_diagnostics import recovery_guidance, row_message, unproven_rows
+
+UNPROVEN_ROWS = []
 
 
 def emit(level: str, message: str) -> None:
-    print(f"{level}\t{message}")
+    # Keep each diagnostic on one physical line, including untrusted metadata.
+    def line(value):
+        return str(value).replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n")
+    print(f"{level}\t{line(message)}")
+    for row in UNPROVEN_ROWS:
+        print(f"WARN\t{line(row_message(row))}\t{json.dumps(row, ensure_ascii=True)}")
     raise SystemExit(0)
 
 
@@ -84,7 +92,8 @@ def main() -> None:
         registry, _ = aa_policy.load_registry(str(REPO / "config" / "aa-model-policy.json"))
     except Exception as error:  # PolicyError, OSError, and anything else fails the gate
         detail = "; ".join(offenders(Path(overlay_path))) or str(error)
-        emit("FAIL", f"overlay rejected, every dispatch is refused: {error} ({detail})")
+        emit("FAIL", f"overlay rejected, every dispatch is refused: {error} ({detail}); "
+             + recovery_guidance(REPO, Path(overlay_path)))
 
     tiers = registry.get("_transport_evidence_tiers", {})
     verified = Counter()
@@ -95,6 +104,7 @@ def main() -> None:
                         for (vendor, tier), count in sorted(verified.items())) or "none"
 
     overlay = json.loads(Path(overlay_path).read_text())
+    UNPROVEN_ROWS.extend(unproven_rows(overlay, registry))
     pending = pending_summary(overlay)
     unproven = overlay.get("unproven", [])
     extra = f"; {len(unproven)} config(s) recorded unproven" if unproven else ""

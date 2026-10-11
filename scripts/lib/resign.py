@@ -48,6 +48,7 @@ import build_overlay  # noqa: E402
 import cli_provenance  # noqa: E402
 import probe_sweep  # noqa: E402
 import probe_failure  # noqa: E402
+from overlay_diagnostics import recovery_guidance  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
 EXIT_HOST_CONFIG = 40
@@ -554,7 +555,8 @@ def _resign(args, live: Path, anchors, log) -> int:
     try:
         report = detect(overlay, anchors)
     except (OSError, ValueError, KeyError, TypeError) as error:
-        log(f"omnilane: failed probe evidence did not validate ({error}); live overlay untouched")
+        log(f"omnilane: failed probe evidence did not validate ({error}); live overlay untouched. "
+            + recovery_guidance(build_overlay.REPO, live))
         return EXIT_HOST_CONFIG
     wanted = args.vendor or list(VENDORS)
     if args.record_signers:
