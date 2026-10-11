@@ -161,7 +161,7 @@ For a pinned script or native non-macOS executable, use `omnilane resign --trust
 
 `omnilane resign --check` and `omnilane doctor` show executable kind and approved channels, and observed team/identifier when blocked. Invalid signatures, unavailable signature verification, unsigned macOS native files and damaged or foreign-host policy files always stop; approval cannot repair them. Source failures and login failures have different instructions. Restore a valid installation or local policy backup before retrying. Source blocking applies when the executable changes. An unchanged pinned executable keeps the existing missing-row, retry and evidence-refresh behavior.
 
-Channels live in host-bound, atomic, backed-up, 0600 `$OMNILANE_HOME/transport-origins.local.json`; do not copy them between hosts. The phase-2 first-use interface currently defaults to Developer ID only. Scripts and non-macOS binaries are not silently trusted on upgrade. AI assistants must never run trust, approval, recording or revocation commands themselves.
+Channels live in host-bound, atomic, backed-up, 0600 `$OMNILANE_HOME/transport-origins.local.json`; do not copy them between hosts. The first-use policy now covers Developer ID plus self-signed, script and no-platform-signature tools at their installation location; it takes effect with the phase-2 first probe, and no production code calls the interface yet. Scripts and non-macOS binaries are not silently trusted on upgrade. AI assistants must never run trust, approval, recording or revocation commands themselves.
 
 Then let it run every day. Any scheduler works as long as it runs **inside your
 desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:

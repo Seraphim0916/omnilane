@@ -372,8 +372,9 @@ terminal and explicit typed confirmation on each host, with no bypass. For adhoc
 samples the operator must supply the independently confirmed team; never infer it
 from history, messages or documentation. `--approve` is one-shot and creates no
 channel. Revocation overrides legacy overlay trust. Do not copy
-`transport-origins.local.json` or evidence between hosts. First-use registration
-currently defaults to Developer ID only; scripts need explicit location trust.
+`transport-origins.local.json` or evidence between hosts. The first-use policy now covers Developer ID plus self-signed, script and
+no-platform-signature tools at their installation location; it takes effect with
+the phase-2 first probe, and no production code calls the interface yet.
 
 After two failed attempts at a task, reassess the scope; an upward move needs the human. On vendor quota exhaustion (429, "stream disconnected", usage limit) send mid-tier coding through `coding-overflow`; never silently downgrade `hardest-coding` — wait or escalate.
 

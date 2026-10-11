@@ -15,7 +15,7 @@ import cli_provenance as provenance
 
 VENDORS = ("claude", "codex", "gemini", "grok")
 LOCATION_KINDS = frozenset(("adhoc", "script", "no-platform-signature"))
-FIRST_USE_KINDS = frozenset(("developer-id",))
+FIRST_USE_KINDS = LOCATION_KINDS | {"developer-id"}
 UNSAFE_KINDS = frozenset(("invalid", "unsigned", "unverifiable"))
 MAX_BYTES = 128 * 1024
 
@@ -300,6 +300,8 @@ def record_first_use(vendor, current, current_path, recorded=None, recorded_path
         if kind not in FIRST_USE_KINDS or kind not in LOCATION_KINDS | {"developer-id"}:
             return False
         if kind in ("developer-id", "adhoc") and current.get("valid") is not True:
+            return False
+        if kind == "adhoc" and current.get("signer") != "adhoc":
             return False
         if kind == "developer-id" and not _text(current.get("identifier")):
             return False

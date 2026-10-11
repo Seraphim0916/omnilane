@@ -73,7 +73,7 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(self.path.exists())
 
     def test_case12_no_builtin_team_approval(self):
-        self.assertEqual(op.FIRST_USE_KINDS, {"developer-id"})
+        self.assertEqual(op.FIRST_USE_KINDS, {"developer-id"} | op.LOCATION_KINDS)
         self.assertFalse(self.gate()[0])
         # Production code/docs must not embed a literal ten-character team.
         import re
@@ -166,12 +166,91 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(op.record_first_use("claude", self.current, self.cli, path=self.path))
 
     def test_case30_first_use_unsafe_kinds_never_record(self):
-        for kind in ("invalid", "unverifiable", "unsigned", "script", "no-platform-signature", "adhoc"):
+        for kind in ("invalid", "unverifiable", "unsigned"):
             self.assertFalse(op.record_first_use("claude", sample(kind), self.cli, path=self.path))
         self.assertFalse(self.path.exists())
         with patch.object(op, "FIRST_USE_KINDS", {"script", "no-platform-signature", "invalid"}):
             self.assertFalse(op.record_first_use("claude", sample("invalid"), self.cli, path=self.path))
             self.assertTrue(op.record_first_use("claude", sample("script"), self.cli, path=self.path))
+        path = self.root / "unsafe.json"
+        with patch.object(op, "FIRST_USE_KINDS", op.FIRST_USE_KINDS | op.UNSAFE_KINDS):
+            for kind in sorted(op.UNSAFE_KINDS):
+                with self.subTest(kind=kind):
+                    self.assertFalse(op.record_first_use("claude", sample(kind), self.cli, path=path))
+        self.assertFalse(path.exists())
+
+    def test_first_use_location_channels_round_trip(self):
+        for kind in sorted(op.LOCATION_KINDS):
+            with self.subTest(kind=kind):
+                self.path = self.root / (kind + ".json")
+                current = sample(kind)
+                self.assertTrue(op.record_first_use("claude", current, self.cli, path=self.path))
+                channels = op.load(self.path)["vendors"]["claude"]["channels"]
+                self.assertEqual(len(channels), 1)
+                self.assertEqual(channels, [{
+                    "kind": "location", "accepts": kind, "approved_via": "first-use",
+                    "install_family": str(self.cli.parent.parent / "<version>" / self.cli.name),
+                    "approved_at": channels[0]["approved_at"],
+                }])
+                before = self.path.read_bytes()
+                self.assertFalse(op.record_first_use("claude", current, self.cli, path=self.path))
+                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(self.gate(current), (True, "origin-approved"))
+                self.assertEqual(self.gate(current, self.cli.parent.parent / "2.3.4" / "cli"),
+                                 (True, "origin-approved"))
+                self.assertEqual(self.gate(current, self.root / "other" / "cli"),
+                                 (False, "location-changed"))
+                for other in sorted(({"developer-id"} | op.LOCATION_KINDS) - {kind}):
+                    with self.subTest(other=other):
+                        self.assertEqual(self.gate(sample(other)), (False, "origin-unapproved"))
+
+    def test_first_use_developer_id_still_rejects_location_kinds(self):
+        self.assertTrue(op.record_first_use("claude", self.current, self.cli, path=self.path))
+        self.assertEqual(self.gate(), (True, "origin-approved"))
+        for kind in sorted(op.LOCATION_KINDS):
+            with self.subTest(kind=kind):
+                self.assertEqual(self.gate(sample(kind)), (False, "origin-unapproved"))
+
+    def test_first_use_adhoc_requires_valid_signature_and_signer(self):
+        for valid in (False, None, 0, 1, "true"):
+            with self.subTest(valid=valid):
+                self.assertFalse(op.record_first_use("claude", sample("adhoc", valid=valid),
+                                                    self.cli, path=self.path))
+        for signer in (None, "unsigned", TEAM, False, []):
+            with self.subTest(signer=signer):
+                self.assertFalse(op.record_first_use("claude", sample("adhoc", signer=signer),
+                                                    self.cli, path=self.path))
+        current = sample("adhoc")
+        del current["signer"]
+        self.assertFalse(op.record_first_use("claude", current, self.cli, path=self.path))
+        self.assertFalse(self.path.exists())
+
+    def test_first_use_existing_overlay_blocks_every_kind(self):
+        for kind in sorted(op.FIRST_USE_KINDS):
+            for recorded, recorded_path in (({}, None), (self.recorded, None), (self.trusted, None),
+                                            (None, str(self.cli)), (self.recorded, str(self.cli))):
+                with self.subTest(kind=kind, recorded=recorded, recorded_path=recorded_path):
+                    self.assertFalse(op.record_first_use("claude", sample(kind), self.cli,
+                                                        recorded, recorded_path, self.path))
+        self.assertFalse(self.path.exists())
+
+    def test_first_use_existing_policy_blocks_every_kind(self):
+        for channels in ([], [self.channel()]):
+            self.write(channels)
+            before = self.path.read_bytes()
+            for kind in sorted(op.FIRST_USE_KINDS):
+                with self.subTest(kind=kind, channels=channels):
+                    self.assertFalse(op.record_first_use("claude", sample(kind), self.cli, path=self.path))
+                    self.assertEqual(self.path.read_bytes(), before)
+
+    def test_first_use_developer_id_malformed_identity_is_refused(self):
+        for key, values in (("signer", (None, "adhoc", "short", [], {})),
+                            ("identifier", (None, "", "bad\nidentifier", [], {}))):
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    self.assertFalse(op.record_first_use("claude", sample(**{key: value}),
+                                                        self.cli, path=self.path))
+        self.assertFalse(self.path.exists())
 
     def test_case31_host_mismatch_rejects_entire_file(self):
         self.write(host="another-host")
