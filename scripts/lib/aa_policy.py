@@ -153,9 +153,28 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
     overlay, digest = _read_json(path)
     expected = os.environ.get("OMNILANE_AA_OVERLAY_SHA256")
     _check(not expected or expected == digest, "transport overlay changed after initial decision")
-    _check(overlay.get("schema_version") == 1, "unsupported transport overlay")
-    _check(overlay.get("snapshot_id") == registry["snapshot"]["id"], "transport overlay snapshot mismatch")
+    validate_transport_overlay(registry, overlay, digest)
+
+
+def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any], digest: str) -> None:
+    """Shared read-only validation for dispatch, maintenance, and diagnostic tools."""
+    import transport_compat as compat
+    _check(type(overlay.get("schema_version")) is int and overlay["schema_version"] in (1, 2),
+           "unsupported transport overlay")
+    _check(not ({"carried_forward", "runtime_verified"} & set(overlay)),
+           "untrusted transport carry-forward assertion")
     _check(overlay.get("host") == socket.gethostname(), "transport overlay host mismatch")
+    source_rows, source, compatibility_sha = compat.source_rows(overlay, registry)
+    cross_snapshot = overlay["snapshot_id"] != registry["snapshot"]["id"]
+    current_rows = {row["id"]: row for row in registry["scored_configs"]}
+    _check(len(current_rows) == len(registry["scored_configs"]), "duplicate AA scored configuration")
+    identities = [tuple(row[k] for k in IDENTITY_FIELDS) for row in registry["scored_configs"]]
+    _check(len(set(identities)) == len(identities), "duplicate AA configuration identity")
+    _check(isinstance(overlay.get("evidence"), list), "invalid transport evidence list")
+    _check(isinstance(overlay.get("mappings"), list), "invalid transport mappings")
+    if overlay["schema_version"] == 2:
+        _check(overlay.get("compatibility_version") == compat.VERSION,
+               "unsupported transport compatibility version")
     stale_vendors: set[str] = set()
     for evidence in overlay.get("evidence", []):
         _check(isinstance(evidence, dict), "invalid transport evidence")
@@ -186,11 +205,29 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
                 _check(False, "transport contract evidence changed")
             stale_vendors.add(vendor)
     _check(bool(overlay.get("evidence")), "transport overlay requires local evidence")
+    records = compat.proof_records(overlay, source_rows, source) if cross_snapshot or overlay["schema_version"] == 2 else {}
+    from probe_failure import pinned_failures
+    pinned_failures(overlay)
+    mapped_ids = {m.get("config_id") for m in overlay["mappings"] if isinstance(m, dict)}
+    _check(not any(u.get("config_id") in mapped_ids for u in overlay.get("unproven", [])
+                   if isinstance(u, dict)), "contradictory verified and unproven transport row")
+    audit = []
+    unverified = {}
+    seen = set()
     tiers: dict[str, str] = {}
     for mapping in overlay.get("mappings", []):
-        rows = [row for row in registry["scored_configs"] if row["id"] == mapping.get("config_id")]
-        _check(len(rows) == 1, "unknown overlay config")
-        row = rows[0]
+        _check(isinstance(mapping, dict), "invalid transport mapping")
+        allowed_fields = {"config_id", "identity", "verification", "runtime_effort", "runtime_model",
+                          "selector_type", "cli_flag", "evidence_tier", "pending_recheck", "expires_at"}
+        if overlay["schema_version"] == 2:
+            allowed_fields.update(("source_snapshot_id", "source_row_digest", "transport_contract_digest",
+                                   "evidence_refs", "verified_at"))
+        _check(set(mapping) <= allowed_fields, "untrusted transport mapping fields")
+        cid = mapping.get("config_id")
+        _check(isinstance(cid, str) and cid not in seen, "duplicate overlay config")
+        seen.add(cid)
+        _check(cid in source_rows, "unknown overlay config")
+        row = source_rows[cid]
         _check(mapping.get("identity") == _row_identity(row), "overlay exact identity mismatch")
         _check(mapping.get("verification") == "request-selector-contract", "unsupported overlay verification")
         _check(mapping.get("runtime_effort") == row["effort"], "overlay effort mismatch")
@@ -208,8 +245,44 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
             _check(mapping.get("runtime_model") == row["model"], "overlay model mismatch")
         tier = mapping.get("evidence_tier", "selector-only")
         _check(tier in TRANSPORT_EVIDENCE_TIERS, "unknown transport evidence tier")
+        files, descriptor = records.get(cid, ({}, {}))
+        if cross_snapshot or overlay["schema_version"] == 2:
+            _check(bool(files), "overlay mapping has no anchored probe evidence")
+            _check(any(e.get("vendor") == row["vendor"] for e in overlay["evidence"]),
+                   "overlay mapping has no executable evidence")
+        if overlay["schema_version"] == 2:
+            _check(mapping.get("source_snapshot_id") == overlay["snapshot_id"],
+                   "overlay source snapshot mismatch")
+            _check(mapping.get("source_row_digest") == compat.digest(compat.row_contract(row)),
+                   "overlay source row digest mismatch")
+            _check(mapping.get("evidence_refs") == files and
+                   mapping.get("verified_at") == descriptor.get("probed_at"),
+                   "overlay proof reference mismatch")
+            # Use the source engine, not the newly installed engine, when validating provenance.
+            source_engine = source["engine"] if source else compat.engine_contract()
+            source_selector = source["selectors"].get(cid) if source else compat.selector_contract(row)
+            expected_contract = compat.digest(dict(version=compat.VERSION, engine=source_engine,
+                                                   selector=source_selector))
+            _check(mapping.get("transport_contract_digest") == expected_contract,
+                   "overlay transport contract digest mismatch")
+        if cid not in current_rows:
+            continue  # A valid proof for a retired row is not an error or dispatch authority.
+        if cross_snapshot and not compat.equivalent(row, current_rows[cid], source):
+            unverified[cid] = "request-contract-changed"
+            continue
+        if compat.expired(mapping.get("expires_at")) or compat.expired(descriptor.get("expires_at")):
+            unverified[cid] = "evidence-expired"
+            continue
+        row = current_rows[cid]
         if row["vendor"] in stale_vendors:
             continue
+        if cross_snapshot:
+            audit.append(dict(config_id=cid, source_snapshot_id=overlay["snapshot_id"],
+                              target_snapshot_id=registry["snapshot"]["id"],
+                              source_overlay_sha256=digest, evidence_refs=files,
+                              source_row_digest=compat.digest(compat.row_contract(row)),
+                              compatibility_version=compat.VERSION,
+                              compatibility_sha256=compatibility_sha))
         tiers[row["id"]] = tier
         row["transport_mapping"].update(
             status="verified", runtime_verified=True,
@@ -221,6 +294,36 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
         )
     registry["_stale_transport_vendors"] = sorted(stale_vendors)
     registry["_transport_evidence_tiers"] = tiers
+    registry["_transport_carry_forward"] = audit
+    registry["_transport_unverified"] = unverified
+    from probe_failure import CONCLUSIVE_REASONS, environment_reason
+    # Display-only hints; never feed failure metadata into verified mappings.
+    registry["_transport_environment_failures"] = {
+        item.get("config_id"): environment_reason(item.get("verdict_reason"))
+        for item in overlay.get("unproven", []) if isinstance(item, dict)
+        and item.get("config_id") in current_rows and environment_reason(item.get("verdict_reason"))}
+    registry["_transport_conclusive_failures"] = {
+        item["config_id"]: item["verdict_reason"]
+        for item in overlay.get("unproven", []) if isinstance(item, dict)
+        and item.get("config_id") in current_rows
+        and isinstance(item.get("verdict_reason"), str)
+        and item["verdict_reason"].split(":", 1)[0] in CONCLUSIVE_REASONS}
+    registry["_transport_compatibility_sha256"] = compatibility_sha
+    registry["_transport_executable_paths"] = {
+        vendor: [e["path"] for e in overlay["evidence"] if e.get("vendor") == vendor
+                 and Path(e["path"]).name != f"run-{vendor}.sh"]
+        for vendor in TRANSPORT_EVIDENCE_VENDORS}
+
+
+def evidence_digest(path: str) -> str:
+    """Hash a raw proof without following links or loading its possibly large contents."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        _check(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "invalid transport evidence file")
+        result = hashlib.sha256()
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            result.update(block)
+    return result.hexdigest()
 
 
 def load_registry(path: str | Path, expected_sha256: str | None = None) -> tuple[dict[str, Any], str]:
@@ -275,6 +378,11 @@ def _unknown_reason(registry: dict[str, Any], identity: dict[str, Any]) -> str |
 def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
                     effort: str | None, target_config: str | None) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
     exact_id = [row for row in registry["scored_configs"] if row["id"] == target_config] if target_config else registry["scored_configs"]
+    request = registry.get("_runtime_executable_request")
+    if request is not None and any(item["config_id"] in {r["id"] for r in exact_id if r["vendor"] == vendor}
+                                   for item in registry.get("_transport_carry_forward", [])):
+        if not request or str(Path(request).resolve()) not in registry.get("_transport_executable_paths", {}).get(vendor, []):
+            return None, "runtime-executable-changed", {"vendor": vendor, "model": model, "effort": effort}
     if target_config and not exact_id:
         return None, "unknown-target-config", {"target_config": target_config}
     if vendor in registry.get("_stale_transport_vendors", []):
@@ -400,13 +508,19 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         registry, vendor, model, effort, target_config
     )
     if target_row is None:
+        from verification_status import transport_guidance
+        guidance = transport_guidance(vendor, target_config, detail.get("candidate_config_ids", []),
+                                      registry.get("_transport_environment_failures", {}),
+                                      registry.get("_transport_conclusive_failures", ()))
         base.update(
             code=mapping_code,
-            message="target runtime cannot be mapped to one verified exact AA configuration",
+            message=guidance["message"],
             failed_gate="target-transport",
             reason=("the caller is identified; this host's transport overlay does not currently "
                     f"verify {vendor} {model} at effort {effort}"),
-            next_command="omnilane resign --check",
+            next_command=guidance["next_command"],
+            requires_gui_session=guidance["requires_gui_session"],
+            message_zh_tw=guidance["message_zh_tw"],
             **detail)
         return base
     target_score = target_row["score"]
@@ -621,6 +735,8 @@ def publish_context(directory: str | Path, registry: dict[str, Any],
         overlay, _ = _read_json(overlay_path)
         atomic_json(root / "aa-transport-overlay.json", overlay)
         lineage["transport_overlay_sha256"] = hashlib.sha256((root / "aa-transport-overlay.json").read_bytes()).hexdigest()
+        lineage["transport_compatibility_sha256"] = registry.get("_transport_compatibility_sha256")
+        lineage["transport_carry_forward"] = registry.get("_transport_carry_forward", [])
     atomic_json(root / "aa-lineage.json", lineage)
     atomic_json(root / "aa-decision.json", decision)
     return lineage
@@ -638,10 +754,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", required=True)
     parser.add_argument("--effort", required=True)
     parser.add_argument("--target-config")
+    parser.add_argument("--runtime-executable", default="")
     parser.add_argument("--publish-dir")
     args = parser.parse_args(argv)
     try:
         registry, registry_sha = load_registry(args.registry, args.expected_registry_sha256)
+        registry["_runtime_executable_request"] = args.runtime_executable
         caller = None
         caller_sha = None
         if args.caller_context:
@@ -670,6 +788,8 @@ def main(argv: list[str] | None = None) -> int:
             "allowed": False,
             "code": "invalid-policy-input",
             "message": message,
+            "next_command": "omnilane doctor",
+            "message_zh_tw": "評分表或本機證據無法通過檢查。請先執行 omnilane doctor 查明來源、檔案與權限；不要直接加 --approve。",
         }), end="")
         return 2
 

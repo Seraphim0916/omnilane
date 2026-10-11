@@ -105,6 +105,13 @@ def main() -> None:
 
     if pending:
         extra += f"; pending re-check: {pending}"
+    carried = registry.get("_transport_carry_forward", [])
+    if carried:
+        extra += (f"; reused {len(carried)} unchanged row(s) from "
+                  f"{carried[0]['source_snapshot_id']} to {carried[0]['target_snapshot_id']}")
+    changed = registry.get("_transport_unverified", {})
+    if changed:
+        extra += "; request contracts need verification: " + ", ".join(sorted(changed))
     stale = registry.get("_stale_transport_vendors", [])
     # The gate hashes the path the overlay recorded. An update that installs beside
     # the old executable leaves that path intact, so only this comparison sees it.
@@ -138,7 +145,7 @@ def main() -> None:
             detail += "; also moved without going stale: " + " | ".join(moved)
         emit("WARN", f"stale vendor(s) {', '.join(stale)} degraded to unverified "
                      f"({detail}); run `omnilane resign`; still verified: {summary}{extra}")
-    emit("WARN" if pending else "PASS", f"verified mappings: {summary}{extra}")
+    emit("WARN" if pending or changed else "PASS", f"verified mappings: {summary}{extra}")
 
 
 main()

@@ -123,6 +123,7 @@ aa_policy_gate() {
     return 3
   }
   args=(--registry "$policy_file" --vendor "$vendor" --model "$model" --effort "$effort")
+  args+=(--runtime-executable "$(command -v "$(vendor_bin "$vendor")" || true)")
   [[ -z "${OMNILANE_AA_REGISTRY_SHA256:-}" ]] ||
     args+=(--expected-registry-sha256 "$OMNILANE_AA_REGISTRY_SHA256")
   [[ -z "$target_config" ]] || args+=(--target-config "$target_config")

@@ -294,15 +294,19 @@ class ProbeAndOverlayTests(unittest.TestCase):
         self.root = Path(self.temp.name)
 
     def evidence(self, name, verdict="pass", **updates):
+        import probe_sweep
         directory = self.root / "evidence"
         directory.mkdir(exist_ok=True)
-        record = {"command": ["claude", "--model", "claude-opus-5"], "exit_code": 0,
+        row = builder.ROWS["claude/claude-opus-5"]
+        record = {"command": probe_sweep.command("claude", row["model"], row["effort"]), "exit_code": 0,
                   "timed_out": False, "probed_at": "2026-09-09T00:00:00+00:00",
-                  "verdict_reason": "fixture-reason", "observed_model": "fixture-model", **updates}
+                  "verdict_reason": "fixture-reason",
+                  "observed_model": row["model"] if verdict in ("pass", None) else "fixture-model", **updates}
         if verdict is not None:
             record["verdict"] = verdict
         (directory / f"{name}.json").write_text(json.dumps(record))
-        (directory / f"{name}.stdout").write_text("FIXTURE_OK")
+        (directory / f"{name}.stdout").write_text(json.dumps(
+            {"result": probe_sweep.TOKENS["claude"], "modelUsage": {row["model"]: {}}}))
         (directory / f"{name}.stderr").write_text("")
 
     def build(self, proven):
@@ -336,7 +340,7 @@ class ProbeAndOverlayTests(unittest.TestCase):
                         root=self.root, vendor="codex")
         self.assertFalse((self.root / "evidence").exists())
 
-    def test_failed_probe_is_visible_but_not_signed_or_hashed(self):
+    def test_failed_probe_is_hashed_without_granting_dispatch_authority(self):
         self.evidence("pass")
         self.evidence("fail", "fail")
         proven = {
@@ -349,26 +353,38 @@ class ProbeAndOverlayTests(unittest.TestCase):
         self.assertEqual(overlay["unproven"], [{"config_id": "claude/claude-sonnet-5",
                                               "verdict_reason": "fixture-reason", "observed_model": "fixture-model",
                                               "probed_at": "2026-09-09T00:00:00+00:00"}])
-        (self.root / "evidence/fail.stdout").write_text("changed unproven evidence")
-        # Unproven rows do not enter the frozen registry, evidence hash checks or dispatch gate.
+        self.assertIn("claude/claude-sonnet-5", manifest["failed_probe_runs"])
+        # Failure evidence is sealed for retry integrity, never dispatch authority.
         with patch.dict(os.environ, {"OMNILANE_AA_TRANSPORT_OVERLAY": str(self.root / "transport-contracts.local.json")}, clear=False):
             with patch.dict(os.environ):
                 os.environ.pop("OMNILANE_AA_OVERLAY_SHA256", None)
                 registry, _ = aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
+                (self.root / "evidence/fail.stdout").write_text("changed unproven evidence")
+                # This module loads aa_policy independently; both policy-error
+                # classes inherit ValueError even when their module objects differ.
+                with self.assertRaisesRegex(ValueError, "failed probe evidence changed"):
+                    aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
         rows = {row["id"]: row for row in registry["scored_configs"]}
         self.assertTrue(rows["claude/claude-opus-5"]["transport_mapping"]["runtime_verified"])
         self.assertIsNot(rows["claude/claude-sonnet-5"]["transport_mapping"].get("runtime_verified"), True)
 
-    def test_legacy_descriptor_still_signed_with_named_warning(self):
+    def test_legacy_negative_response_is_unproven_after_rejudging(self):
         self.evidence("old-format", None, exit_code=1, probed_at=None)
         proven = {"claude/claude-opus-5": ("model_and_effort", "claude-opus-5", "old-format")}
-        overlay, _, stdout = self.build(proven)
+        overlay, manifest, _ = self.build(proven)
+        self.assertEqual(overlay["mappings"], [])
+        self.assertEqual(overlay["unproven"][0]["verdict_reason"], "exit-code: 1")
+        self.assertIn("claude/claude-opus-5", manifest["failed_probe_runs"])
+
+    def test_complete_legacy_success_is_rejudged_without_rewriting_evidence(self):
+        self.evidence("old-format", None)
+        path = self.root / "evidence/old-format.json"
+        before = path.read_bytes()
+        proven = {"claude/claude-opus-5": ("model_and_effort", "claude-opus-5", "old-format")}
+        overlay, _, _ = self.build(proven)
         self.assertEqual(len(overlay["mappings"]), 1)
         self.assertEqual(overlay["unproven"], [])
-        self.assertIn("warning", stdout.lower())
-        self.assertIn("unknown", stdout)
-        self.assertIn("claude/claude-opus-5", stdout)
-        self.assertIn("old-format", stdout)
+        self.assertEqual(path.read_bytes(), before)
 
     def test_any_explicit_nonpass_verdict_is_unproven_not_legacy(self):
         self.evidence("bad", "maybe")

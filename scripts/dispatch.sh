@@ -424,6 +424,7 @@ aa_policy_decide() {
   # vendor model effort [target-config] -> structured JSON in AA_LAST_DECISION
   local vendor="$1" model="$2" effort="$3" target_config="${4:-}" rc=0
   local args=(--registry "$AA_POLICY_FILE" --vendor "$vendor" --model "$model" --effort "$effort")
+  args+=(--runtime-executable "$(command -v "$(vendor_bin "$vendor")" || true)")
   [[ -z "$target_config" ]] || args+=(--target-config "$target_config")
   if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "1" ]]; then
     args+=(--operator-asserted-human)
@@ -863,6 +864,10 @@ fi
 if [[ -n "${OMNILANE_AA_TRANSPORT_OVERLAY:-}" ]]; then
   OMNILANE_AA_OVERLAY_SHA256="$(file_sha256 "$OMNILANE_AA_TRANSPORT_OVERLAY")"
   export OMNILANE_AA_OVERLAY_SHA256
+  if [[ -z "${OMNILANE_AA_COMPATIBILITY_SHA256:-}" ]]; then
+    OMNILANE_AA_COMPATIBILITY_SHA256="$(file_sha256 "$OMNILANE_REPO/config/transport-compatibility.json")"
+    export OMNILANE_AA_COMPATIBILITY_SHA256
+  fi
 fi
 # A model caller that passed no identity is read from the CLI that launched it:
 # the harness sets those flags and the model cannot. An explicit file or the

@@ -11,7 +11,13 @@ def retry_args(directory):
     root = Path(directory)
     os.environ.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
     os.environ.pop("OMNILANE_AA_OVERLAY_SHA256", None)
+    os.environ.pop("OMNILANE_AA_COMPATIBILITY_SHA256", None)
     lineage, _ = aa_policy._read_json(root / "aa-lineage.json")
+    if lineage.get("transport_compatibility_sha256"):
+        import transport_compat
+        _, current_compatibility = transport_compat.archive()
+        aa_policy._check(current_compatibility == lineage["transport_compatibility_sha256"],
+                         "retry transport compatibility changed")
     aa_policy._check(lineage.get("schema_version") == 1, "unsupported retry lineage")
     registry_path = root / "aa-registry.json"
     registry, _ = aa_policy.load_registry(registry_path, lineage["registry_sha256"])

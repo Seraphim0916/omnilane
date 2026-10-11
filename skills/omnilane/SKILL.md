@@ -327,6 +327,27 @@ operator's rules say a reroute needs their approval.
 | `invalid-policy-input` "transport contract evidence changed" | the overlay will not load; nothing is wrong with you or your target | `omnilane doctor`, then the operator runs `omnilane resign` |
 | `inherit-requires-model-caller` | a human has no runtime to inherit | dispatch a lane |
 
+Snapshot-only upgrades reuse unchanged request-selector proofs automatically,
+including score/date-only changes; ceilings always come from the new table.
+Do not ask an operator to re-sign solely because the snapshot changed. New or
+changed rows and changed executable identities remain unverified; use the
+refusal's exact `next_command` and `requires_gui_session`. Legacy format 1 works
+for the release-pinned source snapshots. Unknown sources or damaged evidence
+need inspection, not a blanket approval. Scheduled `omnilane resign --daily`
+keeps nonzero failures and private local pending state shown by `omnilane doctor`.
+No automatic provider probing, signer-policy change, or scheduler install is
+part of this phase.
+
+Environment-failed rows are retryable with `omnilane resign --vendor VENDOR`.
+Non-interactive runs wait 20 hours per failed row; interactive runs or
+`omnilane resign --retry-failed --vendor VENDOR` retry immediately without
+approving signer changes. Failure proof and timestamp presence are pinned;
+altered records are reported and never retried. Expired proofs use the
+missing-row path and leave healthy rows alone. Conclusive model/effort mismatches
+never retry automatically, including with `--retry-failed`: run `omnilane doctor`,
+inspect the original request and CLI/provider routing, and correct the cause
+before explicitly arranging fresh verification.
+
 `omnilane resign --approve …`, `--record-signers` and `--trust-adhoc …` are
 operator actions. A model never runs them. After two failed attempts at a task, reassess the scope;
 an upward move needs the human. On vendor quota exhaustion (429, "stream

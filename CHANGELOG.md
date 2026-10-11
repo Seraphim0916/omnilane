@@ -6,6 +6,44 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix a pre-existing evidence-laundering bug present in base `15d5c99`: missing
+  probe verdicts are re-judged from raw request/response evidence against the
+  source model and effort, never assumed successful, including snapshot carry.
+- Anchor failed probe files and timestamp presence in the integrity manifest.
+  Editing or removing both failure timestamps no longer bypasses the unattended
+  20-hour cooldown; genuinely old records without timestamps remain retryable.
+- Refresh expired evidence through the missing-row path, retain healthy proofs,
+  and keep staged refreshes uninstalled until smoke completes. Conclusive
+  model/effort mismatches point to diagnosis and never auto-retry. Reject rows
+  simultaneously marked verified and unproven. Cover the surviving verdict-gate
+  mutation and consolidate current upgrade/retry guidance outside historical
+  release notes.
+
+- Retry environment-failed transport probes without approving unchanged executables;
+  unattended retries wait 20 hours per row, while interactive runs and `--retry-failed`
+  retry immediately. Preserve failed-probe timestamps, retain conclusive mismatches,
+  and show the exact retry command when dispatch is blocked. Failed or interrupted
+  retries never verify a row or weaken signer checks.
+
+### Changed
+
+- Reuse unchanged request-selector proofs across packaged AA snapshots without
+  running `resign`, writing the overlay, accessing a desktop session, or calling
+  providers. Score/date-only changes use the new table's ceilings immediately;
+  added or changed contracts remain unverified. Legacy overlays load through a
+  release-pinned compatibility archive, with per-row source/proof audit metadata.
+- New overlays record version 2 provenance. Probe files, duplicate rows, expiry,
+  executable evidence, and the original overlay/compatibility pins fail closed.
+- Transport refusals name the vendor, row, exact retry command, and desktop-login
+  requirement. `omnilane resign --daily` (or `scripts/resign-daily.sh`) preserves
+  nonzero failures in private local state shown by `omnilane doctor`, even without
+  Telegram. Interrupted daily runs stay visible until a completed verification.
+
+No automatic first-use provider probes, signer-policy changes, service install,
+or host-local scheduler replacement is included in this phase.
+
 ## [0.53.0] - 2026-10-09
 
 ### Added

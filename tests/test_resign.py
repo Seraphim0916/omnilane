@@ -270,12 +270,10 @@ class ResignTests(unittest.TestCase):
         return {"signer": self.signers[vendor], "identifier": vendor, "valid": True}
 
     def descriptor(self, root, name, verdict):
-        evidence = root / "evidence"
-        for suffix in ("stdout", "stderr"):
-            (evidence / f"{name}.{suffix}").write_text("")
-        (evidence / f"{name}.json").write_text(json.dumps(
-            {"verdict": verdict, "verdict_reason": "", "evidence_tier": "billed-model",
-             "probed_at": "2026-01-01T00:00:00+00:00"}))
+        from probe_fixture import write_probe
+        vendor, entry = next((vendor, entry) for vendor in probe_sweep.VENDORS
+                             for entry in probe_sweep.plan(vendor) if entry["name"] == name)
+        write_probe(root / "evidence", vendor, entry, verdict)
 
     def build(self, root):
         with patch("builtins.print"):
@@ -592,10 +590,10 @@ class ResignTests(unittest.TestCase):
         self.assertTrue(any("score registry moved from aa-older-snapshot" in line
                             for line in self.lines), self.lines)
 
-    def test_a_re_scored_registry_is_re_signed_from_the_existing_evidence(self):
+    def test_an_unknown_snapshot_requires_full_probes_not_existing_evidence(self):
         self.older_snapshot()
         self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
-        self.assertEqual(self.only_missing, {vendor: True for vendor in resign.VENDORS})
+        self.assertEqual(self.only_missing, {vendor: False for vendor in resign.VENDORS})
         self.assertEqual(json.loads(self.live.read_text())["snapshot_id"],
                          build_overlay.REGISTRY["snapshot"]["id"])
 
@@ -604,7 +602,7 @@ class ResignTests(unittest.TestCase):
         self.update("grok")
         self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
         self.assertIs(self.only_missing["grok"], False)
-        self.assertIs(self.only_missing["codex"], True)
+        self.assertIs(self.only_missing["codex"], False)
 
     def never_probed(self, vendor="claude", *, verdict=None):
         """Re-sign the live overlay as if one planned probe of vendor never ran, or ran with verdict."""

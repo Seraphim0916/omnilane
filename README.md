@@ -19,6 +19,14 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 </div>
 
+## Current upgrade and verification
+
+Snapshot-only upgrades now reuse unchanged request-selector proofs automatically: score/date changes use the new ceiling immediately, without `omnilane resign`, GUI login, network calls, or rewriting the overlay. Only new/changed request contracts or executable identities need `omnilane resign --vendor VENDOR`; the refusal names the affected row and whether a desktop terminal is needed. Legacy format 1 works for release-pinned source snapshots; unknown older sources need inspection with `omnilane resign --check`. First-time setup and signer approval are unchanged. Run scheduled verification as `omnilane resign --daily` (or `bash scripts/resign-daily.sh`): failures stay nonzero and appear in `omnilane doctor` from private local status, without Telegram. No scheduler is installed automatically.
+
+Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. Non-interactive runs wait 20 hours after each failed row; interactive runs or `omnilane resign --retry-failed --vendor VENDOR` retry immediately. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
+
+Expired proofs are refreshed through the same missing-row path, without re-probing healthy rows. A model/effort mismatch is a conclusive finding and will not retry automatically, even with `--retry-failed`. Run `omnilane doctor`, inspect the recorded request and CLI/provider routing, and correct the cause before arranging fresh verification. Release notes below describe behavior at the time of each release; current installations follow this section.
+
 ---
 
 ## 🤔 What is omnilane?
@@ -162,7 +170,7 @@ cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
   <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>

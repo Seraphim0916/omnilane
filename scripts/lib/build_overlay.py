@@ -23,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_provenance  # noqa: E402
+import transport_compat  # noqa: E402
 
 REPO = Path(os.environ.get("OMNILANE_REPO") or Path(__file__).resolve().parents[2])
 HOME = Path.home()
@@ -188,7 +189,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     root = args.root.expanduser()
 
-    manifest = {"probe_runs": {}}
+    manifest = {"probe_runs": {}, "failed_probe_runs": {}, "failure_metadata_version": 1}
     unproven = []
     # Evidence written before 0.42.6 carries no tier; it proved the selector and
     # nothing about who answered, which is exactly what selector-only records.
@@ -209,17 +210,21 @@ def main(argv: list[str] | None = None) -> None:
         descriptor = json.loads(descriptor_path.read_text())
         if not isinstance(descriptor, dict):
             raise SystemExit(f"invalid probe descriptor for {cid}: {ev}")
-        if "verdict" not in descriptor:
-            print(f"warning: legacy evidence (verdict=unknown): {cid}: {ev}")
-        elif descriptor["verdict"] != "pass":
+        row = ROWS.get(cid)
+        descriptor = transport_compat.checked_descriptor(
+            row, transport_compat.selector_contract(row) if row else None, entry, descriptor)
+        if descriptor.get("verdict") != "pass":
             unproven.append({
                 "config_id": cid,
                 "verdict_reason": descriptor.get("verdict_reason") or f"verdict: {descriptor['verdict']}",
                 "observed_model": descriptor.get("observed_model"),
                 "probed_at": descriptor.get("probed_at") or datetime.fromtimestamp(
                     descriptor_path.stat().st_mtime, timezone.utc).isoformat(),
+                **({"last_failed_at": descriptor["last_failed_at"]}
+                   if "last_failed_at" in descriptor else {}),
             })
-            # Visibility only: failed evidence must not enter the signed manifest.
+            # Negative proof is integrity-protected, but never grants authority.
+            manifest["failed_probe_runs"][cid] = entry
             continue
         tier = descriptor.get("evidence_tier", "selector-only")
         if tier not in ("billed-model", "client-echo", "selector-only"):
@@ -253,6 +258,9 @@ def main(argv: list[str] | None = None) -> None:
         }
         if selector == "cli_reasoning_effort":
             mapping["cli_flag"] = "--reasoning-effort"
+        descriptor = json.loads(Path(manifest["probe_runs"][cid]["json"]["path"]).read_text())
+        mapping.update(transport_compat.provenance(
+            row, REGISTRY["snapshot"]["id"], manifest["probe_runs"][cid], descriptor))
         mappings.append(mapping)
 
     evidence = []
@@ -265,7 +273,8 @@ def main(argv: list[str] | None = None) -> None:
     evidence.append({"path": str(manifest_path), "sha256": sha256(manifest_path)})
 
     overlay = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "compatibility_version": transport_compat.VERSION,
         "snapshot_id": REGISTRY["snapshot"]["id"],
         "host": socket.gethostname(),
         "source": args.source,

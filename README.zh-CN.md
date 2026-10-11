@@ -19,6 +19,14 @@
 
 </div>
 
+## Current upgrade and verification
+
+仅更新评分表快照时，调用参数和可执行文件身份未变的行会自动沿用探测证据；分数或日期变化立即使用新上限，无需运行 `omnilane resign`、图形登录或联网，也不改写覆盖文件。只有新增或参数合约、可执行文件身份变化的行需要 `omnilane resign --vendor VENDOR`；拒绝消息指出行及是否需要图形终端。软件包包含可信来源快照时，旧格式 1 可直接使用；未知的更早来源先用 `omnilane resign --check` 检查。首次配置和签名者审批规则不变。每日任务使用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失败保留非零退出码，本机私有记录由 `omnilane doctor` 显示，不依赖 Telegram，也不会自动安装定时任务。
+
+Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. Non-interactive runs wait 20 hours after each failed row; interactive runs or `omnilane resign --retry-failed --vendor VENDOR` retry immediately. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
+
+Expired proofs are refreshed through the same missing-row path, without re-probing healthy rows. A model/effort mismatch is a conclusive finding and will not retry automatically, even with `--retry-failed`. Run `omnilane doctor`, inspect the recorded request and CLI/provider routing, and correct the cause before arranging fresh verification. Release notes below describe behavior at the time of each release; current installations follow this section.
+
 ---
 
 ## 🤔 omnilane 是什么?
@@ -134,7 +142,7 @@ cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
   <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>

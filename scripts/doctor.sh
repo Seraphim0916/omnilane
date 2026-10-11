@@ -417,6 +417,14 @@ else
   report PASS live-unavailable "none"
 fi
 
+# Report daily failures even if no overlay was configured or Telegram was absent.
+if command -v python3 >/dev/null 2>&1 && [[ -r "$REPO/scripts/lib/verification_status.py" ]]; then
+  verification_pending="$(OMNILANE_HOME="$OMNILANE_HOME" python3 "$REPO/scripts/lib/verification_status.py")" || true
+  if [[ -n "$verification_pending" ]]; then
+    report WARN verification-pending "$verification_pending"
+  fi
+fi
+
 # live-capable above answers "does this CLI support a live session", which stays
 # true while the AA gate refuses every dispatch. Nothing else loads the overlay,
 # so one drifted evidence hash used to go unreported by an all-green doctor.

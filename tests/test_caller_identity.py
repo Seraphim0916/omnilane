@@ -866,7 +866,7 @@ class DegradedCallerTests(unittest.TestCase):
                                       effort="high", caller=caller, caller_sha256="1" * 64)
         self.assertEqual(unverified["code"], "runtime-mapping-unverified")
         self.assertEqual((unverified["failed_gate"], unverified["next_command"]),
-                         ("target-transport", "omnilane resign --check"))
+                         ("target-transport", "omnilane resign --vendor codex"))
 
 
 class EligibleLanesTests(unittest.TestCase):

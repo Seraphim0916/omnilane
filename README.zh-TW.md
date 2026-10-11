@@ -19,6 +19,14 @@
 
 </div>
 
+## 目前版本的升級與驗證
+
+只換評分表快照時，呼叫參數與執行檔身分沒變的列會自動沿用既有探測證據；分數或日期更新直接套用新上限，不必執行 `omnilane resign`、登入圖形桌面或連網，也不改寫覆蓋檔。只有新增或參數合約、執行檔身分有變的列需要 `omnilane resign --vendor VENDOR`；拒絕訊息會指出列與是否需要圖形終端機。套件內有可信來源快照的舊格式 1 可直接使用；未知的更舊來源請先用 `omnilane resign --check` 查明。首次設定與簽署者核准規則不變。每日排程改用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失敗保留非零結束碼，並留下私有本機紀錄供 `omnilane doctor` 顯示，不依賴 Telegram；不會自動安裝排程。
+
+上次探測因 API 錯誤、逾時、未登入、額度或連線問題失敗時，可執行 `omnilane resign --vendor VENDOR`。非互動執行會對每列等待 20 小時；互動執行或 `omnilane resign --retry-failed --vendor VENDOR` 可立即重試。這個旗標不會放寬簽署者檢查。失敗證據與時間欄位是否存在都受摘要保護；被修改或刪除時會回報，不會重試。
+
+過期的證據會走只補缺列的流程，不重測健康列。若實測打到的不是宣稱的模型／強度，便是結論類失敗，不會自動重試，加 `--retry-failed` 也一樣。請執行 `omnilane doctor`，核對原始請求與工具／供應端的模型對應，修正原因後再安排驗證。以下各版本紀錄描述的是當時行為；目前安裝版本請依本節操作。
+
 ---
 
 ## 🤔 omnilane 是什麼?
@@ -134,7 +142,7 @@ cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
   <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>

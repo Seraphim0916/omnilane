@@ -25,6 +25,7 @@
     "README.ko.md",
     "SECURITY.md",
     "config/aa-model-policy.json",
+    "config/transport-compatibility.json",
     "docs/aa-model-coverage-2026-09-05.json",
     "docs/model-capabilities-2026-09.md",
     "docs/native-executor.md",

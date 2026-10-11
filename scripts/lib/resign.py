@@ -13,8 +13,10 @@ A changed executable is re-probed unattended only when it still carries the
 signer the live overlay recorded and still sits in the same install location.
 A configuration the probe plan lists but this host never probed (a new model,
 or a sweep that could not reach a login) is drift too; with the executable
-unchanged, only those rows are probed. A probe that answered and failed is not
-re-probed. Anything else stops at a notification; `--approve VENDOR` is the operator saying
+unchanged, only missing rows and environmental failures are probed. Unattended
+environment retries wait 20 hours; an interactive run or --retry-failed bypasses
+only that cooldown. Conclusive failures are not retry gaps. Anything else stops
+at a notification; `--approve VENDOR` is the operator saying
 they looked. `--trust-adhoc VENDOR` is the operator saying an adhoc signature in
 that install location is their own local step, so those updates count as
 same-signer.
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import fcntl
 import json
 import os
@@ -44,6 +47,7 @@ import aa_policy  # noqa: E402
 import build_overlay  # noqa: E402
 import cli_provenance  # noqa: E402
 import probe_sweep  # noqa: E402
+import probe_failure  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
 EXIT_HOST_CONFIG = 40
@@ -71,6 +75,16 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
     """Per vendor: what no longer matches the live overlay, and the signer it recorded."""
     report = {}
     registry_snapshot = build_overlay.REGISTRY["snapshot"]["id"]
+    cross_snapshot = overlay.get("snapshot_id") != registry_snapshot
+    compatible, expired_ids = set(), set()
+    candidate = copy.deepcopy(build_overlay.REGISTRY)
+    try:
+        aa_policy.validate_transport_overlay(candidate, overlay, "maintenance-inspection")
+        compatible = {item["config_id"] for item in candidate["_transport_carry_forward"]}
+        expired_ids = {cid for cid, reason in candidate["_transport_unverified"].items()
+                       if reason == "evidence-expired"}
+    except (aa_policy.PolicyError, OSError, KeyError, TypeError):
+        pass  # Unknown or damaged sources cannot save any probe work.
     for vendor in VENDORS:
         recorded = [entry for entry in overlay.get("evidence", []) if entry.get("vendor") == vendor]
         runner_name = build_overlay.RUNNERS[vendor]
@@ -93,13 +107,23 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             reasons.append(f"{runner_name} changed")
         cli_changed = any(runner_name not in reason for reason in reasons)
         executables_unchanged = not reasons
-        # The overlay is bound to one registry snapshot and dispatch refuses any
-        # other, so a re-scored registry strands a host whose CLIs never moved.
-        snapshot_only = executables_unchanged and overlay.get("snapshot_id") != registry_snapshot
-        if overlay.get("snapshot_id") != registry_snapshot:
-            reasons.append(f"the score registry moved from {overlay.get('snapshot_id')} "
-                           f"to {registry_snapshot}")
+        changed = [m["config_id"] for m in overlay.get("mappings", [])
+                   if m["identity"]["vendor"] == vendor and m["config_id"] in build_overlay.ROWS
+                   and m["config_id"] not in compatible | expired_ids] if cross_snapshot else []
+        snapshot_only = False
+        if changed:
+            reasons.append(f"{len(changed)} request contract(s) need verification after the score registry "
+                           f"moved from {overlay.get('snapshot_id')} to {registry_snapshot}")
         missing = unprobed(overlay, vendor)
+        failed = probe_failure.failed_probes(overlay, vendor)
+        expired = sorted(cid for cid in expired_ids if build_overlay.ROWS[cid]["vendor"] == vendor)
+        if expired:
+            reasons.append(f"{len(expired)} configuration(s) have expired probe evidence: "
+                           + ", ".join(expired))
+        if failed:
+            causes = ", ".join(sorted({item["reason"] for item in failed.values()}))
+            reasons.append(f"{len(failed)} configuration(s) failed their last probe for an environment "
+                           f"reason ({causes}): " + ", ".join(sorted(failed)))
         if missing:
             reasons.append(f"{len(missing)} configuration(s) never probed on this host: "
                            + ", ".join(missing))
@@ -112,8 +136,10 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             "snapshot_only": snapshot_only,
             # Unchanged executables mean what they already answered still stands,
             # so only the rows with no evidence need a probe.
-            "only_missing": executables_unchanged and bool(snapshot_only or missing),
+            "only_missing": executables_unchanged and bool(missing or failed or expired) and not changed,
             "unprobed": missing,
+            "expired": expired,
+            "failed_environment": failed,
             "cli": str(cli) if cli else None,
             "cli_changed": cli_changed,
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
@@ -130,19 +156,22 @@ def unprobed(overlay: dict, vendor: str) -> list[str]:
 
     A row the probe plan gained after the last sweep either appears in unproven[]
     as not probed, or, from an overlay built before the plan listed it, nowhere.
-    A probe that answered and failed is a finding, not a gap, so it is not here:
-    re-probing it on every run would only repeat the failure. A vendor with no
+    Failed probes are classified separately by probe_failure.failed_probes;
+    conclusive failures remain findings rather than gaps. A vendor with no
     verified mapping was never set up on this host, which is not drift either.
     """
+    changed_ids = {u["config_id"] for u in overlay.get("unproven", [])
+                   if u.get("verdict_reason") == "request contract changed"}
     if not any(build_overlay.ROWS[m["config_id"]]["vendor"] == vendor
-               for m in overlay.get("mappings", []) if m.get("config_id") in build_overlay.ROWS):
+               for m in overlay.get("mappings", []) if m.get("config_id") in build_overlay.ROWS) \
+            and not any(build_overlay.ROWS.get(cid, {}).get("vendor") == vendor for cid in changed_ids):
         return []
     mapped = {m.get("config_id") for m in overlay.get("mappings", [])}
     reasons = {u.get("config_id"): u.get("verdict_reason") for u in overlay.get("unproven", [])}
     return sorted(cid for cid in build_overlay.PROVEN
                   if cid in build_overlay.ROWS
                   and build_overlay.ROWS[cid]["vendor"] == vendor and cid not in mapped
-                  and reasons.get(cid, NOT_PROBED) == NOT_PROBED)
+                  and reasons.get(cid, NOT_PROBED) in (NOT_PROBED, "request contract changed"))
 
 
 def recorded_signer(entry: dict | None) -> dict | None:
@@ -158,12 +187,10 @@ def recorded_signer(entry: dict | None) -> dict | None:
 def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
     if not vendor_report["cli"]:
         return False, "the CLI is not installed"
-    if vendor_report.get("snapshot_only"):
-        return True, "only the score registry changed; existing probe evidence is reused"
     if vendor_report.get("only_missing"):
-        return True, "the executable is unchanged; probing only the configurations never probed here"
+        return True, "the executable is unchanged; probing only missing or environment-failed configurations"
     if not vendor_report["cli_changed"]:
-        return True, "only omnilane's own runner script changed"
+        return True, "CLI unchanged; re-verify the changed request or runner contracts"
     current = cli_provenance.facts(vendor_report["cli"])
     vendor_report["codesign"] = current
     allowed, reason = cli_provenance.verdict(
@@ -361,7 +388,15 @@ def load_host_configuration() -> tuple[str, dict]:
 def retain_held(staged: dict, overlay: dict, keep: list[str],
                 held: dict[str, str], checked_at: str) -> dict[str, dict]:
     """Carry verified contracts forward; only repeated CLI absence retires them."""
+    import transport_compat as compat
     status = {}
+    source_rows, source, _ = ({}, None, None)
+    cross_snapshot = overlay.get("snapshot_id") != staged.get("snapshot_id")
+    if cross_snapshot:
+        try:
+            source_rows, source, _ = compat.source_rows(overlay, build_overlay.REGISTRY)
+        except aa_policy.PolicyError:
+            pass
 
     def row_vendor(entry: dict) -> str | None:
         # A row the registry dropped since the overlay was signed has no vendor
@@ -371,6 +406,10 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
     for vendor in keep:
         old = [m for m in overlay.get("mappings", [])
                if m["identity"]["vendor"] == vendor and m.get("config_id") in build_overlay.ROWS]
+        original_ids = {m["config_id"] for m in old}
+        if cross_snapshot:
+            old = [m for m in old if m["config_id"] in source_rows and compat.equivalent(
+                source_rows[m["config_id"]], build_overlay.ROWS[m["config_id"]], source)]
         mark = None
         removed = False
         if vendor in held and old:
@@ -381,7 +420,25 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
                        and mark["reason"] == previous.get("reason") == "CLI not found")
             status[vendor] = {"removed": removed, **mark}
         saved = [] if removed else [
-            {**m, "pending_recheck": mark} if mark else m for m in old]
+            {**m, "pending_recheck": mark} if mark else dict(m) for m in old]
+        # Kept mappings retain original proof references, not newly probed pins.
+        if staged.get("schema_version") == 2 and saved:
+            target_entry = next(e for e in staged["evidence"] if not e.get("vendor"))
+            original = next(e for e in overlay["evidence"] if not e.get("vendor"))
+            target_path = Path(target_entry["path"])
+            manifest = json.loads(target_path.read_text())
+            previous = json.loads(Path(original["path"]).read_text())["probe_runs"]
+            for mapping in saved:
+                cid = mapping["config_id"]
+                files = previous[cid]
+                descriptor = json.loads(Path(files["json"]["path"]).read_text())
+                mapping.update(compat.provenance(build_overlay.ROWS[cid], staged["snapshot_id"],
+                                                  files, descriptor))
+                manifest["probe_runs"][cid] = files
+                manifest.get("failed_probe_runs", {}).pop(cid, None)
+            if target_path != Path(original["path"]):
+                target_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+                target_entry["sha256"] = sha256(target_path)
         staged["mappings"] = [m for m in staged["mappings"]
                               if m["identity"]["vendor"] != vendor] + saved
         staged["evidence"] = [e for e in staged["evidence"]
@@ -393,6 +450,10 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
                               if row_vendor(u) != vendor]
         staged["unproven"] += [u for u in overlay.get("unproven", [])
                                if row_vendor(u) == vendor]
+        retained_ids = {m["config_id"] for m in old}
+        staged["unproven"] += [dict(config_id=cid, verdict_reason="request contract changed",
+                                    observed_model=None, probed_at=None)
+                                for cid in sorted(original_ids - retained_ids)]
         if removed:
             staged["unproven"] += [
                 {"config_id": m["config_id"], "verdict_reason": "vendor CLI not installed",
@@ -490,7 +551,11 @@ def _resign(args, live: Path, anchors, log) -> int:
     except (OSError, ValueError) as error:
         log(f"omnilane: cannot read the live overlay {live}: {error}")
         return EXIT_HOST_CONFIG
-    report = detect(overlay, anchors)
+    try:
+        report = detect(overlay, anchors)
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        log(f"omnilane: failed probe evidence did not validate ({error}); live overlay untouched")
+        return EXIT_HOST_CONFIG
     wanted = args.vendor or list(VENDORS)
     if args.record_signers:
         return record_signers(live, overlay, report, wanted, log)
@@ -499,7 +564,14 @@ def _resign(args, live: Path, anchors, log) -> int:
     drifted = [vendor for vendor in wanted if report[vendor]["drifted"]]
     summary = {"host": overlay.get("host"), "checked_at": datetime.now(timezone.utc).isoformat(),
                "live_overlay": str(live), "live_sha256": sha256(live), "vendors": report}
+    args.status_summary = summary
     if not drifted:
+        try:
+            verified(live)
+        except (aa_policy.PolicyError, OSError, ValueError, KeyError, TypeError):
+            log("omnilane: local transport evidence did not validate; run omnilane doctor "
+                "to inspect the source and files before re-verifying")
+            return EXIT_HOST_CONFIG
         log("omnilane: transport overlay matches what the runners execute; nothing to re-sign")
         if args.json:
             print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -512,10 +584,37 @@ def _resign(args, live: Path, anchors, log) -> int:
         log("omnilane: run `omnilane resign` to re-probe and re-sign")
         return EXIT_DRIFT
 
+    # The retry flag only bypasses the cost cooldown, never the signer gate.
+    immediate = getattr(args, "retry_failed", False) or sys.stdin.isatty()
+    deferred = {}
+    for vendor in drifted:
+        failed = report[vendor]["failed_environment"]
+        retry, cooling = [], {}
+        for cid, failure in failed.items():
+            blocked, until = probe_failure.cooldown(failure["last_failed_at"])
+            if blocked and not immediate:
+                cooling[cid] = until
+            else:
+                retry.append(cid)
+        report[vendor].update(retry_failed=retry, cooldown=cooling)
+        if cooling:
+            deferred[vendor] = cooling
+            log(f"omnilane: {vendor}: {len(cooling)} failed configuration(s) deferred by the "
+                "20-hour non-interactive retry cooldown; "
+                f"run `omnilane resign --retry-failed --vendor {vendor}` to retry now")
+    if any(report[vendor]["failed_environment"] for vendor in drifted):
+        try:
+            verified(live)
+        except (aa_policy.PolicyError, OSError, ValueError, KeyError, TypeError) as error:
+            log(f"omnilane: local transport evidence did not validate ({error}); live overlay untouched")
+            return EXIT_HOST_CONFIG
     proceed, held = [], []
     hold_reasons, pending = {}, {}
     installed = False
     for vendor in drifted:
+        if report[vendor]["only_missing"] and not (report[vendor]["unprobed"] or
+                                                    report[vendor]["retry_failed"] or report[vendor]["expired"]):
+            continue
         allowed, reason = gate(report[vendor], vendor in (args.approve or []))
         report[vendor]["gate"] = {"allowed": allowed, "reason": reason}
         if allowed and report[vendor]["cli"]:
@@ -544,8 +643,11 @@ def _resign(args, live: Path, anchors, log) -> int:
         root.mkdir(parents=True)
         shutil.copytree(source / "evidence", root / "evidence")
         shutil.copy2(live, root / "live-overlay.BEFORE.json")
-        sweeps = {vendor: probe_sweep.sweep(vendor, root, log=log,
-                                            only_missing=report[vendor]["only_missing"])
+        sweeps = {vendor: probe_failure.run_sweep(vendor, root, log=log,
+                                           only_missing=report[vendor]["only_missing"],
+                                           retry_failed=report[vendor]["retry_failed"],
+                                           refresh_expired=report[vendor]["expired"],
+                                           skip_configs=report[vendor]["cooldown"], retry_now=immediate)
                   for vendor in proceed}
         summary["sweeps"] = sweeps
         unfinished = [vendor for vendor, result in sweeps.items() if result["outcome"] != "done"]
@@ -555,6 +657,7 @@ def _resign(args, live: Path, anchors, log) -> int:
         # likely a provider having a bad hour than a selector that stopped working.
         # Installing that would trade a stale pin for a smaller overlay.
         was_verified = {mapping["config_id"] for mapping in overlay.get("mappings", [])}
+        was_verified -= {cid for vendor in VENDORS for cid in report[vendor]["expired"]}
         for vendor, result in sweeps.items():
             lost = sorted(was_verified & set(result["failed"]))
             if lost and vendor not in unfinished and not args.allow_shrink:
@@ -574,6 +677,13 @@ def _resign(args, live: Path, anchors, log) -> int:
                     for old in (source / "evidence").glob(entry["name"] + ".*"):
                         shutil.copy2(old, root / "evidence" / old.name)
     if proceed:
+        try:
+            for vendor in proceed:
+                probe_failure.validate_retry_results(root, vendor, report[vendor]["retry_failed"] + report[vendor]["expired"],
+                                                     sweeps[vendor])
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            log(f"omnilane: retry evidence did not validate ({error}); live overlay untouched")
+            return EXIT_ROLLED_BACK
         with contextlib.redirect_stdout(sys.stderr):  # stdout is reserved for --json
             build_overlay.main(["--root", str(root), "--source",
                                 f"{overlay.get('host')} / omnilane resign {sweep_id} / "
@@ -595,17 +705,19 @@ def _resign(args, live: Path, anchors, log) -> int:
         pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"])
         staged_path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
         try:
-            if overlay.get("snapshot_id") == staged["snapshot_id"]:
+            try:
                 before = verified(live)
-            else:
-                # Bound to another registry snapshot, the live overlay does not load at all.
+            except aa_policy.PolicyError:
                 before = {vendor: 0 for vendor in VENDORS}
             after = verified(staged_path)
-        except (aa_policy.PolicyError, OSError, ValueError) as error:
+            remaining = {vendor: probe_failure.failed_probes(staged, vendor) for vendor in wanted}
+        except (aa_policy.PolicyError, OSError, ValueError, KeyError, TypeError) as error:
             log(f"omnilane: the staged overlay does not load ({error}); live overlay untouched")
             return EXIT_ROLLED_BACK
         summary["verified"] = {"before": before, "after": after}
-        empty = [vendor for vendor in proceed if after[vendor] == 0]
+        empty = [vendor for vendor in proceed if after[vendor] == 0 and
+                 not (report[vendor]["only_missing"] and before[vendor] == 0 and
+                      not sweeps[vendor]["passed"])]
         if empty:
             log(f"omnilane: staged overlay verifies nothing for {', '.join(empty)}; "
                 "live overlay untouched")
@@ -616,23 +728,50 @@ def _resign(args, live: Path, anchors, log) -> int:
                     f"({before[vendor]} -> {after[vendor]}); see {root}/evidence")
         backup = live.with_name(live.name + f".before-{sweep_id}")
         shutil.copy2(live, backup)
-        aa_policy.atomic_bytes(live, staged_path.read_bytes())
-        installed = True
-        log(f"omnilane: installed {staged_path} over {live} (backup {backup})")
+        retrying = any(report[v]["retry_failed"] or report[v]["expired"] for v in proceed)
+        if not retrying:
+            aa_policy.atomic_bytes(live, staged_path.read_bytes())
+            installed = True
+            log(f"omnilane: installed {staged_path} over {live} (backup {backup})")
         failures = []
-        if not args.no_smoke:
-            for vendor in proceed:
-                ok, detail = smoke(vendor, staged, live)
-                summary.setdefault("smoke", {})[vendor] = {"ok": ok, "detail": detail}
-                log(f"omnilane: {vendor}: smoke {'passed' if ok else 'FAILED'} - {detail}")
-                if not ok:
-                    failures.append(vendor)
+        try:
+            if not args.no_smoke:
+                for vendor in proceed:
+                    if report[vendor]["only_missing"] and not sweeps[vendor]["passed"]:
+                        continue
+                    # Retry proofs stay staged until smoke completes, including
+                    # when SIGTERM/SIGKILL prevents Python cleanup from running.
+                    ok, detail = smoke(vendor, staged, staged_path if retrying else live)
+                    summary.setdefault("smoke", {})[vendor] = {"ok": ok, "detail": detail}
+                    log(f"omnilane: {vendor}: smoke {'passed' if ok else 'FAILED'} - {detail}")
+                    if not ok:
+                        failures.append(vendor)
+        except BaseException:
+            if installed:
+                aa_policy.atomic_bytes(live, backup.read_bytes())
+            log("omnilane: smoke interrupted; previous overlay preserved")
+            raise
         if failures:
-            aa_policy.atomic_bytes(live, backup.read_bytes())
+            if installed:
+                aa_policy.atomic_bytes(live, backup.read_bytes())
             log(f"omnilane: smoke failed for {', '.join(failures)}; restored {backup}")
             outcome = EXIT_ROLLED_BACK
             installed = False
         else:
+            if retrying:
+                aa_policy.atomic_bytes(live, staged_path.read_bytes())
+                installed = True
+                log(f"omnilane: installed {staged_path} over {live} (backup {backup})")
+            summary["still_failed_environment"] = {v: rows for v, rows in remaining.items() if rows}
+            for vendor, rows in summary["still_failed_environment"].items():
+                log(f"omnilane: {vendor}: {len(rows)} configuration(s) remain unverified after "
+                    "an environment failure; "
+                    f"run `omnilane resign --retry-failed --vendor {vendor}` after fixing the cause")
+            summary["failed_retries"] = {
+                v: sorted(set(report[v]["retry_failed"]) & set(sweeps[v]["failed"])) for v in proceed
+                if set(report[v]["retry_failed"]) & set(sweeps[v]["failed"])}
+            if summary["failed_retries"] or summary["still_failed_environment"]:
+                outcome = EXIT_OPERATOR
             gaps = {vendor: unprobed(staged, vendor) for vendor in VENDORS}
             gaps = {vendor: rows for vendor, rows in gaps.items() if rows}
             summary["still_unprobed"] = gaps
@@ -647,6 +786,9 @@ def _resign(args, live: Path, anchors, log) -> int:
         outcome, pending = install_pending(live, overlay, hold_reasons, root,
                                            summary["checked_at"], log)
         installed = outcome == EXIT_OK
+    if deferred and outcome == EXIT_OK:
+        outcome = EXIT_OPERATOR
+    summary["deferred_retries"] = deferred
     if held and outcome == EXIT_OK:
         outcome = EXIT_OPERATOR
     for vendor in held:
@@ -687,6 +829,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                      epilog=__doc__.split("Exit codes:")[1].strip())
     parser.add_argument("--check", action="store_true", help="report drift and change nothing")
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="retry environment failures now, bypassing only the 20-hour cooldown")
     parser.add_argument("--vendor", action="append", choices=VENDORS,
                         help="limit to this vendor; may repeat")
     parser.add_argument("--approve", action="append", choices=VENDORS,
@@ -702,7 +846,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-smoke", action="store_true",
                         help="skip the real dispatch after installing (not for unattended use)")
     parser.add_argument("--json", action="store_true", help="print the full report as JSON")
-    args = parser.parse_args(argv)
+    parser.add_argument("--daily", action="store_true",
+                        help="persist unresolved verification for doctor and preserve failure exit status")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as error:
+        if error.code and "--daily" in (argv if argv is not None else sys.argv[1:]):
+            from verification_status import run_daily
+            return run_daily(lambda: int(error.code))
+        raise
+    if args.daily:
+        from verification_status import run_daily
+        def daily_action():
+            if args.no_smoke:
+                print("omnilane: --daily requires smoke verification; remove --no-smoke", file=sys.stderr)
+                return 2
+            code = resign(args, log=lambda text: print(text, file=sys.stderr))
+            gaps = getattr(args, "status_summary", {}).get("still_unprobed", {})
+            if code == EXIT_OK and any(gaps.get(vendor) for vendor in (args.vendor or VENDORS)):
+                return EXIT_OPERATOR
+            return code
+        return run_daily(daily_action,
+                         args.vendor, lambda: getattr(args, "status_summary", {}))
     return resign(args, log=lambda text: print(text, file=sys.stderr))
 
 

@@ -19,6 +19,14 @@
 
 </div>
 
+## 現行版の更新と検証
+
+評価表だけの更新では、呼び出し引数と実行ファイルの識別情報が同じ行の検証証拠を自動的に再利用します。点数・日付の変更は新しい上限に直ちに反映され、`omnilane resign`、GUI ログイン、通信、オーバーレイの書き換えは不要です。追加・変更された契約や実行ファイルだけ `omnilane resign --vendor VENDOR` で検証してください。拒否メッセージに対象行と GUI ターミナルの要否が表示されます。信頼済みスナップショットが同梱されていれば旧形式 1 もそのまま使えます。不明な古い出典は `omnilane resign --check` で確認してください。初期設定と署名者承認は変更しません。毎日の処理は `omnilane resign --daily`（または `bash scripts/resign-daily.sh`）を使います。失敗は非ゼロ終了となり、Telegram がなくても `omnilane doctor` がローカルの非公開記録を表示します。スケジューラーの自動インストールはありません。
+
+API エラー、タイムアウト、未ログイン、利用枠、接続障害の行は `omnilane resign --vendor VENDOR` で再検証できます。非対話実行では各行の失敗から 20 時間待機します。対話実行、または `omnilane resign --retry-failed --vendor VENDOR` は直ちに再試行します。この指定で署名者の承認は省略されません。失敗証拠と時刻フィールドの有無を摘要で保護し、変更・削除された記録は報告して再試行を拒否します。
+
+期限切れの証拠は未検証行と同じ経路で更新し、正常な行は再検証しません。実測モデル／強度の不一致は確定した結果なので、`--retry-failed` でも自動再試行しません。`omnilane doctor` で元の要求と CLI／供給側のモデル対応を調べ、原因を修正してから再検証を手配してください。以下の版別記録は当時の動作を説明しています。現行版では本節に従ってください。
+
 ---
 
 ## 🤔 omnilane とは
@@ -139,7 +147,7 @@ cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
   <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>

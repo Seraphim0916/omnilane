@@ -19,6 +19,14 @@
 
 </div>
 
+## 현재 버전의 업그레이드와 검증
+
+평가표만 바뀌면 호출 인수와 실행 파일 식별 정보가 같은 행의 검증 증거를 자동으로 재사용합니다. 점수나 날짜 변경은 새 상한에 즉시 반영되며 `omnilane resign`, GUI 로그인, 네트워크 호출이나 오버레이 수정이 필요 없습니다. 추가되거나 호출 계약 또는 실행 파일이 바뀐 행만 `omnilane resign --vendor VENDOR`로 검증하세요. 거부 메시지에 대상 행과 GUI 터미널 필요 여부가 표시됩니다. 신뢰된 원본 스냅샷이 패키지에 있으면 기존 형식 1도 바로 사용합니다. 알 수 없는 이전 원본은 `omnilane resign --check`로 확인하세요. 최초 설정과 서명자 승인 규칙은 그대로입니다. 일일 작업에는 `omnilane resign --daily` 또는 `bash scripts/resign-daily.sh`를 사용하세요. 실패는 0이 아닌 종료 코드를 유지하고 Telegram 없이도 `omnilane doctor`에 로컬 비공개 기록이 표시됩니다. 예약 작업은 자동 설치하지 않습니다.
+
+API 오류, 시간 초과, 로그인, 할당량 또는 연결 문제로 실패한 행은 `omnilane resign --vendor VENDOR`로 다시 검증할 수 있습니다. 비대화형 실행은 각 행의 실패 후 20시간을 기다립니다. 대화형 실행이나 `omnilane resign --retry-failed --vendor VENDOR`는 즉시 재시도합니다. 이 옵션은 서명자 승인을 대신하지 않습니다. 실패 증거와 시간 필드의 존재 여부를 해시로 보호하며, 변경되거나 삭제된 기록은 보고하고 재시도를 거부합니다.
+
+만료된 증거는 누락된 행과 같은 경로로 갱신하며 정상 행은 다시 검증하지 않습니다. 실제 모델/강도가 선언과 다르면 확정된 실패이므로 `--retry-failed`를 지정해도 자동으로 재시도하지 않습니다. `omnilane doctor`로 원래 요청과 CLI/공급자 모델 연결을 확인하고 원인을 수정한 뒤 새 검증을 준비하세요. 아래 버전별 기록은 출시 당시 동작을 설명합니다. 현재 설치에서는 이 절을 따르세요.
+
 ---
 
 ## 🤔 omnilane 이란?
@@ -138,7 +146,7 @@ cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign</string></array>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
   <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
   <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
