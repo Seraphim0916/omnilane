@@ -1,6 +1,7 @@
 """Operator commands, source gate and transport proofs with fake vendor tools."""
 import offline_env  # noqa: F401
 import copy
+import hashlib
 import io
 import json
 import os
@@ -17,6 +18,53 @@ import resign
 import verification_status as status
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Protected files: this branch must not change them. The gate is the pinned SHA-256 of each file's
+# content at commit e662aba, so it runs in a shallow clone, a release archive, or with no git at all.
+# A legitimate change to a protected file has to update this table in the same commit.
+PROTECTED_BASE = "e662aba"
+PROTECTED_SHA256 = {
+    "scripts/lib/probe.py":
+        "561c129266028c3549091ce36d28581b06833c87606b4d9a43b10ce6575cd719",
+    "scripts/lib/probe_sweep.py":
+        "5b98a7facc460e94cfab573a88c4835df06b55f56f6f56d6576d0c5975d14bc7",
+    "scripts/lib/transport_compat.py":
+        "3534d96a4835a43b0265b8756c139922e3b542cd4ecbdffc9c7a484fc4e99512",
+    "config/transport-compatibility.json":
+        "3c5f261d348d011fe1eed40ef734cf188903b19d9915cf520a3487fa6292c63e",
+    "scripts/runners/run-cerebras.sh":
+        "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
+    "scripts/runners/run-claude.sh":
+        "a84c59ec7adf04893b2833c503606717a3288ca290138e8176adc4bc42448945",
+    "scripts/runners/run-codex.sh":
+        "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
+    "scripts/runners/run-deepseek.sh":
+        "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
+    "scripts/runners/run-exec.sh":
+        "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
+    "scripts/runners/run-gemini.sh":
+        "2e4c4c064f3228293ff63e882154be77bac256e6c40add3f25403f1e539ff12c",
+    "scripts/runners/run-grok.sh":
+        "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
+    "scripts/runners/run-groq.sh":
+        "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
+    "scripts/runners/run-kimi.sh":
+        "0f2b3d3692b9aff1f548c079bc97cbaa56c9661500ee27fee796f4202d5512fc",
+    "scripts/runners/run-mistral.sh":
+        "4893c2dc96ef193d6bd679638c81960ec911da82aea47dd0cee77bd459d8825a",
+    "scripts/runners/run-openai-compat.sh":
+        "e6e7b0cbf600823035f1714f0c617af14ddf530ecd4954744ad76ccea123e4f2",
+    "scripts/runners/run-opencode.sh":
+        "7dd07be771fb8a60194cacd18b0eeeebd6535bd9a7d0a5e4bad314c87651c90d",
+    "scripts/runners/run-openrouter.sh":
+        "64ee12e583f143e5b2b23cb173d320ade83c4a3bdab91e19ea671642e2b170ab",
+    "scripts/runners/run-qwen.sh":
+        "aed846b06a287291c210b153f727153a537aae8bfc9b49894f431298db24183d",
+    "scripts/runners/run-vote.sh":
+        "22825848e8dfedd27b16029917cfbd4105a07b6f06e15ea1b0cb9c7d7d46c618",
+    "scripts/runners/run-zai.sh":
+        "45a05bf343ec4523d5f51ae1491ee444b26246576e8366c92a8f7238217833bc",
+}
 
 
 class IntegrationTests(unittest.TestCase):
@@ -247,12 +295,22 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(self.command("omnilane resign --vendor claude"), 0)
 
     def test_protected_files_are_byte_identical_to_base(self):
-        paths = ["scripts/lib/probe.py", "scripts/lib/probe_sweep.py", "scripts/lib/transport_compat.py",
-                 "config/transport-compatibility.json"]
-        paths += [str(p.relative_to(ROOT)) for p in (ROOT / "scripts/runners").glob("run-*.sh")]
-        for path in paths:
-            base = subprocess.run(["git", "show", "e662aba:" + path], cwd=ROOT, capture_output=True, check=True).stdout
-            self.assertEqual((ROOT / path).read_bytes(), base, path)
+        runners = {str(p.relative_to(ROOT)) for p in (ROOT / "scripts/runners").glob("run-*.sh")}
+        self.assertEqual(runners, {p for p in PROTECTED_SHA256 if p.startswith("scripts/runners/")})
+        for path, expected in PROTECTED_SHA256.items():
+            self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), expected, path)
+
+    def test_protected_files_match_base_commit_when_history_is_available(self):
+        for path in PROTECTED_SHA256:
+            try:
+                base = subprocess.run(["git", "show", PROTECTED_BASE + ":" + path], cwd=ROOT, capture_output=True)
+                reason = base.stderr.decode("utf-8", "replace").strip()
+            except OSError as error:
+                base, reason = None, str(error)
+            if base is None or base.returncode != 0:
+                self.skipTest("history comparison cannot read {}:{} from the repository: {}".format(
+                    PROTECTED_BASE, path, reason))
+            self.assertEqual((ROOT / path).read_bytes(), base.stdout, path)
 
 
 if __name__ == "__main__":
