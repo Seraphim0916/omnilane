@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-10-11
+
 ### Fixed
 
 - Show each unproven configuration as a doctor warning in text and JSON, including requested/observed identity, failure class, reason, probe time, evidence paths and next steps; identify damaged evidence and explain backup restoration or explicit fresh probing without weakening retry or integrity gates.
@@ -1707,7 +1709,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...v0.52.0
 [0.51.1]: https://github.com/Seraphim0916/omnilane/compare/v0.51.0...v0.51.1

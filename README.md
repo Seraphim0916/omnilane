@@ -913,6 +913,15 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.54.0
+
+- Future registry snapshot updates automatically reuse verified rows whose request parameters and executable identities are unchanged; only new or changed rows need `omnilane resign`. This release keeps the 0.53.0 snapshot.
+- Environment failures such as API errors, timeouts, login, quota or connectivity can be retried with `omnilane resign --vendor VENDOR`. Non-interactive runs wait 20 hours per failed row; interactive runs or `--retry-failed` retry immediately, without approving signer changes. Conclusive model/effort mismatches never auto-retry.
+- Blocked dispatch names the vendor and row, gives the exact next command, and explains whether a GUI terminal is required.
+- `omnilane doctor` and `omnilane doctor --json` list every unverified row with requested/observed identity, failure reason, probe time, evidence paths and next steps; damaged evidence includes backup restoration or fresh-probe guidance.
+- `omnilane resign --daily` preserves nonzero failures and interrupted runs in private local status visible through `omnilane doctor`, even without Telegram. No scheduler is installed automatically.
+- Upgrade: `npm i -g omnilane@0.54.0`. Upgrading from 0.53.0 does not require re-signing; upgrading from an earlier version still requires one run of `omnilane resign` from a GUI terminal.
+
 ## What's new in v0.53.0
 
 - After upgrading, run `omnilane resign` on every host once, from a GUI terminal: the registry snapshot is now `aa-v4.3.2-2026-10-08-v1`. All dispatch is blocked with `transport overlay snapshot mismatch` until the overlay is re-signed.

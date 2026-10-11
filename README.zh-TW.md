@@ -752,6 +752,15 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.54.0 新功能
+
+- 之後評分表換新快照時，請求參數與執行檔身分沒變的列會自動沿用舊的驗證；只有新增或有變的列需要 `omnilane resign`。這版沿用 0.53.0 的評分表快照。
+- API 錯誤、逾時、登入、額度或連線等環境原因造成的探測失敗，可用 `omnilane resign --vendor VENDOR` 重試。非互動執行會對每個失敗列等候 20 小時；互動執行或加上 `--retry-failed` 可立即重試，不會因此核准簽署者變更。已確認的模型或強度不符不會自動重試。
+- 派工被擋時，訊息會指出廠商與設定列，附上下一步的完整指令，並說明是否需要圖形終端機。
+- `omnilane doctor` 與 `omnilane doctor --json` 逐列列出未驗證設定的請求與觀察身分、失敗原因、探測時間、證據路徑及下一步；證據損壞時也會說明如何還原備份或重新探測。
+- `omnilane resign --daily` 把失敗的非零退出碼與執行中斷留在本機私有狀態，由 `omnilane doctor` 顯示，不依賴 Telegram，也不會自動安裝排程。
+- 升級：`npm i -g omnilane@0.54.0`。從 0.53.0 升級不用重簽；從更早的版本升級，仍要在圖形終端機跑一次 `omnilane resign`。
+
 ## v0.53.0 新功能
 
 - 升級後每台主機在圖形終端機跑一次 `omnilane resign`：評分表快照換成 `aa-v4.3.2-2026-10-08-v1`，重簽前所有派工都會被擋，錯誤訊息為 `transport overlay snapshot mismatch`。

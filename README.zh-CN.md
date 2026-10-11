@@ -19,13 +19,13 @@
 
 </div>
 
-## Current upgrade and verification
+## 当前升级与验证
 
 仅更新评分表快照时，调用参数和可执行文件身份未变的行会自动沿用探测证据；分数或日期变化立即使用新上限，无需运行 `omnilane resign`、图形登录或联网，也不改写覆盖文件。只有新增或参数合约、可执行文件身份变化的行需要 `omnilane resign --vendor VENDOR`；拒绝消息指出行及是否需要图形终端。软件包包含可信来源快照时，旧格式 1 可直接使用；未知的更早来源先用 `omnilane resign --check` 检查。首次配置和签名者审批规则不变。每日任务使用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失败保留非零退出码，本机私有记录由 `omnilane doctor` 显示，不依赖 Telegram，也不会自动安装定时任务。
 
-Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. Non-interactive runs wait 20 hours after each failed row; interactive runs or `omnilane resign --retry-failed --vendor VENDOR` retry immediately. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
+环境原因（API 错误、超时、登录、配额或连接问题）造成的失败，可用 `omnilane resign --vendor VENDOR` 重试。非交互运行会在每行失败后等待 20 小时；交互运行或 `omnilane resign --retry-failed --vendor VENDOR` 会立即重试。重试标志不会批准签名者变更。失败证据及时间戳是否存在都受完整性保护；记录被修改或删除时会报告问题，不会重试。
 
-Expired proofs are refreshed through the same missing-row path, without re-probing healthy rows. A model/effort mismatch is a conclusive finding and will not retry automatically, even with `--retry-failed`. Run `omnilane doctor`, inspect the recorded request and CLI/provider routing, and correct the cause before arranging fresh verification. Release notes below describe behavior at the time of each release; current installations follow this section.
+过期证据通过同一套缺失行补测流程刷新，不会重新探测正常的行。模型或强度不符属于已确认的问题，即使加上 `--retry-failed` 也不会自动重试。请运行 `omnilane doctor`，检查记录的请求以及 CLI 和供应商路由，修正原因后再安排新的验证。下方版本说明描述各次发布时的行为；当前安装以本节为准。
 
 ---
 
@@ -680,15 +680,15 @@ scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,
 `omnilane whoami`，它会打印可以带的 `--caller-context FILE`，或说明读不到的确切原因
 （缺 `--effort`、模型别名、查无评分行）。模型不得替自己主张真人豁免。
 
-`runtime-mapping-unverified`: the target has no proven host-local request selector.
-`omnilane doctor` and `--json` show each unproven row as `WARN`: ID, requested and
-observed model/effort (when recorded), failure class/reason, last probe time,
-evidence paths (not contents), and next step. Environment failures name
-`omnilane resign --retry-failed --vendor VENDOR`; conclusive failures never
-auto-retry and require inspection of the request, CLI and provider mapping.
-Damaged evidence diagnostics name the path and explain known-good backup
-restoration or explicit fresh probing into a new directory. Quota refusals
-remain until the provider quota recovers.
+`runtime-mapping-unverified`——目标没有已验证的本机请求选择器。
+`omnilane doctor` 及其 `--json` 输出会将每个未验证行列为 `WARN`，显示标识符、请求和
+观察到的模型及强度（如有记录）、失败类别与原因、上次探测时间、
+证据路径（不显示内容）以及下一步。环境原因造成的失败会给出
+`omnilane resign --retry-failed --vendor VENDOR`；已确认的失败不会
+自动重试，需要检查请求、CLI 和供应商映射。
+证据损坏时，诊断会指出路径，并说明如何从已知完好的备份
+恢复，或明确发起探测、将新证据写入新目录。配额造成的拒绝
+会持续到供应商配额恢复。
 
 `invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
 是 overlay 本身加载失败，因此**所有厂商**都会被拒。常见成因是厂商 CLI 升级：
@@ -744,6 +744,15 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
   不会自动执行 `git init`，也不要求用户创建仓库。
 
 ## 📜 版本历程
+
+## v0.54.0 新功能
+
+- 之后评分表换新快照时，请求参数和可执行文件身份未变的行会自动沿用原有验证；只有新增或发生变化的行需要 `omnilane resign`。本版沿用 0.53.0 的评分表快照。
+- API 错误、超时、登录、配额或连接等环境原因造成的探测失败，可用 `omnilane resign --vendor VENDOR` 重试。非交互运行会对每个失败行等待 20 小时；交互运行或加上 `--retry-failed` 可立即重试，不会因此批准签名者变更。已确认的模型或强度不符不会自动重试。
+- 派发被阻止时，消息会指出供应商和配置行，附上下一步的完整命令，并说明是否需要图形终端。
+- `omnilane doctor` 和 `omnilane doctor --json` 逐行列出未验证配置的请求与观察身份、失败原因、探测时间、证据路径及下一步；证据损坏时也会说明如何恢复备份或重新探测。
+- `omnilane resign --daily` 将失败的非零退出码及运行中断保留在本机私有状态中，由 `omnilane doctor` 显示，不依赖 Telegram，也不会自动安装定时任务。
+- 升级：`npm i -g omnilane@0.54.0`。从 0.53.0 升级无需重签；从更早的版本升级，仍需在图形终端运行一次 `omnilane resign`。
 
 ## v0.53.0 新功能
 
