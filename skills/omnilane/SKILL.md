@@ -355,11 +355,27 @@ the affected evidence path and offers known-good backup restoration or explicit
 fresh probing into a new directory. Follow those recovery steps; do not edit
 digests or remove integrity fields, and preserve the existing signer approvals.
 
-`omnilane resign --approve …`, `--record-signers` and `--trust-adhoc …` are
-operator actions. A model never runs them. After two failed attempts at a task, reassess the scope;
-an upward move needs the human. On vendor quota exhaustion (429, "stream
-disconnected", usage limit) send mid-tier coding through `coding-overflow`;
-never silently downgrade `hardest-coding` — wait or escalate.
+Source channels allow re-probing only; they do not authorize dispatch. `resign --check`
+and `doctor` show executable kind, channels and observed team/identifier. Developer ID
+sources require Apple's chain, team, identifier family and resolved installation
+family. An independent adhoc channel permits new adhoc files at that location, but
+cannot prove who produced them. Each changed file still needs its own probes.
+Invalid, unsigned macOS or unverifiable files always stop, including with
+`--approve`. Source failures are distinct from login failures.
+
+`omnilane resign --approve …`, `--record-signers`, `--trust-adhoc …`,
+`--trust-origin VENDOR [--team TEAMID]`, `--trust-location VENDOR` and
+`--revoke-origin VENDOR KIND` are operator actions. **An assistant must never execute
+trust, approval, signer-recording or revocation commands itself.** Present observed
+facts and the exact next command to the operator. `--trust-origin` requires a
+terminal and explicit typed confirmation on each host, with no bypass. For adhoc
+samples the operator must supply the independently confirmed team; never infer it
+from history, messages or documentation. `--approve` is one-shot and creates no
+channel. Revocation overrides legacy overlay trust. Do not copy
+`transport-origins.local.json` or evidence between hosts. First-use registration
+currently defaults to Developer ID only; scripts need explicit location trust.
+
+After two failed attempts at a task, reassess the scope; an upward move needs the human. On vendor quota exhaustion (429, "stream disconnected", usage limit) send mid-tier coding through `coding-overflow`; never silently downgrade `hardest-coding` — wait or escalate.
 
 ## Step 5 — Collect, verify, close
 

@@ -50,6 +50,55 @@ def transport_guidance(vendor, config_id=None, candidates=(), environment_failur
                               + "登入失敗不需要加 --approve。")
 
 
+def origin_guidance(vendor, reason, current=None):
+    """Source failures never suggest login or treat approval as signature repair."""
+    vendor = vendor if vendor in VENDORS else "VENDOR"
+    current = current or {}
+    kind = current.get("kind")
+    descriptions = {
+        "origin-unapproved": ("This executable kind has no approved source channel", "這種執行檔尚未核准來源通道"),
+        "team-changed": ("The signing team changed", "簽署團隊變了"),
+        "identifier-changed": ("The signed product identifier changed", "簽章識別名稱變了"),
+        "location-changed": ("The resolved installation location changed", "解析後的安裝位置變了"),
+        "invalid": ("The signature or Apple Developer ID requirement failed", "簽章或 Apple 發行者要求查驗失敗"),
+        "unsigned": ("This macOS native executable has no signature", "這個 macOS 原生執行檔完全沒有簽章"),
+        "unverifiable": ("The executable signature could not be classified or checked", "無法分類或查驗執行檔簽章"),
+        "policy-invalid": ("The local origin policy is damaged, unsafe, or belongs to another host", "本機通道檔損壞、不安全或屬於別台主機"),
+    }
+    en, zh = descriptions.get(reason, descriptions["unverifiable"])
+    # Diagnostic detail never participates in origin-policy trust decisions.
+    if reason == "invalid":
+        if current.get("invalid_reason") == "integrity":
+            en, zh = "The signature integrity check failed", "簽章完整性查驗失敗"
+        elif current.get("invalid_reason") == "requirement":
+            en, zh = "The Apple Developer ID certificate requirement failed", "Apple 發行者憑證鏈要求查驗失敗"
+    command = None
+    if reason not in ("invalid", "unsigned", "unverifiable", "policy-invalid"):
+        if kind == "developer-id":
+            command = f"omnilane resign --trust-origin {vendor}"
+        elif reason == "location-changed" or kind in ("script", "no-platform-signature"):
+            command = f"omnilane resign --approve {vendor}"
+        elif kind == "adhoc":
+            command = f"omnilane resign --trust-adhoc {vendor}"
+    observed = {key: current.get(key) for key in ("signer", "identifier")
+                if isinstance(current.get(key), str)}
+    if isinstance(current.get("observed_team"), str):
+        observed["signer"] = current["observed_team"]
+    detail = json.dumps(observed, ensure_ascii=True)
+    message = f"{vendor}: {en}. This attempt did not execute the CLI. Observed: {detail}. "
+    message_zh = f"{vendor}：{zh}。這次沒有執行該執行檔。觀察值：{detail}。"
+    if command:
+        message += f"After reviewing the source, run: {command}. Then run omnilane resign --vendor {vendor}."
+        message_zh += f"查明來源後執行：{command}；再執行 omnilane resign --vendor {vendor}。"
+        if kind in ("script", "no-platform-signature"):
+            message += f" For future updates at that pinned location: omnilane resign --trust-location {vendor}."
+            message_zh += f"若要同位置後續更新自動補測：omnilane resign --trust-location {vendor}。"
+    else:
+        message += "No approval command repairs this. Restore a valid installation or this host's policy backup, or repair signature checking, then retry omnilane resign."
+        message_zh += "核准指令無法修好這個問題。請還原有效安裝、本機通道備份，或修復簽章查驗能力後，再執行 omnilane resign。"
+    return dict(next_command=command, message=message, message_zh_tw=message_zh)
+
+
 def status_path():
     return Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane") / "verification-status.json"
 
@@ -101,6 +150,12 @@ def record(code, vendors=None, summary=None):
         state["pending"][vendor] = dict(vendor=vendor, reason=reason, config_ids=rows,
                                          exit_code=code, first_seen=prior.get("first_seen", now) if same else now,
                                          last_seen=now, attempts=prior.get("attempts", 0) + 1 if same else 1)
+        if reason == "review-executable-source":
+            # Allowlist codes only; signer details are re-observed by --check.
+            source_reason = report.get("origin_reason")
+            if source_reason in {"origin-unapproved", "team-changed", "identifier-changed", "location-changed",
+                                 "invalid", "unsigned", "unverifiable", "policy-invalid"}:
+                state["pending"][vendor]["origin_reason"] = source_reason
     state["checked_at"] = now
     path = status_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,7 +179,9 @@ def pending_summary():
         if reason == "verification-busy":
             action = "wait for the running verification, then retry"
         elif reason == "review-executable-source":
-            action = "inspect the executable and signer with `omnilane resign --check` before approving it"
+            action = ("Source review required; this attempt did not execute the CLI. "
+                      "Run `omnilane resign --check` to inspect the executable: observed kind, team, identifier and source-specific next step. "
+                      "來源待查，這次沒有執行該執行檔；請執行 `omnilane resign --check` 查看種類、團隊與後續指令。")
         elif reason == "cli-not-installed":
             action = "install this vendor's CLI, then run `omnilane resign --vendor " + vendor + "`"
         elif reason in ("host-configuration-unavailable", "not-configured-or-invalid-arguments"):

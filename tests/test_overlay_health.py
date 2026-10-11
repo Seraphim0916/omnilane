@@ -211,14 +211,22 @@ class OverlayHealthTests(unittest.TestCase):
 
     def test_matching_executable_keeps_exact_pass_message(self):
         env, overlay = self.vendor_fixture()
-        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+        code, level, message = run(overlay, **env)
+        self.assertEqual((code, level, message), (0, "PASS",
+            "verified mappings: none; claude not installed; skipped / 沒有安裝，略過; "
+            "codex origin kind=script, channels=[]; gemini not installed; skipped / 沒有安裝，略過; "
+            "grok not installed; skipped / 沒有安裝，略過"))
 
     def test_symlink_to_pinned_executable_is_not_a_path_mismatch(self):
         env, overlay = self.vendor_fixture()
         alias = self.base / "cli-alias"
         alias.symlink_to(self.evidence)
         self.local.write_text(f"export CODEX_BIN='{alias}'\n")
-        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+        code, level, message = run(overlay, **env)
+        self.assertEqual((code, level, message), (0, "PASS",
+            "verified mappings: none; claude not installed; skipped / 沒有安裝，略過; "
+            "codex origin kind=script, channels=[]; gemini not installed; skipped / 沒有安裝，略過; "
+            "grok not installed; skipped / 沒有安裝，略過"))
 
     def test_path_mismatch_fails_even_when_pinned_evidence_is_stale(self):
         env, overlay = self.vendor_fixture()
@@ -234,7 +242,11 @@ class OverlayHealthTests(unittest.TestCase):
     def test_unresolvable_cli_is_not_a_path_mismatch(self):
         env, overlay = self.vendor_fixture()
         self.local.write_text("export CODEX_BIN='not-installed-c2'\n")
-        self.assertEqual(run(overlay, **env), (0, "PASS", "verified mappings: none"))
+        code, level, message = run(overlay, **env)
+        self.assertEqual((code, level, message), (0, "PASS",
+            "verified mappings: none; claude not installed; skipped / 沒有安裝，略過; "
+            "codex not installed; skipped / 沒有安裝，略過; gemini not installed; skipped / 沒有安裝，略過; "
+            "grok not installed; skipped / 沒有安裝，略過"))
 
     def test_no_overlay_keeps_exact_warning_and_human_pass(self):
         env, _ = self.vendor_fixture()

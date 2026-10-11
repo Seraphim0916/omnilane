@@ -43,16 +43,25 @@ def codesign(described: str, verify_rc: int = 0):
 
 
 class ProvenanceTests(unittest.TestCase):
+    def setUp(self):
+        SCRATCH.mkdir(exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.addCleanup(self.tmp.cleanup)
+        self.target = Path(self.tmp.name) / "sample"
+        self.target.write_bytes(b"\xcf\xfa\xed\xfe" + b"fake Mach-O")
+        platform = patch.object(sys, "platform", "darwin")
+        platform.start()
+        self.addCleanup(platform.stop)
     TEAM = "Identifier=codex\nAuthority=Developer ID Application: X (TEAM123456)\nTeamIdentifier=TEAM123456\n"
     ADHOC = "Identifier=2.1.276.patchtmp\nSignature=adhoc\nTeamIdentifier=not set\n"
 
     def test_reads_the_signing_team(self):
-        self.assertEqual(cli_provenance.facts("/x", codesign(self.TEAM)),
-                         {"signer": "TEAM123456", "identifier": "codex", "valid": True})
+        self.assertEqual(cli_provenance.facts(self.target, codesign(self.TEAM)),
+                         {"kind": "developer-id", "signer": "TEAM123456", "identifier": "codex", "valid": True})
 
     def test_adhoc_and_invalid_signatures_are_not_a_team(self):
-        self.assertEqual(cli_provenance.facts("/x", codesign(self.ADHOC))["signer"], "adhoc")
-        self.assertEqual(cli_provenance.facts("/x", codesign(self.TEAM, 1))["signer"], "unsigned")
+        self.assertEqual(cli_provenance.facts(self.target, codesign(self.ADHOC))["signer"], "adhoc")
+        self.assertEqual(cli_provenance.facts(self.target, codesign(self.TEAM, 1))["signer"], "unsigned")
 
     def test_a_trusted_adhoc_update_passes_only_in_its_install_location(self):
         adhoc = {"signer": "adhoc", "identifier": "x", "valid": True}
@@ -233,7 +242,7 @@ class ResignTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text(f"{vendor} 1.0.0\n")
             self.bins[vendor] = path
-        self.signers = {vendor: f"TEAM{index}" for index, vendor in enumerate(resign.VENDORS)}
+        self.signers = {vendor: f"TEST{index:06d}" for index, vendor in enumerate(resign.VENDORS)}
         self.sweep_root = self.home / "transport-evidence" / "first"
         (self.sweep_root / "evidence").mkdir(parents=True)
         for vendor in resign.VENDORS:
@@ -267,7 +276,10 @@ class ResignTests(unittest.TestCase):
 
     def facts(self, path, runner=None):
         vendor = self.vendor_of(Path(path).name)
-        return {"signer": self.signers[vendor], "identifier": vendor, "valid": True}
+        signer = self.signers[vendor]
+        kind = signer if signer in ("adhoc", "unsigned", "invalid", "unverifiable", "script", "no-platform-signature") else "developer-id"
+        return {"kind": kind, "signer": signer, "identifier": vendor,
+                "valid": kind in ("adhoc", "developer-id")}
 
     def descriptor(self, root, name, verdict):
         from probe_fixture import write_probe
@@ -286,7 +298,7 @@ class ResignTests(unittest.TestCase):
         self.bins[vendor] = path
         return path
 
-    def run_resign(self, *, outcome="done", outcomes=None, smoke=(True, "ok"), failing=(), canary=(True, "v"), **flags):
+    def run_resign(self, *, outcome="done", outcomes=None, smoke=(True, "ok"), failing=(), canary=(True, "v"), _argv=None, **flags):
         def sweep(vendor, root, log=print, only_missing=False, **_):
             self.sweeps.append(vendor)
             self.only_missing[vendor] = only_missing
@@ -313,8 +325,10 @@ class ResignTests(unittest.TestCase):
         with patch.object(probe_sweep, "sweep", sweep), \
                 patch.object(resign, "canary", lambda cli: canary), \
                 patch.object(resign, "smoke", lambda *a, **k: smoke), \
-                patch("builtins.print"):
-            return resign.resign(args, log=self.lines.append)
+                patch("builtins.print") as output:
+            result = resign.main(_argv) if _argv is not None else resign.resign(args, log=self.lines.append)
+            self.printed = [str(call.args[0]) for call in output.call_args_list if call.args]
+            return result
 
     def missing_cli(self, vendor):
         return patch.object(resign.shutil, "which", lambda name:
@@ -423,7 +437,7 @@ class ResignTests(unittest.TestCase):
 
     def test_signer_holds_never_retire_mappings(self):
         self.update("grok")
-        self.signers["grok"] = "OTHER"
+        self.signers["grok"] = "TEST000010"
         self.repeat_hold("signer gate refused")
 
     def test_canary_holds_never_retire_mappings(self):
@@ -447,7 +461,7 @@ class ResignTests(unittest.TestCase):
         with self.missing_cli("grok"):
             self.run_resign(vendor=["grok"])
         self.update("grok")
-        self.signers["grok"] = "OTHER"
+        self.signers["grok"] = "TEST000010"
         self.run_resign(vendor=["grok"])
         self.assert_pending("grok", "signer gate refused", 2, before)
         with self.missing_cli("grok"):
@@ -670,7 +684,7 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
         self.assertEqual(self.sweeps, [])
         self.assert_pending("claude", "signer gate refused", 1, before)
-        self.assertTrue(any("--approve claude" in line for line in self.lines), self.lines)
+        self.assertTrue(any("--trust-adhoc claude" in line for line in self.lines), self.lines)
         self.assertEqual(self.run_resign(approve=["claude"]), resign.EXIT_OK, self.lines)
         self.assertIs(self.only_missing["claude"], False)
         self.assertEqual(self.pinned("claude"), str(new))
@@ -696,12 +710,12 @@ class ResignTests(unittest.TestCase):
     def test_a_new_signer_is_held_for_the_operator(self):
         old = self.pinned("codex")
         self.update("codex")
-        self.signers["codex"] = "SOMEONEELSE"
+        self.signers["codex"] = "TEST000009"
         before = self.vendor_mappings("codex")
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
         self.assertEqual((self.sweeps, self.pinned("codex")), ([], old))
         self.assert_pending("codex", "signer gate refused", 1, before)
-        self.assertTrue(any("--approve codex" in line for line in self.lines), self.lines)
+        self.assertTrue(any("--trust-origin codex" in line for line in self.lines), self.lines)
 
     def test_an_adhoc_binary_is_held_until_approved(self):
         new = self.update("claude")
@@ -780,7 +794,7 @@ class ResignTests(unittest.TestCase):
     def test_a_held_vendor_keeps_its_old_pin_while_another_is_re_signed(self):
         old_codex = self.pinned("codex")
         self.update("codex")
-        self.signers["codex"] = "SOMEONEELSE"
+        self.signers["codex"] = "TEST000009"
         new_grok = self.update("grok")
         self.assertEqual(self.run_resign(), resign.EXIT_OPERATOR)
         self.assertEqual(self.sweeps, ["grok"])

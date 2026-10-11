@@ -143,23 +143,25 @@ The overlay pins each CLI executable by hash, and **the CLIs update themselves**
 often weekly. After an update that vendor's lanes are refused until the overlay
 is re-signed. `omnilane resign` does the whole job: finds what changed, re-probes
 only that vendor, checks the result, swaps it in, sends one real dispatch to
-confirm, and restores the old file if that fails.
+confirm, and restores the old file if that fails. A source channel only permits probing; it never authorizes dispatch by itself.
 
-It will not re-sign just anything. A changed CLI is re-signed **unattended** only
-when it carries the same code-signing team as the one on record and sits in the
-same install location. So tell it once which signers you accept:
+Record the signers of the unchanged executables from Step 2 once with `omnilane resign --record-signers`. Existing team records imply a Developer ID channel, now requiring Apple's certificate chain as well as the team, product identifier and resolved installation location. An old adhoc record without explicit operator trust grants no channel.
 
 ```bash
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-If you patch a vendor CLI yourself after every update and re-sign it adhoc,
-tell omnilane that too, once per vendor; an adhoc update in the same install
-directory is then re-signed unattended as well:
+For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement.
 
 ```bash
 omnilane resign --trust-adhoc claude   # only if you re-sign claude adhoc yourself
 ```
+
+For a pinned script or native non-macOS executable, use `omnilane resign --trust-location VENDOR`. After reviewing a changed location or a new script, `omnilane resign --approve VENDOR` permits only this attempt; after successful probing you can trust the new pinned location. It does not create a channel. Revoke with `omnilane resign --revoke-origin VENDOR KIND`, where `KIND` is `developer-id`, `adhoc`, `script`, `no-platform-signature` or `location` (all location channels). An empty revoked list stays authoritative over old overlay trust.
+
+`omnilane resign --check` and `omnilane doctor` show executable kind and approved channels, and observed team/identifier when blocked. Invalid signatures, unavailable signature verification, unsigned macOS native files and damaged or foreign-host policy files always stop; approval cannot repair them. Source failures and login failures have different instructions. Restore a valid installation or local policy backup before retrying. Source blocking applies when the executable changes. An unchanged pinned executable keeps the existing missing-row, retry and evidence-refresh behavior.
+
+Channels live in host-bound, atomic, backed-up, 0600 `$OMNILANE_HOME/transport-origins.local.json`; do not copy them between hosts. The phase-2 first-use interface currently defaults to Developer ID only. Scripts and non-macOS binaries are not silently trusted on upgrade. AI assistants must never run trust, approval, recording or revocation commands themselves.
 
 Then let it run every day. Any scheduler works as long as it runs **inside your
 desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:
@@ -190,18 +192,13 @@ What `omnilane resign` exits with:
 |---|---|---|
 | 0 | nothing had changed, or everything that changed was re-signed | nothing |
 | 10 | `--check` only: something changed | run `omnilane resign` |
-| 20 | a vendor needs you: new or missing signer, unsigned or locally patched binary, new install directory, or the provider refused probes that passed last time | read the message. It prints either "retry later" or the exact `omnilane resign --vendor V --approve V` to run after you have looked |
+| 20 | source review, login or verification needs attention | follow the source-specific or login-specific message; approval cannot waive invalid, unsigned or unverifiable signatures |
 | 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
 | 2 | no overlay is configured | do Step 2 |
 | 40 (`EXIT_HOST_CONFIG`) | dispatch's host configuration could not load, or the configured overlay is unreadable or invalid JSON; nothing read/staged/written after a shell failure | fix the path/error on stderr; daily-job owners decide notification policy |
 | 50 (`EXIT_BUSY`) | another `omnilane resign` is already running on this host; nothing read or written | let it finish, then run this one |
 
 Exit 2 also covers argparse usage errors; a configured but unreadable overlay is exit 40, not 2.
-
-Two limits to know. Signer checks use macOS code signatures, so on Linux every
-changed CLI stops at exit 20 for your `--approve`. And a binary with no real
-signature (a locally patched CLI, for example) always stops for approval: nothing
-ties it to its vendor, which is the point of the check.
 
 ### Step 4 — Try it from inside the assistant
 

@@ -9,18 +9,14 @@ drift and, when it is safe to, repairs it without an operator:
     -> build and load the staging overlay -> replace the live one atomically
     -> one real dispatch per re-probed vendor -> restore the old one on failure
 
-A changed executable is re-probed unattended only when it still carries the
-signer the live overlay recorded and still sits in the same install location.
-A configuration the probe plan lists but this host never probed (a new model,
-or a sweep that could not reach a login) is drift too; with the executable
-unchanged, only missing rows and environmental failures are probed. Unattended
-environment retries wait 20 hours; an interactive run or --retry-failed bypasses
-only that cooldown. Conclusive failures are not retry gaps. Anything else stops
-at a notification; `--approve VENDOR` is the operator saying
-they looked. `--trust-adhoc VENDOR` is the operator saying an adhoc signature in
-that install location is their own local step, so those updates count as
-same-signer.
-
+A changed executable is re-probed only through a matching host-local source
+channel: a verified Developer ID or an explicitly trusted installation kind and
+location. Channels do not grant dispatch authority; fresh probe evidence is still
+required. Missing and environment-failed rows keep the existing retry rules:
+unattended environment retries wait 20 hours, while interactive runs or
+--retry-failed bypass only cooldown. --approve is one-shot and cannot waive
+invalid, unsigned macOS or unverifiable signatures. --trust-origin requires a
+terminal and explicit confirmation; --trust-adhoc retains local location trust.
 Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check);
 20 drift needs an operator; 30 attempted and rolled back; 40 host configuration
 failed (EXIT_HOST_CONFIG); 50 another resign is running on this host (EXIT_BUSY);
@@ -46,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
 import build_overlay  # noqa: E402
 import cli_provenance  # noqa: E402
+import origin_policy  # noqa: E402
 import probe_sweep  # noqa: E402
 import probe_failure  # noqa: E402
 from overlay_diagnostics import recovery_guidance  # noqa: E402
@@ -132,6 +129,7 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
                for m in overlay.get("mappings", [])):
             reasons.append("pending re-check")
         report[vendor] = {
+            "vendor": vendor,
             "drifted": bool(reasons),
             "reasons": reasons,
             "snapshot_only": snapshot_only,
@@ -194,14 +192,17 @@ def gate(vendor_report: dict, approved: bool) -> tuple[bool, str]:
         return True, "CLI unchanged; re-verify the changed request or runner contracts"
     current = cli_provenance.facts(vendor_report["cli"])
     vendor_report["codesign"] = current
-    allowed, reason = cli_provenance.verdict(
-        vendor_report["recorded_codesign"], vendor_report["recorded_cli_path"],
-        current, vendor_report["cli"])
-    if not allowed and approved:
-        return True, f"approved by the operator ({reason})"
-    return allowed, reason
-
-
+    allowed, reason = origin_policy.gate(
+        vendor_report.get("vendor"), vendor_report["recorded_codesign"],
+        vendor_report["recorded_cli_path"], current, vendor_report["cli"])
+    vendor_report["origin_reason"] = reason
+    if not allowed and approved and reason not in ("invalid", "unsigned", "unverifiable", "policy-invalid"):
+        return True, f"approved by operator ({reason})"
+    if not allowed:
+        from verification_status import origin_guidance
+        guidance = origin_guidance(vendor_report.get("vendor"), reason, current)
+        return False, guidance["message"] + " / " + guidance["message_zh_tw"]
+    return True, reason
 def canary(cli: str, runner=subprocess.run) -> tuple[bool, str]:
     try:
         result = runner([cli, "--version"], capture_output=True, text=True, timeout=30,
@@ -338,16 +339,27 @@ def trust_adhoc(live: Path, overlay: dict, report: dict, wanted: list[str], log)
     the overlay pins; a new directory or an unsigned executable still stops.
     """
     changed = []
+    channels = []
     for entry in overlay.get("evidence", []):
         vendor = entry.get("vendor")
         if vendor not in wanted or Path(entry["path"]).name == build_overlay.RUNNERS[vendor]:
-            continue
-        if entry.get("operator_trust") == cli_provenance.TRUST_ADHOC:
             continue
         if not entry.get("codesign"):
             log(f"omnilane: {vendor} has no recorded signer to bind the trust to; "
                 "run omnilane resign --record-signers first")
             continue
+        try:
+            data = origin_policy.load()
+            existing = data["vendors"].get(vendor, {}).get("channels", [])
+            if entry.get("operator_trust") == cli_provenance.TRUST_ADHOC and any(
+                    c["kind"] == "location" and c["accepts"] == "adhoc"
+                    and c["install_family"] == origin_policy.install_family(entry["path"]) for c in existing):
+                continue
+        except (origin_policy.OriginError, OSError) as error:
+            log(f"omnilane: origin policy rejected ({error}); nothing recorded")
+            return EXIT_OPERATOR
+        channels.append((vendor, origin_policy._channel("adhoc", entry["path"], {}),
+                         recorded_signer(entry), entry["path"]))
         entry["operator_trust"] = cli_provenance.TRUST_ADHOC
         entry["operator_trust_recorded_at"] = datetime.now(timezone.utc).isoformat()
         changed.append(f"{vendor} in {cli_provenance.family(entry['path'])}")
@@ -359,12 +371,99 @@ def trust_adhoc(live: Path, overlay: dict, report: dict, wanted: list[str], log)
     aa_policy.atomic_bytes(live, (json.dumps(overlay, indent=2, ensure_ascii=False) + "\n").encode())
     try:
         verified(live)
+        origin_policy.record_many(channels)
     except (aa_policy.PolicyError, OSError, ValueError) as error:
         aa_policy.atomic_bytes(live, backup.read_bytes())
         log(f"omnilane: the overlay stopped loading ({error}); restored {backup}")
         return EXIT_ROLLED_BACK
     log(f"omnilane: trusting adhoc {', '.join(changed)} (backup {backup})")
     return EXIT_OK
+
+
+def origin_action(args, report, log):
+    """Explicit local operator commands. Never execute the vendor executable."""
+    revocation = getattr(args, "revoke_origin", None)
+    vendor = (revocation[0] if revocation else getattr(args, "trust_origin", None)
+              or getattr(args, "trust_location", None))
+    if vendor not in VENDORS:
+        log("omnilane: unknown origin vendor; nothing changed")
+        return EXIT_OPERATOR
+    entry = report[vendor]
+    recorded, pinned = entry["recorded_codesign"], entry["recorded_cli_path"]
+    try:
+        if revocation:
+            origin_policy.revoke(vendor, revocation[1], recorded, pinned)
+            log(f"omnilane: revoked {vendor} {revocation[1]}; other channels retained")
+            return EXIT_OK
+        if not entry["cli"]:
+            raise origin_policy.OriginError("CLI is not installed")
+        current = cli_provenance.facts(entry["cli"])
+        kind = current.get("kind")
+        if getattr(args, "trust_origin", None):
+            if not sys.stdin.isatty():
+                raise origin_policy.OriginError("--trust-origin requires an interactive terminal")
+            team = getattr(args, "team", None)
+            if kind == "developer-id" and current.get("valid") is True:
+                if not origin_policy._text(current.get("identifier")):
+                    raise origin_policy.OriginError("verified sample has no usable product identifier")
+                if team is not None and team != current.get("signer"):
+                    raise origin_policy.OriginError("--team differs from the verified sample")
+                team = current.get("signer")
+            elif kind != "adhoc" or current.get("valid") is not True:
+                raise origin_policy.OriginError("trust-origin requires a verified Developer ID or adhoc sample")
+            elif current.get("signer") != "adhoc":
+                raise origin_policy.OriginError("invalid adhoc facts")
+            if not isinstance(team, str) or not cli_provenance.TEAM_ID.fullmatch(team):
+                raise origin_policy.OriginError("adhoc samples require an explicit ten-character --team")
+            log(f"omnilane: {vendor}: kind={kind}, team={team}, identifier={current.get('identifier')}, "
+                f"path={entry['cli']}, Apple-chain={'verified' if kind == 'developer-id' else 'not observed yet'}")
+            if input(f"Trust this source on this host? Type TRUST {vendor} {team}: ").strip() != f"TRUST {vendor} {team}":
+                raise origin_policy.OriginError("explicit confirmation not received")
+            sample = current if kind == "developer-id" else {"identifier": ""}
+            channel = origin_policy._channel("developer-id", entry["cli"], sample, team=team)
+        else:
+            if kind not in ("script", "no-platform-signature") or entry["cli_changed"] or not pinned:
+                raise origin_policy.OriginError("trust-location requires the unchanged pinned script or native non-macOS executable; "
+                                               f"review it, then run omnilane resign --approve {vendor} first")
+            channel = origin_policy._channel(kind, pinned, current)
+        origin_policy.record(vendor, channel, recorded, pinned)
+        log(f"omnilane: recorded {vendor} {channel['kind']} channel; probe evidence is unchanged")
+        return EXIT_OK
+    except (origin_policy.OriginError, OSError, EOFError) as error:
+        log(f"omnilane: origin command refused: {error}; no executable was run")
+        return EXIT_OPERATOR
+
+
+def origin_status(report):
+    for vendor, entry in report.items():
+        if not entry["cli"]:
+            entry.update(codesign={}, origin_channels=[], origin_allowed=False,
+                         origin_reason="cli-not-installed")
+            continue
+        current = cli_provenance.facts(entry["cli"])
+        entry["codesign"] = current
+        try:
+            channels = origin_policy.channels_for(vendor, entry["recorded_codesign"], entry["recorded_cli_path"])
+            # Implicit channels are derived on demand; do not display a synthetic
+            # approval timestamp or make identical read-only checks look changed.
+            entry["origin_channels"] = [{key: value for key, value in channel.items() if key != "approved_at"}
+                                        for channel in channels]
+        except (origin_policy.OriginError, OSError):
+            entry["origin_channels"] = []
+            entry["origin_policy_error"] = True
+        allowed, reason = origin_policy.gate(vendor, entry["recorded_codesign"], entry["recorded_cli_path"],
+                                             current, entry["cli"])
+        entry["origin_reason"] = reason
+        entry["origin_allowed"] = allowed
+
+
+def public_summary(value):
+    if isinstance(value, dict):
+        return {key: (item[:16] if "sha256" in key and isinstance(item, str) else public_summary(item))
+                for key, item in value.items()}
+    if isinstance(value, list):
+        return [public_summary(item) for item in value]
+    return value
 
 
 def load_host_configuration() -> tuple[str, dict]:
@@ -563,6 +662,26 @@ def _resign(args, live: Path, anchors, log) -> int:
         return record_signers(live, overlay, report, wanted, log)
     if args.trust_adhoc:
         return trust_adhoc(live, overlay, report, args.trust_adhoc, log)
+    if any(getattr(args, name, None) for name in ("trust_origin", "trust_location", "revoke_origin")):
+        try:
+            verified(live)
+        except (aa_policy.PolicyError, OSError, ValueError, KeyError, TypeError):
+            log("omnilane: live overlay is invalid; source approval was not recorded")
+            return EXIT_HOST_CONFIG
+        return origin_action(args, report, log)
+    if args.check:
+        origin_status(report)
+        for vendor in wanted:
+            entry = report[vendor]
+            if not entry["cli"]:
+                log(f"omnilane: {vendor}: not installed; skipped / 沒有安裝，略過")
+                continue
+            log(f"omnilane: {vendor}: kind={entry['codesign'].get('kind')}, "
+                f"channels={json.dumps(entry['origin_channels'])}")
+            if entry["cli_changed"] and not entry["origin_allowed"]:
+                from verification_status import origin_guidance
+                guidance = origin_guidance(vendor, entry["origin_reason"], entry["codesign"])
+                log(guidance["message"] + " / " + guidance["message_zh_tw"])
     drifted = [vendor for vendor in wanted if report[vendor]["drifted"]]
     summary = {"host": overlay.get("host"), "checked_at": datetime.now(timezone.utc).isoformat(),
                "live_overlay": str(live), "live_sha256": sha256(live), "vendors": report}
@@ -576,13 +695,13 @@ def _resign(args, live: Path, anchors, log) -> int:
             return EXIT_HOST_CONFIG
         log("omnilane: transport overlay matches what the runners execute; nothing to re-sign")
         if args.json:
-            print(json.dumps(summary, ensure_ascii=False, indent=2))
+            print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         return EXIT_OK
     for vendor in drifted:
         log(f"omnilane: {vendor} drifted: " + "; ".join(report[vendor]["reasons"]))
     if args.check:
         if args.json:
-            print(json.dumps(summary, ensure_ascii=False, indent=2))
+            print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         log("omnilane: run `omnilane resign` to re-probe and re-sign")
         return EXIT_DRIFT
 
@@ -701,7 +820,16 @@ def _resign(args, live: Path, anchors, log) -> int:
                 # untouched vendor would vanish with a re-sign of another one.
                 old = next((e for e in overlay["evidence"] if e.get("vendor") == entry["vendor"]
                             and e.get("operator_trust")), None)
-                if old is not None:
+                try:
+                    channels = origin_policy.channels_for(entry["vendor"], recorded_signer(old),
+                                                           old["path"] if old else None)
+                except (origin_policy.OriginError, OSError):
+                    channels = []
+                    log(f"omnilane: {entry['vendor']}: origin policy unavailable; "
+                        "operator trust was not retained / 無法採用通道檔，未沿用操作者信任")
+                if old is not None and any(c["kind"] == "location" and c["accepts"] == "adhoc"
+                                          and c["install_family"] == origin_policy.install_family(entry["path"])
+                                          for c in channels):
                     entry["operator_trust"] = old["operator_trust"]
                     entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
         pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"])
@@ -729,6 +857,15 @@ def _resign(args, live: Path, anchors, log) -> int:
                 log(f"omnilane: {vendor}: fewer selectors verified than expected "
                     f"({before[vendor]} -> {after[vendor]}); see {root}/evidence")
         backup = live.with_name(live.name + f".before-{sweep_id}")
+        try:
+            for vendor in proceed:
+                if (report[vendor]["cli_changed"] and vendor in (args.approve or [])
+                        and report[vendor].get("origin_reason") != "origin-approved"):
+                    origin_policy.preserve_before_override(vendor, report[vendor]["recorded_codesign"],
+                                                           report[vendor]["recorded_cli_path"])
+        except (origin_policy.OriginError, OSError) as error:
+            log(f"omnilane: cannot preserve prior source channels ({error}); live overlay untouched")
+            return EXIT_ROLLED_BACK
         shutil.copy2(live, backup)
         retrying = any(report[v]["retry_failed"] or report[v]["expired"] for v in proceed)
         if not retrying:
@@ -814,8 +951,9 @@ def _resign(args, live: Path, anchors, log) -> int:
         elif report[vendor].get("gate", {}).get("allowed"):
             log(f"omnilane: {vendor}: Retry later: omnilane resign --vendor {vendor}")
         else:
-            log(f"omnilane: {vendor} still needs an operator. After checking the executable: "
-                f"omnilane resign --vendor {vendor} --approve {vendor}")
+            from verification_status import origin_guidance
+            guidance = origin_guidance(vendor, report[vendor].get("origin_reason"), report[vendor].get("codesign"))
+            log(guidance["message"] + " / " + guidance["message_zh_tw"])
     summary["pending_recheck"] = pending
     summary.update(re_signed=proceed if outcome != EXIT_ROLLED_BACK else [], held=held,
                    exit_code=outcome, sweep_root=str(root) if root.exists() else None)
@@ -823,13 +961,18 @@ def _resign(args, live: Path, anchors, log) -> int:
         (root / "resign-report.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2,
                                                             default=str) + "\n")
     if args.json:
-        print(json.dumps(summary, ensure_ascii=False, indent=2, default=str))
+        print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2, default=str))
     return outcome
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                      epilog=__doc__.split("Exit codes:")[1].strip())
+    origin_commands = parser.add_mutually_exclusive_group()
+    origin_commands.add_argument("--trust-origin", choices=VENDORS, metavar="VENDOR")
+    origin_commands.add_argument("--trust-location", choices=VENDORS, metavar="VENDOR")
+    origin_commands.add_argument("--revoke-origin", nargs=2, metavar=("VENDOR", "KIND"))
+    parser.add_argument("--team", help="explicit Developer ID team; never inferred for adhoc samples")
     parser.add_argument("--check", action="store_true", help="report drift and change nothing")
     parser.add_argument("--retry-failed", action="store_true",
                         help="retry environment failures now, bypassing only the 20-hour cooldown")
@@ -852,6 +995,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="persist unresolved verification for doctor and preserve failure exit status")
     try:
         args = parser.parse_args(argv)
+        if args.team is not None and not args.trust_origin:
+            parser.error("--team requires --trust-origin")
+        if any((args.trust_origin, args.trust_location, args.revoke_origin)) and any((args.check, args.daily, args.trust_adhoc, args.record_signers, args.approve)):
+            parser.error("origin commands cannot be combined with other actions")
     except SystemExit as error:
         if error.code and "--daily" in (argv if argv is not None else sys.argv[1:]):
             from verification_status import run_daily

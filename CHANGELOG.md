@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Pass literal Developer ID requirements with the `codesign -R =...` form and distinguish requirement rejection from unavailable verification. Keep unchanged executable retries independent of source channels, and avoid blocked-source guidance for unchanged or absent CLIs.
+- Limit `resign --check --json` executable digest display to the first 16 hexadecimal characters; integrity checks still use the full digest.
+
+### Added
+
+- Separate host-local source channels from transport proof. Developer ID checks require Apple's certificate chain, the approved team, product identifier and resolved installation family; approved local adhoc updates keep their independent location channel.
+- Add interactive `resign --trust-origin VENDOR [--team TEAMID]`, `--trust-location VENDOR` and `--revoke-origin VENDOR KIND`. Preserve legacy adhoc trust without granting new trust on upgrade. First-use registration defaults to Developer ID only.
+- Show executable kinds, channels and source-specific bilingual recovery instructions in `resign --check` and doctor. Invalid, unsigned macOS and unverifiable files always stop; one-shot approval never records a channel. Trust remains host-local, backed up and separate from dispatch evidence.
+
 ## [0.54.0] - 2026-10-11
 
 ### Fixed

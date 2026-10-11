@@ -120,19 +120,25 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 
 ### 第 3 步：让这份证明自己保持最新，不用你动手
 
-覆盖文件用哈希值钉住每个 CLI 可执行文件，而**这些 CLI 会自己更新**，常常一周一次。更新之后，那一家的通道就会被拒绝，直到覆盖文件重新签署为止。`omnilane resign` 一条命令做完全部：找出哪里变了、只重新探测那一家、检查结果、换上新文件、发一笔真实派工确认，失败就自动恢复旧文件。
+覆盖文件用哈希值钉住每个 CLI 可执行文件，而**这些 CLI 会自己更新**，常常一周一次。更新之后，那一家的通道就会被拒绝，直到覆盖文件重新签署为止。`omnilane resign` 一条命令做完全部：找出哪里变了、只重新探测那一家、检查结果、换上新文件、发一笔真实派工确认，失败就自动恢复旧文件。 来源通道只允许开始补测，不会直接放行调度。
 
-它不是什么都签。变动过的 CLI 只有在“签署者与记录一致、并且装在同一类位置”时，才会**无人值守**地重新签署。所以先告诉它一次你接受哪些签署者：
+完成第 2 步后，对尚未变化的文件执行一次 `omnilane resign --record-signers`。原有团队记录会形成官方通道，但当前文件仍须通过 Apple 证书链、团队、标识名称和解析后安装位置的检查。只有自签记录、没有操作者信任的旧文件，不会因升级而新增信任。
 
 ```bash
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-如果你每次更新后都会自己修补某家 CLI、再用 adhoc 重新签署，也要告诉它一次（每家各一次）；之后同一个安装目录里的 adhoc 新版也会无人值守地重新签署：
+如果你自行修补并自签，执行 `omnilane resign --trust-adhoc claude`，信任同一位置之后的自签更新。另在**每台主机分别**安装有效官方样本时执行 `omnilane resign --trust-origin claude`；当前若为自签，使用 `omnilane resign --trust-origin claude --team TEAMID`，将 `TEAMID` 换成你独立确认的十位团队代码。命令仅限终端，必须输入屏幕要求的明确确认，没有跳过确认的选项，也没有默认团队。官方更新与随后的自签更新分别需要补测。同位置信任无法证明替换文件由谁产生。
 
 ```bash
 omnilane resign --trust-adhoc claude   # 只有你自己会把 claude 签成 adhoc 时才需要
 ```
+
+已固定的脚本或非 macOS 原生文件可用 `omnilane resign --trust-location VENDOR`。位置变化或首次出现脚本时，确认来源后执行 `omnilane resign --approve VENDOR`，补测成功后再信任新位置；批准只限本次，不建立通道。使用 `omnilane resign --revoke-origin VENDOR KIND` 撤销；`KIND` 可为 `developer-id`、`adhoc`、`script`、`no-platform-signature` 或 `location`（全部位置通道）。撤销后的空列表仍优先于覆盖文件的旧信任。
+
+`omnilane resign --check` 和 `omnilane doctor` 显示种类、通道，以及阻止时观察到的团队和标识名称。签名损坏、无法验证、macOS 原生文件完全未签名、通道文件损坏或属于其他主机时始终停止，批准不能修复这些问题。来源失败和登录失败提供不同指引；先恢复有效安装或本机通道备份，再重试。 来源阻止适用于可执行文件已变更的情况。未变更且已固定的可执行文件，沿用既有缺失配置补测、重试和证据更新规则。
+
+通道保存在绑定主机、0600、原子写入且修改前备份的 `$OMNILANE_HOME/transport-origins.local.json`，不要跨主机复制。第二期首次使用接口当前默认只自动记录官方签名；不会因升级而悄悄信任脚本或非 macOS 文件。助手不得自行执行信任、批准、记录或撤销命令。
 
 然后让它每天运行一次。用什么调度器都行，但必须运行在**你的桌面登录会话里**（CLI 需要钥匙串）。macOS 可以用 LaunchAgent：
 
@@ -159,15 +165,13 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 |---|---|---|
 | 0 | 没有东西变动，或变动的都已重签 | 不用做 |
 | 10 | 只有 `--check` 会出现：有东西变了 | 执行 `omnilane resign` |
-| 20 | 有一家需要你：签署者是新的或没有记录、可执行文件没有签名或在本地被改过、换了安装目录，或者供应商这次拒绝了上次通过的探测 | 读消息。它会打印“稍后重试”，或打印出你看过之后应执行的那一行 `omnilane resign --vendor V --approve V` |
+| 20 | 来源、登录或验证需要处理 | 按对应消息操作；批准不能豁免损坏签名、未签名或无法验证的情况 |
 | 30 | 重签后的覆盖文件没通过真实派工，已恢复为前一份 | 没有东西损坏，读日志即可 |
 | 2 | 没有配置覆盖文件 | 做第 2 步 |
 | 40 (`EXIT_HOST_CONFIG`) | 主机配置加载失败，或已配置的覆盖文件无法读取、JSON 无效；不做更改 | 修正 stderr 指出的路径与原因；每日任务的通知方式由负责人决定 |
 | 50 (`EXIT_BUSY`) | 这台主机已有另一个 `omnilane resign` 在运行；不读也不写 | 等它运行完再执行这一次 |
 
 argparse usage errors also return 2; a configured but unreadable overlay returns 40, not 2.
-
-有两个限制要知道。签署者检查用的是 macOS 的代码签名，所以在 Linux 上，每次 CLI 变动都会停在退出码 20 等你 `--approve`。另外，没有真正签名的可执行文件（例如在本地打过补丁的 CLI）一定会停下来等批准：没有任何东西能证明它来自原厂，而这正是这项检查存在的理由。
 
 ### 第 4 步：在助手里面试试看
 

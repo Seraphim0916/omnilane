@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Who signed a vendor CLI, and whether a changed one may be re-signed unattended.
+"""Classify an executable and verify its native Developer ID requirement.
 
-The transport overlay pins each vendor's executable by hash. Vendor CLIs update
-themselves, so that pin goes stale as routine traffic. Re-pinning on sight would
-turn the pin into a rubber stamp; this module is what stands in between. A
-changed executable may be re-probed without an operator only when it still
-carries the signer recorded when the overlay was last signed and still lives in
-the same install location. Anything else is a notification, not a re-sign.
+Facts never grant trust: origin_policy matches them to host-local channels before
+re-probing. The legacy verdict helper remains for older callers.
 """
 from __future__ import annotations
 
@@ -24,33 +20,78 @@ TRUST_ADHOC = "adhoc-in-install-location"
 VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)*")
 
 
+MACH_O = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
+          b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca",
+          b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}
+TEAM_ID = re.compile(r"^[A-Z0-9]{10}$")
+
+
+def verify_origin_requirement(path, team, runner=subprocess.run):
+    """Return Apple's external Developer ID check; never interpolate a shell."""
+    if not isinstance(team, str) or not TEAM_ID.fullmatch(team):
+        raise ValueError("invalid team identifier")
+    requirement = ('anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] '
+                   'exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists '
+                   f'and certificate leaf[subject.OU] = "{team}"')
+    # codesign(1), SPECIFYING REQUIREMENTS: plain text names a file; an initial
+    # '=' introduces literal requirement source text, still passed as one argument.
+    return runner(["codesign", "--verify", "--strict", "-R", "=" + requirement, str(path)],
+                  capture_output=True, text=True, timeout=15)
+
+
 def facts(path: Path | str, runner=subprocess.run) -> dict:
-    """codesign's view of one executable: the signing team, or why there is none."""
-    target = str(path)
+    """Classify the resolved entry itself, never its interpreter or its claims."""
+    import sys
+    result = {"kind": "unverifiable", "signer": UNSIGNED, "identifier": None, "valid": False}
     try:
-        verified = runner(["codesign", "--verify", "--strict", target],
-                          capture_output=True, text=True, timeout=60)
-        described = runner(["codesign", "-dv", "--verbose=2", target],
-                           capture_output=True, text=True, timeout=60)
-    except (OSError, subprocess.SubprocessError) as error:
-        return {"signer": UNSIGNED, "identifier": None, "valid": False,
-                "detail": f"codesign unavailable: {error.__class__.__name__}"}
-    fields = {}
-    for line in described.stderr.splitlines():
-        key, separator, value = line.partition("=")
-        if separator and key not in fields:
-            fields[key] = value
-    valid = verified.returncode == 0
-    team = fields.get("TeamIdentifier")
-    if not valid:
-        signer = UNSIGNED
-    elif fields.get("Signature") == "adhoc" or team in (None, "not set"):
-        signer = ADHOC
-    else:
-        signer = team
-    return {"signer": signer, "identifier": fields.get("Identifier"), "valid": valid}
-
-
+        target = Path(path).resolve(strict=True)
+        with target.open("rb") as stream:
+            magic = stream.read(4)
+        if magic.startswith(b"#!"):
+            return dict(result, kind="script")
+        if sys.platform != "darwin":
+            if magic in MACH_O or magic == b"\x7fELF" or magic.startswith(b"MZ"):
+                return dict(result, kind="no-platform-signature")
+            return result
+        if magic not in MACH_O:
+            return result
+        verified = runner(["codesign", "--verify", "--strict", str(target)],
+                          capture_output=True, text=True, timeout=15)
+        described = runner(["codesign", "-dv", "--verbose=2", str(target)],
+                           capture_output=True, text=True, timeout=15)
+        if described.returncode:
+            if "code object is not signed at all" in described.stderr:
+                return dict(result, kind="unsigned")
+            return result
+        fields = {}
+        for line in described.stderr.splitlines():
+            key, sep, value = line.partition("=")
+            if sep and key in ("TeamIdentifier", "Identifier", "Signature"):
+                if key in fields:
+                    return result
+                fields[key] = value
+        identifier = fields.get("Identifier")
+        if not identifier or any(ord(c) < 32 for c in identifier):
+            return result
+        result["identifier"] = identifier
+        if verified.returncode:
+            return dict(result, kind="invalid", invalid_reason="integrity",
+                        observed_team=fields.get("TeamIdentifier"))
+        team = fields.get("TeamIdentifier")
+        if team and team != "not set":
+            if not TEAM_ID.fullmatch(team):
+                return dict(result, kind="invalid")
+            requirement = verify_origin_requirement(target, team, runner)
+            if requirement.returncode == 3:
+                return dict(result, kind="invalid", signer=team, invalid_reason="requirement")
+            if requirement.returncode != 0:
+                return dict(result, signer=team)
+            return dict(result, kind="developer-id", signer=team, valid=True)
+        if fields.get("Signature") == "adhoc" and team in (None, "not set"):
+            return dict(result, kind="adhoc", signer=ADHOC, valid=True)
+        return result
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
+        return result
 def family(path: Path | str) -> str:
     """An install location with its version numbers blanked out."""
     return VERSION_SEGMENT.sub("<version>", str(path))
@@ -59,6 +100,8 @@ def family(path: Path | str) -> str:
 def verdict(recorded: dict | None, recorded_path: str | None, current: dict,
             current_path: Path | str) -> tuple[bool, str]:
     """May this changed executable be re-probed unattended? And the reason either way."""
+    if current.get("kind") in ("invalid", "unsigned", "unverifiable") or current.get("valid") is False:
+        return False, "the executable signature is invalid or unverifiable; it cannot be approved"
     if current["signer"] == UNSIGNED:
         return False, "the executable is unsigned, so nothing ties it to the vendor; an operator has to approve it"
     if current["signer"] == ADHOC:
