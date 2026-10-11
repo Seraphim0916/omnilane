@@ -7,6 +7,7 @@ semantic version tags.
 ## [Unreleased]
 
 ### Fixed
+- Print "not installed" instead of source-approval advice when a CLI cannot be found during re-signing; exit codes, pending marks and --check output are unchanged.
 
 - Pass literal Developer ID requirements with the `codesign -R =...` form and distinguish requirement rejection from unavailable verification. Keep unchanged executable retries independent of source channels, and avoid blocked-source guidance for unchanged or absent CLIs.
 - Limit `resign --check --json` executable digest display to the first 16 hexadecimal characters; integrity checks still use the full digest.

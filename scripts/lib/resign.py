@@ -434,11 +434,23 @@ def origin_action(args, report, log):
         return EXIT_OPERATOR
 
 
+NOT_INSTALLED_MESSAGE = "omnilane: {vendor}: not installed; skipped / 沒有安裝，略過"
+
+
+def skip_not_installed(vendor, entry, log=None):
+    """Describe an absent CLI without collecting signature facts or source advice."""
+    if entry["cli"]:
+        return False
+    entry.update(codesign={}, origin_channels=[], origin_allowed=False,
+                 origin_reason="cli-not-installed")
+    if log is not None:
+        log(NOT_INSTALLED_MESSAGE.format(vendor=vendor))
+    return True
+
+
 def origin_status(report):
     for vendor, entry in report.items():
-        if not entry["cli"]:
-            entry.update(codesign={}, origin_channels=[], origin_allowed=False,
-                         origin_reason="cli-not-installed")
+        if skip_not_installed(vendor, entry):
             continue
         current = cli_provenance.facts(entry["cli"])
         entry["codesign"] = current
@@ -673,8 +685,7 @@ def _resign(args, live: Path, anchors, log) -> int:
         origin_status(report)
         for vendor in wanted:
             entry = report[vendor]
-            if not entry["cli"]:
-                log(f"omnilane: {vendor}: not installed; skipped / 沒有安裝，略過")
+            if skip_not_installed(vendor, entry, log):
                 continue
             log(f"omnilane: {vendor}: kind={entry['codesign'].get('kind')}, "
                 f"channels={json.dumps(entry['origin_channels'])}")
@@ -951,9 +962,12 @@ def _resign(args, live: Path, anchors, log) -> int:
         elif report[vendor].get("gate", {}).get("allowed"):
             log(f"omnilane: {vendor}: Retry later: omnilane resign --vendor {vendor}")
         else:
-            from verification_status import origin_guidance
-            guidance = origin_guidance(vendor, report[vendor].get("origin_reason"), report[vendor].get("codesign"))
-            log(guidance["message"] + " / " + guidance["message_zh_tw"])
+            if not report[vendor]["cli"]:
+                log(NOT_INSTALLED_MESSAGE.format(vendor=vendor))
+            else:
+                from verification_status import origin_guidance
+                guidance = origin_guidance(vendor, report[vendor].get("origin_reason"), report[vendor].get("codesign"))
+                log(guidance["message"] + " / " + guidance["message_zh_tw"])
     summary["pending_recheck"] = pending
     summary.update(re_signed=proceed if outcome != EXIT_ROLLED_BACK else [], held=held,
                    exit_code=outcome, sweep_root=str(root) if root.exists() else None)
