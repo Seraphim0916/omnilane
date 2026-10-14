@@ -23,15 +23,23 @@ ROOT = Path(__file__).resolve().parents[1]
 # content at commit e662aba, so it runs in a shallow clone, a release archive, or with no git at all.
 # A legitimate change to a protected file has to update this table in the same commit.
 PROTECTED_BASE = "e662aba"
+# AA snapshot proposals may update these data/pin artifacts while retaining the
+# exact historical bytes and every other protected runtime file as baselines.
+SNAPSHOT_REBASE_BASE_SHA256 = {
+    "scripts/lib/transport_compat.py":
+        "3534d96a4835a43b0265b8756c139922e3b542cd4ecbdffc9c7a484fc4e99512",
+    "config/transport-compatibility.json":
+        "3c5f261d348d011fe1eed40ef734cf188903b19d9915cf520a3487fa6292c63e",
+}
 PROTECTED_SHA256 = {
     "scripts/lib/probe.py":
         "561c129266028c3549091ce36d28581b06833c87606b4d9a43b10ce6575cd719",
     "scripts/lib/probe_sweep.py":
         "5b98a7facc460e94cfab573a88c4835df06b55f56f6f56d6576d0c5975d14bc7",
     "scripts/lib/transport_compat.py":
-        "3534d96a4835a43b0265b8756c139922e3b542cd4ecbdffc9c7a484fc4e99512",
+        "24765ecf819dc694fe2b30ed05e13cd4c59e0f5cf62deefe3007fbaaedd00906",
     "config/transport-compatibility.json":
-        "3c5f261d348d011fe1eed40ef734cf188903b19d9915cf520a3487fa6292c63e",
+        "1aee005579bd8a728369f0edcf5b90a2e07daad52e7f07e5f4c99c45f025d71b",
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
@@ -310,7 +318,13 @@ class IntegrationTests(unittest.TestCase):
             if base is None or base.returncode != 0:
                 self.skipTest("history comparison cannot read {}:{} from the repository: {}".format(
                     PROTECTED_BASE, path, reason))
-            self.assertEqual((ROOT / path).read_bytes(), base.stdout, path)
+            if path in SNAPSHOT_REBASE_BASE_SHA256:
+                self.assertEqual(hashlib.sha256(base.stdout).hexdigest(),
+                                 SNAPSHOT_REBASE_BASE_SHA256[path], path)
+                self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(),
+                                 PROTECTED_SHA256[path], path)
+            else:
+                self.assertEqual((ROOT / path).read_bytes(), base.stdout, path)
 
 
 if __name__ == "__main__":

@@ -55,6 +55,8 @@ PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high
 PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
 PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
 PROVEN["grok/grok-4-7-low"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-low")
+# Gemini 4 Argon is AA-scored only: agy has no confirmed local selector yet.
+# Keep it out of PROVEN until a real selector and matching probe evidence exist.
 
 for cid, rid, ev in [
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
