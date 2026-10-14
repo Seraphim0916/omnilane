@@ -1,12 +1,36 @@
 # Model capabilities — AA routing snapshots
 
-The current operator-approved snapshot is **2026-10-08**, snapshot `aa-v4.3.2-2026-10-08-v1`.
-The operator approved it on 2026-10-08; host transport probes are still pending. Earlier sections are historical;
+The current proposal is **2026-10-14**, snapshot `aa-v4.3.2-2026-10-14-v1`.
+It is not operator-approved; the last approved snapshot is `aa-v4.3.2-2026-10-08-v1`.
+Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Current approved snapshot — 2026-10-08
+## Current proposal — 2026-10-14
+
+The supplied AA extract adds Gemini 4 Argon (High) to policy coverage: measured
+index 52.5605655745982, stored raw score 52.56, rounded score 53, not estimated.
+The policy now contains 121 scored configurations. Haiku 4.5 changes from
+16.88 / 17 to 15.41 / 15; GPT-oss 20B changes from 9.95 / 10 to 8.97 / 9.
+Haiku 5.5 low has a sub-centesimal source change; its stored 29.45 / 29 is unchanged.
+
+`aa_rebaseline.py value --extract docs/reports/aa-v4.3.2-extract-2026-10-14.json`
+includes Argon in the candidate pool but selects it in no lane at any evaluated
+caller ceiling. `lanes` confirms the existing routing table is unchanged. The
+configurator, default chains, SKILL.md and five-language README tables retain
+their existing models and order.
+
+No local `agy` selector is confirmed. Argon uses the existing scored-row
+`transport_mapping.status=unknown`, with no candidate runtime model IDs and no
+verified mapping. Its AA-only alias does not claim to be a configurator entry.
+It is deliberately absent from `build_overlay.py`'s `PROVEN` selectors. A real
+selector and successful host evidence are required before adding a probe target.
+`unknown_configs` and `no-aa-row` describe missing scores, so neither fits this
+measured AA row. See [Gemini evidence](reports/aa-gemini-evidence-2026-10-14.md)
+and the [execution report](reports/aa-gemini-4-argon-REPORT-2026-10-14.md).
+
+## Previous approved snapshot — 2026-10-08
 
 The 39-page merge contains 231 vendor records and covers all 120 approved scored rows.
 It adds five Haiku 5.5 rows and restores Sonnet 5.5 low; the three operator-retired
@@ -306,8 +330,9 @@ the 2026-09-30 section still describe each lane. Full account:
 - `fast-agentic` now lists GPT-6.1 Sol low before GPT-6 Sol low, so a caller that can
   reach the GPT-6.1 row gets it and GPT-6 Sol low serves the callers below.
 - GPT-6 Sol and GPT-6 Luna were re-measured (seven rows move by one point). Grok 4.7
-  low is scored and in no chain. Gemini 4 Argon is scored by AA but not added: no
-  local CLI lists it and the value rule picks it in no lane.
+  low is scored and in no chain. Gemini 4 Argon was deferred on 2026-10-02. The
+  2026-10-14 proposal above includes its measured AA score; the value rule still
+  picks it in no lane and the local CLI selector remains unconfirmed.
 
 Regenerate the per-lane tables with
 `scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v4.3.2-extract-2026-10-02.json`.

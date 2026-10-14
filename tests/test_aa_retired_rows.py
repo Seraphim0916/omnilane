@@ -20,7 +20,7 @@ import probe_sweep  # noqa: E402
 
 RETIRED = ("codex/gpt-5-4-mini", "codex/gpt-5-4-mini-medium",
            "codex/gpt-5-4-mini-non-reasoning")
-EXTRACT = REPO / "docs/reports/aa-v4.3.2-extract-2026-10-08.json"
+EXTRACT = REPO / "docs/reports/aa-v4.3.2-extract-2026-10-14.json"
 
 
 class RetiredRowTests(unittest.TestCase):
@@ -74,7 +74,7 @@ class RetiredRowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=REPO / ".sandbox-tmp") as temp:
             path = Path(temp) / "registry.json"
             path.write_bytes(aa_rebaseline.dump(base))
-            args = SimpleNamespace(extract=str(EXTRACT), base=str(path), as_of="2026-10-08",
+            args = SimpleNamespace(extract=str(EXTRACT), base=str(path), as_of="2026-10-14",
                                    revision=1, approval="proposed")
             with patch.object(aa_rebaseline, "REGISTRY", path), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(aa_rebaseline.cmd_build(args), 0)
@@ -94,7 +94,7 @@ class RetiredRowTests(unittest.TestCase):
         collision = (RETIRED[0], "codex", "gpt-5.4-mini", "xhigh", "reasoning",
                      "gpt-5-4-mini", "codex/gpt-6-astra")
         args = SimpleNamespace(extract=str(EXTRACT), base=str(REPO / "config/aa-model-policy.json"),
-                               as_of="2026-10-08", revision=1, approval="proposed")
+                               as_of="2026-10-14", revision=1, approval="proposed")
         with tempfile.TemporaryDirectory(dir=REPO / ".sandbox-tmp") as temp:
             path = Path(temp) / "must-not-be-written.json"
             with patch.object(aa_rebaseline, "NEW_ROWS", [*aa_rebaseline.NEW_ROWS, collision]), \

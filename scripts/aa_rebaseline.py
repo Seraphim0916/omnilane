@@ -45,6 +45,8 @@ KEEP = (
 # Rows this snapshot adds. identity mirrors the sibling rows of the same model.
 NEW_ROWS = [
     # (id, vendor, model, effort, reasoning, aa_slug, copy transport/shape from)
+    ("gemini/gemini-4-argon", "gemini", "gemini-4-argon", "high", "unspecified",
+     "gemini-4-argon", "gemini/gemini-3-7-flash"),
     ("grok/grok-4-7", "grok", "grok-4.7", "xhigh", "reasoning", "grok-4-7", "grok/grok-4-6-xhigh"),
     ("grok/grok-4-7-high", "grok", "grok-4.7", "high", "reasoning", "grok-4-7-high", "grok/grok-4-6"),
     ("grok/grok-4-7-low", "grok", "grok-4.7", "low", "reasoning", "grok-4-7-low", "grok/grok-4-6-low"),
@@ -104,7 +106,13 @@ NEW_ROWS = [
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
-               "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5"}  # new catalog model -> alias entry to clone
+               "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
+               "gemini-4-argon": "gemini-3.8-flash-high"}  # new model -> alias entry to clone
+# AA coverage is independent of local CLI availability. Do not invent a selector
+# or claim configure.sh offers an AA-only model before its transport ID is known.
+UNMAPPED_MODELS = {
+    "gemini-4-argon": "AA lists Gemini 4 Argon (High), but the local agy catalog has no confirmed selector; runtime transport remains unverified",
+}
 
 # Operator-approved retirements, independent of whether AA still publishes a score.
 # config id -> (retirement date, one-line reason)
@@ -355,6 +363,12 @@ def cmd_build(args) -> int:
         row["transport_mapping"]["candidate_model_ids"] = [f"{model}-{effort}" if vendor == "gemini" else model]
         rescore(row, records[slug], version, as_of, report(vendor))
         scored.append(row)
+    for row in scored:
+        if row["model"] in UNMAPPED_MODELS:
+            row["transport_mapping"] = {
+                "status": "unknown", "candidate_model_ids": [], "runtime_verified": False,
+                "reason": UNMAPPED_MODELS[row["model"]],
+            }
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
     new["scored_configs"] = scored
 
@@ -395,7 +409,7 @@ def cmd_build(args) -> int:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
                     and cid in live_ids and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
-    # aliases mirror scripts/configure.sh's catalog, so a new alias needs the model there too.
+    # Runtime aliases mirror configure.sh; AA-only aliases identify their source below.
     have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
     for model, source in NEW_ALIASES.items():
         template = next(a for a in new["aliases"] if a["catalog_model"] == source)
@@ -403,6 +417,10 @@ def cmd_build(args) -> int:
             clone = copy.deepcopy(template)
             clone["catalog_model"] = model
             clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS if m == model]
+            if model in UNMAPPED_MODELS:
+                clone.update(catalog_source="scripts/aa_rebaseline.py",
+                             source_kind="aa_model_not_runtime_identity",
+                             reason=UNMAPPED_MODELS[model])
             new["aliases"].insert(new["aliases"].index(template), clone)
 
     vendors: dict[str, int] = {}
@@ -574,7 +592,7 @@ VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
 STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-sonnet-5",
                   "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
-                  "grok-4.7", "grok-4.6", "gemini-3.8-flash"}
+                  "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
 
