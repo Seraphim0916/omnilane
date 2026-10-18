@@ -10,6 +10,7 @@ shift
 # Isolated worker + real jobs.sh close; never invokes a provider.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+mkdir -p "$ROOT/.test-scratch"
 ROOT="$ROOT" python3 - <<'PY'
 import array
 import fcntl

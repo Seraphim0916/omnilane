@@ -11,6 +11,7 @@ shift
 # before giving up, wherever the wall-clock second happens to be.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+mkdir -p "$ROOT/.test-scratch"
 ROOT="$ROOT" python3 - <<'PY'
 import os
 import pathlib
