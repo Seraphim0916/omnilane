@@ -28,7 +28,7 @@ MAX_BYTES = 1_048_576
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "4.3.2"
 APPROVED_AS_OF = "2026-10-18"
-APPROVED_REGISTRY_SHA256 = "6ac4158930fac4f4b435e837e374fa1434ce9c29e8a122e9be57ff68e1a3e1b5"
+APPROVED_REGISTRY_SHA256 = "aeef33407e43a1bba6720cf431acdce45add2cb8b042985af69c4f57aa27a464"
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))

@@ -1,13 +1,13 @@
 # Model capabilities — AA routing snapshots
 
-The current operator-approved snapshot is **2026-10-14**, snapshot `aa-v4.3.2-2026-10-14-v1`.
-The operator approved it on 2026-10-18; host transport proof is still required.
+The current operator-approved snapshot is **2026-10-18**, snapshot `aa-v4.3.2-2026-10-18-v1`.
+The operator approved it on 2026-10-19; host transport proof is still required.
 Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Proposed snapshot — 2026-10-18 (pending operator approval; no new routing decision)
+## Current approved snapshot — 2026-10-18 (approved 2026-10-19; no new routing decision)
 
 Snapshot `aa-v4.3.2-2026-10-18-v1` is built from the same 2026-10-14 extract and
 reverses the 2026-10-02 retirement of the three `gpt-5.4-mini` rows. The score
@@ -22,7 +22,7 @@ host whose account can call the model can prove its transport with
 `omnilane resign`. Evidence: `docs/reports/aa-gpt-5-4-mini-evidence-2026-10-18.md`
 and `docs/reports/aa-rebaseline-2026-10-18.md`.
 
-## Current approved snapshot — 2026-10-14
+## Previous approved snapshot — 2026-10-14
 
 The supplied AA extract adds Gemini 4 Argon (High) to policy coverage: measured
 index 52.5605655745982, stored raw score 52.56, rounded score 53, not estimated.

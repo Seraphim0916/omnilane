@@ -42,7 +42,7 @@ AA 把三筆都標成 `deprecated: true`。這不是排除條件：現行評分�
   - 選這個做法的原因：現行政策檔裡這三列在 `unknown_configs`，`build` 的評分迴圈只處理基底的 `scored_configs`，所以光把 `RETIRED_ROWS` 清空不會把它們加回來。
   - 放進 `NEW_ROWS` 之後，因為 slug 在抽取檔裡，`build` 會重新計分；同時用 `added` 集合把 `unknown_configs` 裡同身分的三筆拿掉。這和其他新列走同一條路，不需要特殊處理。
 - `build --extract docs/reports/aa-v4.3.2-extract-2026-10-14.json --as-of 2026-10-18 --base <2026-10-14 政策檔副本>` 連跑兩次，雜湊都是 `6ac4158930fac4f4b435e837e374fa1434ce9c29e8a122e9be57ff68e1a3e1b5`。
-- 快照是 `aa-v4.3.2-2026-10-18-v1`，`approval.status=proposed`。
+- 快照是 `aa-v4.3.2-2026-10-18-v1`，`approval.status=approved`（2026-10-19 Vincent 核准；提議時是 `proposed`，提議版政策檔 sha256 `6ac41589…`）。
 - 和 2026-10-14 政策檔比對：
   - 評分列從 121 增加到 124，多出來的正好是這三列，沒有移除任何列；
   - 其他列的分數、是否為估計值、相對順序都沒變；

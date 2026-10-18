@@ -503,7 +503,10 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Current operator-approved snapshot `aa-v4.3.2-2026-10-14-v1` (2026-10-18): 121 scored rows, 12 unknown;
+Current operator-approved snapshot `aa-v4.3.2-2026-10-18-v1` (2026-10-19): 124 scored rows, 9 unknown;
+the three `gpt-5.4-mini` rows are scored again but listed in no lane, and need host proof like every other row.
+
+Previous snapshot `aa-v4.3.2-2026-10-14-v1` (approved 2026-10-18): 121 scored rows, 12 unknown;
 Argon High is a known selector requiring host proof, while Medium/Low remain unscored.
 
 Previous Snapshot `aa-v4.3.2-2026-10-08-v1` is **approved by the operator on 2026-10-08**, not deployed: 120 scored rows.
