@@ -116,6 +116,8 @@ def snapshot(vendor, home, now=None):
         else:
             result.update(status="fresh", freshness="fresh", reason="weekly-snapshot",
                           near_limit=used >= threshold)
+    except FileNotFoundError:
+        result["reason"] = "missing-snapshot"
     except (OSError, UnicodeError, ValueError, KeyError, TypeError, OverflowError, RecursionError):
         result["reason"] = "invalid-snapshot"
     return result

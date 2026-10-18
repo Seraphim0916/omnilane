@@ -40,6 +40,43 @@ class QuotaReviewTests(unittest.TestCase):
         with patch.dict(os.environ, self.env, clear=True):
             return self.reader().snapshot("codex", str(self.home), now)
 
+    def test_missing_snapshot_paths_keep_original_with_missing_reason(self):
+        for directory_exists in (False, True):
+            with self.subTest(directory_exists=directory_exists):
+                directory = self.base / ("empty-quota" if directory_exists else "absent-quota")
+                if directory_exists:
+                    directory.mkdir()
+                self.env["OMNILANE_QUOTA_DIR"] = str(directory)
+                result = self.dispatch()
+                plan = self.plan(result)
+                self.assertEqual(plan["status"], "unknown")
+                self.assertEqual(plan["snapshot"]["reason"], "missing-snapshot")
+                self.assertEqual(plan["action"], "unchanged")
+                self.assertIn("vendor=codex\n", result.stdout)
+
+    def test_invalid_snapshot_paths_keep_invalid_reason(self):
+        for kind in ("leaf-symlink", "directory-symlink", "fifo", "malformed-json"):
+            with self.subTest(kind=kind):
+                directory = self.base / kind
+                if kind == "directory-symlink":
+                    directory.symlink_to(self.quota, target_is_directory=True)
+                else:
+                    directory.mkdir()
+                    leaf = directory / "codex.json"
+                    if kind == "leaf-symlink":
+                        leaf.symlink_to(self.quota / "codex.json")
+                    elif kind == "fifo":
+                        os.mkfifo(leaf)
+                    else:
+                        leaf.write_text("{broken")
+                self.env["OMNILANE_QUOTA_DIR"] = str(directory)
+                result = self.dispatch()
+                plan = self.plan(result)
+                self.assertEqual(plan["status"], "unknown")
+                self.assertEqual(plan["snapshot"]["reason"], "invalid-snapshot")
+                self.assertEqual(plan["action"], "unchanged")
+                self.assertIn("vendor=codex\n", result.stdout)
+
     def shell(self, code):
         return subprocess.run(["/bin/bash", "-c", code], env=self.env,
                               cwd=ROOT, text=True, capture_output=True, timeout=30)
