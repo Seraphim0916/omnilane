@@ -28,11 +28,15 @@ The first version reads only `$OMNILANE_HOME/quota/codex.json`
 ```
 
 `used_percent` must be a finite JSON number between 0 and 100, not a boolean or
-numeric string. Both timestamps must be ISO 8601 with a timezone. `source` is a
+numeric string. Both timestamps must be ISO 8601 with a timezone. UTC suffixes
+`Z`/`z`, offsets such as `+08:00`/`+0800`, and fractional seconds such as `.5`
+are normalized for Python 3.9 compatibility. `source` is a
 short, printable, non-secret label (maximum 128 characters), not a credential or
 raw provider response. Unknown fields are not copied to job records. Files over
 65,536 text characters, symlinks, unreadable files and invalid or missing fields
-are unknown.
+are unknown. The snapshot directory itself must be a real directory, not a
+symlink. Reads pin that directory, reject non-regular files without blocking,
+and cap both UTF-8 bytes and decoded characters.
 
 A snapshot older than 1,800 seconds is **unknown**, with `freshness: "stale"` in
 the evidence. A future capture time is unknown; an elapsed reset time is stale.
@@ -53,8 +57,12 @@ they can also be set per command. This change does not write any local settings.
 | `OMNILANE_QUOTA_THRESHOLD_PERCENT` | `90` | Codex weekly usage threshold, inclusive, from 0 to 100. |
 | `OMNILANE_QUOTA_MAX_AGE_SECONDS` | `1800` | Maximum snapshot age, inclusive, nonnegative seconds. |
 
-Invalid threshold or age configuration makes the quota status unknown; it does
-not disable existing dispatch safety checks. Disabling preflight restores the
+An empty directory, threshold or age variable uses its default. A nonempty
+directory override must be an absolute path. Invalid threshold or age
+configuration makes the quota status unknown; it does
+not disable existing dispatch safety checks. A failed or empty snapshot helper
+result is also unknown (`snapshot-read-failed`), with no quota-based exclusion.
+Disabling preflight restores the
 previous routing decision output byte for byte, including stderr.
 
 ## Decisions and explicit targets
@@ -78,7 +86,10 @@ If no compliant alternative remains:
 Explicit `--vendor`, `--model` or `--effort` preserves the requested target and
 only reports quota status on stderr. Existing `--target-config` pins receive the
 same treatment. All ordinary safety gates still apply. Native `--inherit` does
-not resolve a lane target and is unchanged.
+not resolve a lane target and is unchanged. An existing `--thread` also bypasses
+quota preflight, including its notice and decision record; the ordinary thread
+state and pinned-target checks still apply. A new thread receives normal
+pre-dispatch quota filtering.
 
 ## Inspection and audit
 
@@ -94,11 +105,14 @@ plans include the same object. It contains:
 Actions are `unchanged`, `explicit`, `rerouted`, `quota_near_limit` or `refused`.
 Refusal uses `final: null` and includes the object in its JSON error. Both CLI and
 native jobs persist the decision in `jobs/<job-id>/quota-preflight.json`, with
-the allocated job ID and file mode 600. Native handoff plans also retain the
+the allocated job ID and file mode 600. CLI quota records are atomically replaced
+before `meta.json` is published; a record-write failure stops job publication.
+Native handoff plans also retain the
 same `quota_preflight` object. The existing `meta.json` schema and job audit
 remain unchanged. The snapshot is read once for that decision; existing jobs
 are not reassigned when it changes.
 
-Offline regression coverage is in `tests/test_quota_preflight.py`, discovered by
+Offline regression coverage is in `tests/test_quota_preflight.py` and
+`tests/test_quota_review.py`, discovered by
 the standard Python unittest gate. Provider tools are replaced with fixture
 executables, and HOME, temporary files and routing overlays are isolated.

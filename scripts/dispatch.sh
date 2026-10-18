@@ -1358,6 +1358,7 @@ fi
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
 THREAD_TURN_JSON="${THREAD_TURN:-null}"
+META_TMP="$JOB_DIR/.meta.tmp.$$-$RANDOM"
 if [[ -n "$THREAD_NAME" ]]; then
   (umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","thread":"%s","thread_turn":%s,"candidate":"%s/%s","started":"%s"}\n' \
     "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
@@ -1366,7 +1367,7 @@ if [[ -n "$THREAD_NAME" ]]; then
     "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
     "$(json_escape "$THREAD_NAME")" "$THREAD_TURN_JSON" \
     "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
-    "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+    "$(date -u +%FT%TZ)" > "$META_TMP")
 else
   (umask 077; printf '{"lane":"%s","vendor":"%s","session_mode":"%s","idle_timeout":%s,"model":"%s","effort":"%s","timeout":%s,"job_timeout":%s,"mode":"%s","workdir":"%s","foreman_session":"%s","candidate":"%s/%s","started":"%s"}\n' \
     "$(json_escape "$LANE")" "$(json_escape "$VENDOR")" "$(json_escape "$SESSION_MODE")" \
@@ -1374,11 +1375,10 @@ else
     "$TIMEOUT" "$JOB_TIMEOUT_JSON" "$(json_escape "$MODE")" \
     "$(json_escape "$WORKDIR")" "$(json_escape "$FOREMAN_SESSION")" \
     "$RESOLVED_IDX" "$RESOLVED_TOTAL" \
-    "$(date -u +%FT%TZ)" > "$JOB_DIR/meta.json")
+    "$(date -u +%FT%TZ)" > "$META_TMP")
 fi
 
-META_TMP="$JOB_DIR/.meta.tmp.$$-$RANDOM"
-META_BASE="$(cat "$JOB_DIR/meta.json")"
+META_BASE="$(cat "$META_TMP")"
 if [[ "$META_BASE" != *'}' ]]; then
   rm "$META_TMP" 2>/dev/null || true
   echo "omnilane: cannot add worker provenance to malformed meta.json" >&2
@@ -1398,10 +1398,11 @@ printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job
   > "$META_TMP"
 json_file_round_trip_valid "$META_TMP" || exit 1
 chmod 600 "$META_TMP"
-mv "$META_TMP" "$JOB_DIR/meta.json"
 if [[ -n "$QUOTA_DECISION" ]]; then
-  (umask 077; printf '%s\n' "$QUOTA_JOB_DECISION" > "$JOB_DIR/quota-preflight.json")
+  python3 "$OMNILANE_REPO/scripts/lib/quota_preflight.py" persist \
+    --path="$JOB_DIR/quota-preflight.json" --decision="$QUOTA_JOB_DECISION"
 fi
+mv "$META_TMP" "$JOB_DIR/meta.json"
 
 if [[ -n "$THREAD_NAME" ]]; then
   # The goal caller requires exactly the claimed job ID on stdout. Its private

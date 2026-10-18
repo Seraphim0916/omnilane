@@ -40,6 +40,12 @@ quota_candidate_capable() {
 
 quota_preflight() {
   [[ "${OMNILANE_QUOTA_ENABLED:-1}" != "0" ]] || return 0
+  # Existing threads retain their pinned target. Their state and pin checks
+  # still run in dispatch; even unsafe state must reach that original gate.
+  if [[ -n "$THREAD_NAME" && ( -e "$OMNILANE_HOME/threads/$THREAD_NAME.json" ||
+                              -L "$OMNILANE_HOME/threads/$THREAD_NAME.json" ) ]]; then
+    return 0
+  fi
   local original_spec="$RESOLVED_SPEC" original_idx="$RESOLVED_IDX"
   local original_aa="$AA_SELECTED_DECISION" original_last="$AA_LAST_DECISION"
   local original_vote="$AA_VOTE_PREFLIGHT"
@@ -47,12 +53,15 @@ quota_preflight() {
   local original_vendor="${RESOLVED_FIELDS[0]}"
   local original_model="${OVERRIDE_MODEL:-${RESOLVED_FIELDS[1]:-}}"
   local original_effort="${OVERRIDE_EFFORT:-${RESOLVED_FIELDS[2]:-}}"
-  local near status snapshot action=unchanged rc=0 final_vendor final_model final_effort
+  local near=0 status=unknown snapshot="" snapshot_output action=unchanged rc=0 final_vendor final_model final_effort
   local quota_vendor="$original_vendor"
   if [[ "$original_vendor" == "vote" && ",$original_model," == *",codex,"* ]]; then
     quota_vendor=codex
   fi
-  IFS=$'\t' read -r near status snapshot <<< "$(python3 "$OMNILANE_REPO/scripts/lib/quota_preflight.py" snapshot "$quota_vendor" "$OMNILANE_HOME")"
+  if snapshot_output="$(python3 "$OMNILANE_REPO/scripts/lib/quota_preflight.py" snapshot "$quota_vendor" "$OMNILANE_HOME")" &&
+     [[ -n "$snapshot_output" ]]; then
+    IFS=$'\t' read -r near status snapshot <<< "$snapshot_output"
+  fi
   if [[ "$AA_EXPLICIT_TARGET" -eq 1 ]]; then
     action=explicit
     QUOTA_NOTICE="omnilane: quota status=$status explicit target preserved"
@@ -82,8 +91,8 @@ quota_preflight() {
   fi
   QUOTA_DECISION="$(python3 "$OMNILANE_REPO/scripts/lib/quota_preflight.py" decision \
     --snapshot "$snapshot" --lane "$LANE" --action "$action" \
-    --original "$original_vendor" "$original_model" "$original_effort" \
-    --final "$final_vendor" "$final_model" "$final_effort")"
+    --original-vendor="$original_vendor" --original-model="$original_model" --original-effort="$original_effort" \
+    --final-vendor="$final_vendor" --final-model="$final_model" --final-effort="$final_effort")" || return $?
   if [[ "$action" == "refused" ]]; then
     printf '{"allowed":false,"code":"quota_near_limit_no_alternative","message":"Weekly quota is near its limit and no compliant alternative exists; operator decision required.","quota_preflight":%s}\n' "$QUOTA_DECISION" >&2
     return 7
