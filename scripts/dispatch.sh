@@ -1357,6 +1357,10 @@ else
 fi
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
+if [[ "$VENDOR" == "gemini" ]]; then
+  validate_gemini_task_size "$JOB_DIR/task.txt" || exit $?
+fi
+
 THREAD_TURN_JSON="${THREAD_TURN:-null}"
 META_TMP="$JOB_DIR/.meta.tmp.$$-$RANDOM"
 if [[ -n "$THREAD_NAME" ]]; then

@@ -623,6 +623,19 @@ release_cwd_lock() {
   rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true
 }
 
+# agy 1.4.2 measured 2026-10-18: 184605 bytes arrived intact; truncation
+# began around 192000 bytes. Reject conservatively before invoking agy.
+validate_gemini_task_size() {
+  local file="$1" size
+  local GEMINI_MAX_TASK_BYTES=180000
+  size=$(wc -c < "$file") || return 2
+  size=$((size))
+  if [[ "$size" -gt "$GEMINI_MAX_TASK_BYTES" ]]; then
+    echo "omnilane: Gemini task is $size bytes; limit is $GEMINI_MAX_TASK_BYTES bytes; split the task into smaller parts. task.txt was preserved in full." >&2
+    return 2
+  fi
+}
+
 # Cap payload so a runaway prompt cannot blow a worker's context.
 truncate_payload() { # file, cap_bytes
   local f="$1" cap="${2:-140000}" size

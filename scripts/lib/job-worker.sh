@@ -308,7 +308,9 @@ if [[ "$VENDOR" == "codex" ]]; then
   rm "$forward_spool"
   forward_spool=""
 fi
-truncate_payload "$PROMPT_FILE" 102400
+if [[ "$VENDOR" != "gemini" ]]; then
+  truncate_payload "$PROMPT_FILE" 102400
+fi
 # Codex input must not be consumed by Bash read: an interrupted partial read
 # can discard bytes before the close trap runs. Pump raw bytes instead. The
 # anonymous file holds at most one 64 KiB chunk, with shared read offset on FD 6
@@ -364,7 +366,29 @@ sys.exit((4 if progress else 2) if pending else 0)
 PYPUMP
 }
 
-INITIAL_TEXT="$(cat "$PROMPT_FILE")"
+if [[ "$VENDOR" == "gemini" ]]; then
+  # Encode from the file: Bash command substitution loses trailing newlines,
+  # and passing a large task as a Python argument can exceed exec's argv limit.
+  # Build before starting the runner so invalid UTF-8 fails explicitly.
+  INITIAL_MESSAGE_FILE="$JOB_DIR/initial-gemini-message.json"
+  private_job_files "$INITIAL_MESSAGE_FILE"
+  python3 - "$PROMPT_FILE" "$INITIAL_MESSAGE_FILE" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+try:
+    text = Path(sys.argv[1]).read_bytes().decode("utf-8")
+except UnicodeDecodeError:
+    sys.exit("omnilane: Gemini task must be valid UTF-8; input was not truncated")
+message = {"event": "user", "message": {"role": "user", "content": [
+    {"type": "text", "text": text}
+]}}
+Path(sys.argv[2]).write_bytes((json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
+PY
+else
+  INITIAL_TEXT="$(cat "$PROMPT_FILE")"
+fi
 if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
   FOREMAN_SESSION_VALUE="$FOREMAN_SESSION"
 else
@@ -384,10 +408,14 @@ exec 4<> "$INBOX_FIFO"
 inbox_open=1
 exec 5< "$EVENTS_FILE"
 events_reader_open=1
-initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
 sent_turns=1
 last_turn_events_bytes=0
-if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+if [[ "$VENDOR" == "gemini" ]]; then
+  if ! cat "$INITIAL_MESSAGE_FILE" >&3; then close_requested=1; fi
+else
+  initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
+  if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+fi
 (umask 077; : > "$READY_FILE")
 
 last_activity=$SECONDS

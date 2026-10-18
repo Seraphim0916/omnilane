@@ -30,6 +30,9 @@ SNAPSHOT_REBASE_BASE_SHA256 = {
         "3534d96a4835a43b0265b8756c139922e3b542cd4ecbdffc9c7a484fc4e99512",
     "config/transport-compatibility.json":
         "3c5f261d348d011fe1eed40ef734cf188903b19d9915cf520a3487fa6292c63e",
+    # The Gemini runner stopped silently truncating large tasks (G1).
+    "scripts/runners/run-gemini.sh":
+        "2e4c4c064f3228293ff63e882154be77bac256e6c40add3f25403f1e539ff12c",
 }
 PROTECTED_SHA256 = {
     "scripts/lib/probe.py":
@@ -51,7 +54,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-exec.sh":
         "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
     "scripts/runners/run-gemini.sh":
-        "2e4c4c064f3228293ff63e882154be77bac256e6c40add3f25403f1e539ff12c",
+        "27ac29d5631a2962e7741c9e6793c5f59e0038a34027e34aa73fca82febdd8af",
     "scripts/runners/run-grok.sh":
         "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
     "scripts/runners/run-groq.sh":

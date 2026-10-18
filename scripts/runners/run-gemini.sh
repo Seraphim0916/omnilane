@@ -30,7 +30,8 @@ if [[ -n "$THREAD_MODE" || -n "$THREAD_ID" ]]; then
   esac
 fi
 
-truncate_payload "$PROMPT_FILE" 140000
+# Text print mode requires a nonempty argv prompt; only stream-json reads stdin.
+validate_gemini_task_size "$PROMPT_FILE" || exit $?
 
 WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
   echo "omnilane: Gemini workdir is not accessible" >&2
