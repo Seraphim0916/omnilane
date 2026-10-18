@@ -571,32 +571,44 @@ set +e
 if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
   # With the input pump's 1s read + 0.05s write and supervisor's 1s cleanup,
-  # 9.85s precedes jobs close's 11s deadline (timed on a sub-second clock).
+  # plus up to 0.02s clock shutdown per phase, 9.91s precedes jobs close's
+  # 11s deadline (timed on a sub-second clock).
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
-  # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
-  if perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
-    my ($pid, $grace, $term, $kill) = @ARGV;
-    sub wait_until {
-      my ($pid, $duration) = @_;
-      my $deadline = clock_gettime(CLOCK_MONOTONIC) + $duration;
-      while (kill 0, $pid) {
+  # Close is already committed. Repeated close requests must not interrupt wait.
+  trap '' USR1
+  wait_runner_for() {
+    local timer_pid _tick
+    kill -0 "$runner_pid" 2>/dev/null || return 0
+    # A single monotonic clock streams ticks. The parent does only builtin
+    # reads/checks, yielding CHLD handling; EOF is a durable deadline receipt
+    # even if this shell was descheduled before it entered read.
+    exec 8< <(perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
+      $| = 1;
+      my $deadline = clock_gettime(CLOCK_MONOTONIC) + $ARGV[0];
+      while (1) {
         my $left = $deadline - clock_gettime(CLOCK_MONOTONIC);
-        return 0 if $left <= 0;
+        last if $left <= 0;
+        print ".\n";
         sleep($left < 0.02 ? $left : 0.02);
       }
-      return 1;
-    }
-    exit 0 if wait_until($pid, $grace);
-    kill "TERM", $pid;
-    exit 2 if wait_until($pid, $term);
-    kill "KILL", $pid;
-    exit(wait_until($pid, $kill) ? 2 : 1);
-  ' "$runner_pid" "$CLOSE_RUNNER_GRACE" "$CLOSE_TERM_GRACE" "$CLOSE_KILL_GRACE"; then
-    :
-  else
-    close_wait_rc=$?
+    ' "$1")
+    timer_pid=$!
+    while IFS= read -r _tick <&8; do
+      kill -0 "$runner_pid" 2>/dev/null || break
+    done
+    # Early runner exit closes the reader; the clock exits on its next write
+    # (SIGPIPE), without a cancellation signal racing its startup.
+    exec 8<&-
+    wait "$timer_pid" 2>/dev/null || true
+    ! kill -0 "$runner_pid" 2>/dev/null
+  }
+  if ! wait_runner_for "$CLOSE_RUNNER_GRACE"; then
     runner_forced=1
-    if [[ "$close_wait_rc" -ne 2 ]]; then close_drain_failed=1; fi
+    kill -TERM "$runner_pid" 2>/dev/null || true
+    if ! wait_runner_for "$CLOSE_TERM_GRACE"; then
+      kill -KILL "$runner_pid" 2>/dev/null || true
+      wait_runner_for "$CLOSE_KILL_GRACE" || close_drain_failed=1
+    fi
   fi
 fi
 if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then

@@ -439,7 +439,7 @@ TARGETS = {
     "codex": ("codex/gpt-5-6-luna-low", "gpt-5.6-luna", "low", "model_and_effort"),
     "claude": ("claude/claude-4-5-haiku-reasoning", "claude-haiku-4-5", None, "model_and_effort"),
     "grok": ("grok/grok-4-5", "grok-4.5", "high", "cli_reasoning_effort"),
-    "gemini": ("gemini/gemini-3-6-flash", "gemini-3.6-flash-high", "high", "model_id_encoded_effort"),
+    "gemini": ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "high", "model_id_encoded_effort"),
 }
 
 

@@ -92,9 +92,42 @@ def facts(path: Path | str, runner=subprocess.run) -> dict:
         return result
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
         return result
+def identifier_family(identifier: str) -> str:
+    """Normalize a codesign identifier, separately from filesystem locations."""
+    return VERSION_SEGMENT.sub("<version>", identifier)
+
+
 def family(path: Path | str) -> str:
-    """An install location with its version numbers blanked out."""
-    return VERSION_SEGMENT.sub("<version>", str(path))
+    """Blank an install suffix's version, preserving all location ancestors.
+
+    Only known vendor install layouts admit a version placeholder.
+    """
+    value = str(path)
+    if "/" not in value or "\\" in value:
+        return value
+    # Collapse lexical separators only; resolving '..' could cross a symlink.
+    parts = [part for part in value.split("/") if part not in ("", ".")]
+    prefix = "/" if value.startswith("/") else ""
+    index = len(parts) - 1
+    if parts[-5:-1] == [".local", "share", "claude", "versions"]:
+        pass
+    elif parts[-3:-1] == [".grok", "downloads"] and parts[-1].startswith("grok-"):
+        # Recognize release metadata explicitly. Unknown suffixes stay intact,
+        # so a platform/architecture can never disappear into the version.
+        match = re.fullmatch(
+            r"grok-v?\d+(?:\.\d+)+"
+            r"(?:-(?:alpha|beta|rc|dev|pre|preview|canary|nightly)(?:\.[0-9A-Za-z]+)*)?"
+            r"(?:\+[0-9A-Za-z.]+)?(?P<suffix>-[0-9A-Za-z_.-]+)?", parts[-1])
+        if match:
+            parts[-1] = "grok-<version>" + (match["suffix"] or "")
+        return prefix + "/".join(parts)
+    elif parts[-2:] == ["bin", "codex"] and parts[-7:-3] == [".codex", "packages", "standalone", "releases"]:
+        index -= 2
+    else:
+        return value
+    if VERSION_SEGMENT.fullmatch(parts[index].removeprefix("v")):
+        parts[index] = "<version>"
+    return prefix + "/".join(parts)
 
 
 def verdict(recorded: dict | None, recorded_path: str | None, current: dict,

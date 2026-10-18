@@ -19,6 +19,7 @@ import pathlib
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import termios
 import threading
@@ -75,6 +76,7 @@ if mode == 'stuck':
 ''')
 runner.chmod(0o755)
 processes = []
+exit_recorders = []
 opened_fds = set()
 
 def wait_for(path, timeout=5):
@@ -82,6 +84,67 @@ def wait_for(path, timeout=5):
     while not path.exists():
         assert time.monotonic() < end, f'missing {path}'
         time.sleep(.02)
+
+def wait_for_stopped(pid, timeout=2):
+    """A marker or successful kill(STOP) is not a stopped-state receipt."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        # WUNTRACED observes STOP without reaping the direct child; available
+        # on the system Python 3.9, unlike waitid.
+        observed, status = os.waitpid(pid, os.WUNTRACED | os.WNOHANG)
+        if observed == pid and os.WIFSTOPPED(status):
+            return
+        time.sleep(.01)
+    raise AssertionError(f'{pid}: holder did not stop')
+
+def wait_for_exit(pid):
+    """Close must reap the runner before returning, with no post-close grace."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return
+    raise AssertionError(f'{pid}: runner survived close')
+
+
+def record_exit(worker, destination):
+    receipt = destination.with_name('.exit.tmp')
+    receipt.write_text(str(worker.wait()) + '\n')
+    os.replace(receipt, destination)
+
+
+def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_error):
+    errors = []
+    try:
+        for fd in opened_fds:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        for proc in processes:
+            try:
+                if proc.poll() is None:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=2)
+            except ProcessLookupError:
+                proc.wait(timeout=2)
+            except Exception as error:
+                errors.append(str(error))
+        for recorder in exit_recorders:
+            recorder.join(timeout=2)
+            if recorder.is_alive():
+                errors.append('exit recorder survived fixture cleanup')
+    finally:
+        try:
+            shutil.rmtree(scratch)
+        except OSError as error:
+            errors.append(str(error))
+    if errors:
+        message = '; '.join(errors)
+        if original_error is not None:
+            print('cleanup: ' + message, file=sys.stderr)
+        else:
+            raise AssertionError(message)
+
 
 def wait_for_consumed(fd, timeout=2):
     deadline = time.monotonic() + timeout
@@ -126,15 +189,20 @@ try:
         for key in ('OMNILANE_JOB_WORKER_REPO', 'OMNILANE_JOB_WORKER_EXPECTED_SHA256'):
             env.pop(key, None)
         with (case / 'stderr').open('w') as stderr:
-            proc = subprocess.Popen(['/bin/bash', '-c',
-                '/bin/bash "$1" codex advise "$2" fake medium "$3" "$4"; rc=$?; printf "%s\\n" "$rc" > "$5"; exit "$rc"',
-                'test-close', str(fixture / 'scripts/lib/job-worker.sh'), str(case),
-                str(case / 'prompt'), str(job / 'out.txt'), str(job / 'exit')],
+            proc = subprocess.Popen(['/bin/bash', str(fixture / 'scripts/lib/job-worker.sh'),
+                'codex', 'advise', str(case), 'fake', 'medium',
+                str(case / 'prompt'), str(job / 'out.txt')],
                 env=env, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True)
         processes.append(proc)
+        # The holder is this direct child, so waitpid can observe STOP without ps.
+        # Preserve the old supervisor's exit-file receipt for the real jobs CLI.
+        recorder = threading.Thread(target=record_exit, args=(proc, job / 'exit'))
+        recorder.start()
+        exit_recorders.append(recorder)
         wait_for(job / 'inbox.ready')
         wait_for(case / 'received')
         holder = int((job / 'inbox.holder.pid').read_text())
+        assert holder == proc.pid, 'STOP observer must own the holder child'
         stop = threading.Event()
         producer = None
         hammer = None
@@ -153,6 +221,7 @@ try:
                 wait_for(case / 'runner-stopped-reading')
             os.kill(holder, signal.SIGSTOP)
             try:
+                wait_for_stopped(holder)
                 if mode in ('flow', 'epipe'):
                     runner_fd = os.open(job / 'runner-inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
                     opened_fds.add(runner_fd)
@@ -198,6 +267,7 @@ try:
         if mode == 'idle-exit':
             wait_for(case / 'at-loop-boundary')
             try:
+                wait_for_stopped(holder)
                 fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
                 opened_fds.add(fd)
                 payload = b'{"text":"accepted-before-runner-exit"}\n'
@@ -220,6 +290,8 @@ try:
         result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
                                 env=env, capture_output=True, text=True, timeout=11)
         elapsed = time.monotonic() - started
+        runner_pid = int((case / 'runner.pid').read_text())
+        wait_for_exit(runner_pid)
         if hammer: hammer.join(timeout=3)
         if second_close:
             second_close.communicate(timeout=2)
@@ -237,7 +309,7 @@ try:
         # one scheduling turn to persist its exit code and reap that worker.
         wait_for(job / 'exit', timeout=3)
         proc.wait(timeout=1)
-        # job-worker.sh budgets a stuck runner at up to 9.85s; close must still
+        # job-worker.sh budgets a stuck runner at up to 9.91s; close must still
         # beat jobs close's 11s deadline with room to spare.
         assert elapsed < 10.0, (mode, elapsed, result.stdout, result.stderr)
         expected = (1, 137) if mode == 'idle-exit' else ((1,) if mode in ('empty', 'flow', 'epipe') else (0,))
@@ -256,21 +328,9 @@ try:
         assert not list(job.glob('.forward.*')), 'forward spool survived close'
         if mode in ('stuck', 'flow'): assert (case / 'term').exists(), f'{mode}: TERM not delivered before KILL'
         if mode == 'full-grace': assert not (case / 'term').exists(), '7-second normal shutdown interrupted'
-        runner_pid = int((case / 'runner.pid').read_text())
-        try: os.kill(runner_pid, 0)
-        except ProcessLookupError: pass
-        else: raise AssertionError(f'{mode}: runner survived close')
         print(f'PASS {mode}: jobs close exit={result.returncode}, elapsed={elapsed:.3f}s', flush=True)
 finally:
     if 'stop' in locals(): stop.set()
     if 'producer' in locals() and producer: producer.join(timeout=1)
-    for fd in opened_fds:
-        try: os.close(fd)
-        except OSError: pass
-    for proc in processes:
-        if proc.poll() is not None: continue
-        try: os.killpg(proc.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
-        proc.wait()
-    shutil.rmtree(scratch)
+    cleanup_fixture(scratch, processes, opened_fds, exit_recorders, sys.exc_info()[1])
 PY

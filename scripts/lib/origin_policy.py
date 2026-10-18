@@ -136,7 +136,7 @@ def _channel(kind, path, current, via="operator", team=None):
                    approved_at=datetime.now(timezone.utc).isoformat(), approved_via=via)
     if kind == "developer-id":
         channel.update(team_id=team or current.get("signer"),
-                       identifier_family=provenance.family(current.get("identifier") or ""))
+                       identifier_family=provenance.identifier_family(current.get("identifier") or ""))
     else:
         channel["accepts"] = kind
     return channel
@@ -197,7 +197,7 @@ def gate(vendor, recorded, recorded_path, current, current_path, path=None):
         teams = [c for c in at_location if c["team_id"] == current["signer"]]
         if not teams:
             return False, "team-changed"
-        if not any(not c["identifier_family"] or c["identifier_family"] == provenance.family(current["identifier"]) for c in teams):
+        if not any(not c["identifier_family"] or c["identifier_family"] == provenance.identifier_family(current["identifier"]) for c in teams):
             return False, "identifier-changed"
     return True, "origin-approved"
 

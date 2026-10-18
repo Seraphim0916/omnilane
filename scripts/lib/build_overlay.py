@@ -47,10 +47,6 @@ for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6.1-sol", "gpt-6_1-sol
         PROVEN[cid] = ("model_and_effort", model, ev)
 
 
-PROVEN["grok/grok-4-6"] = ("cli_reasoning_effort", "grok-4.6", "gk-grok-4_6-high")
-for effort in ["xhigh", "medium", "low"]:
-    PROVEN[f"grok/grok-4-6-{effort}"] = ("cli_reasoning_effort", "grok-4.6", f"gk-grok-4_6-{effort}")
-PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high")
 # AA scores grok-4.7 at xhigh and high only; its base row is the xhigh one.
 PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
 PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
@@ -63,10 +59,6 @@ for cid, rid, ev in [
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
     ("gemini/gemini-3-8-flash-medium", "gemini-3.8-flash-medium", "agy-gemini-3_8-flash-medium"),
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),
-    ("gemini/gemini-3-7-flash", "gemini-3.7-flash-high", "agy-gemini-3_7-flash-high"),
-    ("gemini/gemini-3-7-flash-medium", "gemini-3.7-flash-medium", "agy-gemini-3_7-flash-medium"),
-    ("gemini/gemini-3-7-flash-low", "gemini-3.7-flash-low", "agy-gemini-3_7-flash-low"),
-    ("gemini/gemini-3-6-flash", "gemini-3.6-flash-high", "agy-gemini-3_6-flash-high"),
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 

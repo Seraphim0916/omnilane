@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DISPATCH = ROOT / "scripts" / "dispatch.sh"
 
 
+# Retirement removes fallback entries only; every first choice stays unchanged.
 EXPECTED_DEFAULTS = {
     "hardest-coding": "codex gpt-6-astra xhigh",
     "bulk-mechanical": "codex gpt-6.1-sol medium",

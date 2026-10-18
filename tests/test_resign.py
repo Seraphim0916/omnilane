@@ -84,11 +84,11 @@ class ProvenanceTests(unittest.TestCase):
 
     def test_the_verdict(self):
         team = {"signer": "TEAM123456"}
-        path = "/opt/cli/1.2.3/bin/cli"
+        path = "/opt/.codex/packages/standalone/releases/1.2.3/bin/codex"
         cases = [
-            (team, path, team, "/opt/cli/1.3.0/bin/cli", True),
-            (team, path, {"signer": "OTHERTEAM1"}, "/opt/cli/1.3.0/bin/cli", False),
-            (team, path, team, "/tmp/cli/1.3.0/bin/cli", False),
+            (team, path, team, "/opt/.codex/packages/standalone/releases/1.3.0/bin/codex", True),
+            (team, path, {"signer": "OTHERTEAM1"}, "/opt/.codex/packages/standalone/releases/1.3.0/bin/codex", False),
+            (team, path, team, "/tmp/.codex/packages/standalone/releases/1.3.0/bin/codex", False),
             (team, path, {"signer": "adhoc"}, path, False),
             ({"signer": "adhoc"}, path, {"signer": "adhoc"}, path, False),
             (None, path, team, path, False),
@@ -177,7 +177,7 @@ class SweepTests(unittest.TestCase):
 
     def test_a_transient_failure_is_retried_once(self):
         def verdicts(name, attempt):
-            if name == "gk-grok-4_6-high" and attempt == 1:
+            if name == "gk-grok-4_7-high" and attempt == 1:
                 return "fail", "API error (status 403 Forbidden): permission-denied", ""
             return "pass", "", ""
         run, calls = self.prober(verdicts)
@@ -185,7 +185,7 @@ class SweepTests(unittest.TestCase):
                                    manager=lambda: "Aqua", log=lambda _: None)
         self.assertEqual(report["outcome"], "done")
         self.assertEqual(report["failed"], [])
-        self.assertEqual(calls.count("gk-grok-4_6-high"), 2)
+        self.assertEqual(calls.count("gk-grok-4_7-high"), 2)
 
     def test_a_real_selector_failure_is_recorded_not_retried(self):
         def verdicts(name, _attempt):
@@ -227,6 +227,17 @@ class SweepTests(unittest.TestCase):
         self.assertEqual((report["outcome"], calls), ("done", []))
 
 
+def fixture_install_path(base, vendor, version):
+    """Use real vendor layouts so location-policy tests do not invent families."""
+    suffixes = {
+        "claude": f".local/share/claude/versions/{version}",
+        "codex": f".codex/packages/standalone/releases/{version}/bin/codex",
+        "grok": f".grok/downloads/grok-{version}-macos-aarch64",
+        "gemini": "opt/gemini/agy",
+    }
+    return base / suffixes[vendor]
+
+
 class ResignTests(unittest.TestCase):
     """A host with four fake CLIs, a signed overlay, and then an update."""
 
@@ -238,7 +249,7 @@ class ResignTests(unittest.TestCase):
         self.home = self.base / "home"
         self.bins = {}
         for vendor in resign.VENDORS:
-            path = self.base / "opt" / vendor / "1.0.0" / build_overlay.CLI_NAMES[vendor]
+            path = fixture_install_path(self.base, vendor, "1.0.0")
             path.parent.mkdir(parents=True)
             path.write_text(f"{vendor} 1.0.0\n")
             self.bins[vendor] = path
@@ -272,6 +283,10 @@ class ResignTests(unittest.TestCase):
         self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
 
     def vendor_of(self, cli_name):
+        if cli_name.startswith("grok-"):
+            return "grok"
+        if len(cli_name.split(".")) >= 2 and all(part.isdigit() for part in cli_name.split(".")):
+            return "claude"
         return next(v for v, name in build_overlay.CLI_NAMES.items() if name == cli_name)
 
     def facts(self, path, runner=None):
@@ -292,8 +307,9 @@ class ResignTests(unittest.TestCase):
             build_overlay.main(["--root", str(root), "--source", "test"])
 
     def update(self, vendor, version="1.1.0", directory=None):
-        path = (directory or self.base / "opt" / vendor / version) / build_overlay.CLI_NAMES[vendor]
-        path.parent.mkdir(parents=True)
+        path = (Path(directory) / build_overlay.CLI_NAMES[vendor] if directory
+                else fixture_install_path(self.base, vendor, version))
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"{vendor} {version}\n")
         self.bins[vendor] = path
         return path
@@ -454,7 +470,7 @@ class ResignTests(unittest.TestCase):
 
     def test_regressed_holds_never_retire_mappings(self):
         self.update("grok")
-        self.repeat_hold("regressed", failing=("grok/grok-4-6",))
+        self.repeat_hold("regressed", failing=("grok/grok-4-7-high",))
 
     def test_missing_cli_retirement_requires_two_consecutive_missing_reasons(self):
         before = self.vendor_mappings("grok")
@@ -556,10 +572,51 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.vendor_mappings("grok"), [])
         self.assertTrue(all(finding in overlay["unproven"] for finding in findings))
 
+    def test_retired_agy_selectors_drop_without_allow_shrink(self):
+        retired = {
+            "gemini/gemini-3-6-flash": "gemini-3.6-flash-high",
+            "gemini/gemini-3-7-flash": "gemini-3.7-flash-high",
+            "gemini/gemini-3-7-flash-medium": "gemini-3.7-flash-medium",
+            "gemini/gemini-3-7-flash-low": "gemini-3.7-flash-low",
+        }
+        legacy = {cid: ("model_id_encoded_effort", model, "retired-" + model)
+                  for cid, model in retired.items()}
+        # Simulate a verified historical host; never use real provider state.
+        with patch.dict(build_overlay.PROVEN, legacy):
+            for _, _, name in legacy.values():
+                self.descriptor(self.sweep_root, name, "pass")
+            self.build(self.sweep_root)
+            self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        before = {mapping["config_id"] for mapping in self.vendor_mappings("gemini")}
+        self.assertTrue(retired.keys() <= before)
+        self.update("gemini")
+        self.assertEqual(self.run_resign(vendor=["gemini"]), resign.EXIT_OK, self.lines)
+        after = {mapping["config_id"] for mapping in self.vendor_mappings("gemini")}
+        self.assertEqual(after, before - retired.keys())
+
+    def test_retired_grok_selectors_drop_without_allow_shrink(self):
+        retired = {"grok/grok-4-5", "grok/grok-4-6", "grok/grok-4-6-low",
+                   "grok/grok-4-6-medium", "grok/grok-4-6-xhigh"}
+        legacy = {cid: ("cli_reasoning_effort", build_overlay.ROWS[cid]["model"],
+                        "retired-" + cid.replace("/", "-")) for cid in retired}
+        with patch.dict(build_overlay.PROVEN, legacy):
+            for _, _, name in legacy.values():
+                self.descriptor(self.sweep_root, name, "pass")
+            self.build(self.sweep_root)
+            self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        before = {mapping["config_id"] for mapping in self.vendor_mappings("grok")}
+        self.assertTrue(retired <= before)
+        self.update("grok")
+        self.assertEqual(self.run_resign(vendor=["grok"]), resign.EXIT_OK, self.lines)
+        after = {mapping["config_id"] for mapping in self.vendor_mappings("grok")}
+        self.assertEqual(after, before - retired)
+
     def pinned(self, vendor):
         overlay = json.loads(self.live.read_text())
         return next(e["path"] for e in overlay["evidence"] if e.get("vendor") == vendor
-                    and Path(e["path"]).name == build_overlay.CLI_NAMES[vendor])
+                    and (Path(e["path"]).name == build_overlay.CLI_NAMES[vendor]
+                         or (vendor == "claude" and Path(e["path"]).parent.name == "versions")
+                         or (vendor == "grok" and Path(e["path"]).name.startswith("grok-"))))
 
     def test_the_overlay_records_each_signer(self):
         overlay = json.loads(self.live.read_text())
@@ -868,7 +925,7 @@ class ResignTests(unittest.TestCase):
         old = self.pinned("grok")
         self.update("grok")
         before = self.vendor_mappings("grok")
-        self.assertEqual(self.run_resign(failing=("grok/grok-4-6",)), resign.EXIT_OPERATOR)
+        self.assertEqual(self.run_resign(failing=("grok/grok-4-7-high",)), resign.EXIT_OPERATOR)
         self.assertEqual(self.pinned("grok"), old)
         self.assert_pending("grok", "regressed", 1, before)
         self.assertTrue(any("--allow-shrink" in line for line in self.lines), self.lines)
@@ -876,12 +933,12 @@ class ResignTests(unittest.TestCase):
 
     def test_allow_shrink_installs_the_smaller_overlay(self):
         new = self.update("grok")
-        self.assertEqual(self.run_resign(failing=("grok/grok-4-6",), allow_shrink=True),
+        self.assertEqual(self.run_resign(failing=("grok/grok-4-7-high",), allow_shrink=True),
                          resign.EXIT_OK, self.lines)
         overlay = json.loads(self.live.read_text())
         self.assertEqual(self.pinned("grok"), str(new))
-        self.assertNotIn("grok/grok-4-6", {m["config_id"] for m in overlay["mappings"]})
-        self.assertIn("grok/grok-4-6", {u["config_id"] for u in overlay["unproven"]})
+        self.assertNotIn("grok/grok-4-7-high", {m["config_id"] for m in overlay["mappings"]})
+        self.assertIn("grok/grok-4-7-high", {u["config_id"] for u in overlay["unproven"]})
 
     def test_an_unprobeable_vendor_is_not_installed(self):
         self.update("grok")

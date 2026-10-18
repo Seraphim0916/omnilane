@@ -24,7 +24,7 @@ GPT-6 Luna high for low-cost filtering; `live-search` and `coding-overflow`
 start with Grok 4.7 high for realtime X/web search and Codex-quota relief.
 In these five lanes, Argon occupies the Gemini family slot immediately before
 the first Gemini 3.8 Flash row, providing access on Antigravity-only hosts.
-Removing Argon reproduces every row of the original `1072603` chains in order.
+Removing Argon and retired Grok 4.6 reproduces the remaining original `1072603` chains in order.
 This addition does not claim Argon is the cheapest near-tie winner.
 
 The other six lanes retain their second-round placements. `hardest-coding`,
@@ -49,8 +49,13 @@ or blocking other vendors. This work did not run a host re-sign or provider call
 Medium and Low are recorded in `unknown_configs` following Gemini 3.6's
 unscored-effort convention: score null, authority ineligible, no lane, no probe
 candidate, and no borrowed High score. There are 121 scored and 12 unknown rows;
-the configurator coverage inventory has 121 entries. The operator approved this snapshot on 2026-10-18.
+the configurator coverage inventory now has 114 entries. The operator approved this snapshot on 2026-10-18.
 See [the third-round report](reports/REPORT-3.md) for positions and validation.
+
+Native Grok 4.5/4.6 and agy Gemini 3.6/3.7 Flash were retired on 2026-10-18
+following operator-reported catalog rejection. They are absent from native menus,
+probe candidates and current lanes; historical scores and captures remain intact.
+OpenRouter/OpenCode catalogs are independent and retain their API entries.
 
 ### Current lane measurements
 
@@ -79,8 +84,7 @@ The historical sections below retain their original captures.
 | 15 | claude claude-sonnet-5-5 medium | 41 | 0.298 | 0.529 | not published | 622 |
 | 16 | claude claude-opus-5 low | 39 | 0.263 | 0.492 | not published | 1561 |
 | 17 | grok grok-4.7 high | 46 | 0.247 | 0.578 | not published | 3881 |
-| 18 | grok grok-4.6 high | 44 | 0.212 | 0.565 | not published | 1963 |
-| 19 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | not published | 1623 |
+| 18 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | not published | 1623 |
 
 **bulk-mechanical**
 
@@ -147,12 +151,11 @@ The historical sections below retain their original captures.
 | 4 | claude claude-sonnet-5-5 high | 47 | 1638 | 1493 | 0.525 | 1027 |
 | 5 | claude claude-opus-5-5 medium | 51 | 1627 | 1503 | 0.542 | 1627 |
 | 6 | grok grok-4.7 high | 46 | 1634 | 1507 | 0.604 | 3881 |
-| 7 | grok grok-4.6 high | 44 | 1535 | 1521 | 0.559 | 1963 |
-| 8 | codex gpt-6-astra xhigh | 52 | 1546 | 1518 | 0.527 | 3803 |
-| 9 | claude claude-haiku-5-5 xhigh | 41 | 1533 | 1393 | 0.505 | 158 |
-| 10 | gemini gemini-4-argon-high | 53 | 1488 | 1304 | 0.562 | 2407 |
-| 11 | claude claude-haiku-5-5 high | 38 | 1442 | 1305 | 0.459 | 94 |
-| 12 | gemini gemini-3.8-flash-high | 41 | 1203 | 1223 | 0.468 | 1623 |
+| 7 | codex gpt-6-astra xhigh | 52 | 1546 | 1518 | 0.527 | 3803 |
+| 8 | claude claude-haiku-5-5 xhigh | 41 | 1533 | 1393 | 0.505 | 158 |
+| 9 | gemini gemini-4-argon-high | 53 | 1488 | 1304 | 0.562 | 2407 |
+| 10 | claude claude-haiku-5-5 high | 38 | 1442 | 1305 | 0.459 | 94 |
+| 11 | gemini gemini-3.8-flash-high | 41 | 1203 | 1223 | 0.468 | 1623 |
 
 **consult**
 
@@ -161,9 +164,8 @@ The historical sections below retain their original captures.
 | 1 | codex gpt-6-astra xhigh | 52 | 52.4 | 3803 |
 | 2 | claude claude-opus-5-5 xhigh | 56 | 56.0 | 4057 |
 | 3 | grok grok-4.7 high | 46 | 46.3 | 3881 |
-| 4 | grok grok-4.6 high | 44 | 44.3 | 1963 |
-| 5 | gemini gemini-4-argon-high | 53 | 52.6 | 2407 |
-| 6 | gemini gemini-3.8-flash-high | 41 | 40.9 | 1623 |
+| 4 | gemini gemini-4-argon-high | 53 | 52.6 | 2407 |
+| 5 | gemini gemini-3.8-flash-high | 41 | 40.9 | 1623 |
 
 **ui-draft**
 
@@ -211,22 +213,20 @@ The historical sections below retain their original captures.
 | # | candidate | score | knowledge (omniscience) | hallucination rate | index run cost ($) |
 |---|---|---|---|---|---|
 | 1 | grok grok-4.7 high | 46 | 30.9 | not published | 3881 |
-| 2 | grok grok-4.6 high | 44 | 30.5 | not published | 1963 |
-| 3 | gemini gemini-4-argon-high | 53 | 42.4 | not published | 2407 |
-| 4 | gemini gemini-3.8-flash-high | 41 | 29.6 | not published | 1623 |
-| 5 | claude claude-opus-5-5 low | 42 | 38.9 | not published | 860 |
+| 2 | gemini gemini-4-argon-high | 53 | 42.4 | not published | 2407 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 29.6 | not published | 1623 |
+| 4 | claude claude-opus-5-5 low | 42 | 38.9 | not published | 860 |
 
 **coding-overflow**
 
 | # | candidate | score | Terminal-Bench 4.0 | SciCode | index run cost ($) |
 |---|---|---|---|---|---|
 | 1 | grok grok-4.7 high | 46 | 0.247 | 0.578 | 3881 |
-| 2 | grok grok-4.6 high | 44 | 0.212 | 0.565 | 1963 |
-| 3 | gemini gemini-4-argon-high | 53 | 0.571 | 0.618 | 2407 |
-| 4 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | 1623 |
-| 5 | kimi kimi-k3 | not scored | — | — | — |
-| 6 | qwen qwen3-coder-plus | not scored | — | — | — |
-| 7 | opencode - | not scored | — | — | — |
+| 2 | gemini gemini-4-argon-high | 53 | 0.571 | 0.618 | 2407 |
+| 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | 1623 |
+| 4 | kimi kimi-k3 | not scored | — | — | — |
+| 5 | qwen qwen3-coder-plus | not scored | — | — | — |
+| 6 | opencode - | not scored | — | — | — |
 
 ## Previous approved snapshot — 2026-10-08
 

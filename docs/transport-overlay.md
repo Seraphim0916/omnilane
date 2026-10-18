@@ -111,6 +111,17 @@ install per-version files), which the hash check alone never saw.
 
 ## Re-signing by hand
 
+Native Gemini 3.6/3.7 Flash high/medium/low choices are retired from configure.
+The rejected `gemini-3.6-flash-high` and `gemini-3.7-flash` high/medium/low
+selectors (`invalid model selection`) are also excluded from the probe
+candidate table. The 3.6 medium/low choices were menu-only entries, not proven
+probe candidates. Historical compatibility
+snapshots retain their scored rows, but their transport selectors are null,
+so old evidence cannot carry these retired selectors into a new overlay.
+Use the supported Gemini 3.8 Flash selectors instead. The AA scoring policy
+and routing lanes are unchanged; this retirement does not run resign or
+modify any host-local overlay.
+
 Re-signing by hand is a probe, a rebuild, and an install, in that order. Back up
 `~/.omnilane/transport-contracts.local.json` first; restoring it is the rollback.
 `scripts/lib/probe_sweep.py --root ROOT [--vendor V]` derives every probe command

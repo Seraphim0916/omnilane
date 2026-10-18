@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 121,
+    "catalogEntries": 114,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1183,80 +1183,6 @@
     {
       "vendor": "gemini",
       "access": "cli",
-      "catalogModel": "gemini-3.7-flash-high",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "exact-configuration",
-      "aaSlugs": [
-        "gemini-3-7-flash"
-      ],
-      "mappingReason": "AA omits high suffix for its high row"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
-      "catalogModel": "gemini-3.7-flash-medium",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "exact-configuration",
-      "aaSlugs": [
-        "gemini-3-7-flash-medium"
-      ],
-      "mappingReason": "Strength is encoded in runtime model ID"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
-      "catalogModel": "gemini-3.7-flash-low",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "exact-configuration",
-      "aaSlugs": [
-        "gemini-3-7-flash-low"
-      ],
-      "mappingReason": "Strength is encoded in runtime model ID"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
-      "catalogModel": "gemini-3.6-flash-high",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "exact-configuration",
-      "aaSlugs": [
-        "gemini-3-6-flash"
-      ],
-      "mappingReason": "AA exposes only the matched high row in this snapshot"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
-      "catalogModel": "gemini-3.6-flash-medium",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "no-aa-row",
-      "aaSlugs": [],
-      "mappingReason": "Runtime-compatible ID retained; no same-slug AA row in the 643-row snapshot"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
-      "catalogModel": "gemini-3.6-flash-low",
-      "lifecycle": "legacy",
-      "disposition": "legacy-compatible",
-      "routeRefs": [],
-      "mappingStatus": "no-aa-row",
-      "aaSlugs": [],
-      "mappingReason": "Runtime-compatible ID retained; no same-slug AA row in the 643-row snapshot"
-    },
-    {
-      "vendor": "gemini",
-      "access": "cli",
       "catalogModel": "gemini-3.1-pro-high",
       "lifecycle": "legacy",
       "disposition": "legacy-compatible",
@@ -1361,53 +1287,6 @@
       "mappingStatus": "no-aa-row",
       "aaSlugs": [],
       "mappingReason": "Released 2026-09-21, after this v4.2 inventory was taken, so none of its 643 rows is this model; config/aa-model-policy.json scores it from AA v4.3.2 as grok-4-7 (xhigh) and grok-4-7-high. Its routeRefs are routing.yaml as of 2026-09-22; every other entry's are as of this inventory"
-    },
-    {
-      "vendor": "grok",
-      "access": "cli",
-      "catalogModel": "grok-4.6",
-      "lifecycle": "active",
-      "disposition": "default",
-      "routeRefs": [
-        {
-          "lane": "hardest-coding",
-          "position": "fallback",
-          "effort": "-"
-        },
-        {
-          "lane": "hard-judgment",
-          "position": "fallback",
-          "effort": "-"
-        },
-        {
-          "lane": "taste-final",
-          "position": "fallback",
-          "effort": "-"
-        },
-        {
-          "lane": "consult",
-          "position": "fallback",
-          "effort": "-"
-        },
-        {
-          "lane": "live-search",
-          "position": "primary",
-          "effort": "-"
-        },
-        {
-          "lane": "coding-overflow",
-          "position": "primary",
-          "effort": "-"
-        }
-      ],
-      "mappingStatus": "family",
-      "aaSlugs": [
-        "grok-4-6",
-        "grok-4-6-low",
-        "grok-4-6-medium",
-        "grok-4-6-xhigh"
-      ],
-      "mappingReason": "AA effort rows cannot be reproduced by the current Grok runner effort field"
     },
     {
       "vendor": "grok",

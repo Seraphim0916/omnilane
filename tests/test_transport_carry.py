@@ -25,7 +25,7 @@ TARGETS = {
     "codex": "codex/gpt-6-1-sol-high",
     "claude": "claude/claude-opus-5-5-high",
     "gemini": "gemini/gemini-3-8-flash",
-    "grok": "grok/grok-4-6",
+    "grok": "grok/grok-4-7-high",
 }
 
 

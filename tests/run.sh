@@ -4383,9 +4383,9 @@ test_configure_model_catalogs() {
 codex|1|11|1|gpt-5.3-codex-spark
 claude|2|15|1|claude-haiku-5-5
 claude|2|24|1|claude-haiku-4-5-20251001
-grok|3|4||grok-4.3-official
+grok|3|3||grok-4.3-official
 gemini|4|1||gemini-4-argon-high
-gemini|4|15||gpt-oss-120b-medium
+gemini|4|9||gpt-oss-120b-medium
 kimi|5|3||kimi-k2.5
 qwen|6|8||qwen3-coder-flash
 opencode|7|13||openrouter/qwen/qwen3-coder-plus

@@ -64,17 +64,17 @@ decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
 | Lane | First choice | Backup | Use for |
 |---|---|---|---|
-| hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Grok 4.6 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
 | hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → Grok 4.6 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
-| consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Grok 4.6 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; always keep `--vendor` |
+| taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | User-facing prose, prompt/doc polish, Chinese phrasing, style arbitration |
+| consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; always keep `--vendor` |
 | ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | UI drafts only WITH design system / reference images; open-ended taste goes taste-final |
 | long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Long-context synthesis; context size alone is not a quality result |
 | fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step agentic loops and multimodal checks |
-| live-search | Grok 4.7 | Grok 4.6 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
-| coding-overflow | Grok 4.7 | Grok 4.6 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
+| live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; non-Grok fallbacks provide generic web search, not equivalent X context |
+| coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
 | arbitrate | off (opt-in vote panel) | — | Disabled by default. The operator enables it with `arbitrate: vote codex,claude,grok -` in routing.local.yaml (1-4 voters; a `2` in place of the final `-` adds a rebuttal round). One quota hit PER VOTER PER ROUND; you chair and own the decision |
 
 Chains are ordered value-first: for each caller ceiling, the cheapest row whose
@@ -530,7 +530,6 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | GPT-6 Sol | codex | gpt-6-sol | xhigh |
 | GPT-6 Luna | codex | gpt-6-luna | high |
 | Grok 4.7 | grok | grok-4.7 | - |
-| Grok 4.6 | grok | grok-4.6 | - |
 | Gemini 3.1 Pro | gemini | Gemini 3.1 Pro (High) | - |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
 | Gemini 4 Argon High | gemini | gemini-4-argon-high | - |

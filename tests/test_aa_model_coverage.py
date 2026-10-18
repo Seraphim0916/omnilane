@@ -111,10 +111,9 @@ class AAModelCoverageTest(unittest.TestCase):
             rows[("gemini", "gemini-3.8-flash-high")]["aaSlugs"],
             ["gemini-3-8-flash"],
         )
-        self.assertEqual(
-            rows[("gemini", "gemini-3.7-flash-high")]["aaSlugs"],
-            ["gemini-3-7-flash"],
-        )
+        self.assertNotIn(("gemini", "gemini-3.7-flash-high"), rows)
+        # Retiring a native menu entry does not delete historical AA evidence.
+        self.assertIn("gemini-3-7-flash", self.rows)
 
     def test_unspecified_runner_effort_is_not_presented_as_exact(self):
         expected = {

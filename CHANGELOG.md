@@ -10,10 +10,15 @@ semantic version tags.
 
 - Report unmatched vendor/model/effort selectors as `unknown-model-name`, list the vendor's model aliases (including embedded effort suffixes), and suggest `omnilane list`; retain re-signing guidance for known models with unverified transport.
 - Preserve transport diagnostics for known models with omitted effort, including partial mappings; detect conflicting embedded effort before verification. Scope suggestions to `target_config`, label them as registered names rather than dispatch approvals, and localize omitted/invalid effort and empty-vendor messages. Keep the deliberate `code=unknown-model-name` / `failed_gate=target-model-name` contract; verified plain models missing effort retain `unknown-target-runtime`. Restore the Grok missing-effort assertion and add a mutation-checked test of its `runtime-effort-discarded` guard.
+- Retire native Grok 4.5/4.6 probe candidates, configure choices and transport carry; remove Grok 4.6 from lane chains and synchronize catalogs, menu indices and documentation without changing AA scores.
+- Limit source-policy install-family version normalization to Claude, Codex and Grok installation suffixes, preserving version-like home and worktree names.
+- Reap live-close runners in the parent shell with one deadline timer per entered phase; require immediate PID disappearance at close return and portable child STOP receipts, preserving close deadlines and data checks.
+- Retire native Gemini 3.6/3.7 Flash high/medium/low choices from configure; exclude their rejected selectors from resign probes and transport carry while retaining AA scores and routing lanes.
 
 ## [0.55.0] - 2026-10-18
 
 ### Fixed
+
 - Publish whole-job timeout exit codes after completion-receipt finalization, distinguish result receipts from controller exit, and verify natural shutdown with bounded polling. Keep `which-bin` read-only by disabling Python bytecode writes and retaining that restriction in offline test environments.
 - Return false from first-use registration for invalid executable paths or origin policy files without recording trust.
 - Print "not installed" instead of source-approval advice when a CLI cannot be found during re-signing; exit codes, pending marks and --check output are unchanged.

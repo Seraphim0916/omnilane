@@ -27,12 +27,29 @@ def sample(kind="developer-id", **kwargs):
 
 
 class PolicyTests(unittest.TestCase):
+    def test_install_family_preserves_versioned_ancestors(self):
+        for ancestor in ("/work/verify-0.55", "/Users/operator-1.2.3", "/work/0.55/1.2.3"):
+            for suffix, expected in (
+                (".local/share/claude/versions/2.1.276", ".local/share/claude/versions/<version>"),
+                (".codex/packages/standalone/releases/0.55.0/bin/codex", ".codex/packages/standalone/releases/<version>/bin/codex"),
+                (".grok/downloads/grok-1.0.25-macos-aarch64", ".grok/downloads/grok-<version>-macos-aarch64"),
+                ("vendor/1.2.3/cli", "vendor/1.2.3/cli"),
+                ("bin/tool-1.2.3", "bin/tool-1.2.3"),
+            ):
+                with self.subTest(ancestor=ancestor, suffix=suffix):
+                    self.assertEqual(cp.family(ancestor + "/" + suffix), ancestor + "/" + expected)
+        self.assertNotEqual(cp.family("/work/verify-0.55/vendor/1.2.3/cli"),
+                            cp.family("/work/verify-0.56/vendor/1.2.3/cli"))
+        self.assertEqual(cp.identifier_family("vendor.1.2.3"), "vendor.<version>")
+        self.assertEqual(cp.family("/Users/1.2.3/cli"), "/Users/1.2.3/cli")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp")
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name) / "verify-0.55" / "home-1.2.3"
+        self.root.mkdir(parents=True)
         self.path = self.root / "origins.json"
-        self.cli = self.root / "vendor" / "1.2.3" / "cli"
+        self.cli = self.root / ".local/share/claude/versions/1.2.3"
         self.cli.parent.mkdir(parents=True)
         self.cli.write_bytes(b"fixture")
         self.current = sample()
@@ -96,7 +113,7 @@ class PolicyTests(unittest.TestCase):
 
     def test_case16_adhoc_version_only_path_allows_probe(self):
         self.write([self.channel("adhoc")])
-        self.assertTrue(self.gate(sample("adhoc"), self.cli.parent.parent / "2.3.4" / "cli")[0])
+        self.assertTrue(self.gate(sample("adhoc"), self.cli.with_name("2.3.4"))[0])
 
     def test_case17_resolved_paths_prevent_dot_symlink_case_tricks(self):
         self.write([self.channel("adhoc")])
@@ -189,14 +206,14 @@ class PolicyTests(unittest.TestCase):
                 self.assertEqual(len(channels), 1)
                 self.assertEqual(channels, [{
                     "kind": "location", "accepts": kind, "approved_via": "first-use",
-                    "install_family": str(self.cli.parent.parent / "<version>" / self.cli.name),
+                    "install_family": str(self.cli.with_name("<version>")),
                     "approved_at": channels[0]["approved_at"],
                 }])
                 before = self.path.read_bytes()
                 self.assertFalse(op.record_first_use("claude", current, self.cli, path=self.path))
                 self.assertEqual(self.path.read_bytes(), before)
                 self.assertEqual(self.gate(current), (True, "origin-approved"))
-                self.assertEqual(self.gate(current, self.cli.parent.parent / "2.3.4" / "cli"),
+                self.assertEqual(self.gate(current, self.cli.with_name("2.3.4")),
                                  (True, "origin-approved"))
                 self.assertEqual(self.gate(current, self.root / "other" / "cli"),
                                  (False, "location-changed"))
