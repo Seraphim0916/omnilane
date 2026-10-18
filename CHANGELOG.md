@@ -7,6 +7,7 @@ semantic version tags.
 ## [Unreleased]
 
 ### Fixed
+- Publish whole-job timeout exit codes after completion-receipt finalization, distinguish result receipts from controller exit, and verify natural shutdown with bounded polling. Keep `which-bin` read-only by disabling Python bytecode writes and retaining that restriction in offline test environments.
 - Return false from first-use registration for invalid executable paths or origin policy files without recording trust.
 - Print "not installed" instead of source-approval advice when a CLI cannot be found during re-signing; exit codes, pending marks and --check output are unchanged.
 
@@ -17,8 +18,15 @@ semantic version tags.
 
 - Propose AA v4.3.2 snapshot `aa-v4.3.2-2026-10-14-v1` with Gemini 4 Argon (High),
   measured index 52.5606 (score 53), and refreshed Haiku 4.5 / GPT-oss 20B scores.
-  Argon has no confirmed local `agy` selector; transport stays unknown and lane
-  ordering is unchanged. The snapshot remains proposed, without host re-signing.
+  Register the `gemini-4-argon-high` agy probe candidate, configurator entry and
+  all eleven Flash-bearing lanes. Preserve the original defaults and non-Argon
+  order in bulk-mechanical, triage, fast-agentic, live-search and coding-overflow:
+  Argon sits immediately before Gemini 3.8 Flash for Antigravity-only hosts.
+  Retain the other six lane placements, including missing-metric exceptions
+  and vendor-pinned consultation.
+  Synchronize the five README tables, skill, coverage and transport archive.
+  Medium/Low remain unscored and unrouted; per-host proof is still required.
+  The snapshot remains proposed, without host re-signing.
 - Separate host-local source channels from transport proof. Developer ID checks require Apple's certificate chain, the approved team, product identifier and resolved installation family; approved local adhoc updates keep their independent location channel.
 - Add interactive `resign --trust-origin VENDOR [--team TEAMID]`, `--trust-location VENDOR` and `--revoke-origin VENDOR KIND`. Preserve legacy adhoc trust without granting new trust on upgrade. First-use policy now covers Developer ID plus self-signed, script and no-platform-signature tools at their installation location; it takes effect with the phase-2 first probe, and no production code calls the interface yet. First-use trust is currently per vendor with no recorded identity, path or policy entry, not per host; phase-2 wiring will decide whether other vendors' existing records should block it.
 - Show executable kinds, channels and source-specific bilingual recovery instructions in `resign --check` and doctor. Invalid, unsigned macOS and unverifiable files always stop; one-shot approval never records a channel. Trust remains host-local, backed up and separate from dispatch evidence.

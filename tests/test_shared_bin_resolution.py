@@ -141,6 +141,8 @@ class SharedBinResolutionTests(unittest.TestCase):
                               capture_output=True, text=True)
 
     def test_which_bin_success_resolves_local_symlink_without_writes(self):
+        # The product's read-only guarantee must not depend on the test launcher.
+        self.env.pop("PYTHONDONTWRITEBYTECODE", None)
         pinned = self.fake("outside-path/codex")
         link = self.root / "codex-link"
         link.symlink_to(pinned)

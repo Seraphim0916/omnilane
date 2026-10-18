@@ -659,6 +659,70 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(self.run_resign(), resign.EXIT_OK, self.lines)
         self.assertEqual(sorted(self.probed["claude"]), rows)
 
+    def test_argon_probe_success_maps_only_the_scored_high_selector(self):
+        entries = [e for e in probe_sweep.plan("gemini") if "argon" in e["model"]]
+        self.assertEqual([(e["config_id"], e["model"], e["effort"]) for e in entries],
+                         [("gemini/gemini-4-argon", "gemini-4-argon-high", None)])
+        mapping = next(m for m in self.vendor_mappings("gemini")
+                       if m["config_id"] == "gemini/gemini-4-argon")
+        self.assertEqual((mapping["runtime_model"], mapping["runtime_effort"]),
+                         ("gemini-4-argon-high", "high"))
+
+    def test_new_argon_failure_keeps_existing_gemini_and_other_vendor_updates(self):
+        cid = "gemini/gemini-4-argon"
+        entry = next(e for e in probe_sweep.plan("gemini") if e["config_id"] == cid)
+        for path in (self.sweep_root / "evidence").glob(entry["name"] + ".*"):
+            path.unlink()
+        self.build(self.sweep_root)
+        self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        before = {m["config_id"]: (m["identity"], m["runtime_model"], m["runtime_effort"])
+                  for m in self.vendor_mappings("gemini")}
+        new_grok = self.update("grok")
+        self.assertEqual(self.run_resign(failing=(cid,)), resign.EXIT_OK, self.lines)
+        self.assertIs(self.only_missing["gemini"], True)
+        self.assertEqual(self.probed["gemini"], [cid])
+        after = {m["config_id"]: (m["identity"], m["runtime_model"], m["runtime_effort"])
+                 for m in self.vendor_mappings("gemini")}
+        self.assertEqual(after, before)
+        self.assertEqual(self.pinned("grok"), str(new_grok))
+        overlay = json.loads(self.live.read_text())
+        self.assertNotIn(cid, {m["config_id"] for m in overlay["mappings"]})
+        self.assertIn(cid, {u["config_id"] for u in overlay["unproven"]})
+        self.assertEqual(self.run_resign(check=True), resign.EXIT_OK, self.lines)
+
+    def test_new_argon_permission_failure_keeps_other_updates_but_returns_operator(self):
+        cid = "gemini/gemini-4-argon"
+        entry = next(e for e in probe_sweep.plan("gemini") if e["config_id"] == cid)
+        for path in (self.sweep_root / "evidence").glob(entry["name"] + ".*"):
+            path.unlink()
+        self.build(self.sweep_root)
+        self.live.write_bytes((self.sweep_root / "transport-contracts.local.json").read_bytes())
+        before = {m["config_id"] for m in self.vendor_mappings("gemini")}
+        new_grok = self.update("grok")
+        original = self.descriptor
+
+        def permission_denied(root, name, verdict):
+            original(root, name, verdict)
+            if name != entry["name"] or verdict != "fail":
+                return
+            evidence = root / "evidence"
+            path = evidence / (name + ".json")
+            record = json.loads(path.read_text())
+            record["exit_code"] = 1
+            stderr = "HTTP 403: permission-denied for gemini-4-argon-high"
+            (evidence / (name + ".stderr")).write_text(stderr)
+            result = probe_sweep.probe_module.verdict(
+                record, (evidence / (name + ".stdout")).read_text(), stderr,
+                "agy", probe_sweep.TOKENS["gemini"])
+            record.update(zip(("verdict", "verdict_reason", "observed_model", "evidence_tier"), result))
+            path.write_text(json.dumps(record))
+
+        with patch.object(self, "descriptor", permission_denied):
+            self.assertEqual(self.run_resign(failing=(cid,)), resign.EXIT_OPERATOR, self.lines)
+        self.assertEqual(self.pinned("grok"), str(new_grok))
+        self.assertEqual({m["config_id"] for m in self.vendor_mappings("gemini")}, before)
+        self.assertTrue(any("environment failure" in line for line in self.lines), self.lines)
+
     def test_a_probe_that_answered_and_failed_is_not_probed_again(self):
         rows = self.never_probed(verdict="fail")
         overlay = json.loads(self.live.read_text())

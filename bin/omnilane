@@ -68,7 +68,7 @@ case "$cmd" in
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: which-bin requires Python 3.9 or newer" >&2; exit 1
     }
-    exec python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$resolved"
+    exec python3 -B -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$resolved"
     ;;
   whoami)
     command -v python3 >/dev/null 2>&1 || {

@@ -184,6 +184,7 @@ class ShellIsolationTests(unittest.TestCase):
         self.assertNotEqual(child["HOME"], str(self.home))
         self.assertNotEqual(child["OMNILANE_TEST_UTIL_PATH"], str(self.bins))
         self.assertEqual(child["PATH"], child["OMNILANE_TEST_UTIL_PATH"])
+        self.assertEqual(child["PYTHONDONTWRITEBYTECODE"], "1")
 
     def test_vendor_names_are_absent_instead_of_falsely_available_stubs(self):
         code = "import json,shutil; print(json.dumps({v:shutil.which(v) for v in " + repr(VENDORS) + "}))"

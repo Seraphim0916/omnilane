@@ -110,11 +110,13 @@ class GrokUnconfinedTests(unittest.TestCase):
         self.assertIn("fallback-result", real.stdout)
         self.assertFalse(self.marker.exists())
 
-    def test_shipped_coding_overflow_skips_both_grok_rows(self):
+    def test_shipped_coding_overflow_skips_both_grok_rows_before_argon_without_opt_in(self):
         result = self.work("--dry-run", lane="coding-overflow")
         self.assert_ok(result)
         self.assertIn("vendor=gemini\n", result.stdout)
-        self.assertIn("candidate=3/7\n", result.stdout)
+        self.assertIn("model=gemini-4-argon-high\n", result.stdout)
+        self.assertIn("candidate=3/8\n", result.stdout)
+        self.assertFalse(self.marker.exists())
 
     def test_shipped_option_is_lint_failure_and_ignored(self):
         repo = self.fixture_repo()

@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 120,
+    "catalogEntries": 121,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1018,6 +1018,75 @@
         "claude-4-5-haiku-reasoning"
       ],
       "mappingReason": "Dated runtime ID maps to AA Haiku 4.5 family, not a literal slug"
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-argon-high",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "default",
+          "effort": "-"
+        },
+        {
+          "lane": "triage",
+          "position": "default",
+          "effort": "-"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "consult",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "long-context",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "fast-agentic",
+          "position": "default",
+          "effort": "-"
+        },
+        {
+          "lane": "live-search",
+          "position": "default",
+          "effort": "-"
+        },
+        {
+          "lane": "coding-overflow",
+          "position": "default",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-argon"
+      ],
+      "mappingReason": "AA v4.3.2 measures Gemini 4 Argon (High); agy encodes high in its selector. Host proof still required; absent from the historical v4.2 aaModels capture."
     },
     {
       "vendor": "gemini",

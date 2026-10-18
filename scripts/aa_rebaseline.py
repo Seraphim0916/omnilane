@@ -107,12 +107,10 @@ NEW_ROWS = [
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
-               "gemini-4-argon": "gemini-3.8-flash-high"}  # new model -> alias entry to clone
-# AA coverage is independent of local CLI availability. Do not invent a selector
-# or claim configure.sh offers an AA-only model before its transport ID is known.
-UNMAPPED_MODELS = {
-    "gemini-4-argon": "AA lists Gemini 4 Argon (High), but the local agy catalog has no confirmed selector; runtime transport remains unverified",
-}
+               "gemini-4-argon-high": "gemini-3.8-flash-high"}  # catalog selector -> alias to clone
+# AA's family slug and agy's effort-encoded selector are different identities.
+# A known selector is a probe target, never proof that this host can use it.
+RUNTIME_SELECTORS = {"gemini-4-argon": "gemini-4-argon-high"}
 
 # Operator-approved retirements, independent of whether AA still publishes a score.
 # config id -> (retirement date, one-line reason)
@@ -364,10 +362,12 @@ def cmd_build(args) -> int:
         rescore(row, records[slug], version, as_of, report(vendor))
         scored.append(row)
     for row in scored:
-        if row["model"] in UNMAPPED_MODELS:
+        if row["model"] in RUNTIME_SELECTORS:
             row["transport_mapping"] = {
-                "status": "unknown", "candidate_model_ids": [], "runtime_verified": False,
-                "reason": UNMAPPED_MODELS[row["model"]],
+                "status": "unknown",
+                "candidate_model_ids": [RUNTIME_SELECTORS[row["model"]]],
+                "runtime_verified": False,
+                "reason": "Known agy selector; successful host transport probe and model access are still required",
             }
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
     new["scored_configs"] = scored
@@ -392,6 +392,22 @@ def cmd_build(args) -> int:
             "source_urls": [], "evidence_report": report(row["vendor"]), "mapping_status": "unknown",
             "transport_mapping": {"status": "unknown", "runtime_verified": False, "resolved_config_id": None},
         })
+    # Follow the existing Gemini 3.6 medium/low convention: known selectors with
+    # no separate AA score are unknown, never assigned their High sibling's score.
+    for effort in ("medium", "low"):
+        cid = f"gemini/gemini-4-argon/{effort}/unspecified"
+        if not any(row["id"] == cid for row in unknown):
+            unknown.append({
+                "id": cid, "vendor": "gemini", "model": "gemini-4-argon",
+                "effort": effort, "reasoning": "unspecified", "fallback": None,
+                "score": None, "estimated": None, "benchmark_version": version,
+                "as_of": as_of, "status": "unknown", "authority_eligible": False,
+                "reason": "Known agy selector; no separate AA score; do not reuse High score",
+                "source_urls": [], "evidence_report": report("gemini"),
+                "mapping_status": "unknown",
+                "transport_mapping": {"status": "unknown", "runtime_verified": False,
+                                      "resolved_config_id": None},
+            })
     new["unknown_configs"] = unknown
 
     for row in new["reference_configs"]:
@@ -409,18 +425,17 @@ def cmd_build(args) -> int:
             if (alias["catalog_vendor"], alias["catalog_model"]) == (vendor, model) \
                     and cid in live_ids and cid not in alias["candidate_config_ids"]:
                 alias["candidate_config_ids"].append(cid)
-    # Runtime aliases mirror configure.sh; AA-only aliases identify their source below.
+    # Replace the earlier AA-only family alias with the known configure selector.
+    new["aliases"] = [a for a in new["aliases"] if a["catalog_model"] not in RUNTIME_SELECTORS]
+    # Runtime aliases mirror configure.sh, without inheriting transport proof.
     have = {(alias["catalog_vendor"], alias["catalog_model"]) for alias in new["aliases"]}
     for model, source in NEW_ALIASES.items():
         template = next(a for a in new["aliases"] if a["catalog_model"] == source)
         if (template["catalog_vendor"], model) not in have:
             clone = copy.deepcopy(template)
             clone["catalog_model"] = model
-            clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS if m == model]
-            if model in UNMAPPED_MODELS:
-                clone.update(catalog_source="scripts/aa_rebaseline.py",
-                             source_kind="aa_model_not_runtime_identity",
-                             reason=UNMAPPED_MODELS[model])
+            clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS
+                                             if RUNTIME_SELECTORS.get(m, m) == model]
             new["aliases"].insert(new["aliases"].index(template), clone)
 
     vendors: dict[str, int] = {}

@@ -1983,6 +1983,7 @@ test_background_job_records_whole_job_timeout() {
   local name="background job records whole-job timeout"
   local home gate pidfile job_id exit_file ticks=0 rc="" controller_pid=""
   local gate_pid="" child_pid="" controller_alive=no gate_alive=no child_alive=no
+  local receipt_ready=no
   home="$TEST_ROOT/job-timeout-background"; mkdir -p "$home"
   gate="$home/gate.sh"; pidfile="$home/gate-pids"
   cat > "$gate" <<'EOF'
@@ -2004,12 +2005,24 @@ EOF
     ticks=$((ticks + 1))
   done
   [[ -f "$exit_file" ]] && rc="$(cat "$exit_file")"
+  if python3 -B -c 'import json, sys; r = json.load(open(sys.argv[1])); sys.exit(not (r["exit"] == 124))' \
+    "$home/inbox/$job_id.json" 2>/dev/null; then
+    receipt_ready=yes
+  fi
   controller_pid="$(cat "$home/jobs/$job_id/pid" 2>/dev/null || true)"
   if [[ -f "$pidfile" ]]; then read -r gate_pid child_pid < "$pidfile"; fi
-  sleep 0.1
-  [[ -n "$controller_pid" ]] && kill -0 "$controller_pid" 2>/dev/null && controller_alive=yes
-  [[ -n "$gate_pid" ]] && kill -0 "$gate_pid" 2>/dev/null && gate_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  # The publisher can still be returning after exit is visible. Observe natural
+  # shutdown within five seconds; cleanup only after capturing the failure state.
+  ticks=0
+  while [[ "$ticks" -lt 100 ]]; do
+    controller_alive=no; gate_alive=no; child_alive=no
+    [[ -n "$controller_pid" ]] && kill -0 "$controller_pid" 2>/dev/null && controller_alive=yes
+    [[ -n "$gate_pid" ]] && kill -0 "$gate_pid" 2>/dev/null && gate_alive=yes
+    [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+    [[ "$controller_alive" == no && "$gate_alive" == no && "$child_alive" == no ]] && break
+    sleep 0.05
+    ticks=$((ticks + 1))
+  done
 
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$gate_alive" == yes ]] && kill "$gate_pid" 2>/dev/null || true
@@ -2017,6 +2030,10 @@ EOF
 
   if [[ "$rc" != "124" ]]; then
     fail "$name" "expected recorded exit 124, got '${rc:-missing}'"
+  elif [[ "$receipt_ready" != yes ]]; then
+    fail "$name" "exit was published without the finalized result receipt"
+  elif [[ -z "$controller_pid" || -z "$gate_pid" || -z "$child_pid" ]]; then
+    fail "$name" "missing process identity for natural-exit verification"
   elif [[ "$controller_alive" == yes || "$gate_alive" == yes || "$child_alive" == yes ]]; then
     fail "$name" "background timeout left a process alive"
   else
@@ -4363,7 +4380,8 @@ codex|1|11|1|gpt-5.3-codex-spark
 claude|2|15|1|claude-haiku-5-5
 claude|2|24|1|claude-haiku-4-5-20251001
 grok|3|4||grok-4.3-official
-gemini|4|14||gpt-oss-120b-medium
+gemini|4|1||gemini-4-argon-high
+gemini|4|15||gpt-oss-120b-medium
 kimi|5|3||kimi-k2.5
 qwen|6|8||qwen3-coder-flash
 opencode|7|13||openrouter/qwen/qwen3-coder-plus

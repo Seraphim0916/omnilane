@@ -254,9 +254,11 @@
       "evidence_report": "docs/reports/aa-gemini-evidence-2026-10-14.md",
       "transport_mapping": {
         "status": "unknown",
-        "candidate_model_ids": [],
+        "candidate_model_ids": [
+          "gemini-4-argon-high"
+        ],
         "runtime_verified": false,
-        "reason": "AA lists Gemini 4 Argon (High), but the local agy catalog has no confirmed selector; runtime transport remains unverified"
+        "reason": "Known agy selector; successful host transport probe and model access are still required"
       },
       "score_raw": 52.56
     },
@@ -3572,6 +3574,52 @@
         "runtime_verified": false,
         "resolved_config_id": null
       }
+    },
+    {
+      "id": "gemini/gemini-4-argon/medium/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-4-argon",
+      "effort": "medium",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.3.2",
+      "as_of": "2026-10-14",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "Known agy selector; no separate AA score; do not reuse High score",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-10-14.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
+    },
+    {
+      "id": "gemini/gemini-4-argon/low/unspecified",
+      "vendor": "gemini",
+      "model": "gemini-4-argon",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "score": null,
+      "estimated": null,
+      "benchmark_version": "4.3.2",
+      "as_of": "2026-10-14",
+      "status": "unknown",
+      "authority_eligible": false,
+      "reason": "Known agy selector; no separate AA score; do not reuse High score",
+      "source_urls": [],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-10-14.md",
+      "mapping_status": "unknown",
+      "transport_mapping": {
+        "status": "unknown",
+        "runtime_verified": false,
+        "resolved_config_id": null
+      }
     }
   ],
   "reference_configs": [
@@ -4119,7 +4167,7 @@
     },
     {
       "catalog_vendor": "gemini",
-      "catalog_model": "gemini-4-argon",
+      "catalog_model": "gemini-4-argon-high",
       "status": "unknown",
       "resolved_config_id": null,
       "candidate_config_ids": [
@@ -4127,9 +4175,9 @@
       ],
       "implicit_default_effort": null,
       "runtime_verified": false,
-      "reason": "AA lists Gemini 4 Argon (High), but the local agy catalog has no confirmed selector; runtime transport remains unverified",
-      "catalog_source": "scripts/aa_rebaseline.py",
-      "source_kind": "aa_model_not_runtime_identity"
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
     },
     {
       "catalog_vendor": "gemini",
@@ -4374,7 +4422,7 @@
   "coverage": {
     "scored_configs": 121,
     "reference_configs": 1,
-    "unknown_configs": 10,
+    "unknown_configs": 12,
     "aliases": 53,
     "by_vendor": {
       "codex": 54,

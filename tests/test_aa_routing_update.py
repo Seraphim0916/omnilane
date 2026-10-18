@@ -96,6 +96,35 @@ class AARoutingUpdateTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(EXPECTED_DEFAULTS, self._listed(result.stdout))
 
+    def test_argon_keeps_the_five_value_and_purpose_defaults(self) -> None:
+        lanes = {}
+        for line in (ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
+            if match:
+                lanes[match.group(1)] = [item.strip() for item in match.group(2).split("|")]
+        for lane in ("bulk-mechanical", "triage", "fast-agentic", "live-search", "coding-overflow"):
+            with self.subTest(lane=lane):
+                chain = lanes[lane]
+                argon = "gemini gemini-4-argon-high -"
+                self.assertEqual(1, chain.count(argon))
+                flash = next(i for i, item in enumerate(chain)
+                             if item.startswith("gemini gemini-3.8-flash-"))
+                self.assertEqual(flash - 1, chain.index(argon))
+                self.assertEqual(EXPECTED_DEFAULTS[lane], chain[0])
+
+    def test_agy_only_host_selects_argon_in_every_flash_lane(self) -> None:
+        env = self.env.copy()
+        env.update({name: str(self.bin / "not-installed")
+                    for name in ("CODEX_BIN", "CLAUDE_BIN", "GROK_BIN")})
+        result = self._run("--list", env=env)
+        self.assertEqual(0, result.returncode, result.stderr)
+        selected = self._listed(result.stdout)
+        for lane in EXPECTED_DEFAULTS.keys() - {"arbitrate"}:
+            self.assertEqual(selected[lane].split("#", 1)[0].strip(), "gemini gemini-4-argon-high -", lane)
+        consult = self._run("--dry-run", "--vendor", "gemini", "consult", "fixture", env=env)
+        self.assertEqual(0, consult.returncode, consult.stdout + consult.stderr)
+        self.assertIn("model=gemini-4-argon-high\n", consult.stdout)
+
     def test_local_whole_lane_precedence(self) -> None:
         (self.home / "routing.local.yaml").write_text(
             "consult: codex local-fixture low | claude untouched-fixture high\n",

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the merged omnilane AA transport overlay from verified probe evidence.
 
-Only (config_id, selector) pairs listed in PROVEN are written. Every entry here
-corresponds to a probe run under the selected evidence root whose raw
+PROVEN enumerates known (config_id, selector) probe candidates. Only passing
+host evidence creates a mapping; each mapped entry corresponds to a run whose raw
 stdout/stderr is hashed into the manifest, so the overlay's evidence[] anchors
 the whole set.
 """
@@ -55,10 +55,11 @@ PROVEN["grok/grok-4-5"] = ("cli_reasoning_effort", "grok-4.5", "gk-grok-4_5-high
 PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
 PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
 PROVEN["grok/grok-4-7-low"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-low")
-# Gemini 4 Argon is AA-scored only: agy has no confirmed local selector yet.
-# Keep it out of PROVEN until a real selector and matching probe evidence exist.
+# Known selectors are probe candidates, not host authorization. Ultra access and
+# successful evidence are still required; unscored Argon Medium/Low stay out.
 
 for cid, rid, ev in [
+    ("gemini/gemini-4-argon", "gemini-4-argon-high", "agy-gemini-4-argon-high"),
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
     ("gemini/gemini-3-8-flash-medium", "gemini-3.8-flash-medium", "agy-gemini-3_8-flash-medium"),
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),
