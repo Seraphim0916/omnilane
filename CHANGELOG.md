@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- Proposed registry snapshot `aa-v4.3.2-2026-10-18-v1`, built from the 2026-10-14 extract, puts `codex/gpt-5-4-mini` (24), `codex/gpt-5-4-mini-medium` (20, estimated) and `codex/gpt-5-4-mini-non-reasoning` (11, estimated) back in the scored table (121 -> 124 scored, Codex 54 -> 57). The score table follows what the vendor offers, not whether one ChatGPT account can call the model, so the 2026-10-02 retirement is reversed. No lane lists them and `routing.yaml` is unchanged. The configure alias and probe candidates return; hosts whose account gets HTTP 400 record the probe as unproven. Every other score and ordering is unchanged. The snapshot is `proposed` until the operator approves it, and every host must run `omnilane resign` after upgrading because the snapshot id changes. Details: `docs/reports/aa-gpt-5-4-mini-evidence-2026-10-18.md`.
+
 ## [0.56.0] - 2026-10-18
 
 ### Added

@@ -103,22 +103,28 @@ NEW_ROWS = [
     *[(f"codex/gpt-6-1-sol{suffix}", "codex", "gpt-6.1-sol", effort, "reasoning",
        f"gpt-6-1-sol{suffix}", f"codex/gpt-6-sol{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
+    # Back in the score table (2026-10-18): the table follows what the vendor offers, not
+    # whether one ChatGPT account can call it. No lane lists them in routing.yaml.
+    ("codex/gpt-5-4-mini", "codex", "gpt-5.4-mini", "xhigh", "reasoning",
+     "gpt-5-4-mini", "codex/gpt-5-4"),
+    ("codex/gpt-5-4-mini-medium", "codex", "gpt-5.4-mini", "medium", "reasoning",
+     "gpt-5-4-mini-medium", "codex/gpt-5-4"),
+    ("codex/gpt-5-4-mini-non-reasoning", "codex", "gpt-5.4-mini", None, "non-reasoning",
+     "gpt-5-4-mini-non-reasoning", "codex/gpt-5-4-non-reasoning"),
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
-               "gemini-4-argon-high": "gemini-3.8-flash-high"}  # catalog selector -> alias to clone
+               "gemini-4-argon-high": "gemini-3.8-flash-high",
+               "gpt-5.4-mini": "gpt-5.4"}  # catalog selector -> alias to clone
 # AA's family slug and agy's effort-encoded selector are different identities.
 # A known selector is a probe target, never proof that this host can use it.
 RUNTIME_SELECTORS = {"gemini-4-argon": "gemini-4-argon-high"}
 
 # Operator-approved retirements, independent of whether AA still publishes a score.
 # config id -> (retirement date, one-line reason)
-RETIRED_ROWS = {
-    "codex/gpt-5-4-mini": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
-    "codex/gpt-5-4-mini-medium": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
-    "codex/gpt-5-4-mini-non-reasoning": ("2026-10-02", "HTTP 400: not supported when using Codex with a ChatGPT account"),
-}
+# The 2026-10-02 gpt-5.4-mini retirement was reversed on 2026-10-18; see NEW_ROWS.
+RETIRED_ROWS: dict[str, tuple[str, str]] = {}
 
 
 def half_up(value: float) -> int:

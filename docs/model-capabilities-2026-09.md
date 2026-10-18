@@ -7,6 +7,21 @@ scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
+## Proposed snapshot — 2026-10-18 (pending operator approval; no new routing decision)
+
+Snapshot `aa-v4.3.2-2026-10-18-v1` is built from the same 2026-10-14 extract and
+reverses the 2026-10-02 retirement of the three `gpt-5.4-mini` rows. The score
+table follows what the vendor offers, not whether one ChatGPT account can call
+the model. `codex/gpt-5-4-mini` 24.07 / 24, `codex/gpt-5-4-mini-medium` 19.75 / 20
+(estimated) and `codex/gpt-5-4-mini-non-reasoning` 11.14 / 11 (estimated) return
+to the scored table, which grows from 121 to 124 rows (Codex 54 -> 57); unknown
+rows go from 12 to 9. Every other score and the ordering are unchanged.
+`routing.yaml` does not change, and `aa_rebaseline.py lanes` lists none of the
+three in any lane. The configure alias and the probe candidates return, so a
+host whose account can call the model can prove its transport with
+`omnilane resign`. Evidence: `docs/reports/aa-gpt-5-4-mini-evidence-2026-10-18.md`
+and `docs/reports/aa-rebaseline-2026-10-18.md`.
+
 ## Current approved snapshot — 2026-10-14
 
 The supplied AA extract adds Gemini 4 Argon (High) to policy coverage: measured

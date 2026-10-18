@@ -225,7 +225,7 @@ flowchart LR
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
-AA `aa-v4.3.2-2026-10-14-v1`: **approved by the operator on 2026-10-18**; 121 scored configurations and 12 unknown rows. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-14.md).
+AA `aa-v4.3.2-2026-10-18-v1`：**proposed（待操作者批准）**；124 行计分、9 行未知。三行 `gpt-5.4-mini` 放回评分表，但不进任何车道。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-18.md)。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 

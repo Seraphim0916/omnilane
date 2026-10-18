@@ -263,7 +263,7 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v4.3.2-2026-10-14-v1`: **approved by the operator on 2026-10-18**; 121 scored configurations and 12 unknown rows. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-14.md).
+AA `aa-v4.3.2-2026-10-18-v1`: **proposed, pending operator approval**; 124 scored configurations and 9 unknown rows. It puts the three `gpt-5.4-mini` rows back in the score table without adding them to any lane. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-18.md).
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 

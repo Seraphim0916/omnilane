@@ -225,7 +225,7 @@ flowchart LR
 
 ## 🛤️ 通道一覽(預設值;實際生效值跑 `scripts/dispatch.sh --list` 看)
 
-AA `aa-v4.3.2-2026-10-14-v1`：**approved（操作者已於 2026-10-18 核准）**；121 列計分、12 列未知，仍待主機傳輸驗證。[證據](docs/reports/aa-rebaseline-2026-10-14.md)。
+AA `aa-v4.3.2-2026-10-18-v1`：**proposed（待操作者核准）**；124 列計分、9 列未知。三列 `gpt-5.4-mini` 放回評分表，但不進任何車道。仍待主機傳輸驗證。[證據](docs/reports/aa-rebaseline-2026-10-18.md)。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已於 2026-10-08 核准）**；2026-10-08 已由官方確認 Haiku 5.5 的 `claude-haiku-5-5` 代號與五種強度，仍待主機傳輸探測。[證據](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
