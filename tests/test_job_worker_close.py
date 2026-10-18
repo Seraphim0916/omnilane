@@ -87,6 +87,76 @@ set -euo pipefail
         self.assertFalse((self.job / "inbox.fifo").exists())
         return process.returncode, stderr
 
+    def timeout_worker(self, *, forwarded=False, events=None, output=True):
+        self.env["OMNILANE_IDLE_TIMEOUT"] = "0"
+        self.env["OMNILANE_TIMEOUT"] = "3"
+        self.events.write_text("".join(json.dumps(event) + "\n" for event in (
+            self.successful_results()[:1] if events is None else events
+        )))
+        self.env["FIXTURE_FORWARD"] = "1" if forwarded else "0"
+        self.env["FIXTURE_OUTPUT"] = "1" if output else "0"
+        runner = self.runtime / "scripts/runners/run-claude.sh"
+        runner.write_text("""#!/usr/bin/env bash
+set -euo pipefail
+{
+  IFS= read -r _
+  cat "$FIXTURE_EVENTS" >> "${6}.events.jsonl"
+  if [[ "$FIXTURE_OUTPUT" == 1 ]]; then printf 'earlier result\n' > "$6"; fi
+  if [[ "$FIXTURE_FORWARD" == 1 ]]; then IFS= read -r _; fi
+  exit 142
+} < "$OMNILANE_INBOX"
+""")
+        process = subprocess.Popen(
+            ["bash", str(self.runtime / "scripts/lib/job-worker.sh"), "claude", "work",
+             str(self.root), "claude-opus-5", "high", str(self.prompt), str(self.output)],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        try:
+            if forwarded:
+                deadline = time.monotonic() + 5
+                while not (self.job / "inbox.ready").exists():
+                    self.assertIsNone(process.poll(), "worker exited before readiness")
+                    self.assertLess(time.monotonic(), deadline, "mailbox never ready")
+                    time.sleep(0.02)
+                with (self.job / "inbox.fifo").open("w") as inbox:
+                    inbox.write('{"type":"user","message":{"role":"user","content":[]}}\n')
+            stdout, stderr = process.communicate(timeout=10)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate(timeout=5)
+        self.assertEqual(stdout, "")
+        self.assertFalse((self.job / "inbox.ready").exists())
+        return process.returncode, stderr
+
+    def test_call_timeout_after_completed_turn_succeeds(self):
+        rc, stderr = self.timeout_worker()
+        self.assertEqual(rc, 0, stderr)
+        self.assertEqual(self.output.read_text(),
+                         "earlier result\n\nclosed by per-call timeout after 3s; last turn completed\n")
+
+    def test_call_timeout_with_unanswered_forwarded_turn_stays_142(self):
+        rc, stderr = self.timeout_worker(forwarded=True)
+        self.assertEqual(rc, 142, stderr)
+        self.assertEqual(self.output.read_text(), "earlier result\n")
+
+    def test_call_timeout_does_not_count_normalized_result(self):
+        event = dict(self.successful_results()[0], normalized_by="fixture")
+        rc, stderr = self.timeout_worker(events=[event])
+        self.assertEqual(rc, 142, stderr)
+
+    def test_call_timeout_recovers_empty_claude_output(self):
+        rc, stderr = self.timeout_worker(output=False)
+        self.assertEqual(rc, 0, stderr)
+        self.assertTrue(self.output.read_text().startswith("earlier result\n"))
+
+    def test_call_timeout_requires_usable_output(self):
+        event = {"type": "result", "is_error": False}
+        rc, stderr = self.timeout_worker(events=[event], output=False)
+        self.assertEqual(rc, 142, stderr)
+        self.assertFalse(self.output.exists())
+
     @staticmethod
     def successful_results():
         return [

@@ -119,7 +119,7 @@ report_completions() {
       for my $record (@claimed) {
         my $exit = defined($record->{exit}) && $record->{exit} =~ /\A-?[0-9]+\z/
           ? 0 + $record->{exit} : 1;
-        my $failed = $exit == 0 ? "" : " FAILED";
+        my $failed = $exit == 0 ? "" : $exit == 142 ? " CALL_TIMEOUT" : " FAILED";
         my $job = defined($record->{job_id}) && !ref($record->{job_id})
           ? $record->{job_id} : "unknown";
         my $lane = defined($record->{lane}) && !ref($record->{lane})

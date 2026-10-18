@@ -571,7 +571,8 @@ Job `list` and `status` use the same observed state. `dead` means the worker PID
 Background jobs require Perl supervision so cancellation can terminate the
 supervised process group. Supervision alone adds no whole-job deadline; when
 no job timeout applies, metadata remains `job_timeout: null`. The supervised
-per-call watchdog uses Perl's alarm and can return 142; whole-job deadline
+per-call watchdog uses the separate `scripts/lib/call-timeout.pl` supervisor and
+returns 142 on expiry; whole-job deadline
 expiry returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
 
 `--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
@@ -635,7 +636,9 @@ macOS Grok work: the operator may enable single-shot work **without isolation** 
   forever. The cap applies to **each CLI invocation**, highest priority first:
   `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
   upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
-  global `OMNILANE_TIMEOUT`, default 600s. It is a per-call hang-guard, not a
+  global `OMNILANE_TIMEOUT`, default 600s. For a live mailbox, it bounds the whole
+  resident CLI session; completing a turn does not stop or reset that clock.
+  It is a per-call hang-guard, not a
   whole-job budget: a retrying vendor (grok) or the `vote` panel (voters ×
   rounds) makes several calls, so total wall-clock can be a multiple of this
   value.
@@ -658,6 +661,16 @@ macOS Grok work: the operator may enable single-shot work **without isolation** 
   blow a worker's context.
 
 ## 📬 Live mailbox
+
+The per-call `--timeout` bounds the whole resident session. Completing a turn
+does not stop or reset that clock. For Claude and Gemini, an answered session
+that reaches this timeout is classified as success only when every sent turn
+has a vendor SUCCESS result and usable output is available. Its output ends
+with `closed by per-call timeout after Ns; last turn completed`. A trailing
+Gemini cancellation error does not undo completed turns. An unanswered turn
+keeps exit 142, reported as `CALL_TIMEOUT`; `jobs.sh stats` includes it in both
+`failed` and the `call_timed_out` sub-count. Read the answer and use
+`jobs close ID` promptly, or use `--single-shot` for one-shot background work.
 
 A live mailbox is a resident background dispatch, not a one-shot dispatch. Claude and Gemini retain their existing automatic live behavior with `--background`. Codex and Grok default to single-shot; opt in with `--background --live` (Grok additionally requires `--mode sysops --workdir DIR`). The foreman can send another instruction while it is running and is responsible for closing it with `jobs.sh close ID`. The idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
 

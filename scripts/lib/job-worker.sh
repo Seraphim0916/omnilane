@@ -323,6 +323,7 @@ inbox_open=1
 exec 5< "$EVENTS_FILE"
 events_reader_open=1
 initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
+sent_turns=1
 if ! printf '%s\n' "$initial_payload" >&3; then close_requested=1; fi
 (umask 077; : > "$READY_FILE")
 
@@ -417,7 +418,11 @@ PY
   else
     incoming=""
     if IFS= read -r -t 1 incoming <&4; then
-      if ! printf '%s\n' "$incoming" >&3; then close_requested=1; fi
+      if ! printf '%s\n' "$incoming" >&3; then
+        close_requested=1
+      elif [[ "$VENDOR" == "gemini" || "$VENDOR" == "claude" ]]; then
+        sent_turns=$((sent_turns + 1))
+      fi
       last_activity=$SECONDS
     elif [[ "$close_requested" -ne 0 && -n "$incoming" ]]; then
       close_partial="$incoming"
@@ -508,6 +513,19 @@ elif [[ "$close_requested" -eq 1 ]]; then
   fi
 else
   rc="$runner_rc"
+  if [[ "$runner_rc" -eq 142 && ( "$VENDOR" == "gemini" || "$VENDOR" == "claude" ) ]]; then
+    success_count=0
+    while IFS= read -r event || [[ -n "$event" ]]; do
+      if live_event_is_vendor_result "$event" && live_event_is_success "$VENDOR" "$event"; then
+        success_count=$((success_count + 1))
+      fi
+    done < "$EVENTS_FILE"
+    if [[ "$success_count" -ge "$sent_turns" ]] \
+        && recover_close_result_output && [[ -s "$OUTPUT_FILE" ]]; then
+      rc=0
+      close_reason="closed by per-call timeout after ${OMNILANE_TIMEOUT}s; last turn completed"
+    fi
+  fi
 fi
 
 # Append the idle notice only after result recovery and success checks. The

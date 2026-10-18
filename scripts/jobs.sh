@@ -916,6 +916,7 @@ case "${1:-}" in
     sampled=0
     succeeded=0
     failed=0
+    call_timed_out=0
     running=0
     pending=0
     dead=0
@@ -957,6 +958,7 @@ case "${1:-}" in
               succeeded=$((succeeded + 1))
             else
               failed=$((failed + 1))
+              if [[ "$JOB_STATE_EXIT" -eq 142 ]]; then call_timed_out=$((call_timed_out + 1)); fi
             fi
             ;;
           running) running=$((running + 1)) ;;
@@ -984,12 +986,12 @@ case "${1:-}" in
         lanes_json="$(json_stat_counts "${lanes[@]}")"
         vendors_json="$(json_stat_counts "${vendors[@]}")"
       fi
-      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s,"pending":%s,"dead":%s,"expired":%s}\n' \
+      printf '{"schema_version":1,"command":"stats","ok":true,"sampled":%s,"succeeded":%s,"failed":%s,"running":%s,"invalid_exit":%s,"success_rate":%s,"invalid_metadata":%s,"lanes":%s,"vendors":%s,"pending":%s,"dead":%s,"expired":%s,"call_timed_out":%s}\n' \
         "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" \
-        "$invalid_metadata" "$lanes_json" "$vendors_json" "$pending" "$dead" "$expired"
+        "$invalid_metadata" "$lanes_json" "$vendors_json" "$pending" "$dead" "$expired" "$call_timed_out"
     else
-      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%% pending=%s dead=%s expired=%s\n' \
-        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" "$pending" "$dead" "$expired"
+      printf 'jobs: sampled=%s succeeded=%s failed=%s running=%s invalid_exit=%s success_rate=%s%% pending=%s dead=%s expired=%s call_timed_out=%s\n' \
+        "$sampled" "$succeeded" "$failed" "$running" "$invalid_exit" "$success_rate" "$pending" "$dead" "$expired" "$call_timed_out"
       printf 'invalid_metadata=%s\n' "$invalid_metadata"
       if [[ "$valid_metadata" -gt 0 ]]; then
         print_stat_counts lane "${lanes[@]}"

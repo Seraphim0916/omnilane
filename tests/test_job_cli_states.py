@@ -218,5 +218,17 @@ _omnilane
             self.assertEqual(set(status.split(":(")[1].rstrip(")").split()), STATES)
 
 
+    def test_stats_counts_call_timeout_as_failed_subset(self):
+        for code in (0, 1, 142, 142):
+            self.job(exit_code=code)
+        stats = json.loads(self.cli("--json", "stats").stdout)
+        self.assertEqual(stats["call_timed_out"], 2)
+        self.assertEqual(stats["failed"], 3)
+        self.assertEqual(stats["succeeded"], 1)
+        text = self.cli("stats").stdout
+        self.assertIn("call_timed_out=2", text)
+        self.assertIn("failed=3", text)
+
+
 if __name__ == "__main__":
     unittest.main()

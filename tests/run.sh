@@ -4323,6 +4323,10 @@ test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-sh
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
 test_live_mailbox_case claude-close-recovery "Claude close recovers completed result output"
 test_live_mailbox_case gemini-schema "Gemini live mailbox uses agy schema"
+for scenario in gemini-success gemini-incomplete gemini-two gemini-empty gemini-idle claude-success claude-error; do
+  test_live_mailbox_case "call-timeout-$scenario" "live per-call timeout $scenario"
+done
+test_live_mailbox_case call-timeout-warnings "live per-call timeout dispatch warnings"
 test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
 test_live_mailbox_case codex-close-deadline "Codex worker close deadline preserves queued input and precedes jobs timeout"
 close_floor_out="$(bash "$ROOT/tests/test_jobs_close_deadline_floor.sh" --omnilane-offline-child 2>&1)" &&

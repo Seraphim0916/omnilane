@@ -88,6 +88,109 @@ EOF
   [[ ! -e "$home/jobs" ]] || fail "fail-fast created job state"
 }
 
+case_live_call_timeout() {
+  local scenario="$1" vendor=gemini timeout=3 idle=0 expected=0 turns=1
+  case "$scenario" in
+    gemini-incomplete) expected=142; turns=2 ;;
+    gemini-two) turns=2 ;;
+    gemini-empty) expected=142 ;;
+    gemini-idle) timeout=10; idle=1 ;;
+    claude-success) vendor=claude ;;
+    claude-error) vendor=claude; expected=142 ;;
+  esac
+  local home="$TEST_ROOT/$scenario" bin="$TEST_ROOT/$scenario/bin"
+  local provider_home="$TEST_ROOT/$scenario/provider-home" job job_dir record report notice
+  mkdir -p "$bin" "$provider_home/.gemini"
+  cat > "$bin/provider" <<'PY'
+#!/usr/bin/env python3
+import json
+import os
+import signal
+import sys
+
+scenario = os.environ["FAKE_TIMEOUT_SCENARIO"]
+vendor = os.environ["FAKE_TIMEOUT_VENDOR"]
+
+def emit(event):
+    print(json.dumps(event), flush=True)
+
+def stop(*_):
+    if vendor == "gemini":
+        emit({"event": "result", "result": {
+            "status": "ERROR", "error": "stream input cancelled: context canceled"}})
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, stop)
+for turn, line in enumerate(sys.stdin, 1):
+    with open(os.environ["FAKE_TIMEOUT_INPUT"], "a") as captured:
+        captured.write(line)
+    if scenario == "gemini-empty" or (scenario == "gemini-incomplete" and turn == 2):
+        emit({"event": "step_update", "step": {"text": "still working"}})
+    elif scenario == "claude-error":
+        emit({"type": "result", "is_error": True, "result": "failed turn"})
+    elif vendor == "gemini":
+        emit({"event": "result", "result": {
+            "status": "SUCCESS", "response": f"turn-{turn}"}})
+    else:
+        emit({"type": "result", "is_error": False, "result": f"turn-{turn}"})
+PY
+  chmod +x "$bin/provider"
+  printf 'triage: %s %s -\n' "$vendor" "$vendor-default" > "$home/routing.local.yaml"
+  job="$(HOME="$provider_home" OMNILANE_HOME="$home" AGY_BIN="$bin/provider" \
+    CLAUDE_BIN="$bin/provider" OMNILANE_JOB_SUPERVISED=1 \
+    FAKE_TIMEOUT_SCENARIO="$scenario" FAKE_TIMEOUT_VENDOR="$vendor" \
+    FAKE_TIMEOUT_INPUT="$home/input" "$ROOT/scripts/dispatch.sh" \
+    --background --live --timeout "$timeout" --idle-timeout "$idle" \
+    --mode sysops --workdir "$ROOT" --vendor "$vendor" triage first)"
+  job_dir="$home/jobs/$job"
+  if [[ "$turns" -eq 2 ]]; then
+    wait_for_file "$job_dir/inbox.ready" || fail "$scenario: mailbox never ready"
+    wait_for_lines "$home/input" 1 || fail "$scenario: first turn never sent"
+    OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" second >/dev/null
+    wait_for_lines "$home/input" 2 || fail "$scenario: second turn never sent"
+  fi
+  wait_for_file "$job_dir/exit" || fail "$scenario: no exit recorded"
+  [[ "$(cat "$job_dir/exit")" == "$expected" ]] || fail "$scenario: expected exit $expected, got $(cat "$job_dir/exit")"
+  record="$home/inbox/$job.json"
+  wait_for_file "$record" || fail "$scenario: no completion record"
+  report="$(printf '{}' | OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$ROOT" bash "$ROOT/hooks/report-completions.sh")"
+  [[ "$report" == *"exit=$expected"* ]] || fail "$scenario: missing completion report: $report"
+  if [[ "$expected" -eq 0 ]]; then
+    notice="closed by per-call timeout after ${timeout}s; last turn completed"
+    [[ "$idle" -eq 0 ]] || notice="closed by idle cap after ${idle}s"
+    [[ "$(head -1 "$job_dir/out.txt")" == "turn-$turns" ]] || fail "$scenario: last completed turn not preserved"
+    [[ "$(tail -1 "$job_dir/out.txt")" == "$notice" ]] || fail "$scenario: missing final notice"
+    grep -Fq "$notice" "$job_dir/mode-notice.txt" || fail "$scenario: mode notice missing"
+    [[ "$report" != *FAILED* && "$report" != *CALL_TIMEOUT* && "$report" == *"$notice"* ]] || fail "$scenario: success misreported: $report"
+  else
+    [[ "$report" == *"completion: CALL_TIMEOUT "* && "$report" != *FAILED* ]] || fail "$scenario: expected CALL_TIMEOUT completion: $report"
+    if [[ "$scenario" == "gemini-empty" || "$scenario" == "claude-error" ]]; then
+      [[ ! -s "$job_dir/out.txt" ]] || fail "$scenario: fabricated success output"
+    fi
+  fi
+}
+
+case_call_timeout_warnings() {
+  local home="$TEST_ROOT/timeout-warnings" out idle
+  mkdir -p "$home"
+  printf '#!/bin/sh\nexit 0\n' > "$home/agy"
+  chmod +x "$home/agy"
+  printf 'triage: gemini gemini-default -\n' > "$home/routing.local.yaml"
+  for idle in ${1:-5 0}; do
+    out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background \
+      --vendor gemini --timeout 5 --idle-timeout "$idle" triage first 2>&1 >/dev/null)" || fail "warning dispatch failed: $out"
+    [[ "$out" == *"jobs close ID"* && "$out" == *"--single-shot"* ]] || fail "idle=$idle: missing timeout guidance: $out"
+    if [[ "$idle" -gt 0 ]]; then
+      [[ "$out" == *"idle cap cannot close the session before the per-call timeout"* ]] || fail "idle=$idle: missing relative timeout warning: $out"
+    else
+      [[ "$out" == *"only the per-call timeout or jobs close ends it"* ]] || fail "idle=0: missing unlimited idle warning: $out"
+    fi
+  done
+  out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background \
+    --vendor gemini --timeout 10 --idle-timeout 5 triage first 2>&1 >/dev/null)" || fail "warning dispatch failed: $out"
+  [[ "$out" == *"omnilane: --timeout is 10s, but the independent live mailbox idle cap remains 5s; adjust it with --idle-timeout SECONDS"* ]] || fail "existing timeout warning changed: $out"
+}
+
 make_codex() {
   local path="$1"
   cat > "$path" <<'PY'
@@ -1613,6 +1716,12 @@ PY
 
 case "$CASE" in
  "")
+    for scenario in gemini-success gemini-incomplete gemini-two gemini-empty gemini-idle claude-success claude-error; do
+      bash "$0" --omnilane-offline-child "call-timeout-$scenario"
+      printf 'ok - live per-call timeout %s\n' "$scenario"
+    done
+    bash "$0" --omnilane-offline-child call-timeout-warnings
+    printf 'ok - live per-call timeout dispatch warnings\n'
     bash "$0" --omnilane-offline-child codex-killed-runner
     printf 'ok - killed Codex live runner reaps app-server process group\n'
     bash "$0" --omnilane-offline-child codex-app-server-eof-cleanup
@@ -1661,6 +1770,15 @@ case "$CASE" in
     printf 'ok - Grok initialize probe keeps stdin open\n'
     ;;
   live-fail-fast) case_live_fail_fast ;;
+  call-timeout-gemini-success) case_live_call_timeout gemini-success ;;
+  call-timeout-gemini-incomplete) case_live_call_timeout gemini-incomplete ;;
+  call-timeout-gemini-two) case_live_call_timeout gemini-two ;;
+  call-timeout-gemini-empty) case_live_call_timeout gemini-empty ;;
+  call-timeout-gemini-idle) case_live_call_timeout gemini-idle ;;
+  call-timeout-claude-success) case_live_call_timeout claude-success ;;
+  call-timeout-claude-error) case_live_call_timeout claude-error ;;
+  call-timeout-warnings) case_call_timeout_warnings ;;
+  call-timeout-warnings-zero) case_call_timeout_warnings 0 ;;
   single-shot-claude) case_single_shot_claude ;;
   idle-cap) case_idle_cap ;;
   claude-close-recovery) case_claude_close_recovers_result_output ;;
