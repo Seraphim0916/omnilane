@@ -89,10 +89,19 @@ EOF
 }
 
 case_live_call_timeout() {
+  # Keep watchdog/dispatch/completion integration single-turn. The two-turn
+  # cases use FIFO/pipe rendezvous and the real runners at the worker boundary;
+  # process startup and jobs send must not race a fixed three-second alarm.
+  case "$1" in
+    gemini-two)
+      python3 "$ROOT/tests/test_job_worker_close.py" JobWorkerCloseTests.test_review_gemini_two_completed_turns_use_last_output
+      return ;;
+    gemini-incomplete)
+      python3 "$ROOT/tests/test_job_worker_close.py" JobWorkerCloseTests.test_review_gemini_second_turn_incomplete_stays_142
+      return ;;
+  esac
   local scenario="$1" vendor=gemini timeout=3 idle=0 expected=0 turns=1
   case "$scenario" in
-    gemini-incomplete) expected=142; turns=2 ;;
-    gemini-two) turns=2 ;;
     gemini-empty) expected=142 ;;
     gemini-idle) timeout=10; idle=1 ;;
     claude-success) vendor=claude ;;
@@ -124,7 +133,7 @@ signal.signal(signal.SIGTERM, stop)
 for turn, line in enumerate(sys.stdin, 1):
     with open(os.environ["FAKE_TIMEOUT_INPUT"], "a") as captured:
         captured.write(line)
-    if scenario == "gemini-empty" or (scenario == "gemini-incomplete" and turn == 2):
+    if scenario == "gemini-empty":
         emit({"event": "step_update", "step": {"text": "still working"}})
     elif scenario == "claude-error":
         emit({"type": "result", "is_error": True, "result": "failed turn"})
@@ -143,12 +152,6 @@ PY
     --background --live --timeout "$timeout" --idle-timeout "$idle" \
     --mode sysops --workdir "$ROOT" --vendor "$vendor" triage first)"
   job_dir="$home/jobs/$job"
-  if [[ "$turns" -eq 2 ]]; then
-    wait_for_file "$job_dir/inbox.ready" || fail "$scenario: mailbox never ready"
-    wait_for_lines "$home/input" 1 || fail "$scenario: first turn never sent"
-    OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" second >/dev/null
-    wait_for_lines "$home/input" 2 || fail "$scenario: second turn never sent"
-  fi
   wait_for_file "$job_dir/exit" || fail "$scenario: no exit recorded"
   [[ "$(cat "$job_dir/exit")" == "$expected" ]] || fail "$scenario: expected exit $expected, got $(cat "$job_dir/exit")"
   record="$home/inbox/$job.json"
@@ -172,11 +175,13 @@ PY
 
 case_call_timeout_warnings() {
   local home="$TEST_ROOT/timeout-warnings" out idle
+  local idles=("$@")
+  [[ ${#idles[@]} -gt 0 ]] || idles=(5 0)
   mkdir -p "$home"
   printf '#!/bin/sh\nexit 0\n' > "$home/agy"
   chmod +x "$home/agy"
   printf 'triage: gemini gemini-default -\n' > "$home/routing.local.yaml"
-  for idle in ${1:-5 0}; do
+  for idle in "${idles[@]}"; do
     out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background \
       --vendor gemini --timeout 5 --idle-timeout "$idle" triage first 2>&1 >/dev/null)" || fail "warning dispatch failed: $out"
     [[ "$out" == *"jobs close ID"* && "$out" == *"--single-shot"* ]] || fail "idle=$idle: missing timeout guidance: $out"
@@ -189,6 +194,14 @@ case_call_timeout_warnings() {
   out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background \
     --vendor gemini --timeout 10 --idle-timeout 5 triage first 2>&1 >/dev/null)" || fail "warning dispatch failed: $out"
   [[ "$out" == *"omnilane: --timeout is 10s, but the independent live mailbox idle cap remains 5s; adjust it with --idle-timeout SECONDS"* ]] || fail "existing timeout warning changed: $out"
+  for idle in 5 0; do
+    out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background --live \
+      --vendor gemini --timeout 5 --idle-timeout "$idle" triage first 2>&1 >/dev/null)" || fail "explicit live dispatch failed: $out"
+    [[ "$out" != *"the foreman should jobs close ID"* ]] || fail "explicit --live idle=$idle: unexpected auto-live guidance: $out"
+  done
+  out="$(OMNILANE_HOME="$home" AGY_BIN="$home/agy" "$ROOT/scripts/dispatch.sh" --dry-run --background --live \
+    --vendor gemini --timeout 10 --idle-timeout 5 triage first 2>&1 >/dev/null)" || fail "explicit live dispatch failed: $out"
+  [[ "$out" == *"omnilane: --timeout is 10s, but the independent live mailbox idle cap remains 5s; adjust it with --idle-timeout SECONDS"* ]] || fail "explicit --live lost original warning: $out"
 }
 
 make_codex() {
@@ -1778,7 +1791,6 @@ case "$CASE" in
   call-timeout-claude-success) case_live_call_timeout claude-success ;;
   call-timeout-claude-error) case_live_call_timeout claude-error ;;
   call-timeout-warnings) case_call_timeout_warnings ;;
-  call-timeout-warnings-zero) case_call_timeout_warnings 0 ;;
   single-shot-claude) case_single_shot_claude ;;
   idle-cap) case_idle_cap ;;
   claude-close-recovery) case_claude_close_recovers_result_output ;;

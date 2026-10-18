@@ -129,6 +129,10 @@ close_reason=""
 close_drain_failed=0
 close_partial=""
 natural_runner_exit=0
+forward_failed=0
+forward_failed_input=""
+pending_input=0
+runner_forced=0
 CLOSE_DRAIN_TIMEOUT=0.1
 CLOSE_RUNNER_GRACE=7.5
 CLOSE_TERM_GRACE=0.1
@@ -219,6 +223,64 @@ recover_close_result_output() {
   command -v python3 >/dev/null 2>&1 || return 1
   python3 "$OMNILANE_REPO/scripts/lib/normalize-claude-stream.py" \
     "$EVENTS_FILE" "$OUTPUT_FILE"
+}
+
+# Bash 3.2 can retry its printf builtin on stdout after a broken redirected
+# write. Use an OS write so a failed forward cannot leak the payload there.
+write_runner_line() {
+  RUNNER_LINE="$1" python3 -c '
+import os, sys
+pending = (os.environ["RUNNER_LINE"] + "\n").encode()
+try:
+    while pending:
+        pending = pending[os.write(3, pending):]
+except OSError as error:
+    print("omnilane: runner input write error: " + str(error), file=sys.stderr)
+    sys.exit(1)
+'
+}
+
+# Read only the bytes already queued after readiness was withdrawn. Never wait
+# for another writer or forward into a dead reader. Bash 3.2 read -t cannot do
+# a bounded fractional drain, and read -t 0 does not consume queued bytes.
+retain_live_pending_input() {
+  CLOSE_PARTIAL="$close_partial" FORWARD_FAILED_INPUT="$forward_failed_input" \
+    python3 - "$JOB_DIR/close-pending.jsonl" <<'PYPENDING'
+import array
+import fcntl
+import os
+import select
+import sys
+import termios
+
+pending = os.environ["FORWARD_FAILED_INPUT"].encode() + os.environ["CLOSE_PARTIAL"].encode()
+available = array.array("i", [0])
+fcntl.ioctl(4, termios.FIONREAD, available, True)
+remaining = available[0]
+# macOS FIFO FIONREAD may return zero even when select reports readable data.
+# kqueue supplies the actual queued-byte count without consuming or waiting.
+if hasattr(select, "kqueue"):
+    queue = select.kqueue()
+    try:
+        events = queue.control([select.kevent(4, filter=select.KQ_FILTER_READ,
+                                flags=select.KQ_EV_ADD)], 1, 0)
+        if events:
+            remaining = max(remaining, events[0].data)
+    finally:
+        queue.close()
+os.set_blocking(4, False)
+while remaining:
+    chunk = os.read(4, min(remaining, 65536))
+    if not chunk:
+        break
+    pending += chunk
+    remaining -= len(chunk)
+if pending:
+    fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as saved:
+        saved.write(pending)
+    sys.exit(3)
+PYPENDING
 }
 
 if ! prepare_live_mailbox; then
@@ -324,7 +386,8 @@ exec 5< "$EVENTS_FILE"
 events_reader_open=1
 initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
 sent_turns=1
-if ! printf '%s\n' "$initial_payload" >&3; then close_requested=1; fi
+last_turn_events_bytes=0
+if ! write_runner_line "$initial_payload"; then close_requested=1; fi
 (umask 077; : > "$READY_FILE")
 
 last_activity=$SECONDS
@@ -418,14 +481,23 @@ PY
   else
     incoming=""
     if IFS= read -r -t 1 incoming <&4; then
-      if ! printf '%s\n' "$incoming" >&3; then
-        close_requested=1
-      elif [[ "$VENDOR" == "gemini" || "$VENDOR" == "claude" ]]; then
+      incoming="${close_partial}${incoming}"
+      close_partial=""
+      if [[ "$VENDOR" == "gemini" || "$VENDOR" == "claude" ]]; then
+        # Earlier duplicate results cannot stand in for this accepted turn.
+        # Snapshot BEFORE forwarding so an immediate new result remains visible.
+        last_turn_events_bytes="$(LC_ALL=C wc -c < "$EVENTS_FILE")"
         sent_turns=$((sent_turns + 1))
       fi
+      if ! write_runner_line "$incoming"; then
+        forward_failed=1
+        forward_failed_input="$incoming"$'\n'
+        close_requested=1
+      fi
+      incoming=""
       last_activity=$SECONDS
-    elif [[ "$close_requested" -ne 0 && -n "$incoming" ]]; then
-      close_partial="$incoming"
+    elif [[ -n "$incoming" ]]; then
+      close_partial="${close_partial}${incoming}"
     fi
   fi
   while IFS= read -r event <&5; do
@@ -444,6 +516,25 @@ PY
 done
 
 if [[ "$forward_spool_open" -eq 1 ]]; then exec 6<&-; exec 7>&-; forward_spool_open=0; fi
+
+# Stop new send callers before inspecting accepted but unread input. Preserve
+# failed writes and interrupted partial reads in the same order as FIFO bytes.
+rm "$READY_FILE" 2>/dev/null || true
+if [[ "$VENDOR" == "gemini" || "$VENDOR" == "claude" ]]; then
+  if retain_live_pending_input; then
+    :
+  else
+    pending_status=$?
+    pending_input=1
+    if [[ "$pending_status" -eq 3 ]]; then
+      emit_mode_notice "omnilane: unforwarded input retained in $JOB_DIR/close-pending.jsonl" || true
+    else
+      close_drain_failed=1
+      emit_mode_notice "omnilane: could not inspect or retain unforwarded input; inspect stderr" || true
+    fi
+  fi
+fi
+
 if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
 if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
 if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
@@ -455,7 +546,7 @@ if [[ "$close_requested" -eq 1 ]]; then
   # 9.85s precedes jobs close's 11s deadline (timed on a sub-second clock).
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # A monotonic timer avoids accumulating 75 shell/sleep launch overheads.
-  if ! perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
+  if perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
     my ($pid, $grace, $term, $kill) = @ARGV;
     sub wait_until {
       my ($pid, $duration) = @_;
@@ -469,11 +560,15 @@ if [[ "$close_requested" -eq 1 ]]; then
     }
     exit 0 if wait_until($pid, $grace);
     kill "TERM", $pid;
-    exit 0 if wait_until($pid, $term);
+    exit 2 if wait_until($pid, $term);
     kill "KILL", $pid;
-    exit(wait_until($pid, $kill) ? 0 : 1);
+    exit(wait_until($pid, $kill) ? 2 : 1);
   ' "$runner_pid" "$CLOSE_RUNNER_GRACE" "$CLOSE_TERM_GRACE" "$CLOSE_KILL_GRACE"; then
-    close_drain_failed=1
+    :
+  else
+    close_wait_rc=$?
+    runner_forced=1
+    if [[ "$close_wait_rc" -ne 2 ]]; then close_drain_failed=1; fi
   fi
 fi
 if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then
@@ -486,7 +581,16 @@ else
 fi
 set -e
 
-if [[ "$natural_runner_exit" -eq 1 ]]; then
+if [[ "$forward_failed" -eq 1 ]]; then
+  rc="$runner_rc"
+  if [[ "$runner_forced" -eq 1 || "$rc" -eq 0 ]]; then rc=1; fi
+  close_reason=""
+  if [[ -f "$JOB_DIR/close-pending.jsonl" ]]; then
+    emit_mode_notice "omnilane: follow-up could not be forwarded; unforwarded input retained in $JOB_DIR/close-pending.jsonl" || true
+  else
+    emit_mode_notice "omnilane: follow-up could not be forwarded or retained; inspect stderr" || true
+  fi
+elif [[ "$natural_runner_exit" -eq 1 ]]; then
   # Draining after a natural/failed reader exit must not turn its exit status
   # into success because an earlier turn happened to emit a result event.
   rc="$runner_rc"
@@ -515,15 +619,48 @@ else
   rc="$runner_rc"
   if [[ "$runner_rc" -eq 142 && ( "$VENDOR" == "gemini" || "$VENDOR" == "claude" ) ]]; then
     success_count=0
+    terminal_success=0
+    last_success_event=""
     while IFS= read -r event || [[ -n "$event" ]]; do
-      if live_event_is_vendor_result "$event" && live_event_is_success "$VENDOR" "$event"; then
-        success_count=$((success_count + 1))
+      if live_event_is_vendor_result "$event"; then
+        if live_event_is_success "$VENDOR" "$event"; then
+          success_count=$((success_count + 1))
+          terminal_success=1
+          last_success_event="$event"
+        fi
+      elif live_event_is_valid "$event"; then
+        # Only non-success vendor result events (e.g. cancellation) may follow
+        # the last SUCCESS. Assistant/tool/step activity means work continued.
+        terminal_success=0
       fi
     done < "$EVENTS_FILE"
-    if [[ "$success_count" -ge "$sent_turns" ]] \
+    if [[ "$pending_input" -eq 0 && "$terminal_success" -eq 1 && "$success_count" -ge "$sent_turns" ]] \
+        && printf '%s\n' "$last_success_event" | python3 -c '
+import json, sys
+event = json.load(sys.stdin)
+vendor = sys.argv[1]
+text = event.get("result") if vendor == "claude" else event.get("result", {}).get("response")
+new_success = False
+with open(sys.argv[2], "rb") as events:
+    events.seek(int(sys.argv[3]))
+    for raw in events:
+        try:
+            result = json.loads(raw)
+        except (ValueError, UnicodeError):
+            continue
+        if not isinstance(result, dict) or "normalized_by" in result:
+            continue
+        if vendor == "claude":
+            success = result.get("type") == "result" and result.get("is_error") is not True
+        else:
+            value = result.get("result")
+            success = result.get("event") == "result" and isinstance(value, dict) and value.get("status") == "SUCCESS"
+        new_success = new_success or success
+sys.exit(0 if isinstance(text, str) and new_success else 1)
+' "$VENDOR" "$EVENTS_FILE" "$last_turn_events_bytes" \
         && recover_close_result_output && [[ -s "$OUTPUT_FILE" ]]; then
       rc=0
-      close_reason="closed by per-call timeout after ${OMNILANE_TIMEOUT}s; last turn completed"
+      close_reason="closed by per-call timeout after ${OMNILANE_TIMEOUT:-unknown}s; last turn completed"
     fi
   fi
 fi

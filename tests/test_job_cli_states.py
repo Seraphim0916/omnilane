@@ -229,6 +229,19 @@ _omnilane
         self.assertIn("call_timed_out=2", text)
         self.assertIn("failed=3", text)
 
+    def test_review_stats_invalid_exit_never_reaches_arithmetic(self):
+        for code in ("08", "abc", "999", ""):
+            self.job(exit_code=code)
+        self.job(exit_code=142)
+        stats = json.loads(self.cli("--json", "stats").stdout)
+        self.assertEqual(stats["invalid_exit"], 4)
+        self.assertEqual(stats["call_timed_out"], 1)
+        self.assertEqual(stats["failed"], 1)
+        self.assertEqual(stats["sampled"], 5)
+        text = self.cli("stats").stdout
+        self.assertIn("invalid_exit=4", text)
+        self.assertIn("call_timed_out=1", text)
+
 
 if __name__ == "__main__":
     unittest.main()

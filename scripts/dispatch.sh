@@ -1156,9 +1156,9 @@ export OMNILANE_IDLE_TIMEOUT="$IDLE_TIMEOUT"
 # would be told about a limit that never applies to it.
 if [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDLE_TIMEOUT" ]]; then
   echo "omnilane: --timeout is ${TIMEOUT}s, but the independent live mailbox idle cap remains ${IDLE_TIMEOUT}s; adjust it with --idle-timeout SECONDS" >&2
-elif [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 ]]; then
+elif [[ "$SESSION_MODE" == "live" && "$SESSION_REQUEST" != "live" && "$IDLE_TIMEOUT" -gt 0 ]]; then
   echo "omnilane: --timeout ${TIMEOUT}s, idle cap ${IDLE_TIMEOUT}s: the idle cap cannot close the session before the per-call timeout; the foreman should jobs close ID after reading the answer or use --single-shot" >&2
-elif [[ "$SESSION_MODE" == "live" ]]; then
+elif [[ "$SESSION_MODE" == "live" && "$SESSION_REQUEST" != "live" ]]; then
   echo "omnilane: --idle-timeout 0 disables the idle cap; only the per-call timeout or jobs close ends it; the foreman should jobs close ID after reading the answer or use --single-shot" >&2
 fi
 
