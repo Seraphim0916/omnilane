@@ -3,6 +3,7 @@
 import hashlib
 import os
 from pathlib import Path
+import platform
 import subprocess
 import tempfile
 import time
@@ -11,6 +12,7 @@ import unittest
 from offline_env import isolated_environment
 
 ROOT = Path(__file__).resolve().parents[1]
+GEMINI_MAX_TASK_BYTES = 130000 if platform.system() == "Linux" else 180000
 FAKE_AGY = r'''#!/usr/bin/env python3
 import json, os, pathlib, sys
 args = sys.argv[1:]
@@ -79,13 +81,13 @@ class GeminiInputIntegrityTests(unittest.TestCase):
             self.assertTrue((job / "task.txt").read_bytes() == payload, "task.txt was modified")
 
     @staticmethod
-    def large_payload():
+    def large_payload(size=GEMINI_MAX_TASK_BYTES - 1000):
         numbered = "".join(f"{i:05d}: 中文完整任務\n" for i in range(1600)).encode("utf-8")
-        return numbered + b"x" * (179000 - len(numbered))
+        return numbered + b"x" * (size - len(numbered))
 
     def test_foreground_large_input(self):
         payload = self.large_payload()
-        self.assertEqual(len(payload), 179000)
+        self.assertEqual(len(payload), GEMINI_MAX_TASK_BYTES - 1000)
         self.assertGreater(payload.count(b"\n"), 1500)
         self.assert_intact(payload, self.dispatch(payload))
 
@@ -94,12 +96,13 @@ class GeminiInputIntegrityTests(unittest.TestCase):
         for _ in range(2):
             self.assert_intact(payload, self.dispatch(payload, "--thread", "input-integrity"))
 
-    def assert_rejected(self, *flags):
-        payload = self.large_payload() + b"x" * 1001
+    def assert_rejected(self, *flags, payload=None):
+        if payload is None:
+            payload = self.large_payload(GEMINI_MAX_TASK_BYTES + 1)
         result = self.dispatch(payload, *flags)
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn(b"180001", result.stderr)
-        self.assertIn(b"180000", result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(f"task is {len(payload)} bytes".encode(), result.stderr)
+        self.assertIn(f"limit is {GEMINI_MAX_TASK_BYTES} bytes".encode(), result.stderr)
         self.assertIn(b"split", result.stderr)
         self.assertFalse(Path(str(self.capture) + '.called').exists())
         jobs = list((self.home / "jobs").iterdir())
@@ -110,6 +113,18 @@ class GeminiInputIntegrityTests(unittest.TestCase):
 
     def test_foreground_over_limit(self):
         self.assert_rejected()
+
+    def test_linux_rejects_130001_bytes(self):
+        if platform.system() != "Linux":
+            self.skipTest("Linux-only single argv argument limit; requires Linux CI")
+        self.assert_rejected(payload=self.large_payload(130001))
+
+    def test_darwin_accepts_130001_bytes(self):
+        if platform.system() != "Darwin":
+            self.skipTest("Darwin-only comparison: no Linux MAX_ARG_STRLEN limit")
+        payload = self.large_payload(130001)
+        self.assertEqual(len(payload), 130001)
+        self.assert_intact(payload, self.dispatch(payload))
 
     def test_named_thread_over_limit(self):
         self.assert_rejected("--thread", "input-integrity")
@@ -140,7 +155,9 @@ class GeminiInputIntegrityTests(unittest.TestCase):
                 self.assertEqual(result.stderr, b'Error: empty prompt. Usage: agy --print "your prompt here"\n')
 
     def test_fake_agy_truncates_oversized_argument(self):
-        payload = self.large_payload() + b'x' * 14000
+        if platform.system() == "Linux":
+            self.skipTest("Linux MAX_ARG_STRLEN prevents exec before fake agy can truncate")
+        payload = self.large_payload(193000)
         result = subprocess.run([self.env['AGY_BIN'], '--print', payload.decode('utf-8')],
                                 env=self.env, capture_output=True, timeout=10)
         self.assertEqual(result.returncode, 0)

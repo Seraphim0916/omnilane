@@ -628,6 +628,11 @@ release_cwd_lock() {
 validate_gemini_task_size() {
   local file="$1" size
   local GEMINI_MAX_TASK_BYTES=180000
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    # agy receives the prompt as one argv argument: MAX_ARG_STRLEN is
+    # 131072 bytes including NUL; leave a safety margin below that limit.
+    GEMINI_MAX_TASK_BYTES=130000
+  fi
   size=$(wc -c < "$file") || return 2
   size=$((size))
   if [[ "$size" -gt "$GEMINI_MAX_TASK_BYTES" ]]; then
