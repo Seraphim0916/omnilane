@@ -1086,7 +1086,7 @@
       "aaSlugs": [
         "gemini-4-argon"
       ],
-      "mappingReason": "AA v4.3.2 measures Gemini 4 Argon (High); agy encodes high in its selector. Host proof still required; absent from the historical v4.2 aaModels capture."
+      "mappingReason": "AA v4.3.2 snapshot aa-v4.3.2-2026-10-14-v1 was approved by the operator on 2026-10-18 and measures Gemini 4 Argon (High); agy encodes high in its selector. Host proof still required; absent from the historical v4.2 aaModels capture."
     },
     {
       "vendor": "gemini",

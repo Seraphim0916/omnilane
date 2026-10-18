@@ -1,13 +1,13 @@
 # Model capabilities — AA routing snapshots
 
-The current proposal is **2026-10-14**, snapshot `aa-v4.3.2-2026-10-14-v1`.
-It is not operator-approved; the last approved snapshot is `aa-v4.3.2-2026-10-08-v1`.
+The current operator-approved snapshot is **2026-10-14**, snapshot `aa-v4.3.2-2026-10-14-v1`.
+The operator approved it on 2026-10-18; host transport proof is still required.
 Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Current proposal — 2026-10-14
+## Current approved snapshot — 2026-10-14
 
 The supplied AA extract adds Gemini 4 Argon (High) to policy coverage: measured
 index 52.5605655745982, stored raw score 52.56, rounded score 53, not estimated.
@@ -16,7 +16,7 @@ The policy now contains 121 scored configurations. Haiku 4.5 changes from
 Haiku 5.5 low has a sub-centesimal source change; its stored 29.45 / 29 is unchanged.
 
 The value tool selects only per-ceiling winners, so it does not supply a
-position for Argon. The 2026-10-14 access proposal adds its High row to all
+position for Argon. The operator-approved 2026-10-14 access snapshot adds its High row to all
 eleven lanes containing Gemini 3.8 Flash. The third-round correction preserves
 the original value and purpose defaults: `bulk-mechanical` and `fast-agentic`
 start with GPT-6.1 Sol medium for throughput value; `triage` starts with
@@ -49,7 +49,7 @@ or blocking other vendors. This work did not run a host re-sign or provider call
 Medium and Low are recorded in `unknown_configs` following Gemini 3.6's
 unscored-effort convention: score null, authority ineligible, no lane, no probe
 candidate, and no borrowed High score. There are 121 scored and 12 unknown rows;
-the configurator coverage inventory has 121 entries. Approval remains proposed.
+the configurator coverage inventory has 121 entries. The operator approved this snapshot on 2026-10-18.
 See [the third-round report](reports/REPORT-3.md) for positions and validation.
 
 ### Current lane measurements
@@ -529,7 +529,7 @@ the 2026-09-30 section still describe each lane. Full account:
   reach the GPT-6.1 row gets it and GPT-6 Sol low serves the callers below.
 - GPT-6 Sol and GPT-6 Luna were re-measured (seven rows move by one point). Grok 4.7
   low is scored and in no chain. Gemini 4 Argon was deferred on 2026-10-02. The
-  2026-10-14 proposal above includes its measured AA score; the value rule still
+  2026-10-14 operator-approved snapshot above includes its measured AA score; the value rule still
   picks it in no lane and the local CLI selector remains unconfirmed.
 
 Regenerate the per-lane tables with

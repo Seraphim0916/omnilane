@@ -34,7 +34,7 @@
 # max effort is in no chain: wherever it is ahead of the same model's xhigh row at all, it
 # costs far more for it. Every max row stays selectable with --effort max.
 # Your own job outcomes (~/.omnilane/jobs/) outrank these priors; edit lanes to match.
-# 2026-10-14 Argon access addition: preserve existing value rungs and the first
+# 2026-10-14 operator-approved Argon access snapshot (approved 2026-10-18): preserve existing value rungs and the first
 # choice in bulk-mechanical, triage, fast-agentic, live-search and coding-overflow;
 # put Argon in their Gemini family slot immediately before 3.8 Flash.
 # hardest-coding, hard-judgment and taste-final retain the measured placements;

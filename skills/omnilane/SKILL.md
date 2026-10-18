@@ -503,14 +503,14 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Current proposal `aa-v4.3.2-2026-10-14-v1`: 121 scored rows, 12 unknown;
+Current operator-approved snapshot `aa-v4.3.2-2026-10-14-v1` (2026-10-18): 121 scored rows, 12 unknown;
 Argon High is a known selector requiring host proof, while Medium/Low remain unscored.
 
 Previous Snapshot `aa-v4.3.2-2026-10-08-v1` is **approved by the operator on 2026-10-08**, not deployed: 120 scored rows.
 The merged AA capture restores Sonnet 5.5 low and adds Haiku 5.5 at max/xhigh/high/medium/low.
 The three operator-retired GPT-5.4 mini rows remain unknown and outside aliases/probes.
 Anthropic's `claude-haiku-5-5` ID and all five efforts (Claude Code v2.1.293+) were officially confirmed on 2026-10-08; host transport remains unprobed.
-Do not infer dispatchability from these AA scores; approval and host transport probes are still required.
+Do not infer dispatchability from these AA scores; host transport probes are still required.
 
 
 | Alias | Vendor | Model | Effort |

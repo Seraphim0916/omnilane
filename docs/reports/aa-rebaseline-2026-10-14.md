@@ -1,11 +1,11 @@
-# AA v4.3.2 Gemini 4 Argon 快照提案（2026-10-14）
+# AA v4.3.2 Gemini 4 Argon 核准快照（2026-10-14）
 
 來源：codex-s／MacStudio；工作樹 `feat/aa-gemini-4-argon`，基底 `bafcedb`。
 
-狀態：**proposed，尚未核准、重簽或部署**。
+狀態：**approved，Vincent 已於 2026-10-18 09:1x 核准快照與合併（原話「都做完」）；主機尚未重簽或部署**。
 
 快照：`aa-v4.3.2-2026-10-14-v1`。
-SHA-256：`53236f1dd277a0b9bca850a41b6e6e71c156a102ba40dc39c00ebdf74da1019d`。
+SHA-256：`483cd8c36694384032cee05904c0a7dc5e62d89873d18de73231740368a535ac`。
 
 使用主控提供的 `aa-v4.3.2-extract-2026-10-14.json`，未重新抓取。
 抽取檔 SHA-256：`41588b6710e724f0393b1745bdfc1b468590f93d126eaf6fd81b7022485e4817`。
