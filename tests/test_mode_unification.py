@@ -562,13 +562,17 @@ fi
         self.assertNotIn("--dangerously-skip-permissions", argv)
         self.assertEqual(settings["toolPermission"], "proceed-in-sandbox")
         self.assertIs(settings["enableTerminalSandbox"], True)
-        self.assertIs(settings["allowNonWorkspaceAccess"], False)
+        self.assertIs(settings["allowNonWorkspaceAccess"], True)
+        deny = settings["permissions"]["deny"]
         self.assertEqual(
-            settings["permissions"]["deny"],
+            deny[:5],
             ["write_file(*)", "command(*)", "execute_url(*)", "mcp(*)", "unsandboxed(*)"],
         )
+        for secret in (".ssh", ".openclaw/secrets", ".openclaw/openclaw.json", ".mcp-auth", "Library/Keychains"):
+            self.assertTrue(any(item.startswith("read_file(/") and item.endswith(f"/{secret})")
+                                for item in deny), secret)
         allow = settings["permissions"]["allow"]
-        self.assertTrue(any(item.startswith("read_file(") for item in allow))
+        self.assertIn("read_file(*)", allow)
         self.assertIn("read_url(*)", allow)
         self.assertFalse(any(item.startswith("write_file(") for item in allow))
         self.assertEqual(app_root.stat().st_mode & 0o777, 0o700)

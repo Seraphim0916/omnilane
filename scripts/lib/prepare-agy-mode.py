@@ -13,15 +13,29 @@ import tempfile
 POLICY_MARKER = ".omnilane-policy-root-v1.json"
 
 
+def advise_secret_roots() -> list[str]:
+    home = Path.home()
+    return [str(home / rel) for rel in (
+        ".ssh", ".gnupg", ".aws", ".mcp-auth", ".netrc", "Library/Keychains",
+        ".openclaw/secrets", ".openclaw/openclaw.json", ".codex/auth.json",
+        ".claude/projects", ".claude/.credentials.json", ".config/gh",
+        ".gemini/oauth_creds.json", ".gemini/google_accounts.json",
+    )]
+
+
 def policy(mode: str, workdir: str, app_root: str | None = None) -> dict[str, object]:
     read = f"read_file({workdir})"
     write = f"write_file({workdir})"
     if mode == "advise":
-        allow = [read, "read_url(*)"]
+        # Headless agy auto-denies reads outside the workspace, so a reviewer
+        # could not open the absolute paths named in its brief. Codex and
+        # Claude advise read the whole filesystem; match them, minus secrets.
+        allow = ["read_file(*)", "read_url(*)"]
         deny = ["write_file(*)", "command(*)", "execute_url(*)", "mcp(*)", "unsandboxed(*)"]
+        deny += [f"read_file({root})" for root in advise_secret_roots()]
         permission = "proceed-in-sandbox"
         terminal_sandbox = True
-        outside = False
+        outside = True
     elif mode == "work":
         allow = [read, write, "command(*)"]
         # Agy's command(*) denial matching also covers unsandboxed(*), so a
