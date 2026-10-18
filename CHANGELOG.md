@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-10-18
+
 ### Fixed
 - Publish whole-job timeout exit codes after completion-receipt finalization, distinguish result receipts from controller exit, and verify natural shutdown with bounded polling. Keep `which-bin` read-only by disabling Python bytecode writes and retaining that restriction in offline test environments.
 - Return false from first-use registration for invalid executable paths or origin policy files without recording trust.
@@ -1734,7 +1736,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/Seraphim0916/omnilane/compare/v0.51.1...v0.52.0

@@ -914,6 +914,14 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.55.0
+
+- When upgrading from 0.54.0, run `omnilane resign` once from a GUI terminal because the AA snapshot has changed.
+- Gemini 4 Argon (High) joins the score table and lanes, immediately before Gemini 3.8 Flash; Antigravity-only hosts use it first while existing defaults and other model ordering stay unchanged.
+- AA snapshot `aa-v4.3.2-2026-10-14-v1` was operator-approved on 2026-10-18; each host still needs its own transport proof.
+- Fix the race between background-job timeout receipts and process exit; keep `which-bin` read-only without writing Python bytecode caches.
+- Upgrade: `npm i -g omnilane@0.55.0`.
+
 ## What's new in v0.54.0
 
 - Future registry snapshot updates automatically reuse verified rows whose request parameters and executable identities are unchanged; only new or changed rows need `omnilane resign`. This release keeps the 0.53.0 snapshot.
