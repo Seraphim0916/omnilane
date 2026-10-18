@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- Report unmatched vendor/model/effort selectors as `unknown-model-name`, list the vendor's model aliases (including embedded effort suffixes), and suggest `omnilane list`; retain re-signing guidance for known models with unverified transport.
+- Preserve transport diagnostics for known models with omitted effort, including partial mappings; detect conflicting embedded effort before verification. Scope suggestions to `target_config`, label them as registered names rather than dispatch approvals, and localize omitted/invalid effort and empty-vendor messages. Keep the deliberate `code=unknown-model-name` / `failed_gate=target-model-name` contract; verified plain models missing effort retain `unknown-target-runtime`. Restore the Grok missing-effort assertion and add a mutation-checked test of its `runtime-effort-discarded` guard.
+
 ## [0.55.0] - 2026-10-18
 
 ### Fixed

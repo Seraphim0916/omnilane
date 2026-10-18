@@ -90,6 +90,191 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertEqual(result["code"], "same-score-allowed")
         self.assertEqual(result["target_score"], 53)
 
+    def test_unknown_model_lists_vendor_selectors_without_resign(self):
+        for stale in (False, True):
+            self.registry["_stale_transport_vendors"] = ["gemini"] if stale else []
+            for model in ("gemini-4-argon", "gemini-3.8-flash"):
+                with self.subTest(model=model, stale=stale):
+                    result = aa_policy.decide(
+                        self.registry, "fixture-sha", vendor="gemini", model=model,
+                        effort=None, caller=self.context("codex/gpt-6-astra"),
+                        caller_sha256="caller-sha")
+                    self.assertFalse(result["allowed"])
+                    self.assertIsNone(result["target_config_id"])
+                    self.assertEqual(result["code"], "unknown-model-name")
+                    self.assertEqual(result["failed_gate"], "target-model-name")
+                    self.assertEqual(result["next_command"], "omnilane list")
+                    for key in ("message", "message_zh_tw"):
+                        self.assertIn("gemini-4-argon-high", result[key])
+                        self.assertIn("gemini-3.8-flash-high", result[key])
+                        self.assertNotIn("resign", result[key])
+                        self.assertNotIn("gpt-", result[key])
+                    self.assertNotIn("effort None", result["message"])
+                    self.assertNotIn("指定強度", result["message_zh_tw"])
+
+    def test_known_unverified_model_keeps_transport_guidance(self):
+        for stale in (False, True):
+            self.registry["_stale_transport_vendors"] = ["gemini"] if stale else []
+            for effort in (None, "high"):
+                with self.subTest(stale=stale, effort=effort):
+                    result = aa_policy.decide(
+                        self.registry, "fixture-sha", vendor="gemini",
+                        model="gemini-4-argon-high", effort=effort,
+                        caller=self.context("codex/gpt-6-astra"), caller_sha256="caller-sha")
+                    self.assertEqual(result["code"], "unknown-target-runtime" if stale
+                                     else "runtime-mapping-unverified")
+                    self.assertEqual(result["failed_gate"], "target-transport")
+                    self.assertIn("resign", result["next_command"])
+
+    def test_unknown_model_suggestions_follow_runtime_aliases(self):
+        row = self.verify_mapping("gemini/gemini-4-argon", "fixture-argon-high")
+        row["transport_mapping"]["selector_type"] = "model_id_encoded_effort"
+        _, code, detail = aa_policy._runtime_target(
+            self.registry, "gemini", "missing-model", None, None)
+        self.assertEqual(code, "unknown-model-name")
+        self.assertIn("fixture-argon-high", detail["available_models"])
+        self.assertNotIn("gemini-4-argon-high", detail["available_models"])
+        self.assertEqual(detail["available_models"], sorted(set(detail["available_models"])))
+        result = aa_policy.decide(
+            self.registry, "fixture-sha", vendor="gemini", model="fixture-argon-high",
+            effort=None, caller=self.context("codex/gpt-6-astra"),
+            caller_sha256="caller-sha")
+        self.assertTrue(result["allowed"], result)
+
+    def test_unmatched_effort_is_a_selector_error(self):
+        self.verify_mapping("codex/gpt-6-astra")
+        result = aa_policy.decide(
+            self.registry, "fixture-sha", vendor="codex", model="gpt-6-astra",
+            effort="nonexistent", caller=self.context("codex/gpt-6-astra"),
+            caller_sha256="caller-sha")
+        self.assertEqual(result["code"], "unknown-model-name")
+        self.assertEqual(result["next_command"], "omnilane list")
+        for key in ("message", "message_zh_tw"):
+            self.assertIn("nonexistent", result[key])
+            self.assertIn("gpt-6-astra", result[key])
+            self.assertNotIn("resign", result[key])
+        self.assertIn("no configuration matches", result["message"])
+        self.assertIn("找不到符合", result["message_zh_tw"])
+
+    def test_known_unverified_plain_models_keep_transport_guidance(self):
+        for config_id in ("grok/grok-4-6", "codex/gpt-6-astra"):
+            row = self.row(config_id)
+            mapping = row["transport_mapping"]
+            for partial in (False, True):
+                if partial:
+                    mapping["runtime_model"] = row["model"]
+                for stale in (False, True):
+                    self.registry["_stale_transport_vendors"] = [row["vendor"]] if stale else []
+                    for effort in (None, row["effort"]):
+                        with self.subTest(config_id=config_id, partial=partial,
+                                          stale=stale, effort=effort):
+                            result = aa_policy.decide(
+                                self.registry, "fixture-sha", vendor=row["vendor"],
+                                model=row["model"], effort=effort,
+                                caller=self.context("codex/gpt-6-astra"),
+                                caller_sha256="caller-sha", target_config=config_id)
+                            self.assertFalse(result["allowed"])
+                            self.assertEqual(result["code"], "unknown-target-runtime" if stale
+                                             else "runtime-mapping-unverified")
+                            self.assertEqual(result["failed_gate"], "target-transport")
+                            self.assertIn("resign", result["next_command"])
+                            if not stale:
+                                self.assertEqual(result["candidate_config_ids"], [config_id])
+
+    def test_encoded_effort_conflict_is_independent_of_verification(self):
+        row = self.row("gemini/gemini-4-argon")
+        for state in ("candidate", "partial", "verified"):
+            if state == "partial":
+                row["transport_mapping"]["runtime_model"] = "gemini-4-argon-high"
+            elif state == "verified":
+                self.verify_mapping(row["id"], "gemini-4-argon-high")
+                row["transport_mapping"]["selector_type"] = "model_id_encoded_effort"
+            with self.subTest(state=state):
+                result = aa_policy.decide(
+                    self.registry, "fixture-sha", vendor="gemini",
+                    model="gemini-4-argon-high", effort="low",
+                    caller=self.context("codex/gpt-6-astra"), caller_sha256="caller-sha")
+                self.assertFalse(result["allowed"])
+                self.assertEqual(result["code"], "encoded-effort-conflict")
+                self.assertEqual(result["encoded_effort"], "high")
+                self.assertEqual(result["effort"], "low")
+
+    def test_suggestions_respect_target_config_and_use_registered_aliases(self):
+        config_id = "gemini/gemini-4-argon"
+        for verified in (False, True):
+            alias = "fixture-argon-high" if verified else "gemini-4-argon-high"
+            if verified:
+                row = self.verify_mapping(config_id, alias)
+                row["transport_mapping"]["selector_type"] = "model_id_encoded_effort"
+            with self.subTest(verified=verified):
+                result = aa_policy.decide(
+                    self.registry, "fixture-sha", vendor="gemini", model="missing-model",
+                    effort=None, caller=self.context("codex/gpt-6-astra"),
+                    caller_sha256="caller-sha", target_config=config_id)
+                self.assertEqual(result["code"], "unknown-model-name")
+                self.assertEqual(result["available_models"], [alias])
+                for key in ("message", "message_zh_tw"):
+                    self.assertIn(alias, result[key])
+                    self.assertNotIn("gemini-3.8-flash-high", result[key])
+
+    def test_suggestions_do_not_claim_transport_or_ceiling_approval(self):
+        for verified in (False, True):
+            if verified:
+                row = self.verify_mapping("gemini/gemini-4-argon", "gemini-4-argon-high")
+                row["transport_mapping"]["selector_type"] = "model_id_encoded_effort"
+            with self.subTest(verified=verified):
+                result = aa_policy.decide(
+                    self.registry, "fixture-sha", vendor="gemini", model="missing-model",
+                    effort=None, caller=self.context("codex/gpt-6-astra", ceiling=1),
+                    caller_sha256="caller-sha")
+                self.assertIn("gemini-4-argon-high", result["available_models"])
+                self.assertIn("Registered", result["message"])
+                self.assertIn("transport verification", result["message"])
+                self.assertIn("caller ceiling", result["message"])
+                self.assertIn("已登錄", result["message_zh_tw"])
+                self.assertIn("傳輸驗證", result["message_zh_tw"])
+                self.assertIn("呼叫端上限", result["message_zh_tw"])
+                attempted = aa_policy.decide(
+                    self.registry, "fixture-sha", vendor="gemini",
+                    model="gemini-4-argon-high", effort=None,
+                    caller=self.context("codex/gpt-6-astra", ceiling=1),
+                    caller_sha256="caller-sha")
+                self.assertFalse(attempted["allowed"])
+                self.assertEqual(attempted["code"], "target-above-effective-ceiling" if verified
+                                 else "runtime-mapping-unverified")
+
+    def test_unknown_vendor_has_localized_empty_suggestions(self):
+        for config_id in (None, "gemini/gemini-4-argon"):
+            with self.subTest(target_config=config_id):
+                result = aa_policy.decide(
+                    self.registry, "fixture-sha", vendor="unknown-vendor", model="missing-model",
+                    effort=None, caller=self.context("codex/gpt-6-astra"),
+                    caller_sha256="caller-sha", target_config=config_id)
+                self.assertFalse(result["allowed"])
+                self.assertEqual(result["code"], "unknown-model-name")
+                self.assertEqual(result["available_models"], [])
+                self.assertEqual(result["next_command"], "omnilane list")
+                self.assertIn("No registered model selectors", result["message"])
+                self.assertIn("沒有已登錄型號", result["message_zh_tw"])
+                for key in ("message", "message_zh_tw"):
+                    self.assertIn("unknown-vendor", result[key])
+                    self.assertNotIn("(none)", result[key])
+                    self.assertNotIn("resign", result[key])
+
+    def test_unknown_selector_preserves_base_decision_fields(self):
+        result = aa_policy.decide(
+            self.registry, "fixture-sha", vendor="gemini", model="missing-model", effort=None,
+            caller=self.context("codex/gpt-6-astra"), caller_sha256="caller-sha")
+        self.assertEqual(result["schema_version"], 1)
+        self.assertEqual(result["target_request"], {
+            "vendor": "gemini", "model": "missing-model", "effort": None})
+        self.assertEqual(result["caller_score"], 53)
+        self.assertEqual(result["effective_ceiling"], 53)
+        self.assertEqual(result["caller_context_sha256"], "caller-sha")
+        self.assertIsNone(result["target_score"])
+        self.assertIsNone(result["child_context"])
+        self.assertFalse(result["allowed"])
+
     def test_within_display_grade_upward_is_denied(self):
         result = self.decide("claude/claude-opus-5-xhigh", "codex/gpt-6-astra-xhigh")
         self.assertFalse(result["allowed"])
@@ -226,6 +411,17 @@ class ExactAAPolicyTests(unittest.TestCase):
         target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", None, None)
         self.assertIsNone(target)
         self.assertEqual(code, "unknown-target-runtime")
+
+    def test_grok_guard_rejects_verified_mapping_that_discards_effort(self):
+        # This malformed mapping passes generic matching, so only the Grok
+        # selector guard can deny it. The public overlay loader rejects it too.
+        row = self.verify_mapping("grok/grok-4-6", runtime_effort=None)
+        row["transport_mapping"].update(
+            selector_type="cli_reasoning_effort", cli_flag="--reasoning-effort")
+        target, code, _ = aa_policy._runtime_target(
+            self.registry, "grok", "grok-4.6", None, None)
+        self.assertIsNone(target)
+        self.assertEqual(code, "runtime-effort-discarded")
 
     def test_operator_assertion_is_explicit_exemption_not_authentication(self):
         result = aa_policy.decide(

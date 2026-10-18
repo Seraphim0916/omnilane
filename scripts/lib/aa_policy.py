@@ -378,18 +378,12 @@ def _unknown_reason(registry: dict[str, Any], identity: dict[str, Any]) -> str |
 def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
                     effort: str | None, target_config: str | None) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
     exact_id = [row for row in registry["scored_configs"] if row["id"] == target_config] if target_config else registry["scored_configs"]
-    request = registry.get("_runtime_executable_request")
-    if request is not None and any(item["config_id"] in {r["id"] for r in exact_id if r["vendor"] == vendor}
-                                   for item in registry.get("_transport_carry_forward", [])):
-        if not request or str(Path(request).resolve()) not in registry.get("_transport_executable_paths", {}).get(vendor, []):
-            return None, "runtime-executable-changed", {"vendor": vendor, "model": model, "effort": effort}
     if target_config and not exact_id:
         return None, "unknown-target-config", {"target_config": target_config}
-    if vendor in registry.get("_stale_transport_vendors", []):
-        return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
     vendor_rows = [row for row in exact_id if row["vendor"] == vendor]
     candidates: list[dict[str, Any]] = []
     unresolved: list[str] = []
+    missing_effort = False
     for row in vendor_rows:
         mapping = row["transport_mapping"]
         model_ids = mapping.get("candidate_model_ids", [])
@@ -399,14 +393,43 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
         encoded_effort = mapping.get("selector_type") == "model_id_encoded_effort"
         if not model_match:
             continue
+        verified = mapping.get("runtime_verified") is True and mapping.get("status") in ("verified", "resolved")
+        # A known alias can expose a conflicting effort before transport proof
+        # exists. This inference only diagnoses; it never verifies a mapping.
+        if not verified and runtime_effort and model.endswith(f"-{runtime_effort}"):
+            encoded_effort = True
         if encoded_effort and effort not in (None, runtime_effort):
             return None, "encoded-effort-conflict", {"model": model, "effort": effort, "encoded_effort": runtime_effort}
         if not encoded_effort and effort != runtime_effort:
+            if effort is None:
+                if verified:
+                    missing_effort = True
+                else:
+                    unresolved.append(row["id"])
             continue
-        if mapping.get("runtime_verified") is True and mapping.get("status") in ("verified", "resolved"):
+        if verified:
             candidates.append(row)
         else:
             unresolved.append(row["id"])
+    if not candidates and not unresolved and not missing_effort:
+        available_models = sorted({
+            name
+            for row in vendor_rows
+            for name in ([row["transport_mapping"]["runtime_model"]]
+                         if row["transport_mapping"].get("runtime_model") is not None
+                         else row["transport_mapping"].get("candidate_model_ids", []))
+        })
+        return None, "unknown-model-name", {
+            "vendor": vendor, "model": model, "effort": effort,
+            "available_models": available_models,
+        }
+    request = registry.get("_runtime_executable_request")
+    if request is not None and any(item["config_id"] in {r["id"] for r in exact_id if r["vendor"] == vendor}
+                                   for item in registry.get("_transport_carry_forward", [])):
+        if not request or str(Path(request).resolve()) not in registry.get("_transport_executable_paths", {}).get(vendor, []):
+            return None, "runtime-executable-changed", {"vendor": vendor, "model": model, "effort": effort}
+    if vendor in registry.get("_stale_transport_vendors", []):
+        return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
     if vendor == "grok" and candidates and any(
         row["transport_mapping"].get("selector_type") != "cli_reasoning_effort"
         or row["transport_mapping"].get("cli_flag") != "--reasoning-effort"
@@ -420,7 +443,7 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
         return candidates[0], "runtime-mapping-verified", {}
     if len(candidates) > 1:
         return None, "ambiguous-runtime-mapping", {"candidate_config_ids": [row["id"] for row in candidates]}
-    if unresolved:
+    if unresolved and not missing_effort:
         return None, "runtime-mapping-unverified", {"candidate_config_ids": unresolved}
     return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
 
@@ -508,6 +531,27 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         registry, vendor, model, effort, target_config
     )
     if target_row is None:
+        if mapping_code == "unknown-model-name":
+            selectors = detail["available_models"]
+            effort_en = f" with effort {effort!r}" if effort is not None else ""
+            effort_zh = f"（指定強度：{effort}）" if effort is not None else ""
+            registered_en = (f"Registered model selectors in this scope: {', '.join(selectors)}. "
+                             if selectors else "No registered model selectors in this scope. ")
+            registered_zh = (f"此範圍已登錄的型號寫法：{'、'.join(selectors)}。"
+                             if selectors else "此範圍沒有已登錄型號。")
+            base.update(
+                code=mapping_code,
+                failed_gate="target-model-name",
+                message=(f"Vendor {vendor}: no configuration matches model {model!r}{effort_en}. "
+                         f"{registered_en}Listing is not dispatch approval; matching effort, "
+                         "transport verification and caller ceiling still apply. See omnilane list."),
+                message_zh_tw=(f"廠商「{vendor}」找不到符合「{model}」{effort_zh}的型號設定。"
+                               f"{registered_zh}名稱列入清單不代表可派工；仍須符合強度、"
+                               "傳輸驗證與呼叫端上限。請執行 omnilane list 查看。"),
+                reason="no scored configuration matches the requested vendor/model/effort selector",
+                next_command="omnilane list",
+                **detail)
+            return base
         from verification_status import transport_guidance
         guidance = transport_guidance(vendor, target_config, detail.get("candidate_config_ids", []),
                                       registry.get("_transport_environment_failures", {}),
