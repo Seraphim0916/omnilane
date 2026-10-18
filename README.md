@@ -927,6 +927,18 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.56.0
+
+- When upgrading from 0.55.0, run `omnilane resign --vendor gemini` once from a GUI terminal because `run-gemini.sh` has changed.
+- Gemini tasks are no longer silently truncated: inputs over 180,000 bytes on macOS and other non-Linux platforms, or 130,000 bytes on Linux, fail with rc=2 before agy starts while `task.txt` retains the full input.
+- Quota preflight reroutes eligible lane dispatches when fresh Codex weekly usage reaches the default 90% threshold, while preserving explicit targets and existing thread continuations.
+- Unknown model names now list registered aliases and suggest `omnilane list`.
+- Live per-call timeouts count as success only after all turns complete, with usable final output and no pending input, later activity or forwarding failure remaining.
+- Retire Grok 4.6 from routing and remove Gemini 3.6/3.7 Flash choices from configure.
+- Fix live-close deadline handling and make close-deadline tests runnable independently in a clean checkout.
+- Gemini advise can now read files outside the dispatch workdir, except private credential and session paths.
+- Upgrade: `npm i -g omnilane@0.56.0`.
+
 ## What's new in v0.55.0
 
 - When upgrading from 0.54.0, run `omnilane resign` once from a GUI terminal because the AA snapshot has changed.

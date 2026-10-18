@@ -6,8 +6,19 @@ semantic version tags.
 
 ## [Unreleased]
 
-### Fixed
+## [0.56.0] - 2026-10-18
 
+### Added
+- Add quota preflight before lane dispatch: fresh Codex weekly snapshots at or above the default 90% threshold reroute through the lane's existing candidates and all existing gates. Missing, stale or malformed snapshots remain unknown; explicit targets and existing thread continuations stay pinned. Save each decision in `quota-preflight.json`; without a compliant alternative, `hardest-coding` and `hard-judgment` refuse with exit 7 while other lanes retain their original route.
+
+### Fixed
+- Reclassify live per-call timeout exit 142 as success only when every sent turn has a vendor SUCCESS, the final success carries usable text after the last forwarded turn, and no later activity, queued input or forwarding failure remains. Preserve unsent input in `close-pending.jsonl` and retain failures for incomplete turns.
+- Label exit 142 as `CALL_TIMEOUT`, include `call_timed_out` in job statistics, and warn when an automatically selected live session's idle cap cannot fire before its per-call timeout.
+- Stop silently truncating Gemini tasks on print, thread and live paths. Reject tasks over 180,000 bytes on macOS and other non-Linux platforms, or 130,000 bytes on Linux, with rc=2 before calling agy; preserve the full input in `task.txt`. The limits follow 2026-10-18 measurements of agy 1.4.2 (truncation from about 192,000 bytes) and Linux's 131072-byte single-argument limit.
+- Harden quota preflight with safe defaults for empty settings, absolute snapshot directories, bounded regular-file reads that reject symlinks and FIFOs, and atomic decision publication before job metadata. Treat failed snapshot reads as unknown without redispatching existing jobs.
+- Record `missing-snapshot` instead of `invalid-snapshot` when the quota directory or `codex.json` is absent, so an unconfigured host is distinguishable from a broken snapshot; symlinks, FIFOs and malformed JSON still record `invalid-snapshot`, and both remain `status=unknown` without rerouting.
+- Let Gemini (agy) advise read files outside the dispatch workdir via `read_file(*)` with non-workspace access, while denying reads under 14 credential and session roots; writes, commands, MCP and unsandboxed calls stay denied.
+- Create `.test-scratch` before `mkdtemp` in `test_live_close_deadline.sh` and `test_jobs_close_deadline_floor.sh`, so either test can run independently in a clean checkout without `FileNotFoundError`.
 - Report unmatched vendor/model/effort selectors as `unknown-model-name`, list the vendor's model aliases (including embedded effort suffixes), and suggest `omnilane list`; retain re-signing guidance for known models with unverified transport.
 - Preserve transport diagnostics for known models with omitted effort, including partial mappings; detect conflicting embedded effort before verification. Scope suggestions to `target_config`, label them as registered names rather than dispatch approvals, and localize omitted/invalid effort and empty-vendor messages. Keep the deliberate `code=unknown-model-name` / `failed_gate=target-model-name` contract; verified plain models missing effort retain `unknown-target-runtime`. Restore the Grok missing-effort assertion and add a mutation-checked test of its `runtime-effort-discarded` guard.
 - Retire native Grok 4.5/4.6 probe candidates, configure choices and transport carry; remove Grok 4.6 from lane chains and synchronize catalogs, menu indices and documentation without changing AA scores.
@@ -1746,7 +1757,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.55.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.56.0...HEAD
+[0.56.0]: https://github.com/Seraphim0916/omnilane/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/Seraphim0916/omnilane/compare/v0.52.0...v0.53.0
