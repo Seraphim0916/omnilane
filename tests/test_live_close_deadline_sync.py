@@ -15,6 +15,10 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def setUpModule():
+    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
+
+
 class CloseSynchronizationTests(unittest.TestCase):
     def setUp(self):
         source_path = Path(os.environ.get("CLOSE_SYNC_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))

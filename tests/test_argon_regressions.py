@@ -20,6 +20,10 @@ import cli_provenance as cp
 import origin_policy as op
 
 
+def setUpModule():
+    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
+
+
 def fixture_tree():
     path = Path(os.environ.get("ARGON_FIXTURE_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
     source = path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
