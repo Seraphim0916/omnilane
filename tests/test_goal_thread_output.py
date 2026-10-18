@@ -143,7 +143,9 @@ class GoalThreadOutputTests(unittest.TestCase):
             self.assertEqual(state["session_id"], session)
             self.assertEqual(state["turns"], turn)
             self.assertEqual(result.stdout, self.notice("direct-fixture", turn, session) + lines[1] + "\n")
-            self.assertEqual(result.stderr, "omnilane: executor=cli reason=no-native-context\n")
+            self.assertEqual(result.stderr,
+                             "omnilane: quota status=unknown explicit target preserved\n"
+                             "omnilane: executor=cli reason=no-native-context\n")
             self.assert_call_count(turn)
 
     def test_ordinary_goal_keeps_one_id_and_no_success_stderr(self):

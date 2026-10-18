@@ -53,6 +53,8 @@ unset OMNILANE_CONFIGURE_VALIDATE_FILE
 export -n VALIDATE_LOCAL_FILE
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
+# shellcheck disable=SC1091
+source "$OMNILANE_REPO/scripts/lib/quota-preflight.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
@@ -325,6 +327,7 @@ print_dry_run_plan() {
   print_dry_run_value executor "$SELECTED_EXECUTOR"
   print_dry_run_value executor_reason "$EXECUTOR_REASON"
   printf 'aa_policy=%s\n' "$AA_SELECTED_DECISION"
+  [[ -z "$QUOTA_DECISION" ]] || printf 'quota_preflight=%s\n' "$QUOTA_DECISION"
   print_dry_run_value mode "$MODE"
   print_dry_run_value workdir "$WORKDIR"
   printf 'timeout=%s\n' "$TIMEOUT"
@@ -492,6 +495,9 @@ resolve_chain() {
     vendor="${F[0]:-}"
     model="${OVERRIDE_MODEL:-${F[1]:-}}"
     effort="${OVERRIDE_EFFORT:-${F[2]:-}}"
+    if [[ -n "$QUOTA_EXCLUDED_VENDOR" && "$vendor" == "$QUOTA_EXCLUDED_VENDOR" ]]; then
+      continue
+    fi
     if [[ -n "$requested_vendor" ]]; then
       [[ "$vendor" == "$requested_vendor" ]] || continue
       considered=1
@@ -517,6 +523,9 @@ resolve_chain() {
     if [[ "$vendor" != "grok" || "$MODE" != "work" || "$OMNILANE_GROK_MACOS_WORK_UNCONFINED" == "1" || "$(uname -s)" != "Darwin" ]] &&
        { [[ "$RESOLVE_WITH_CONTEXT" -eq 1 || "$vendor" == "off" ]] || routing_candidate_available "$vendor" "$model"; }; then
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}")
+      if [[ -n "$QUOTA_EXCLUDED_VENDOR" ]] && ! quota_candidate_capable "$vendor" "$model" "$effort"; then
+        continue
+      fi
       AA_SELECTED_DECISION="$AA_LAST_DECISION"
       RESOLVED_IDX="$i"; return 0
     fi
@@ -969,6 +978,7 @@ else
   fi
 fi
 
+quota_preflight || exit $?
 FIELDS=("${RESOLVED_FIELDS[@]}")
 VENDOR="${FIELDS[0]}"; MODEL="${FIELDS[1]:-}"; EFFORT="${FIELDS[2]:-}"
 [[ -n "$OVERRIDE_MODEL" ]] && MODEL="$OVERRIDE_MODEL"
@@ -1013,9 +1023,11 @@ if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 ]]; then
   fi
   [[ "$BACKGROUND" -eq 0 ]] || NATIVE_ARGS+=(--background)
   [[ "$DRY_RUN" -eq 0 ]] || NATIVE_ARGS+=(--dry-run)
+  [[ -z "$QUOTA_DECISION" ]] || NATIVE_ARGS+=(--quota-decision "$QUOTA_DECISION")
   NATIVE_RC=0
   NATIVE_OUTPUT="$(python3 "$OMNILANE_REPO/scripts/lib/native.py" "${NATIVE_ARGS[@]}")" || NATIVE_RC=$?
   if [[ "$NATIVE_RC" -eq 0 ]]; then
+    quota_emit_notice
     printf '%s\n' "$NATIVE_OUTPUT"
     exit 0
   elif [[ "$NATIVE_RC" -ne 10 ]]; then
@@ -1229,6 +1241,7 @@ if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
   exit 1
 fi
 
+quota_emit_notice
 if [[ "$DRY_RUN" -eq 1 ]]; then
   print_dry_run_plan
   exit 0
@@ -1373,6 +1386,9 @@ if [[ "$META_BASE" != *'}' ]]; then
 fi
 META_BASE="${META_BASE%\}}"
 META_BASE="$META_BASE,\"executor\":\"cli\",\"executor_reason\":\"$(json_escape "$EXECUTOR_REASON")\""
+if [[ -n "$QUOTA_DECISION" ]]; then
+  QUOTA_JOB_DECISION="$(python3 -c 'import json,sys; value=json.loads(sys.argv[1]); value["job_id"]=sys.argv[2]; print(json.dumps(value,separators=(",",":")))' "$QUOTA_DECISION" "$JOB_ID")"
+fi
 [[ "$GROK_WORK_UNCONFINED" -eq 0 ]] || META_BASE="$META_BASE,\"isolation\":\"none\""
 printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job_worker_source_path":"%s","job_worker_source_sha256":"%s","job_worker_path":"%s","job_worker_sha256":"%s"}\n' \
   "$META_BASE" "$(json_escape "$JOB_WORKER_BASH")" \
@@ -1383,6 +1399,9 @@ printf '%s,"worker_interpreter_path":"%s","worker_interpreter_version":"%s","job
 json_file_round_trip_valid "$META_TMP" || exit 1
 chmod 600 "$META_TMP"
 mv "$META_TMP" "$JOB_DIR/meta.json"
+if [[ -n "$QUOTA_DECISION" ]]; then
+  (umask 077; printf '%s\n' "$QUOTA_JOB_DECISION" > "$JOB_DIR/quota-preflight.json")
+fi
 
 if [[ -n "$THREAD_NAME" ]]; then
   # The goal caller requires exactly the claimed job ID on stdout. Its private

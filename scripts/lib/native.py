@@ -355,6 +355,8 @@ def publish_job(root, job_id, plan, metadata, registry=None, caller=None, regist
         write_new(staging / "task.txt", plan["task"])
         write_new(staging / "meta.json", json_text(metadata))
         write_new(staging / "native.json", json_text(plan))
+        if "quota_preflight" in plan:
+            write_new(staging / "quota-preflight.json", json_text(plan["quota_preflight"]))
 
         publish_lock_path = root / ".native-publish.lock"
         publish_fd = os.open(
@@ -450,6 +452,9 @@ def route(args):
 
 
 def publish_plan(args, plan, policy_decision, registry, caller):
+    quota_decision = getattr(args, "quota_decision", None)
+    if quota_decision:
+        plan["quota_preflight"] = json.loads(quota_decision)
     if args.dry_run:
         print(json_text(plan), end="")
         return 0
@@ -458,6 +463,8 @@ def publish_plan(args, plan, policy_decision, registry, caller):
     text_value(plan["task"], "task", 65536, multiline=True)
     job_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}-{secrets.randbelow(10**9)}"
     plan.update(job_id=job_id, task_id=job_id, created=stamp(), job_state_created=True)
+    if "quota_preflight" in plan:
+        plan["quota_preflight"]["job_id"] = job_id
     # Validate size before creating any job state.
     check(len(json_text(plan).encode("utf-8")) <= MAX_BYTES, "handoff too large")
     metadata = {k: plan[k] for k in ("lane", "vendor", "model", "effort", "mode", "workdir", "executor", "executor_reason")}
@@ -612,6 +619,7 @@ def main():
     p.add_argument("--expected-registry-sha256")
     p.add_argument("--expected-caller-sha256")
     p.add_argument("--target-config")
+    p.add_argument("--quota-decision", help=argparse.SUPPRESS)
     p.add_argument("--session", default="auto")
     p.add_argument("--thread", default="")
     p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)

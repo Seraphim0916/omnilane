@@ -455,6 +455,8 @@ class NativeExecutorTests(unittest.TestCase):
     def test_publication_collision_preserves_unrelated_final_directory(self):
         native = self.load_native()
         real_datetime = native.datetime.datetime
+        self.addCleanup(setattr, native.datetime, "datetime", real_datetime)
+        self.addCleanup(setattr, native.secrets, "randbelow", native.secrets.randbelow)
 
         class FixedDateTime(real_datetime):
             @classmethod
@@ -483,7 +485,7 @@ class NativeExecutorTests(unittest.TestCase):
         for path in directory.iterdir():
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(set(p.name for p in directory.iterdir()),
-                         {"native.json", "meta.json", "task.txt", "native.lock", "aa-lineage.json", "aa-registry.json", "aa-decision.json"})
+                         {"native.json", "meta.json", "task.txt", "native.lock", "aa-lineage.json", "aa-registry.json", "aa-decision.json", "quota-preflight.json"})
         self.assertNotIn("capabilities", json.loads((directory / "native.json").read_text()))
 
     def test_stdin_task_and_no_shell_interpolation(self):

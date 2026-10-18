@@ -147,7 +147,8 @@ class GrokUnconfinedTests(unittest.TestCase):
         dry = self.work("--dry-run", "--vendor", "grok")
         self.assert_ok(dry)
         self.assertIn(NOTICE, dry.stdout)
-        self.assertEqual(dry.stderr, NOTICE + "\n")
+        self.assertEqual(dry.stderr, NOTICE + "\n"
+                         "omnilane: quota status=unknown explicit target preserved\n")
         self.assertFalse((self.home / "jobs").exists())
         result = self.work("--vendor", "grok")
         self.assert_ok(result)
