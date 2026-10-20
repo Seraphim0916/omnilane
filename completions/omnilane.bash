@@ -79,7 +79,7 @@ _omnilane() {
     goal_dispatch=1
   fi
   if [[ "$COMP_CWORD" -eq 1 ]]; then
-      words="version list route dispatch goal jobs mcp doctor which-bin whoami native-context resign benchmark release-audit ui configure completion help"
+      words="version list route dispatch goal jobs mcp doctor which-bin whoami native-context resign self-exec stats benchmark release-audit ui configure completion help"
   else
     case "$command" in
       route|dispatch)

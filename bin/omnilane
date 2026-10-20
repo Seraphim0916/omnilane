@@ -92,6 +92,23 @@ case "$cmd" in
     # Python loads dispatch's host configuration and reports any error once.
     exec python3 "$REPO/scripts/lib/resign.py" "$@"
     ;;
+  self-exec)
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: self-exec requires Python 3.9 or newer" >&2
+      exit 1
+    }
+    [[ "${1:-}" == "record" ]] || { echo "usage: omnilane self-exec record --refusal PATH --reason TEXT" >&2; exit 2; }
+    exec python3 "$REPO/scripts/lib/self_exec.py" "$@"
+    ;;
+  stats)
+    command -v python3 >/dev/null 2>&1 || {
+      echo "omnilane: stats requires Python 3.9 or newer" >&2
+      exit 1
+    }
+    [[ "${1:-}" == "self-exec" ]] || { echo "usage: omnilane stats self-exec [--since 7d] [--json]" >&2; exit 2; }
+    shift
+    exec python3 "$REPO/scripts/lib/self_exec.py" stats "$@"
+    ;;
   benchmark)
     command -v python3 >/dev/null 2>&1 || {
       echo "omnilane: benchmark requires Python 3.9 or newer" >&2
@@ -136,6 +153,10 @@ omnilane — one routing table, every harness
                                          (--vendor V --model M: the host's statement when whoami cannot read it)
   omnilane resign [--check] [--vendor V] [--approve V] [--record-signers] [--trust-adhoc V]
                                          re-probe and re-sign the transport overlay after a CLI update
+  omnilane self-exec record --refusal PATH --reason "TEXT" [--lane L] [--task "TEXT"]
+                                         record a task the commander did itself, citing the refusal file
+  omnilane stats self-exec [--since 7d] [--json]
+                                         how often the commander did the work itself
   omnilane benchmark [--json] [--run] [--vendor V] fixed quality/cost comparison
   omnilane ui    start|status|url|stop
   omnilane configure                    interactive lane menu

@@ -193,7 +193,21 @@ stand as the host's statement and the decision is
 has no `effective_ceiling`, publishes neither `aa-authorizer.json` nor
 `aa-child-context.json`, and `jobs status` shows `caller_identity_verified: false`
 and `satisfies_lane_target: false`. A file with no `current_model` is refused as
-`missing-caller-context`. `omnilane native-context --vendor V --model M` writes
+`missing-caller-context`.
+
+A lane dispatch reaches the same handoff on its own. When every candidate of the
+lane is refused as `missing-caller-context` and the dispatch carried a
+`--native-context` file with `inherits_caller_runtime: true` and a
+`current_model`, dispatch prints the refusal and its summary line, then re-runs
+itself with `--inherit` and prints "falling back to --inherit". The handoff adds
+`fallback: {"from": "lane-dispatch", "lane", "refused_code",
+"lane_refusal_evidence", "satisfies_lane_target": false, "report_as"}`. It does
+not fall back for an explicit vendor/model/effort target, `--executor cli`,
+`--background`, `--live`, `--thread`, `--mode sysops`, `--job-timeout` or
+`--idle-timeout`, for any other refusal code (an unreadable `--caller-context`
+file is `invalid-policy-input`, which may also mean a broken registry), or when
+the file does not state the model; stderr then says which of these stopped it.
+`OMNILANE_INHERIT_FALLBACK=1` marks the re-run, so it never falls back twice. `omnilane native-context --vendor V --model M` writes
 such a file only when the identity cannot be read or resolved, marks it
 `caller_identity_verified: false`, and exits 2 if the statement contradicts an
 identity it can read. This exists for a caller that cannot be read, for example a

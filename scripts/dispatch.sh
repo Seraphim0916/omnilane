@@ -412,15 +412,51 @@ chain_is_disabled() {
 }
 
 aa_print_refusal() {
-  # Refusal JSON on stderr, with the lanes this caller can still reach appended.
-  local helper="$OMNILANE_REPO/scripts/lib/aa_lanes.py"
+  # Refusal JSON on stderr, with the lanes this caller can still reach appended,
+  # then one summary line a commander can paste into a report as evidence.
+  local helper="$OMNILANE_REPO/scripts/lib/aa_lanes.py" refusal="$AA_LAST_DECISION"
   if [[ -n "$AA_LAST_DECISION" && -r "$helper" ]] && command -v python3 >/dev/null 2>&1; then
-    printf '%s\n' "$AA_LAST_DECISION" | python3 "$helper" --registry "$AA_POLICY_FILE" --lane "${LANE:-}" \
-      --routing "$OMNILANE_HOME/routing.local.yaml" --routing "$OMNILANE_REPO/routing.yaml" >&2 \
-      || printf '%s\n' "$AA_LAST_DECISION" >&2
-  else
-    printf '%s\n' "$AA_LAST_DECISION" >&2
+    refusal="$(printf '%s\n' "$AA_LAST_DECISION" | python3 "$helper" --registry "$AA_POLICY_FILE" --lane "${LANE:-}" \
+      --routing "$OMNILANE_HOME/routing.local.yaml" --routing "$OMNILANE_REPO/routing.yaml")" \
+      || refusal="$AA_LAST_DECISION"
   fi
+  printf '%s\n' "$refusal" >&2
+  REFUSAL_EVIDENCE=""
+  if [[ -n "$refusal" ]] && command -v python3 >/dev/null 2>&1; then
+    REFUSAL_EVIDENCE="$(printf '%s\n' "$refusal" | python3 "$OMNILANE_REPO/scripts/lib/refusal_evidence.py" \
+      --home "$OMNILANE_HOME" --lane "${LANE:-}" --headline "${1:-}")" || REFUSAL_EVIDENCE=""
+  fi
+}
+
+inherit_fallback() {
+  # A lane refused only because no caller identity was readable becomes the
+  # caller's own sub-agent (the --inherit handoff) when the caller already gave a
+  # capability file that names its model. Nothing here names a model for it: an
+  # inherited worker must know whose runtime it inherits, and completion is
+  # checked against that statement. Returns when no fallback applies.
+  local code blocked=()
+  code="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("code", ""))' "$AA_LAST_DECISION" 2>/dev/null || true)"
+  [[ "$code" == "missing-caller-context" && "${OMNILANE_INHERIT_FALLBACK:-0}" != "1" ]] || return 0
+  [[ "$EXECUTOR" != "cli" ]] || blocked+=("--executor cli")
+  [[ "$AA_EXPLICIT_TARGET" -eq 0 ]] || blocked+=("an explicit --vendor/--model/--effort target")
+  [[ "$BACKGROUND" -eq 0 ]] || blocked+=("--background")
+  [[ "$SESSION_REQUEST" != "live" ]] || blocked+=("--live")
+  [[ -z "$THREAD_NAME" ]] || blocked+=("--thread")
+  [[ "$MODE" != "sysops" ]] || blocked+=("--mode sysops")
+  [[ -z "$OVERRIDE_JOB_TIMEOUT$OVERRIDE_IDLE_TIMEOUT" ]] || blocked+=("--job-timeout/--idle-timeout")
+  if [[ -z "$NATIVE_CONTEXT" ]]; then
+    blocked+=("no --native-context")
+  elif ! python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("inherits_caller_runtime") is True and c.get("current_model") else 1)' "$NATIVE_CONTEXT" 2>/dev/null; then
+    blocked+=("the --native-context file does not state inherits_caller_runtime and current_model")
+  fi
+  if [[ "${#blocked[@]}" -gt 0 ]]; then
+    local joined; joined="$(IFS=';'; printf '%s' "${blocked[*]}")"
+    echo "omnilane: no fallback to your own sub-agent (${joined//;/; }). With a sub-agent tool that runs your own model: omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir \"$WORKDIR\", then repeat with --native-context FILE" >&2
+    return 0
+  fi
+  echo "omnilane: caller identity unreadable; falling back to --inherit: your own sub-agent on your own runtime. It does not satisfy lane '$LANE'; report it as your own sub-agent's work, not the lane's." >&2
+  OMNILANE_INHERIT_FALLBACK=1 OMNILANE_INHERIT_FALLBACK_REFUSAL="$REFUSAL_EVIDENCE" \
+    exec bash "$OMNILANE_REPO/scripts/dispatch.sh" --inherit "${ORIGINAL_ARGS[@]}"
 }
 
 aa_policy_decide() {
@@ -774,6 +810,7 @@ case "${1:-}" in
     ;;
 esac
 
+ORIGINAL_ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --list|--explain|--validate|--json) usage_error ;;
@@ -931,6 +968,10 @@ if [[ "$INHERIT" -eq 1 ]]; then
   fi
   [[ "$BACKGROUND" -eq 0 ]] || INHERIT_ARGS+=(--background)
   [[ "$DRY_RUN" -eq 0 ]] || INHERIT_ARGS+=(--dry-run)
+  if [[ "${OMNILANE_INHERIT_FALLBACK:-0}" == "1" ]]; then
+    INHERIT_ARGS+=(--fallback-from-lane --fallback-refusal "${OMNILANE_INHERIT_FALLBACK_REFUSAL:-}")
+  fi
+  unset OMNILANE_INHERIT_FALLBACK OMNILANE_INHERIT_FALLBACK_REFUSAL
   exec python3 "$OMNILANE_REPO/scripts/lib/native.py" "${INHERIT_ARGS[@]}"
 fi
 if [[ -n "$OVERRIDE_VENDOR" ]]; then
@@ -970,10 +1011,15 @@ else
   resolve_chain "$CHAIN" || resolve_rc=$?
   if [[ "$resolve_rc" -eq 6 ]]; then
     aa_print_refusal
+    inherit_fallback
     exit 3
   elif [[ "$resolve_rc" -ne 0 ]]; then
-    echo "omnilane: no eligible available target for lane '$LANE' (chain:$CHAIN)." >&2
-    [[ -z "$AA_LAST_DECISION" ]] || aa_print_refusal
+    headline="omnilane: no eligible available target for lane '$LANE' (chain:$CHAIN)."
+    echo "$headline" >&2
+    if [[ -n "$AA_LAST_DECISION" ]]; then
+      aa_print_refusal "$headline"
+      inherit_fallback
+    fi
     exit 4
   fi
 fi

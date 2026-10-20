@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import tempfile
 import threading
@@ -78,7 +79,8 @@ class NativeExecutorTests(unittest.TestCase):
     def run_cli(self, script, args, expected=0, input=None):
         result = subprocess.run(["bash", str(ROOT / script), *args], cwd=ROOT, env=self.env,
                                 input=input, text=True, capture_output=True, timeout=20)
-        self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+        if expected is not None:
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return result
 
     def route(self, *flags, context=True, expected=0, lane="native-unit", task="fixture task"):
@@ -812,11 +814,82 @@ class InheritedWorkerTests(unittest.TestCase):
                          "missing-caller-context")
         self.assert_no_jobs()
 
-    def test_an_unreadable_caller_still_cannot_dispatch_a_lane(self):
+    def test_an_unreadable_caller_without_a_capability_file_still_cannot_dispatch_a_lane(self):
         # Every candidate of the lane is refused, so the lane itself has no target: exit 4.
-        result = self.route(expected=4)
+        result = self.route(context=False, expected=4)
         self.assertEqual(self.refusal(result)["code"], "missing-caller-context")
+        self.assertIn("no fallback to your own sub-agent (no --native-context)", result.stderr)
         self.assert_no_jobs()
+
+    def summary_evidence(self, result):
+        line = next(l for l in result.stderr.splitlines() if l.startswith("omnilane refusal: "))
+        self.assertIn("failed_gate=caller-identity code=missing-caller-context", line)
+        self.assertIn('reason="no caller identity reached the gate"', line)
+        self.assertIn('quote="no caller identity', line)
+        path = Path(line.split(" evidence=", 1)[1])
+        self.assertEqual(path.parent, self.home / "refusals")
+        stored = json.loads(path.read_text())
+        self.assertEqual(stored["refusal"]["code"], "missing-caller-context")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        return path
+
+    def test_a_lane_refusal_prints_a_citable_summary_and_keeps_the_evidence(self):
+        result = self.route(context=False, expected=4)
+        self.summary_evidence(result)
+
+    def test_an_unreadable_caller_with_a_capability_file_falls_back_to_its_own_sub_agent(self):
+        result = self.route()
+        plan = json.loads(result.stdout)
+        self.assertEqual((plan["state"], plan["executor"], plan["inherit"], plan["effort"]),
+                         ("pending", "native", True, "inherited"))
+        self.assertEqual((plan["vendor"], plan["model"]), ("codex", "gpt-6-astra"))
+        self.assertIs(plan["caller_identity_verified"], False)
+        self.assertIs(plan["worker_contract"]["satisfies_lane_target"], False)
+        evidence = self.summary_evidence(result)
+        self.assertEqual(plan["fallback"], {
+            "from": "lane-dispatch", "lane": "native-unit", "refused_code": "missing-caller-context",
+            "lane_refusal_evidence": str(evidence), "satisfies_lane_target": False,
+            "report_as": "the commander's own sub-agent, not the lane's target"})
+        self.assertIn("falling back to --inherit", result.stderr)
+        self.assertIn("does not satisfy lane 'native-unit'", result.stderr)
+        # The handoff completes like any inherited worker and never counts as the lane.
+        done = self.completion(plan)
+        done["runtime"]["effort"] = "unknown"
+        self.ingest(plan, done)
+        status = json.loads(self.job("status", plan["job_id"]).stdout)["job"]
+        self.assertEqual((status["state"], status["satisfies_lane_target"]), ("done", False))
+
+    def test_the_fallback_never_replaces_an_explicit_target_or_a_cli_only_flag(self):
+        for flags, why in ((("--vendor", "codex"), "explicit --vendor"),
+                           (("--background",), "--background"),
+                           (("--live",), "--live"),
+                           (("--thread", "fixture"), "--thread"),
+                           (("--executor", "cli"), "--executor cli")):
+            with self.subTest(flags=flags):
+                result = self.route(*flags, expected=None)
+                self.assertNotEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("falling back to --inherit", result.stderr)
+        self.assert_no_jobs()
+
+    def test_the_fallback_needs_the_host_to_name_the_model(self):
+        del self.ctx["current_model"]
+        self.save_context()
+        result = self.route(expected=4)
+        self.assertIn("does not state inherits_caller_runtime and current_model", result.stderr)
+        self.assert_no_jobs()
+
+    def test_the_fallback_does_not_loop(self):
+        self.env["OMNILANE_INHERIT_FALLBACK"] = "1"
+        result = self.route(expected=4)
+        self.assertNotIn("falling back to --inherit", result.stderr)
+        self.assert_no_jobs()
+
+    def test_a_verified_caller_never_falls_back(self):
+        best = max((r for r in json.loads((ROOT / "config/aa-model-policy.json").read_text())["scored_configs"]
+                    if r["vendor"] == "codex" and r["model"] == "gpt-6-astra"), key=lambda r: r["score"])
+        self.write_caller(best)
+        result = self.route("--caller-context", str(self.caller), expected=None)
+        self.assertNotIn("falling back to --inherit", result.stderr)
 
     def test_a_verified_caller_is_marked_verified(self):
         plan = json.loads(self.inherit().stdout)

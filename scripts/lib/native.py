@@ -296,6 +296,13 @@ def route_inherited(args, ctx, registry, registry_sha):
             "provider_invoked": False, "job_state_created": False,
             "agent_strategy": "new", "existing_agent_id": None, "preserve_existing_context": False,
             "new_agent_capacity": ctx.get("new_agent_capacity", "unknown")}
+    if getattr(args, "fallback_from_lane", False):
+        # The commander asked for a lane; it gets its own sub-agent instead.
+        plan["fallback"] = {"from": "lane-dispatch", "lane": args.lane,
+                            "refused_code": "missing-caller-context",
+                            "lane_refusal_evidence": args.fallback_refusal or None,
+                            "satisfies_lane_target": False,
+                            "report_as": "the commander's own sub-agent, not the lane's target"}
     return publish_plan(args, plan, decision, registry, caller)
 
 
@@ -610,6 +617,8 @@ def main():
         p.add_argument("--" + key, default="")
     p.add_argument("--inherit", action="store_true",
                    help="spawn a worker that inherits the caller's own model and effort")
+    p.add_argument("--fallback-from-lane", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--fallback-refusal", default="", help=argparse.SUPPRESS)
     p.add_argument("--executor", choices=("auto", "native", "cli"), required=True)
     p.add_argument("--mode", choices=("advise", "work", "sysops"), required=True)
     p.add_argument("--context")

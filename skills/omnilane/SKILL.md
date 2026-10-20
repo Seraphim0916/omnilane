@@ -209,8 +209,15 @@ you enforce on the sub-agent; default 600). It takes no
 If `whoami` cannot read you even when run alone, `--inherit` still works on your
 own statement — add `--vendor <yours> --model <the model you really run>` to
 `native-context`. The handoff then says `caller_identity_verified: false` and
-carries no ceiling; completion is checked against what you stated. Lane dispatch
-stays refused while you are unread; report that instead of guessing an identity.
+carries no ceiling; completion is checked against what you stated. A lane
+dispatch that is refused only because you are unread (`missing-caller-context`)
+and that carries such a file as `--native-context` becomes this same handoff by
+itself: stderr says "falling back to --inherit", and the handoff gains a
+`fallback` object naming the lane and the stored refusal. Report it as your own
+sub-agent's work; it never satisfies the lane. There is no fallback for an
+explicit `--vendor`/`--model`/`--effort`, for `--executor cli`, or for the
+CLI-only flags above, and none without a file that states your model: dispatch
+does not guess an identity for you.
 
 Hermes and OpenClaw callers are always in this case. From Hermes:
 
@@ -301,7 +308,23 @@ of an existing agent, cancellation and the strict schemas are in
 ## Step 4 — If dispatch refuses
 
 A refusal is one JSON line on stderr and no job exists. Read `failed_gate`,
-`reason`, `next_command` and `eligible_lanes`, and act on them instead of guessing:
+`reason`, `next_command` and `eligible_lanes`, and act on them instead of guessing.
+A lane refusal is followed by one summary line to paste into your report as
+evidence; its `evidence=` path is the refusal, stored under
+`$OMNILANE_HOME/refusals/`:
+
+```text
+omnilane refusal: failed_gate=caller-identity code=missing-caller-context reason="…" quote="…" evidence=/…/refusals/20261020-110627-82f995ed.json
+```
+
+If you then do the work yourself, record it with that path, so the operator can
+see how often it happens (`omnilane stats self-exec --since 7d`):
+
+```sh
+omnilane self-exec record --refusal /…/refusals/20261020-110627-82f995ed.json --reason "why it could not be dispatched"
+```
+
+The JSON looks like this:
 
 ```json
 {"allowed": false, "code": "target-above-effective-ceiling", "failed_gate": "downward-ceiling",
@@ -318,7 +341,7 @@ operator's rules say a reroute needs their approval.
 
 | `failed_gate` / `code` | Meaning | Do this |
 |---|---|---|
-| `caller-identity` · `missing-caller-context` | nobody could tell who is asking | run `omnilane whoami` alone and apply Step 1 |
+| `caller-identity` · `missing-caller-context` | nobody could tell who is asking | run `omnilane whoami` alone and apply Step 1; if it still cannot read you, repeat with `--native-context` from `native-context --vendor V --model M --inherits-caller-runtime` and take the inherited handoff (Step 3) |
 | `caller-identity` · `invalid-degraded-caller` | a context file is marked `effort_unverified` but is not its model's lowest row | use the file `whoami` writes; do not edit it |
 | `downward-ceiling` · `target-above-effective-ceiling` | the target scores above you | a fitting lane from `eligible_lanes`, or report `required_caller_effort` to the operator |
 | `target-transport` · `runtime-mapping-unverified` / `unknown-target-runtime` | you are identified; this host has not (or no longer) proven that target. Usually a vendor CLI updated itself | tell the operator to run `omnilane resign`; meanwhile a fitting lane from `eligible_lanes` whose `transport_verified` is true |

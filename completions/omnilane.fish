@@ -32,6 +32,10 @@ complete -c omnilane -f -n __fish_use_subcommand -a which-bin -d 'resolved dispa
 complete -c omnilane -f -n '__fish_seen_subcommand_from which-bin' -a 'codex claude grok gemini kimi qwen opencode'
 complete -c omnilane -f -n __fish_use_subcommand -a whoami        -d 'caller-context file for the launching CLI'
 complete -c omnilane -f -n __fish_use_subcommand -a resign        -d 're-probe and re-sign the transport overlay'
+complete -c omnilane -f -n __fish_use_subcommand -a self-exec     -d 'record a task the commander did itself'
+complete -c omnilane -f -n '__fish_seen_subcommand_from self-exec' -a record
+complete -c omnilane -f -n __fish_use_subcommand -a stats         -d 'self-exec share of all tasks'
+complete -c omnilane -f -n '__fish_seen_subcommand_from stats' -a self-exec
 complete -c omnilane -f -n __fish_use_subcommand -a native-context -d 'capability file for this harness sub-agents'
 complete -c omnilane -f -n __fish_use_subcommand -a benchmark     -d 'fixed quality/cost comparison'
 complete -c omnilane -f -n __fish_use_subcommand -a release-audit -d 'offline release gate'
