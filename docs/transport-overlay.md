@@ -126,6 +126,10 @@ Re-signing by hand is a probe, a rebuild, and an install, in that order. Back up
 `~/.omnilane/transport-contracts.local.json` first; restoring it is the rollback.
 `scripts/lib/probe_sweep.py --root ROOT [--vendor V]` derives every probe command
 from `build_overlay.py`'s PROVEN table (`--plan` prints them without running).
+Export `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` before a hand-run sweep: `omnilane
+resign` sets it for every Claude probe, but `probe_sweep.py` and `probe.py` are
+hashed into each proof, so neither sets it, and an enabled advisor tool makes a
+working Claude selector fail as `model-mismatch`.
 `scripts/lib/probe.py --expect TOKEN [--vendor V] NAME COMMAND…` invokes the CLI
 directly through `subprocess`, so it works while the gate is refusing everything —
 this is what breaks the deadlock. `scripts/provider-probe.sh` goes through

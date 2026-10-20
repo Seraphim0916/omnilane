@@ -472,6 +472,22 @@ class ResignTests(unittest.TestCase):
         self.update("grok")
         self.repeat_hold("regressed", failing=("grok/grok-4-7-high",))
 
+    def test_a_held_vendor_keeps_the_failed_output_beside_the_restored_evidence(self):
+        self.update("grok")
+        failing = "grok/grok-4-7-high"
+        name = next(e["name"] for e in probe_sweep.plan("grok") if e["config_id"] == failing)
+        before = {p.name for p in (self.home / "transport-evidence").iterdir()}
+        self.assertEqual(self.run_resign(vendor=["grok"], failing=(failing,)), resign.EXIT_OPERATOR)
+        new_roots = [p for p in (self.home / "transport-evidence").iterdir() if p.name not in before]
+        self.assertEqual(len(new_roots), 1, new_roots)
+        evidence = new_roots[0] / "evidence"
+        self.assertEqual(json.loads((evidence / f"{name}.json").read_text())["verdict"], "pass")
+        self.assertEqual(json.loads((evidence / f"{name}.failed.json").read_text())["verdict"], "fail")
+        self.assertEqual(sorted(p.name for p in evidence.glob("*.failed.*")),
+                         sorted(f"{name}.failed.{suffix}" for suffix in ("json", "stdout")))
+        self.assertTrue(any(f"kept this run's output for {failing}" in line for line in self.lines),
+                        self.lines)
+
     def test_missing_cli_retirement_requires_two_consecutive_missing_reasons(self):
         before = self.vendor_mappings("grok")
         with self.missing_cli("grok"):

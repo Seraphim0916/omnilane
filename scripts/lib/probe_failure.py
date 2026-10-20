@@ -1,13 +1,16 @@
 """Retry eligibility is informational; only a fresh passing proof can verify a row."""
 
 from __future__ import annotations
+import contextlib
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import probe
 
+ADVISOR_KILL_SWITCH = "CLAUDE_CODE_DISABLE_ADVISOR_TOOL"
 COOLDOWN = timedelta(hours=20)
 ENVIRONMENT_REASONS = frozenset(("timeout", "api-error", "quota-exhausted", "not-authenticated",
                                "connection-error", "rate-limited"))
@@ -200,6 +203,31 @@ def validate_retry_results(root: Path, vendor: str, selected, result: dict) -> N
         (root / "evidence" / f"{entry['name']}.json").write_text(json.dumps(descriptor, indent=2) + "\n")
 
 
+@contextlib.contextmanager
+def advisor_disabled(vendor: str):
+    """Keep claude's server-side advisor out of a probe.
+
+    A user setting can enable it; the probed model then sometimes consults it, the
+    advisor model is billed as well, and modelUsage no longer names the requested
+    model alone (claude 2.1.304, 2026-10-20). The CLI checks this switch before the
+    user's opt-in and the server-side flag. It is set here rather than in probe.py
+    because probe.py and probe_sweep.py are hashed into every proof's engine
+    contract: editing them would invalidate every verified mapping on every host.
+    """
+    if vendor != "claude":
+        yield
+        return
+    previous = os.environ.get(ADVISOR_KILL_SWITCH)
+    os.environ[ADVISOR_KILL_SWITCH] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(ADVISOR_KILL_SWITCH, None)
+        else:
+            os.environ[ADVISOR_KILL_SWITCH] = previous
+
+
 def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
               retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False) -> dict:
     """Reuse the pinned sweep engine, exposing only eligible staged gaps to it.
@@ -246,7 +274,8 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
             if previous.get("verdict") == "fail" and environment_reason(previous.get("verdict_reason")):
                 log(f"{name}: environment probe already failed; unattended cooldown prevents another call")
                 return previous
-        record = probe_sweep.probe_module.probe(name, argv, **kwargs)
+        with advisor_disabled(vendor):
+            record = probe_sweep.probe_module.probe(name, argv, **kwargs)
         if record.get("verdict") == "fail":
             streams = [(root / "evidence" / f"{name}.{suffix}").read_text(errors="replace")
                        for suffix in ("stdout", "stderr")]
