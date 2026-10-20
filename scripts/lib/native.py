@@ -19,6 +19,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
+import host_context  # noqa: E402
 
 
 MAX_BYTES = 262144
@@ -89,8 +90,8 @@ def canonical_dir(value):
     return str(path.resolve(strict=True))
 
 
-def capability_context(path):
-    ctx = read_json(path)
+def capability_context(path, value=None):
+    ctx = read_json(path) if value is None else value
     fields(ctx, ("schema_version", "harness", "vendor", "capabilities", "requirements"),
            ("current_model", "current_effort", "agent_strategy", "existing_agent",
             "preserve_existing_context", "new_agent_capacity", "inherits_caller_runtime",
@@ -303,6 +304,11 @@ def route_inherited(args, ctx, registry, registry_sha):
                             "lane_refusal_evidence": args.fallback_refusal or None,
                             "satisfies_lane_target": False,
                             "report_as": "the commander's own sub-agent, not the lane's target"}
+        if getattr(args, "fallback_host_file", ""):
+            # The model is the harness's configured start model, not one read from this session.
+            plan["fallback"]["host_context"] = {
+                "file": args.fallback_host_file, "source": "host-config",
+                "model_may_differ_from_session": True}
     return publish_plan(args, plan, decision, registry, caller)
 
 
@@ -397,6 +403,14 @@ def route(args):
           "caller context and operator assertion are mutually exclusive")
     ctx = capability_context(args.context) if args.context else None
     args.workdir = canonical_dir(args.workdir)
+    if getattr(args, "context_from_host", False):
+        # Built in memory from the verified host file: a read-only sandbox can still use it.
+        check(ctx is None and getattr(args, "inherit", False), "--context-from-host is for --inherit only")
+        try:
+            built, _ = host_context.build_context(args.workdir, args.mode)
+        except (host_context.HostContextError, OSError, ValueError) as error:
+            raise ValueError(f"host capability file unusable: {error}") from None
+        ctx = capability_context(None, built)
     registry, registry_sha = aa_policy.load_registry(
         args.policy, args.expected_registry_sha256
     )
@@ -619,6 +633,8 @@ def main():
                    help="spawn a worker that inherits the caller's own model and effort")
     p.add_argument("--fallback-from-lane", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--fallback-refusal", default="", help=argparse.SUPPRESS)
+    p.add_argument("--fallback-host-file", default="", help=argparse.SUPPRESS)
+    p.add_argument("--context-from-host", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--executor", choices=("auto", "native", "cli"), required=True)
     p.add_argument("--mode", choices=("advise", "work", "sysops"), required=True)
     p.add_argument("--context")

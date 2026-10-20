@@ -217,7 +217,13 @@ itself: stderr says "falling back to --inherit", and the handoff gains a
 sub-agent's work; it never satisfies the lane. There is no fallback for an
 explicit `--vendor`/`--model`/`--effort`, for `--executor cli`, or for the
 CLI-only flags above, and none without a file that states your model: dispatch
-does not guess an identity for you.
+does not guess an identity for you. Without `--native-context`, that file can be
+the host's: the operator runs `omnilane native-context --install` once from a
+terminal, and dispatch then uses the file of the harness its environment names
+(stderr: "using the host capability file"). It holds the model the harness is
+configured to start with, so if you were started with another model, completion
+fails; say so in your report rather than retrying. A changed file is not used,
+but nothing prevents a change: do not edit it.
 
 Hermes and OpenClaw callers are always in this case. From Hermes:
 

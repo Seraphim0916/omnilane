@@ -444,18 +444,32 @@ inherit_fallback() {
   [[ -z "$THREAD_NAME" ]] || blocked+=("--thread")
   [[ "$MODE" != "sysops" ]] || blocked+=("--mode sysops")
   [[ -z "$OVERRIDE_JOB_TIMEOUT$OVERRIDE_IDLE_TIMEOUT" ]] || blocked+=("--job-timeout/--idle-timeout")
-  if [[ -z "$NATIVE_CONTEXT" ]]; then
+  local host_file="" resolved
+  if [[ -n "$NATIVE_CONTEXT" ]]; then
+    python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("inherits_caller_runtime") is True and c.get("current_model") else 1)' "$NATIVE_CONTEXT" 2>/dev/null \
+      || blocked+=("the --native-context file does not state inherits_caller_runtime and current_model")
+  elif [[ "${#blocked[@]}" -eq 0 ]]; then
+    # No file from the caller: the host's own file for this harness, written from a
+    # terminal by `omnilane native-context --install`. Only checked here; native.py
+    # rebuilds it in memory for this call's workdir and mode, so nothing is written.
+    if resolved="$(python3 "$OMNILANE_REPO/scripts/lib/native_context.py" --resolve-host \
+        --workdir "$WORKDIR" --mode "$MODE" 2>&1)"; then
+      host_file="$resolved"
+    else
+      blocked+=("no --native-context, and ${resolved#omnilane: }")
+    fi
+  else
     blocked+=("no --native-context")
-  elif ! python3 -c 'import json,sys; c=json.load(open(sys.argv[1])); sys.exit(0 if c.get("inherits_caller_runtime") is True and c.get("current_model") else 1)' "$NATIVE_CONTEXT" 2>/dev/null; then
-    blocked+=("the --native-context file does not state inherits_caller_runtime and current_model")
   fi
   if [[ "${#blocked[@]}" -gt 0 ]]; then
     local joined; joined="$(IFS=';'; printf '%s' "${blocked[*]}")"
-    echo "omnilane: no fallback to your own sub-agent (${joined//;/; }). With a sub-agent tool that runs your own model: omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir \"$WORKDIR\", then repeat with --native-context FILE" >&2
+    echo "omnilane: no fallback to your own sub-agent (${joined//;/; }). With a sub-agent tool that runs your own model: run \`omnilane native-context --install\` from a terminal, or omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir \"$WORKDIR\" and repeat with --native-context FILE" >&2
     return 0
   fi
+  [[ -z "$host_file" ]] || echo "omnilane: using the host capability file $host_file (the model this harness is configured to start with; a session started with --model or switched since may run another, and its completion then fails)" >&2
   echo "omnilane: caller identity unreadable; falling back to --inherit: your own sub-agent on your own runtime. It does not satisfy lane '$LANE'; report it as your own sub-agent's work, not the lane's." >&2
   OMNILANE_INHERIT_FALLBACK=1 OMNILANE_INHERIT_FALLBACK_REFUSAL="$REFUSAL_EVIDENCE" \
+    OMNILANE_INHERIT_FALLBACK_HOST_FILE="$host_file" \
     exec bash "$OMNILANE_REPO/scripts/dispatch.sh" --inherit "${ORIGINAL_ARGS[@]}"
 }
 
@@ -969,9 +983,12 @@ if [[ "$INHERIT" -eq 1 ]]; then
   [[ "$BACKGROUND" -eq 0 ]] || INHERIT_ARGS+=(--background)
   [[ "$DRY_RUN" -eq 0 ]] || INHERIT_ARGS+=(--dry-run)
   if [[ "${OMNILANE_INHERIT_FALLBACK:-0}" == "1" ]]; then
-    INHERIT_ARGS+=(--fallback-from-lane --fallback-refusal "${OMNILANE_INHERIT_FALLBACK_REFUSAL:-}")
+    INHERIT_ARGS+=(--fallback-from-lane --fallback-refusal "${OMNILANE_INHERIT_FALLBACK_REFUSAL:-}"
+      --fallback-host-file "${OMNILANE_INHERIT_FALLBACK_HOST_FILE:-}")
+    [[ -n "$NATIVE_CONTEXT" || -z "${OMNILANE_INHERIT_FALLBACK_HOST_FILE:-}" ]] \
+      || INHERIT_ARGS+=(--context-from-host)
   fi
-  unset OMNILANE_INHERIT_FALLBACK OMNILANE_INHERIT_FALLBACK_REFUSAL
+  unset OMNILANE_INHERIT_FALLBACK OMNILANE_INHERIT_FALLBACK_REFUSAL OMNILANE_INHERIT_FALLBACK_HOST_FILE
   exec python3 "$OMNILANE_REPO/scripts/lib/native.py" "${INHERIT_ARGS[@]}"
 fi
 if [[ -n "$OVERRIDE_VENDOR" ]]; then

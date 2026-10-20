@@ -686,6 +686,9 @@ class InheritedWorkerTests(unittest.TestCase):
         NativeExecutorTests.setUp(self)
         self.env.pop("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN")
         self.env["OMNILANE_AA_CALLER_FROM_PROCESS"] = "0"
+        # The host-file fallback reads the harness from these; the suite may itself run inside one.
+        for name in ("CODEX_THREAD_ID", "CODEX_SANDBOX", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
+            self.env.pop(name, None)
         registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
         rows = [r for r in registry["scored_configs"]
                 if r["vendor"] == "codex" and r["model"] == "gpt-6-astra"]
@@ -818,7 +821,57 @@ class InheritedWorkerTests(unittest.TestCase):
         # Every candidate of the lane is refused, so the lane itself has no target: exit 4.
         result = self.route(context=False, expected=4)
         self.assertEqual(self.refusal(result)["code"], "missing-caller-context")
-        self.assertIn("no fallback to your own sub-agent (no --native-context)", result.stderr)
+        self.assertIn("no fallback to your own sub-agent (no --native-context, and no host capability file: "
+                      "no harness signal", result.stderr)
+        self.assert_no_jobs()
+
+    def install_host_file(self, model="gpt-6-astra"):
+        codex_home = self.base / "codex-home"
+        codex_home.mkdir(exist_ok=True)
+        (codex_home / "config.toml").write_text(f'model = "{model}"\n')
+        env = dict(self.env, CODEX_HOME=str(codex_home), CLAUDE_CONFIG_DIR=str(self.base / "no-claude"))
+        result = subprocess.run(["python3", str(ROOT / "scripts/lib/native_context.py"), "--install"],
+                                env=env, text=True, capture_output=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.env["CODEX_HOME"] = str(codex_home)
+        return self.home / "native-context" / "host" / "codex.json"
+
+    def test_with_no_capability_file_the_host_file_of_this_harness_is_used(self):
+        host = self.install_host_file()
+        self.env["CODEX_THREAD_ID"] = "fixture-thread"
+        result = self.route(context=False)
+        plan = json.loads(result.stdout)
+        self.assertEqual((plan["state"], plan["harness"], plan["vendor"], plan["model"]),
+                         ("pending", "codex", "codex", "gpt-6-astra"))
+        self.assertIs(plan["caller_identity_verified"], False)
+        self.assertIs(plan["worker_contract"]["satisfies_lane_target"], False)
+        self.assertEqual(plan["fallback"]["host_context"],
+                         {"file": str(host), "source": "host-config", "model_may_differ_from_session": True})
+        self.assertIn(f"using the host capability file {host}", result.stderr)
+        # Nothing but the job is written: the context for this workdir lives in memory.
+        self.assertEqual(sorted(p.name for p in host.parent.iterdir()), ["codex.install.json", "codex.json"])
+
+    def test_a_changed_host_file_is_not_used(self):
+        host = self.install_host_file()
+        self.env["CODEX_THREAD_ID"] = "fixture-thread"
+        stat_before = host.stat()
+        host.write_text(host.read_text().replace("gpt-6-astra", "gpt-6-luna"))
+        os.utime(host, ns=(stat_before.st_atime_ns, stat_before.st_mtime_ns))
+        result = self.route(context=False, expected=4)
+        self.assertIn("changed after it was installed", result.stderr)
+        self.assert_no_jobs()
+
+    def test_the_host_file_is_not_used_without_a_single_harness_signal(self):
+        self.install_host_file()
+        for extra, why in (({}, "no harness signal"),
+                           ({"CODEX_THREAD_ID": "t", "CLAUDECODE": "1"}, "more than one harness")):
+            with self.subTest(why=why):
+                env = dict(self.env, **extra)
+                result = subprocess.run(["bash", str(ROOT / "scripts/dispatch.sh"), "--workdir", str(ROOT),
+                                         "native-unit", "fixture task"], cwd=ROOT, env=env, text=True,
+                                        capture_output=True, timeout=20)
+                self.assertEqual(result.returncode, 4, result.stderr)
+                self.assertIn(why, result.stderr)
         self.assert_no_jobs()
 
     def summary_evidence(self, result):

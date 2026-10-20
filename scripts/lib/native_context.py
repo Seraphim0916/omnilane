@@ -23,6 +23,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import caller_identity  # noqa: E402
+import host_context  # noqa: E402
 
 HARNESSES = {"codex": "codex", "claude": "claude-code", "grok": "grok-build", "gemini": "antigravity"}
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -62,6 +63,42 @@ def build(vendor: str, model: str, effort: str | None, *, harness: str, workdirs
 
 class HostRowsError(ValueError):
     pass
+
+
+def host_main(args) -> int:
+    """--install writes the host files; --resolve-host is dispatch's fallback lookup."""
+    if args.install and args.resolve_host:
+        print("omnilane: --install and --resolve-host are separate steps", file=sys.stderr)
+        return 2
+    if args.vendor or args.model or args.inherits_caller_runtime or args.host_rows or args.out:
+        print("omnilane: --install/--resolve-host take no --vendor, --model, "
+              "--inherits-caller-runtime, --host-rows or --out", file=sys.stderr)
+        return 2
+    if args.install:
+        if args.workdir or args.mode:
+            print("omnilane: --install writes no workdir or mode; dispatch adds them per call",
+                  file=sys.stderr)
+            return 2
+        wanted = [args.harness] if args.harness else list(host_context.SUPPORTED)
+        if any(name not in host_context.SUPPORTED for name in wanted):
+            print(f"omnilane: --install supports {', '.join(host_context.SUPPORTED)}", file=sys.stderr)
+            return 2
+        code, written = host_context.install(wanted, args.registry,
+                                             log=lambda line: print(line, file=sys.stderr))
+        for path in written:
+            print(path)
+        return code
+    if args.harness or not args.workdir or len(args.workdir) != 1 or not args.mode or len(args.mode) != 1:
+        print("omnilane: --resolve-host takes exactly one --workdir and one --mode", file=sys.stderr)
+        return 2
+    try:
+        # Writes nothing: native.py builds the same context again in memory.
+        _, value = host_context.build_context(str(args.workdir[0]), args.mode[0])
+    except (host_context.HostContextError, OSError, ValueError) as error:
+        print(f"omnilane: no host capability file: {error}", file=sys.stderr)
+        return 3
+    print(host_context.host_dir() / f"{value['harness']}.json")
+    return 0
 
 
 def _unique_keys(pairs):
@@ -154,7 +191,13 @@ def main(argv: list[str] | None = None, read_caller=caller_identity.read_caller)
                                  '"efforts": [E, ...]}]}} (default: $OMNILANE_HOME/native-rows.json '
                                  "when it exists)")
     rows_group.add_argument("--no-host-rows", action="store_true", help="do not merge host rows")
+    parser.add_argument("--install", action="store_true",
+                        help="from a terminal: write each harness's configured model to "
+                             "$OMNILANE_HOME/native-context/host/<harness>.json (see host_context.py)")
+    parser.add_argument("--resolve-host", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.install or args.resolve_host:
+        return host_main(args)
     if bool(args.vendor) != bool(args.model):
         print("omnilane: --vendor and --model go together", file=sys.stderr)
         return 2

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "description": "Model names a harness's own configuration may use that are not the exact model id the registry scores. `omnilane native-context --install` maps through this table and writes nothing for a name it cannot map. Add a row only with evidence of what the harness actually ran.",
+  "aliases": {
+    "claude-code": {
+      "opus[1m]": "claude-opus-5-5"
+    }
+  },
+  "evidence": {
+    "claude-code/opus[1m]": "2026-10-20, MacStudio, claude 2.1.304: ~/.claude/settings.json model=opus[1m]; every assistant record of that session's transcript carries message.model claude-opus-5-5."
+  }
+}

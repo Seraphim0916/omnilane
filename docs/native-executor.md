@@ -207,7 +207,46 @@ not fall back for an explicit vendor/model/effort target, `--executor cli`,
 `--idle-timeout`, for any other refusal code (an unreadable `--caller-context`
 file is `invalid-policy-input`, which may also mean a broken registry), or when
 the file does not state the model; stderr then says which of these stopped it.
-`OMNILANE_INHERIT_FALLBACK=1` marks the re-run, so it never falls back twice. `omnilane native-context --vendor V --model M` writes
+`OMNILANE_INHERIT_FALLBACK=1` marks the re-run, so it never falls back twice.
+
+With no `--native-context` at all, the fallback uses the host's own file for the
+harness it runs under, `$OMNILANE_HOME/native-context/host/<harness>.json`:
+
+- `omnilane native-context --install [--harness codex|claude-code]`, run from a
+  terminal, writes it from the harness's own configuration: Codex
+  `$CODEX_HOME/config.toml` (`profiles.<profile>.model` when `profile` is set,
+  otherwise `model`), Claude Code `settings.json` under `$CLAUDE_CONFIG_DIR` or
+  `~/.claude` (`env.ANTHROPIC_MODEL`, otherwise `model`). A name that is not an
+  exact scored model is mapped through `config/model-aliases.json` (for example
+  `opus[1m]` → `claude-opus-5-5`); a name with no mapping writes nothing and the
+  command says which one is missing. The file has no workdir and no mode, is
+  marked `source: host-config` and `caller_identity_verified: false`, and gets an
+  install record (sha256, size, mtime) next to it. `--install` refuses to run
+  inside a harness, as a guard against accidents.
+- The harness is read only from the variables the harness itself sets
+  (`CODEX_THREAD_ID` or `CODEX_SANDBOX`; `CLAUDECODE=1` or
+  `CLAUDE_CODE_ENTRYPOINT`). None of them, or the signals of more than one
+  harness, is a refusal: dispatch does not pick a file.
+- The file is used only if it is a regular file owned by this user, not
+  group/world-writable, and still matches its install record. `native.py`
+  rebuilds the capability context in memory with this call's `--workdir` and
+  `--mode`, so nothing is written: a read-only Codex sandbox (seatbelt) can read
+  `~/.omnilane` but cannot write even a temp file. Publishing a real (not
+  `--dry-run`) handoff still creates a job under `~/.omnilane/jobs`, which such a
+  sandbox refuses like any other dispatch.
+- The handoff's `fallback.host_context` names the file and says
+  `model_may_differ_from_session: true`.
+
+Limits, stated plainly. The install record shows that a file changed; it does
+not prevent the change: a model runs as the same user who installed the file and
+can rewrite the file and its record. That is accepted because an inherited worker
+never scores above its caller and completion is still checked against the stated
+model. The file holds the model a new session starts with: a session started
+with `--model`, another profile, or switched mid-conversation may run a different
+one, and its completion is then refused rather than recorded under the wrong
+model.
+
+`omnilane native-context --vendor V --model M` writes
 such a file only when the identity cannot be read or resolved, marks it
 `caller_identity_verified: false`, and exits 2 if the statement contradicts an
 identity it can read. This exists for a caller that cannot be read, for example a
