@@ -13,7 +13,9 @@ concurrency:
 
 jobs:
   lint-and-smoke:
-    runs-on: ubuntu-latest
+    # ubuntu-latest became ubuntu-26.04 on 2026-10-20, and actions/python-versions has
+    # no Python 3.9 build for it (the last Linux x64 builds are for 22.04 and 24.04).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: set up Python 3.9
