@@ -217,9 +217,16 @@ harness it runs under, `$OMNILANE_HOME/native-context/host/<harness>.json`:
   `$CODEX_HOME/config.toml` (`profiles.<profile>.model` when `profile` is set,
   otherwise `model`), Claude Code `settings.json` under `$CLAUDE_CONFIG_DIR` or
   `~/.claude` (`env.ANTHROPIC_MODEL`, otherwise `model`). A name that is not an
-  exact scored model is mapped through `config/model-aliases.json` (for example
-  `opus[1m]` → `claude-opus-5-5`); a name with no mapping writes nothing and the
-  command says which one is missing. The file has no workdir and no mode, is
+  exact scored model is mapped through `config/model-aliases.json` (`opus[1m]` →
+  `claude-opus-5-5`, `sonnet` → `claude-sonnet-5-5`); a name with no mapping
+  writes nothing and the command says which one is missing. Claude Code resolves
+  an alias from a catalog built into each release (a served catalog can override
+  it), separately per provider, so the rows hold for the first-party provider and
+  the CLI versions their evidence names (`sonnet`: 2.1.299–2.1.304); install
+  refuses when settings or the environment select another provider
+  (`CLAUDE_CODE_USE_BEDROCK`, `_VERTEX`, `_FOUNDRY`, `_MANTLE`, `_ANTHROPIC_AWS`,
+  `_ANTHROPIC_GOOGLE_CLOUD`, `_GATEWAY`). Re-check the rows, and reinstall, when the
+  CLI adds a model family. The file has no workdir and no mode, is
   marked `source: host-config` and `caller_identity_verified: false`, and gets an
   install record (sha256, size, mtime) next to it. `--install` refuses to run
   inside a harness, as a guard against accidents.

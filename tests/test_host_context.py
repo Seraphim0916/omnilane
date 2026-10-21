@@ -88,15 +88,27 @@ class ConfiguredModelTests(Fixture):
         self.claude_settings({"model": "opus[1m]", "env": {"ANTHROPIC_MODEL": "claude-sonnet-5-5"}})
         self.assertEqual(host_context.configured_model("claude-code")[0], "claude-sonnet-5-5")
 
+    def test_another_claude_provider_is_refused_from_settings_or_the_environment(self):
+        # The CLI maps "sonnet" to claude-sonnet-4-5 on Bedrock: the first-party table would be wrong there.
+        self.claude_settings({"model": "sonnet", "env": {"CLAUDE_CODE_USE_BEDROCK": "1"}})
+        with self.assertRaisesRegex(host_context.HostContextError, "settings env selects another provider"):
+            host_context.configured_model("claude-code")
+        self.claude_settings({"model": "sonnet", "env": {"CLAUDE_CODE_USE_VERTEX": "0"}})
+        self.assertEqual(host_context.configured_model("claude-code")[0], "sonnet")
+        with self.assertRaisesRegex(host_context.HostContextError, "environment selects another provider"):
+            host_context.configured_model("claude-code", dict(os.environ, CLAUDE_CODE_USE_GATEWAY="true"))
+
     def test_an_alias_maps_and_an_unknown_name_is_refused(self):
         registry, _ = host_context.caller_identity.load_registry(REGISTRY)
         aliases = host_context.load_aliases()
         self.assertEqual(host_context.exact_model("claude-code", "opus[1m]", registry, aliases),
                          ("claude-opus-5-5", "opus[1m]"))
+        self.assertEqual(host_context.exact_model("claude-code", "sonnet", registry, aliases),
+                         ("claude-sonnet-5-5", "sonnet"))
         self.assertEqual(host_context.exact_model("codex", "gpt-6-astra", registry, aliases),
                          ("gpt-6-astra", None))
         with self.assertRaisesRegex(host_context.HostContextError, "has no mapping"):
-            host_context.exact_model("claude-code", "sonnet", registry, aliases)
+            host_context.exact_model("claude-code", "haiku", registry, aliases)
         with self.assertRaisesRegex(host_context.HostContextError, "does not score"):
             host_context.exact_model("claude-code", "opus[1m]", registry, {"claude-code": {"opus[1m]": "nope"}})
 
@@ -122,7 +134,7 @@ class InstallTests(Fixture):
         self.assertFalse(host_context.host_dir().exists())
 
     def test_a_missing_config_is_skipped_and_an_unmapped_model_writes_nothing(self):
-        self.claude_settings({"model": "sonnet"})
+        self.claude_settings({"model": "haiku"})
         self.assertEqual(self.install(), 3)
         self.assertTrue(any("codex: skipped" in line for line in self.lines), self.lines)
         self.assertTrue(any("claude-code: not written" in line and "no mapping" in line

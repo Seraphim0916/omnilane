@@ -36,6 +36,10 @@ REPO = Path(__file__).resolve().parents[2]
 ALIASES = REPO / "config" / "model-aliases.json"
 SUPPORTED = ("codex", "claude-code")
 VENDORS = {"codex": "codex", "claude-code": "claude"}
+# claude 2.1.304's catalog keys its per-provider aliases by these switches.
+CLAUDE_PROVIDER_FLAGS = ("CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+                         "CLAUDE_CODE_USE_MANTLE", "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+                         "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD", "CLAUDE_CODE_USE_GATEWAY")
 MAX_BYTES = 65536
 
 
@@ -122,6 +126,13 @@ def configured_model(harness: str, environment=os.environ) -> tuple[str, dict]:
     if harness == "claude-code":
         path = Path(environment.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "settings.json"
         settings = json.loads(path.read_text(encoding="utf-8"))
+        # Claude Code resolves aliases per provider; the alias table and the scored ids are first-party.
+        for source, values in (("settings env", settings.get("env") or {}), ("environment", environment)):
+            chosen = [name for name in CLAUDE_PROVIDER_FLAGS
+                      if str(values.get(name, "")).strip().lower() not in ("", "0", "false")]
+            if chosen:
+                raise HostContextError(f"{source} selects another provider ({', '.join(chosen)}); "
+                                       "host files cover the first-party provider only")
         env_model = (settings.get("env") or {}).get("ANTHROPIC_MODEL")
         if env_model:
             return env_model, {"file": str(path), "key": "env.ANTHROPIC_MODEL"}

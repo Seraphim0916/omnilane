@@ -1,12 +1,14 @@
 {
   "schema_version": 1,
-  "description": "Model names a harness's own configuration may use that are not the exact model id the registry scores. `omnilane native-context --install` maps through this table and writes nothing for a name it cannot map. Add a row only with evidence of what the harness actually ran.",
+  "description": "Model names a harness's own configuration may use that are not the exact model id the registry scores. `omnilane native-context --install` maps through this table and writes nothing for a name it cannot map. Add a row only with evidence of what the harness actually ran. Claude Code resolves its aliases from a catalog built into each CLI release (and a server-served catalog may override it), per provider: these rows hold for the first-party provider only, and install refuses when settings select another one. Re-check the rows when the CLI adds a model family.",
   "aliases": {
     "claude-code": {
-      "opus[1m]": "claude-opus-5-5"
+      "opus[1m]": "claude-opus-5-5",
+      "sonnet": "claude-sonnet-5-5"
     }
   },
   "evidence": {
-    "claude-code/opus[1m]": "2026-10-20, MacStudio, claude 2.1.304: ~/.claude/settings.json model=opus[1m]; every assistant record of that session's transcript carries message.model claude-opus-5-5."
+    "claude-code/opus[1m]": "2026-10-20, MacStudio, claude 2.1.304: ~/.claude/settings.json model=opus[1m]; every assistant record of that session's transcript carries message.model claude-opus-5-5.",
+    "claude-code/sonnet": "2026-10-21: the catalog built into claude 2.1.299, 2.1.302, 2.1.303 and 2.1.304 (MacStudio and MacMini binaries) reads aliases.sonnet.default = claude-sonnet-5-5 and latest_per_family.sonnet = claude-sonnet-5-5; other providers differ (bedrock/vertex/foundry/mantle claude-sonnet-4-5, anthropic_aws/gateway claude-sonnet-4-6). MacMini ~/.claude/settings.json model=sonnet with no provider flag; the operator saw 'Sonnet 5.5 (from .claude/settings.json)' when opening Claude Code there on 2026-10-20 (relayed, not independently observed). No MacMini transcript started from that setting was found: the recent ones all passed --model."
   }
 }
