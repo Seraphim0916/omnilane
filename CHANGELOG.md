@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-10-21
+
 ### Added
 - `omnilane native-context --install [--harness codex|claude-code]`, run once from a terminal, records the model each harness's own configuration starts with (Codex `config.toml` model or active profile; Claude Code `settings.json` `env.ANTHROPIC_MODEL` or `model`) in `$OMNILANE_HOME/native-context/host/<harness>.json`, marked `source: host-config` and `caller_identity_verified: false`, with an install record of its sha256, size and mtime. Names that are not exact scored models go through the new `config/model-aliases.json` (`opus[1m]` → `claude-opus-5-5`, verified on claude 2.1.304); an unmapped name writes nothing and says which mapping is missing. It refuses to run inside a harness. When dispatch cannot read the caller and was given no `--native-context`, the inherited-worker fallback now uses the file of the harness named by its environment (`CODEX_THREAD_ID`/`CODEX_SANDBOX` or `CLAUDECODE`/`CLAUDE_CODE_ENTRYPOINT`; none or both is a refusal), only if it still matches its install record, and builds the capability context for this call's workdir and mode in memory, so a read-only Codex sandbox can use it. The handoff's `fallback.host_context` says `model_may_differ_from_session: true`. The record shows a change but cannot prevent one, since a model runs as the same user; this is accepted because an inherited worker never scores above its caller and completion is still checked against the stated model. `probe.py` and `probe_sweep.py` are unchanged.
 - A lane dispatch refused only because the caller's identity could not be read (`missing-caller-context`) now falls back to the `--inherit` handoff when it carries a `--native-context` file that states the caller's model (`omnilane native-context --vendor V --model M --inherits-caller-runtime`). Stderr says "falling back to --inherit", and the handoff gains a `fallback` object with the lane and the stored refusal; it stays `satisfies_lane_target: false` and `caller_identity_verified: false`. There is no fallback for an explicit vendor/model/effort target, `--executor cli`, the CLI-only flags `--inherit` refuses, any other refusal code, or a file that does not state the model: dispatch never guesses an identity, because completion is checked against the stated one.
@@ -20,6 +22,7 @@ semantic version tags.
 - `docs/native-executor.md`: the paragraph on `omnilane native-context --vendor V --model M` had been run into the new fallback paragraph; it is a separate paragraph again.
 - `omnilane resign` no longer reports working Claude selectors as `model-mismatch` when the host's Claude Code settings enable the server-side advisor tool. Since claude 2.1.304 the probed model sometimes consults the advisor even with `--tools ""`; the advisor model is billed too, so `modelUsage` names two models and the exact-match check fails. On 2026-10-20 this held `claude` on both hosts, and a different effort failed on each run (`claude-opus-5-5-high`/`-low`, then `-low` alone). The re-sign sweep now runs every Claude probe with `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`, which the CLI checks before both the user's opt-in and the server-side flag. A Claude Code debug log shows the tool as enabled without the switch and absent with it, and nine probes of `claude-opus-5-5` at high, low and medium with the switch each billed only the requested model. The switch is set in `probe_failure.py`, not in `probe.py` or `probe_sweep.py`: those two files are hashed into every proof's engine contract, so editing them would invalidate every verified mapping on every host. Existing proofs stay valid. A hand-run full sweep (`scripts/lib/probe_sweep.py --root`) does not go through that wrapper; export the variable before running it.
 - A held vendor no longer loses the record of why its probe failed. Re-sign copies the old evidence back over the new sweep so the rebuild stays honest, and that copy overwrote the failed probe's stdout, stderr and descriptor. Each configuration the sweep reported as failed now has this run's differing files renamed to `<name>.failed.<ext>` first, and the log names them. The overlay builder reads evidence by exact name, so these files never enter a proof.
+- CI: `lint-and-smoke` runs on `ubuntu-24.04` instead of `ubuntu-latest`. `ubuntu-latest` became ubuntu-26.04 on 2026-10-20 and actions/python-versions has no Python 3.9 build for it, so the job failed within seconds on every pull request.
 
 ## [0.56.0] - 2026-10-18
 
@@ -1772,7 +1775,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.56.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.57.0...HEAD
+[0.57.0]: https://github.com/Seraphim0916/omnilane/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/Seraphim0916/omnilane/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/Seraphim0916/omnilane/compare/v0.53.0...v0.54.0

@@ -756,6 +756,17 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
 
 ## 📜 릴리스 기록
 
+## v0.57.0 새 기능
+
+- 업그레이드 후 각 호스트의 터미널에서 `omnilane native-context --install`을 한 번 실행하세요. 0.56.0에서 업그레이드하는 경우 AA 스냅샷이 바뀌었으므로 GUI 터미널에서 `omnilane resign`도 한 번 실행하세요.
+- `omnilane native-context --install`은 각 하네스 자체 설정이 시작할 때 쓰는 모델을 기록합니다. 디스패치가 호출자를 식별하지 못할 때(예: Codex 읽기 전용 샌드박스) 추가 플래그 없이 상속형 워커로 폴백합니다.
+- 호출자 신원을 읽지 못한 것만이 이유로 거부된 레인 디스패치는 `--native-context` 파일에 호출자 모델이 명시되어 있으면 `--inherit` 핸드오프로 폴백합니다. 신원을 추측하지 않습니다.
+- 레인 거부마다 `omnilane refusal:` 요약 한 줄을 출력하고 증거를 `$OMNILANE_HOME/refusals/`에 저장합니다.
+- `omnilane self-exec record`와 `omnilane stats self-exec`로 거부 이후 커맨더가 직접 한 작업을 기록하고 집계합니다.
+- `codex/gpt-5-4-mini`가 점수표에 돌아왔습니다(어느 레인에도 없음). `routing.yaml`은 바뀌지 않았습니다.
+- `omnilane resign`은 advisor 도구가 켜져 있어도 정상인 Claude 셀렉터를 `model-mismatch`로 보고하지 않으며, 보류된 벤더의 실패한 프로브 출력을 보존합니다.
+- 업그레이드: `npm i -g omnilane@0.57.0`.
+
 ## v0.56.0 새 기능
 
 - 0.55.0에서 업그레이드한 뒤에는 `run-gemini.sh`가 변경되었으므로 GUI 터미널에서 `omnilane resign --vendor gemini`를 한 번 실행하세요.

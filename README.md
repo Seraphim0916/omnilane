@@ -927,6 +927,17 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.57.0
+
+- After upgrading, run `omnilane native-context --install` once from a terminal on each host; when upgrading from 0.56.0, also run `omnilane resign` once from a GUI terminal because the AA snapshot has changed.
+- `omnilane native-context --install` records the model each harness's own configuration starts with, so a caller that dispatch cannot identify (for example a read-only Codex sandbox) falls back to an inherited worker with no extra flags.
+- A lane dispatch refused only because the caller's identity could not be read now falls back to the `--inherit` handoff when a `--native-context` file states the caller's model; it never guesses an identity.
+- Every lane refusal prints a one-line `omnilane refusal:` summary and is stored as evidence under `$OMNILANE_HOME/refusals/`.
+- `omnilane self-exec record` and `omnilane stats self-exec` track tasks the commander did itself after a stored refusal.
+- `codex/gpt-5-4-mini` returns to the score table (no lane lists it); `routing.yaml` is unchanged.
+- `omnilane resign` no longer reports working Claude selectors as `model-mismatch` when the advisor tool is enabled, and keeps a held vendor's failed probe output.
+- Upgrade: `npm i -g omnilane@0.57.0`.
+
 ## What's new in v0.56.0
 
 - When upgrading from 0.55.0, run `omnilane resign --vendor gemini` once from a GUI terminal because `run-gemini.sh` has changed.

@@ -760,6 +760,17 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 
 ## 📜 版本歷程
 
+## v0.57.0 新功能
+
+- 升級後，每台主機都要在終端機跑一次 `omnilane native-context --install`；從 0.56.0 升級的主機，因為 AA 快照換版，還要在圖形終端機跑一次 `omnilane resign`。
+- `omnilane native-context --install` 會記下各執行環境自己設定的起始模型；派工讀不到呼叫端身分時（例如 Codex 唯讀沙箱），不用加任何旗標就能退回繼承式工人。
+- 只因讀不到呼叫端身分而被拒的車道派工，只要 `--native-context` 檔寫明呼叫端模型，就會退回 `--inherit` 交接；不會猜測身分。
+- 每次車道拒絕都會印一行 `omnilane refusal:` 摘要，並把證據存到 `$OMNILANE_HOME/refusals/`。
+- `omnilane self-exec record` 與 `omnilane stats self-exec` 記錄並統計主控在拒絕之後自己做的工作。
+- `codex/gpt-5-4-mini` 回到評分表（沒有車道使用）；`routing.yaml` 沒有改。
+- `omnilane resign` 在啟用 advisor 工具時，不再把正常的 Claude 選擇器誤報成 `model-mismatch`，也會保留被擱置廠商的失敗探測輸出。
+- 升級：`npm i -g omnilane@0.57.0`。
+
 ## v0.56.0 新功能
 
 - 從 0.55.0 升級後，請在圖形終端機跑一次 `omnilane resign --vendor gemini`，因為 `run-gemini.sh` 已更新。

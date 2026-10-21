@@ -772,6 +772,17 @@ work の別名ではありません。サービス管理など、work の境界�
 
 ## 📜 リリース履歴
 
+## v0.57.0 の新機能
+
+- アップグレード後、各ホストのターミナルで `omnilane native-context --install` を一度実行してください。0.56.0 からアップグレードする場合は、AA スナップショットが変わったため、GUI ターミナルで `omnilane resign` も一度実行してください。
+- `omnilane native-context --install` は各ハーネス自身の設定が起動時に使うモデルを記録します。ディスパッチが呼び出し元を識別できない場合（例：Codex の読み取り専用サンドボックス）、追加フラグなしで継承型ワーカーにフォールバックします。
+- 呼び出し元の身元を読めないことだけが理由で拒否されたレーンのディスパッチは、`--native-context` ファイルが呼び出し元のモデルを明記していれば `--inherit` ハンドオフにフォールバックします。身元を推測することはありません。
+- レーンの拒否ごとに `omnilane refusal:` の要約を 1 行出力し、証拠を `$OMNILANE_HOME/refusals/` に保存します。
+- `omnilane self-exec record` と `omnilane stats self-exec` で、拒否後にコマンダー自身が行った作業を記録・集計します。
+- `codex/gpt-5-4-mini` がスコア表に戻りました（どのレーンにも含まれません）。`routing.yaml` は変更していません。
+- `omnilane resign` は advisor ツールが有効でも、正常な Claude セレクターを `model-mismatch` と報告しなくなり、保留されたベンダーの失敗したプローブ出力も保持します。
+- アップグレード：`npm i -g omnilane@0.57.0`。
+
 ## v0.56.0 の新機能
 
 - 0.55.0 からアップグレードした後は、`run-gemini.sh` が変更されたため、GUI ターミナルで `omnilane resign --vendor gemini` を一度実行してください。
