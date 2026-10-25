@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import pathlib
 import queue
@@ -57,6 +58,7 @@ class CodexLiveClient:
         self.thread_id: str | None = None
         self.turn_id: str | None = None
         self.last_turn_succeeded = False
+        self.pending_turn_completions: dict[str, bool] | None = None
         self.stop_requested = False
         self.server_stdout_eof = threading.Event()
 
@@ -116,6 +118,12 @@ class CodexLiveClient:
         if not isinstance(message, dict):
             return None
 
+        params = message.get("params")
+        if isinstance(params, dict):
+            event_thread_id = params.get("threadId")
+            if event_thread_id is not None and event_thread_id != self.thread_id:
+                return message
+
         if message.get("method") == "item/completed":
             params = message.get("params")
             item = params.get("item") if isinstance(params, dict) else None
@@ -127,9 +135,14 @@ class CodexLiveClient:
         if message.get("method") == "turn/completed":
             params = message.get("params")
             turn = params.get("turn") if isinstance(params, dict) else None
-            if isinstance(turn, dict) and turn.get("id") == self.turn_id:
-                self.last_turn_succeeded = turn.get("status") == "completed" and turn.get("error") is None
-                self.turn_id = None
+            if isinstance(turn, dict):
+                turn_id = turn.get("id")
+                succeeded = turn.get("status") == "completed" and turn.get("error") is None
+                if isinstance(turn_id, str) and self.pending_turn_completions is not None:
+                    self.pending_turn_completions[turn_id] = succeeded
+                if turn_id == self.turn_id:
+                    self.last_turn_succeeded = succeeded
+                    self.turn_id = None
         return message
 
     def append_agent_text(self, text: str) -> None:
@@ -156,6 +169,8 @@ class CodexLiveClient:
             message = self.receive(min(0.2, max(0.0, deadline - time.monotonic())))
             if message is None or message.get("id") != request_id:
                 continue
+            if "result" in message and "error" in message:
+                raise ProtocolError(f"Codex app-server returned both result and error during {method}")
             result = message.get("result")
             if not isinstance(result, dict):
                 error = message.get("error")
@@ -218,14 +233,23 @@ class CodexLiveClient:
         }
         if self.args.effort and self.args.effort != "-":
             params["effort"] = self.args.effort
-        request_id = self.send("turn/start", params)
-        result = self.wait_response(request_id, "turn/start")
+        # Notifications can precede the response that gives us the turn id.
+        pending: dict[str, bool] = {}
+        self.pending_turn_completions = pending
+        self.last_turn_succeeded = False
+        try:
+            request_id = self.send("turn/start", params)
+            result = self.wait_response(request_id, "turn/start")
+        finally:
+            self.pending_turn_completions = None
         turn = result.get("turn")
         turn_id = turn.get("id") if isinstance(turn, dict) else None
         if not isinstance(turn_id, str) or not turn_id:
             raise ProtocolError("Codex turn/start response omitted turn.id")
         self.turn_id = turn_id
-        self.last_turn_succeeded = False
+        if turn_id in pending:
+            self.last_turn_succeeded = pending[turn_id]
+            self.turn_id = None
 
     def steer_turn(self, text: str) -> None:
         assert self.thread_id is not None and self.turn_id is not None
@@ -446,7 +470,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--app-server-eof-grace", type=float, default=2.0)
     parser.add_argument("--app-server-term-grace", type=float, default=1.0)
     parser.add_argument("--app-server-kill-grace", type=float, default=1.0)
-    return parser.parse_args()
+    args = parser.parse_args()
+    for name in ("rpc_timeout", "close_grace", "app_server_eof_grace", "app_server_term_grace", "app_server_kill_grace"):
+        value = getattr(args, name)
+        positive = name == "rpc_timeout"
+        if not math.isfinite(value) or value < 0 or (positive and value == 0):
+            requirement = "finite and greater than zero" if positive else "finite and nonnegative"
+            parser.error(f"--{name.replace('_', '-')} must be {requirement}")
+    return args
 
 
 def main() -> int:
