@@ -92,10 +92,15 @@ def _toml_strings(text: str) -> dict:
 
 
 def _toml_fallback(text: str) -> dict:
-    """Parse a string-only TOML subset; reject syntax we cannot safely interpret."""
+    """Parse common TOML settings without dependencies on Python 3.9/3.10.
+
+    Preserve value types for configured_model's shape checks. Unsupported syntax
+    still fails closed instead of hiding a malformed or ambiguous model setting.
+    """
     value: dict = {}
     current = value
     tables = set()
+    inline_tables = set()
     quoted = r""""(?:[^"\\\x00-\x08\x0a-\x1f]|\\(?:["\\btnfr]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*"|'[^'\x00-\x08\x0a-\x1f]*'"""
     key = r"(?:[A-Za-z0-9_-]+|" + quoted + r")"
 
@@ -117,7 +122,79 @@ def _toml_fallback(text: str) -> dict:
             return escapes[escape]
         return re.sub(r'\\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', replace, token[1:-1])
 
-    for number, line in enumerate(text.splitlines(), 1):
+    def whitespace(pos, multiline=False):
+        pattern = r"(?:\s|#[^\n]*(?:\n|$))*" if multiline else r"[ \t]*"
+        return re.compile(pattern).match(text, pos).end()
+
+    def parse_value(pos):
+        pos = whitespace(pos)
+        string = re.compile(quoted).match(text, pos)
+        if string:
+            return decode(string.group()), string.end()
+        if pos < len(text) and text[pos] == '[':
+            items = []
+            pos = whitespace(pos + 1, multiline=True)
+            while pos < len(text) and text[pos] != ']':
+                item, pos = parse_value(pos)
+                items.append(item)
+                pos = whitespace(pos, multiline=True)
+                if pos < len(text) and text[pos] == ']':
+                    break
+                if pos >= len(text) or text[pos] != ',':
+                    raise ValueError("expected array comma or closing bracket")
+                pos = whitespace(pos + 1, multiline=True)
+            if pos >= len(text):
+                raise ValueError("unterminated array")
+            return items, pos + 1
+        if pos < len(text) and text[pos] == '{':
+            fields = {}
+            inline_tables.add(id(fields))
+            pos = whitespace(pos + 1)
+            while pos < len(text) and text[pos] != '}':
+                field = re.compile(r"(" + key + r")[ \t]*=[ \t]*").match(text, pos)
+                if not field:
+                    raise ValueError("invalid inline table key")
+                name = decode(field.group(1))
+                if name in fields:
+                    raise ValueError("duplicate inline table key")
+                fields[name], pos = parse_value(field.end())
+                pos = whitespace(pos)
+                if pos < len(text) and text[pos] == '}':
+                    break
+                if pos >= len(text) or text[pos] != ',':
+                    raise ValueError("expected inline table comma or closing brace")
+                pos = whitespace(pos + 1)
+                if pos < len(text) and text[pos] == '}':
+                    raise ValueError("trailing inline table comma")
+            if pos >= len(text):
+                raise ValueError("unterminated inline table")
+            return fields, pos + 1
+        token = re.compile(r"[^\s,#\]}]+").match(text, pos)
+        if not token:
+            raise ValueError("missing value")
+        raw = token.group()
+        if raw in ('true', 'false'):
+            return raw == 'true', token.end()
+        decimal = r"(?:0|[1-9](?:_?[0-9])*)"
+        digits = r"[0-9](?:_?[0-9])*"
+        if re.fullmatch(r"[+-]?" + decimal, raw):
+            return int(raw.replace('_', '')), token.end()
+        if re.fullmatch(r"(?:0x[0-9a-fA-F](?:_?[0-9a-fA-F])*|"
+                        r"0o[0-7](?:_?[0-7])*|0b[01](?:_?[01])*)", raw):
+            return int(raw.replace('_', ''), 0), token.end()
+        exponent = r"[eE][+-]?" + digits
+        if re.fullmatch(r"[+-]?(?:" + decimal + r"(?:\." + digits
+                        + r"(?:" + exponent + r")?|" + exponent + r")|inf|nan)", raw):
+            return float(raw.replace('_', '')), token.end()
+        raise ValueError("unsupported or invalid value")
+
+    pos = 0
+    while pos < len(text):
+        number = text.count('\n', 0, pos) + 1
+        end = text.find('\n', pos)
+        end = len(text) if end < 0 else end
+        line = text[pos:end]
+        start, pos = pos, end + 1
         if re.fullmatch(r"\s*(?:#.*)?", line):
             continue
         try:
@@ -131,13 +208,19 @@ def _toml_fallback(text: str) -> dict:
                 current = value
                 for part in parts:
                     current = current.setdefault(part, {})
-                    if not isinstance(current, dict):
+                    if not isinstance(current, dict) or id(current) in inline_tables:
                         raise ValueError("table conflicts with a value")
                 continue
-            pair = re.fullmatch(r"\s*(" + key + r")\s*=\s*(" + quoted + r")\s*(?:#.*)?", line)
+            pair = re.match(r"[ \t]*(" + key + r")[ \t]*=[ \t]*", line)
             if not pair:
-                raise ValueError("unsupported or invalid syntax (fallback supports strings only)")
-            name, content = decode(pair.group(1)), decode(pair.group(2))
+                raise ValueError("unsupported or invalid syntax")
+            name = decode(pair.group(1))
+            content, stop = parse_value(start + pair.end())
+            end = text.find('\n', stop)
+            end = len(text) if end < 0 else end
+            if not re.fullmatch(r"[ \t\r]*(?:#.*)?", text[stop:end]):
+                raise ValueError("unexpected content after value")
+            pos = end + 1
             if name in current:
                 raise ValueError("duplicate key")
             current[name] = content
