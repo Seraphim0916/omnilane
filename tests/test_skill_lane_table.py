@@ -3,6 +3,7 @@ import offline_env  # Activate suite isolation for direct file execution.
 import re
 import unittest
 from pathlib import Path
+from typing import Optional
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = REPO / "skills" / "omnilane" / "SKILL.md"
@@ -10,10 +11,12 @@ ROUTING = REPO / "routing.yaml"
 READMES = sorted(REPO.glob("README*.md"))
 
 
-def routing_chains() -> dict:
+def routing_chains(text: Optional[str] = None) -> dict:
     chains = {}
-    for line in ROUTING.read_text(encoding="utf-8").splitlines():
-        match = re.match(r"^([a-z][a-z-]*):\s*(.+)$", line.split("#")[0].rstrip())
+    if text is None:
+        text = ROUTING.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        match = re.match(r"^([a-z][a-z0-9-]*):\s*(.+)$", line.split("#")[0].rstrip())
         if match:
             chains[match.group(1)] = [segment.split() for segment in match.group(2).split("|")]
     return chains
@@ -35,15 +38,17 @@ def table_chains(path: Path) -> dict:
         if len(cells) < 3:
             continue
         lane = re.sub(r"^[^a-z]+", "", cells[0])
-        if re.fullmatch(r"[a-z][a-z-]*", lane) and "→" in cells[2] or lane in ("consult",):
+        if re.fullmatch(r"[a-z][a-z0-9-]*", lane) and "→" in cells[2] or lane in ("consult",):
             chains[lane] = [cells[1]] + [item.strip() for item in cells[2].split("→")]
     return chains
 
 
-def skill_lane_rows() -> dict:
+def skill_lane_rows(text: Optional[str] = None) -> dict:
     """Rows of the skill's `| Lane | Use for |` table, keyed by lane."""
     rows, inside = {}, False
-    for line in SKILL.read_text(encoding="utf-8").splitlines():
+    if text is None:
+        text = SKILL.read_text(encoding="utf-8")
+    for line in text.splitlines():
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         if cells == ["Lane", "Use for"]:
             inside = True
@@ -59,14 +64,37 @@ def flat(text: str) -> str:
 
 
 class SkillLaneTableTests(unittest.TestCase):
+    def assert_skill_lanes_match(self, routing: dict, rows: dict):
+        expected, actual = set(routing), set(rows)
+        self.assertEqual(
+            expected, actual,
+            "SKILL.md lane mismatch: missing lanes: {}; extra lanes: {}".format(
+                sorted(expected - actual), sorted(actual - expected)
+            ),
+        )
+
     def test_skill_table_names_every_routing_lane(self):
         rows = skill_lane_rows()
         self.assertGreaterEqual(len(rows), 10, "SKILL.md: lane table not found")
-        for lane in routing_chains():
-            self.assertIn(lane, rows, f"SKILL.md has no row for {lane}")
+        self.assert_skill_lanes_match(routing_chains(), rows)
+
+    def test_detects_digit_lane_missing_from_skill_table(self):
+        routing = routing_chains("review-lane: off - -\nreview-lane-2: off - -\n")
+        rows = skill_lane_rows("| Lane | Use for |\n|---|---|\n| review-lane | Review |\n")
+        with self.assertRaisesRegex(AssertionError, r"missing lanes: \['review-lane-2'\]"):
+            self.assert_skill_lanes_match(routing, rows)
+
+    def test_detects_extra_lane_in_skill_table(self):
+        routing = routing_chains("review-lane: off - -\n")
+        rows = skill_lane_rows(
+            "| Lane | Use for |\n|---|---|\n"
+            "| review-lane | Review |\n| obsolete-lane | Obsolete |\n"
+        )
+        with self.assertRaisesRegex(AssertionError, r"extra lanes: \['obsolete-lane'\]"):
+            self.assert_skill_lanes_match(routing, rows)
 
     def test_skill_table_carries_no_model_names(self):
-        # Chains live in routing.yaml and `omnilane list`; a copy in the skill goes stale.
+        # Chains live in routing.yaml and `omnilane route --explain`; a copy in the skill goes stale.
         models = set()
         for segments in routing_chains().values():
             for segment in segments:

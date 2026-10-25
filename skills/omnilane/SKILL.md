@@ -62,8 +62,9 @@ The table shows no scores, and you cannot tell from it whether a target is withi
 your ceiling. Ask: add `--dry-run` to the dispatch in Step 3. It prints the
 decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
-The table lists lanes and their purposes only; for a lane's live candidate chain,
-run `omnilane list` (or add `--dry-run` to a dispatch).
+The table lists lanes and their purposes only; `omnilane list` shows the live
+table with one resolved target per lane. For a lane's ordered candidate chain,
+run `omnilane route --explain <lane>`. `--dry-run` prints the decision without calling.
 
 | Lane | Use for |
 |---|---|
