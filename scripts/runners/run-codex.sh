@@ -46,8 +46,10 @@ ARGS+=(--disable multi_agent)
 # Optional, off unless both are set: the built-in `openai` provider id cannot
 # be overridden, so extra request headers need a provider of our own that keeps
 # the ChatGPT login (requires_openai_auth). The value of
-# OMNILANE_CODEX_HTTP_HEADERS is a TOML inline table, e.g.
-# {"x-headroom-bypass"="true"}.
+# OMNILANE_CODEX_HTTP_HEADERS is a TOML inline table of string headers, e.g.
+# {"x-headroom-bypass"="true"}; it is parsed and re-serialized so it can only
+# ever become http_headers, never another provider field.
+CODEX_SETUP="$(dirname "${BASH_SOURCE[0]}")/../lib/codex_worker_setup.py"
 CODEX_PROVIDER_BASE_URL="${OMNILANE_CODEX_PROVIDER_BASE_URL:-}"
 CODEX_HTTP_HEADERS="${OMNILANE_CODEX_HTTP_HEADERS:-}"
 if [[ -n "$CODEX_PROVIDER_BASE_URL" || -n "$CODEX_HTTP_HEADERS" ]]; then
@@ -59,10 +61,7 @@ if [[ -n "$CODEX_PROVIDER_BASE_URL" || -n "$CODEX_HTTP_HEADERS" ]]; then
     echo "omnilane: invalid OMNILANE_CODEX_PROVIDER_BASE_URL" >&2
     exit 2
   }
-  [[ "$CODEX_HTTP_HEADERS" =~ ^\{[^$'\n']*\}$ ]] || {
-    echo "omnilane: OMNILANE_CODEX_HTTP_HEADERS must be one TOML inline table" >&2
-    exit 2
-  }
+  CODEX_HTTP_HEADERS="$(python3 -I "$CODEX_SETUP" headers "$CODEX_HTTP_HEADERS")" || exit 2
   ARGS+=(
     -c 'model_provider="omnilane_codex"'
     -c "model_providers.omnilane_codex={name=\"omnilane Codex worker\", base_url=\"$CODEX_PROVIDER_BASE_URL\", wire_api=\"responses\", requires_openai_auth=true, http_headers=$CODEX_HTTP_HEADERS}"
@@ -90,32 +89,19 @@ ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
 PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 
 # workspace-write excludes /tmp and $TMPDIR, so heredocs and xcrun fail there;
-# give the worker a temp dir inside the one root it may write.
+# give the worker a temp dir inside the one root it may write. advise is a
+# read-only sandbox: a directory would not make it writable, so leave the
+# workdir untouched there.
 TMP_ENV=()
-if [[ "$MODE" == "work" || "$MODE" == "advise" ]]; then
+if [[ "$MODE" == "work" ]]; then
   WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
     echo "omnilane: Codex workdir is not accessible" >&2
     exit 2
   }
-  CODEX_TMP="$WORKDIR/.omnilane-tmp"
-  if [[ -L "$CODEX_TMP" || ( -e "$CODEX_TMP" && ! -d "$CODEX_TMP" ) ]]; then
-    echo "omnilane: unsafe Codex work temp path" >&2
-    exit 125
-  fi
-  mkdir -p "$CODEX_TMP"
-  chmod 700 "$CODEX_TMP"
-  CODEX_TMP="$(cd -- "$CODEX_TMP" && pwd -P)"
-  case "$CODEX_TMP/" in
-    "$WORKDIR/"*) ;;
-    *) echo "omnilane: Codex work temp escaped workdir" >&2; exit 125 ;;
-  esac
-  # info/exclude rather than .gitignore: it is never tracked, so a worker
-  # cannot commit the ignore rule into the target repository.
-  if EXCLUDE_FILE="$(git -C "$WORKDIR" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null)"; then
-    if ! grep -qxF '/.omnilane-tmp/' "$EXCLUDE_FILE" 2>/dev/null; then
-      mkdir -p "$(dirname "$EXCLUDE_FILE")" && printf '/.omnilane-tmp/\n' >> "$EXCLUDE_FILE" || true
-    fi
-  fi
+  # Created and chmodded through one no-follow descriptor, so a link swapped
+  # in after a check cannot redirect either step; info/exclude (never
+  # tracked, so a worker cannot commit the rule) is written the same way.
+  CODEX_TMP="$(python3 -I "$CODEX_SETUP" tmpdir "$WORKDIR")" || exit 125
   TMP_ENV=("TMPDIR=$CODEX_TMP/" "TMPPREFIX=$CODEX_TMP/zsh")
   # The process env alone is not enough: shell_environment_policy (for example
   # inherit = "core") drops TMPPREFIX before the tool shell starts, and zsh
