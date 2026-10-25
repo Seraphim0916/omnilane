@@ -28,6 +28,9 @@ PROMPT_FILE="$6"; OUTPUT_FILE="$7"
 RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 [[ -x "$RUNNER" ]] || { echo "omnilane: no runner for vendor '$VENDOR'" >&2; exit 2; }
 
+# Two concurrent codex execs in one target dir corrupt its job index — serialize.
+[[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
+
 # Reuse the guarded sibling-copy mechanism before any mode or fallback path.
 # Keep this boundary copy raw: the vendor runners (and the first live message)
 # add worker rules themselves. Passing the decorated copy would double them.
@@ -37,13 +40,21 @@ if [[ -L "$RUNNER_PROMPT_FILE" || ( -e "$RUNNER_PROMPT_FILE" && ! -f "$RUNNER_PR
   echo "omnilane: unsafe runner prompt path" >&2
   exit 125
 fi
+live_mailbox_cleanup_ready=0
+# One exit handler owns prompt copies, mailbox resources, and the cwd lock.
+# Install after lock acquisition, which sets its own EXIT trap.
+# shellcheck disable=SC2329
+cleanup_job_worker() {
+  if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox; fi
+  rm -f -- "${TASK_PROMPT_FILE}.worker" "$RUNNER_PROMPT_FILE" \
+    "${RUNNER_PROMPT_FILE}.worker" 2>/dev/null || true
+  release_cwd_lock
+}
+trap cleanup_job_worker EXIT
 WORKER_PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")" || exit 1
 mv -f "$WORKER_PROMPT_FILE" "$RUNNER_PROMPT_FILE" || exit 1
 cat "$PROMPT_FILE" > "$RUNNER_PROMPT_FILE" || exit 1
 PROMPT_FILE="$RUNNER_PROMPT_FILE"
-
-# Two concurrent codex execs in one target dir corrupt its job index — serialize.
-[[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
 
 emit_mode_notice() {
   local notice="$1" notice_file="${OUTPUT_FILE%/*}/mode-notice.txt"
@@ -157,7 +168,7 @@ events_reader_open=0
 forward_spool_open=0
 runner_pid=""
 
-# Invoked by the EXIT trap below.
+# Invoked by the shared job cleanup once the mailbox is prepared.
 # shellcheck disable=SC2329
 cleanup_live_mailbox() {
   if [[ -n "${forward_spool:-}" ]]; then rm "$forward_spool" 2>/dev/null || true; fi
@@ -311,7 +322,7 @@ fi
 
 trap 'close_requested=1' USR1
 trap 'close_requested=1' PIPE
-trap cleanup_live_mailbox EXIT
+live_mailbox_cleanup_ready=1
 if [[ "$VENDOR" == "codex" ]]; then
   # Allocate once before publishing the holder PID. Reader and writer offsets
   # are independent; unlink immediately and keep this 0600 file private to us.
