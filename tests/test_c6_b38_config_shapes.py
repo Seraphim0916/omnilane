@@ -19,7 +19,10 @@ class ConfigShapeTests(unittest.TestCase):
             base = Path(directory)
             (base / 'config.toml').write_text(
                 'model = "gpt-6-astra"\nmodel_context_window = 100000\n'
-                '[features]\nmulti_agent = true\n')
+                'developer_instructions = """\nKeep going.\nmodel = "fake"\n"""\n'
+                "notes = '''\nliteral instructions\n'''\n"
+                'features.multi_agent = true\n'
+                '[[agents]]\nname = "one"\n[[agents]]\nname = "two"\n')
             environment = dict(os.environ, CODEX_HOME=directory,
                                OMNILANE_HOME=str(base / 'output'))
             for name in ('CODEX_THREAD_ID', 'CODEX_SANDBOX', 'CLAUDECODE',
@@ -42,7 +45,8 @@ class ConfigShapeTests(unittest.TestCase):
     def test_fallback_rejects_wrong_field_types(self):
         for text in ('model = 42', 'model = ["a"]', 'profile = false',
                      'profiles = []', '[profiles]\np = 1',
-                     '[profiles.p]\nmodel = false'):
+                     '[profiles.p]\nmodel = false', 'profiles.p.model = false',
+                     'model = 1979-05-27', '[[profiles]]\nmodel = "bad"'):
             with self.subTest(text=text), patch.dict(sys.modules, {'tomllib': None}), \
                  patch.object(Path, 'read_text', return_value=text):
                 with self.assertRaises(hc.HostContextError):
