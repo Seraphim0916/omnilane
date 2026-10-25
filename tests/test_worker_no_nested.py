@@ -230,6 +230,62 @@ class CodexWorkerContracts(unittest.TestCase):
         self.assertEqual(result.returncode, 125)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
 
+    # --- R7 review (FIX-FIRST) regressions ---
+
+    def test_header_value_may_contain_comma(self) -> None:
+        result, data = self.run_codex(
+            "work", self.prompt(),
+            OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+            OMNILANE_CODEX_HTTP_HEADERS='{"Accept"="application/json, text/plain", x-b = "1"}')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        provider = [v for v in config_values(data["argv"]) if v.startswith("model_providers.omnilane_codex=")]
+        self.assertIn('http_headers={"Accept"="application/json, text/plain", "x-b"="1"}', provider[0])
+
+    def test_header_pairs_still_need_separators(self) -> None:
+        for bad in ('{"a"="1" "b"="2"}', '{"a"="1",}', '{,"a"="1"}', '{"a"="1",, "b"="2"}'):
+            with self.subTest(value=bad):
+                result, data = self.run_codex(
+                    "work", self.prompt(),
+                    OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+                    OMNILANE_CODEX_HTTP_HEADERS=bad)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(data, {})
+
+    def test_live_branch_gets_shared_codex_controls(self) -> None:
+        inbox = self.tmp / "inbox.fifo"
+        os.mkfifo(inbox)
+        record = self.tmp / "live.record.json"
+        fake = self.tmp / "codex-live-fake"
+        fake.write_text("""#!/usr/bin/env python3
+import json, os, sys
+json.dump({"argv": sys.argv[1:], "TMPDIR": os.environ.get("TMPDIR")}, open(os.environ["FAKE_LIVE_RECORD"], "w"))
+sys.exit(3)
+""")
+        fake.chmod(0o755)
+        env = fixture_environment_with_isolated_tools(self)
+        env.update(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", CODEX_BIN=str(fake), OMNILANE_REPO=str(ROOT),
+                   OMNILANE_TIMEOUT="20", OMNILANE_INBOX=str(inbox), FAKE_LIVE_RECORD=str(record),
+                   OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+                   OMNILANE_CODEX_HTTP_HEADERS='{"x-headroom-bypass"="true"}')
+        for key in ("OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
+            env.pop(key, None)
+        subprocess.run(
+            ["/bin/bash", str(ROOT / "scripts/runners/run-codex.sh"), "work", str(self.workdir),
+             "gpt-6-astra", "medium", str(self.prompt()), str(self.tmp / "live.out")],
+            env=env, text=True, capture_output=True, check=False, timeout=60)
+        data = json.loads(record.read_text())
+        argv = data["argv"]
+        self.assertEqual(argv[-1], "app-server")
+        self.assertEqual(argv[argv.index("--disable") + 1], "multi_agent")
+        values = config_values(argv)
+        tmp_dir = self.workdir / ".omnilane-tmp"
+        self.assertIn('model_provider="omnilane_codex"', values)
+        self.assertTrue(any(v.startswith("model_providers.omnilane_codex=") and
+                            'http_headers={"x-headroom-bypass"="true"}' in v for v in values))
+        self.assertIn(f'shell_environment_policy.set.TMPPREFIX="{tmp_dir}/zsh"', values)
+        self.assertEqual(data["TMPDIR"], str(tmp_dir) + "/")
+
+
     def test_codex_prompt_starts_with_worker_rules(self) -> None:
         result, data = self.run_codex("work", self.prompt())
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -281,6 +337,83 @@ class EveryRunnerPrependsWorkerRules(unittest.TestCase):
                     self.assertNotIn("'", text)
                     self.assertTrue(text.endswith("task body\n"))
                     self.assertEqual(stat.S_IMODE(sent.stat().st_mode) & 0o077, 0)
+
+
+def load_setup():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("omnilane_codex_worker_setup",
+                                                  ROOT / "scripts/lib/codex_worker_setup.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class ExcludeWriteContracts(unittest.TestCase):
+    def setUp(self) -> None:
+        td = tempfile.TemporaryDirectory(prefix="omnilane-exclude-")
+        self.addCleanup(td.cleanup)
+        self.tmp = Path(td.name).resolve()
+        self.repo = self.tmp / "repo"
+        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+        self.setup = load_setup()
+
+    def test_write_failure_only_warns(self) -> None:
+        import contextlib
+        import errno
+        import io
+        from unittest import mock
+        real_fdopen = os.fdopen
+
+        class Full:
+            def __init__(self, handle):
+                self.handle = handle
+
+            def __getattr__(self, name):
+                return getattr(self.handle, name)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                self.handle.close()
+                return False
+
+            def write(self, text):
+                raise OSError(errno.ENOSPC, "No space left on device")
+
+        def full_fdopen(fd, *args, **kwargs):
+            return Full(real_fdopen(fd, *args, **kwargs))
+
+        stderr = io.StringIO()
+        with mock.patch.object(self.setup.os, "fdopen", full_fdopen), contextlib.redirect_stderr(stderr):
+            self.setup.add_exclude(str(self.repo))
+        self.assertIn("warning", stderr.getvalue())
+        self.assertIn("No space left", stderr.getvalue())
+
+    def test_info_swapped_after_check_is_not_followed(self) -> None:
+        import contextlib
+        import io
+        from unittest import mock
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        (outside / "exclude").write_text("keep\n")
+        info = self.repo / ".git/info"
+        real_open = os.open
+        swapped = []
+
+        def swapping_open(path, flags, *args, **kwargs):
+            if str(path).endswith("exclude") and not swapped:
+                info.rename(info.with_name("info.real"))
+                info.symlink_to(outside)
+                swapped.append(True)
+            return real_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(self.setup.os, "open", swapping_open), contextlib.redirect_stderr(io.StringIO()):
+            self.setup.add_exclude(str(self.repo))
+        self.assertTrue(swapped)
+        self.assertEqual((outside / "exclude").read_text(), "keep\n")
+        self.assertIn("/.omnilane-tmp/", (self.repo / ".git/info.real/exclude").read_text())
+
 
 
 if __name__ == "__main__":

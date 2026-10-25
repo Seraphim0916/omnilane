@@ -60,7 +60,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-claude.sh":
         "ace5f5826204903feecc9b4faea8702ef050bdcfa332304c3ae32bd5aae54e7a",
     "scripts/runners/run-codex.sh":
-        "2aad8ed8aac4d5efd7b6e08a9ad4ec007f5f9b599f737da6ed78171649dc4a7c",
+        "8c9516ba9c9ef026badca58842987576b12b121b7aec5f89bcc18e091d70f31c",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":

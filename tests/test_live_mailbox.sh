@@ -219,7 +219,8 @@ def emit(value):
 
 
 app_args = sys.argv[1:]
-while app_args[:1] == ["-c"] and len(app_args) >= 2:
+# Like the real CLI, take global -c / --disable / --enable pairs before the subcommand.
+while app_args[:1] in (["-c"], ["--disable"], ["--enable"]) and len(app_args) >= 2:
     app_args = app_args[2:]
 if app_args[:1] == ["app-server"]:
     counter_path = pathlib.Path(os.environ["FAKE_CODEX_COUNTER"])
@@ -349,7 +350,7 @@ case_codex_live_fallback() {
   cat > "$fake" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-while [[ "${1:-}" == "-c" ]]; do shift 2; done
+while [[ "${1:-}" == "-c" || "${1:-}" == "--disable" || "${1:-}" == "--enable" ]]; do shift 2; done
 if [[ "${1:-}" == "app-server" ]]; then
   IFS= read -r _ || true
   printf '{"id":1,"error":{"message":"app-server unavailable"}}\n'
@@ -715,7 +716,7 @@ import sys
 import time
 
 args = sys.argv[1:]
-while args[:1] == ["-c"] and len(args) >= 2:
+while args[:1] in (["-c"], ["--disable"], ["--enable"]) and len(args) >= 2:
     args = args[2:]
 if args != ["app-server"]:
     raise SystemExit(2)
