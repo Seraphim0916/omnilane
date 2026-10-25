@@ -15,6 +15,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 JOB_ID = "20261026-120000-123-456"
 HARD_TIMEOUT = 12
+STARTUP_TIMEOUT = 30
 
 
 class MailboxBackpressureTests(unittest.TestCase):
@@ -90,7 +91,7 @@ class MailboxBackpressureTests(unittest.TestCase):
     def start_send(self):
         self.output_path = self.home / "stdout"
         self.trace_path = self.home / "stderr"
-        self.started = time.monotonic()
+        startup_started = time.monotonic()
         # Trace only the isolated fixture environment, never inherited secrets.
         # Files keep a leaked child's open output pipe from hiding CLI exit.
         with self.output_path.open("w") as output, self.trace_path.open("w") as trace:
@@ -99,6 +100,20 @@ class MailboxBackpressureTests(unittest.TestCase):
                 env=self.env, cwd=ROOT, start_new_session=True, close_fds=True,
                 stdout=output, stderr=trace, text=True,
             )
+        # Synchronize on the real send path before starting backpressure clocks.
+        # Keep the last pre-entry sample so polling cannot shorten elapsed time.
+        previous_sample = startup_started
+        while time.monotonic() < startup_started + STARTUP_TIMEOUT:
+            sampled_at = time.monotonic()
+            returncode = self.process.poll()
+            trace = self.trace_path.read_text()
+            if re.search(r"^\+ write_fifo_with_timeout ", trace, re.MULTILINE):
+                self.started = previous_sample
+                return
+            self.assertIsNone(returncode, "send exited before FIFO write readiness")
+            previous_sample = sampled_at
+            time.sleep(0.01)
+        self.fail("send did not reach FIFO write readiness within startup timeout (30s)")
 
     def wait_for_blocked_writer(self):
         # Observe the real writer PID and its printf attempt without requiring ps
