@@ -109,7 +109,8 @@ def load():
     if not path.exists() and not path.is_symlink():
         return {"schema_version": 1, "pending": {}}
     value, _ = aa_policy._read_json(path)
-    aa_policy._check(value.get("schema_version") == 1 and isinstance(value.get("pending"), dict),
+    aa_policy._check(type(value.get("schema_version")) is int
+                     and value.get("schema_version") == 1 and isinstance(value.get("pending"), dict),
                      "invalid local verification status")
     return value
 
