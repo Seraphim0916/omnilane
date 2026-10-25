@@ -44,6 +44,7 @@ unset XAI_API_KEY 2>/dev/null || true
 # empty text and exit 0. A dispatch from a Claude Code session inherits it.
 strip_caller_claude_env
 
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 truncate_payload "$PROMPT_FILE" 140000
 
 MODE_ARGS=()

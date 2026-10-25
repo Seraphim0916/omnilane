@@ -40,6 +40,34 @@ else
 fi
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 ARGS+=(-c 'approval_policy="never"')
+# A worker that spawns its own sub-agents escapes the one-dispatch budget.
+ARGS+=(--disable multi_agent)
+
+# Optional, off unless both are set: the built-in `openai` provider id cannot
+# be overridden, so extra request headers need a provider of our own that keeps
+# the ChatGPT login (requires_openai_auth). The value of
+# OMNILANE_CODEX_HTTP_HEADERS is a TOML inline table, e.g.
+# {"x-headroom-bypass"="true"}.
+CODEX_PROVIDER_BASE_URL="${OMNILANE_CODEX_PROVIDER_BASE_URL:-}"
+CODEX_HTTP_HEADERS="${OMNILANE_CODEX_HTTP_HEADERS:-}"
+if [[ -n "$CODEX_PROVIDER_BASE_URL" || -n "$CODEX_HTTP_HEADERS" ]]; then
+  [[ -n "$CODEX_PROVIDER_BASE_URL" && -n "$CODEX_HTTP_HEADERS" ]] || {
+    echo "omnilane: OMNILANE_CODEX_PROVIDER_BASE_URL and OMNILANE_CODEX_HTTP_HEADERS must be set together" >&2
+    exit 2
+  }
+  [[ "$CODEX_PROVIDER_BASE_URL" =~ ^https?://[^[:space:]\"]+$ ]] || {
+    echo "omnilane: invalid OMNILANE_CODEX_PROVIDER_BASE_URL" >&2
+    exit 2
+  }
+  [[ "$CODEX_HTTP_HEADERS" =~ ^\{[^$'\n']*\}$ ]] || {
+    echo "omnilane: OMNILANE_CODEX_HTTP_HEADERS must be one TOML inline table" >&2
+    exit 2
+  }
+  ARGS+=(
+    -c 'model_provider="omnilane_codex"'
+    -c "model_providers.omnilane_codex={name=\"omnilane Codex worker\", base_url=\"$CODEX_PROVIDER_BASE_URL\", wire_api=\"responses\", requires_openai_auth=true, http_headers=$CODEX_HTTP_HEADERS}"
+  )
+fi
 if [[ "$MODE" == "advise" ]]; then
   [[ -z "$THREAD_MODE" ]] && ARGS+=(--ephemeral)
   SANDBOX=read-only
@@ -58,6 +86,47 @@ else
   )
 fi
 ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
+
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
+
+# workspace-write excludes /tmp and $TMPDIR, so heredocs and xcrun fail there;
+# give the worker a temp dir inside the one root it may write.
+TMP_ENV=()
+if [[ "$MODE" == "work" || "$MODE" == "advise" ]]; then
+  WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
+    echo "omnilane: Codex workdir is not accessible" >&2
+    exit 2
+  }
+  CODEX_TMP="$WORKDIR/.omnilane-tmp"
+  if [[ -L "$CODEX_TMP" || ( -e "$CODEX_TMP" && ! -d "$CODEX_TMP" ) ]]; then
+    echo "omnilane: unsafe Codex work temp path" >&2
+    exit 125
+  fi
+  mkdir -p "$CODEX_TMP"
+  chmod 700 "$CODEX_TMP"
+  CODEX_TMP="$(cd -- "$CODEX_TMP" && pwd -P)"
+  case "$CODEX_TMP/" in
+    "$WORKDIR/"*) ;;
+    *) echo "omnilane: Codex work temp escaped workdir" >&2; exit 125 ;;
+  esac
+  # info/exclude rather than .gitignore: it is never tracked, so a worker
+  # cannot commit the ignore rule into the target repository.
+  if EXCLUDE_FILE="$(git -C "$WORKDIR" rev-parse --path-format=absolute --git-path info/exclude 2>/dev/null)"; then
+    if ! grep -qxF '/.omnilane-tmp/' "$EXCLUDE_FILE" 2>/dev/null; then
+      mkdir -p "$(dirname "$EXCLUDE_FILE")" && printf '/.omnilane-tmp/\n' >> "$EXCLUDE_FILE" || true
+    fi
+  fi
+  TMP_ENV=("TMPDIR=$CODEX_TMP/" "TMPPREFIX=$CODEX_TMP/zsh")
+  # The process env alone is not enough: shell_environment_policy (for example
+  # inherit = "core") drops TMPPREFIX before the tool shell starts, and zsh
+  # then writes heredocs to /tmp/zsh. `set` values apply after the filters.
+  if [[ "$CODEX_TMP" != *[\"\\]* ]]; then
+    ARGS+=(
+      -c "shell_environment_policy.set.TMPDIR=\"$CODEX_TMP/\""
+      -c "shell_environment_policy.set.TMPPREFIX=\"$CODEX_TMP/zsh\""
+    )
+  fi
+fi
 
 LIVE_INBOX="${OMNILANE_INBOX:-}"
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
@@ -90,7 +159,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     cd "$WORKDIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
       -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_ORGANIZATION -u OPENAI_PROJECT -u OPENAI_API_BASE \
-      OMNILANE_DEPTH=1 \
+      OMNILANE_DEPTH=1 ${TMP_ENV[@]+"${TMP_ENV[@]}"} \
       python3 "$CODEX_LIVE_RUNNER" \
         --codex-bin "$CODEX_BIN" \
         --cwd "$WORKDIR" \
@@ -125,7 +194,7 @@ set +e
   # Subscription-login path: strip API-key env so the CLI uses its own auth.
   run_with_timeout "$RUN_TIMEOUT" env \
     -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_ORGANIZATION -u OPENAI_PROJECT -u OPENAI_API_BASE \
-    OMNILANE_DEPTH=1 \
+    OMNILANE_DEPTH=1 ${TMP_ENV[@]+"${TMP_ENV[@]}"} \
     "$CODEX_BIN" "${ARGS[@]}" < "$PROMPT_FILE" \
     > "${OUTPUT_FILE}.progress.log" 2> "${OUTPUT_FILE}.stderr.log"
 )

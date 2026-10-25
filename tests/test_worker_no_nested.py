@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""Offline contracts: workers do not delegate, and Codex gets a writable temp dir."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import tempfile
+import unittest
+
+from offline_env import fixture_environment_with_isolated_tools
+
+ROOT = Path(__file__).resolve().parents[1]
+MARKER = "[omnilane worker rules]"
+
+FAKE_CODEX = """#!/usr/bin/env bash
+set -euo pipefail
+FAKE_STDIN="$(cat; printf x)"
+export FAKE_STDIN="${FAKE_STDIN%x}"
+python3 - "$FAKE_CODEX_RECORD" "$@" <<'PY'
+import json, os, pathlib, sys
+pathlib.Path(sys.argv[1]).write_text(json.dumps({
+    "argv": sys.argv[2:],
+    "TMPDIR": os.environ.get("TMPDIR"),
+    "TMPPREFIX": os.environ.get("TMPPREFIX"),
+    "stdin": os.environ["FAKE_STDIN"],
+}))
+PY
+out=""
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "-o" ]]; then shift; out="$1"; fi
+  shift
+done
+printf 'fixture\\n' > "$out"
+printf '{"type":"thread.started","thread_id":"fixture"}\\n'
+"""
+
+
+def config_values(argv: list[str]) -> list[str]:
+    return [argv[i + 1] for i, token in enumerate(argv[:-1]) if token == "-c"]
+
+
+class CodexWorkerContracts(unittest.TestCase):
+    maxDiff = None
+
+    def setUp(self) -> None:
+        td = tempfile.TemporaryDirectory(prefix="omnilane-no-nested-")
+        self.addCleanup(td.cleanup)
+        self.tmp = Path(td.name)
+        self.fake = self.tmp / "codex"
+        self.fake.write_text(FAKE_CODEX)
+        self.fake.chmod(0o755)
+        self.workdir = self.tmp / "repo"
+        self.workdir.mkdir()
+        subprocess.run(["git", "init", "-q", str(self.workdir)], check=True)
+        self.workdir = self.workdir.resolve()
+
+    def run_codex(self, mode: str, prompt: Path, **extra: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+        record = self.tmp / f"{mode}.record.json"
+        if record.exists():
+            record.unlink()
+        env = fixture_environment_with_isolated_tools(self)
+        env.update(
+            OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
+            CODEX_BIN=str(self.fake),
+            FAKE_CODEX_RECORD=str(record),
+            OMNILANE_REPO=str(ROOT),
+            OMNILANE_TIMEOUT="5",
+            TMPDIR=str(self.tmp) + "/",
+        )
+        for key in ("OMNILANE_INBOX", "OMNILANE_CODEX_PROVIDER_BASE_URL", "OMNILANE_CODEX_HTTP_HEADERS",
+                    "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
+            env.pop(key, None)
+        env.update(extra)
+        result = subprocess.run(
+            ["/bin/bash", str(ROOT / "scripts/runners/run-codex.sh"), mode, str(self.workdir),
+             "gpt-6-astra", "medium", str(prompt), str(self.tmp / f"{mode}.out")],
+            env=env, text=True, capture_output=True, check=False,
+        )
+        data = json.loads(record.read_text()) if record.exists() else {}
+        return result, data
+
+    def prompt(self, name: str = "prompt.txt") -> Path:
+        path = self.tmp / name
+        path.write_text("do the thing\n")
+        return path
+
+    def test_disables_multi_agent_in_every_mode(self) -> None:
+        for mode in ("advise", "work", "sysops"):
+            with self.subTest(mode=mode):
+                result, data = self.run_codex(mode, self.prompt(f"{mode}.txt"))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                argv = data["argv"]
+                self.assertIn("--disable", argv)
+                self.assertEqual(argv[argv.index("--disable") + 1], "multi_agent")
+
+    def test_work_and_advise_get_temp_dir_inside_workdir(self) -> None:
+        tmp_dir = self.workdir / ".omnilane-tmp"
+        for mode in ("work", "advise"):
+            with self.subTest(mode=mode):
+                result, data = self.run_codex(mode, self.prompt(f"{mode}.txt"))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(data["TMPDIR"], str(tmp_dir) + "/")
+                self.assertEqual(data["TMPPREFIX"], str(tmp_dir / "zsh"))
+                values = config_values(data["argv"])
+                self.assertIn(f'shell_environment_policy.set.TMPDIR="{tmp_dir}/"', values)
+                self.assertIn(f'shell_environment_policy.set.TMPPREFIX="{tmp_dir}/zsh"', values)
+                self.assertTrue(tmp_dir.is_dir())
+                self.assertEqual(stat.S_IMODE(tmp_dir.stat().st_mode), 0o700)
+        exclude = (self.workdir / ".git/info/exclude").read_text().splitlines()
+        self.assertEqual(exclude.count("/.omnilane-tmp/"), 1)
+        status = subprocess.run(["git", "-C", str(self.workdir), "status", "--porcelain"],
+                                capture_output=True, text=True, check=True)
+        self.assertEqual(status.stdout, "")
+
+    def test_sysops_keeps_inherited_tmpdir(self) -> None:
+        result, data = self.run_codex("sysops", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(data["TMPDIR"], str(self.tmp) + "/")
+        self.assertFalse((self.workdir / ".omnilane-tmp").exists())
+        self.assertFalse(any(v.startswith("shell_environment_policy.set.TMP")
+                             for v in config_values(data["argv"])))
+
+    def test_symlinked_temp_dir_is_refused(self) -> None:
+        (self.workdir / ".omnilane-tmp").symlink_to(self.tmp)
+        result, _ = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 125)
+        self.assertIn("unsafe Codex work temp path", result.stderr)
+
+    def test_provider_headers_are_off_by_default(self) -> None:
+        result, data = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(v.startswith("model_provider") for v in config_values(data["argv"])))
+
+    def test_provider_headers_need_both_variables(self) -> None:
+        for extra in ({"OMNILANE_CODEX_PROVIDER_BASE_URL": "http://127.0.0.1:1/backend-api/codex"},
+                      {"OMNILANE_CODEX_HTTP_HEADERS": '{"x-a"="1"}'}):
+            with self.subTest(extra=extra):
+                result, _ = self.run_codex("work", self.prompt(), **extra)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("must be set together", result.stderr)
+
+    def test_provider_headers_define_openai_auth_provider(self) -> None:
+        result, data = self.run_codex(
+            "work", self.prompt(),
+            OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+            OMNILANE_CODEX_HTTP_HEADERS='{"x-headroom-bypass"="true"}',
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = config_values(data["argv"])
+        self.assertIn('model_provider="omnilane_codex"', values)
+        provider = [v for v in values if v.startswith("model_providers.omnilane_codex=")]
+        self.assertEqual(len(provider), 1)
+        self.assertIn('base_url="http://127.0.0.1:8791/backend-api/codex"', provider[0])
+        self.assertIn("requires_openai_auth=true", provider[0])
+        self.assertIn('http_headers={"x-headroom-bypass"="true"}', provider[0])
+
+    def test_codex_prompt_starts_with_worker_rules(self) -> None:
+        result, data = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(data["stdin"].startswith(MARKER + "\n"))
+        self.assertIn("omnilane route", data["stdin"])
+        self.assertTrue(data["stdin"].endswith("do the thing\n"))
+
+
+class EveryRunnerPrependsWorkerRules(unittest.TestCase):
+    RUNNERS = {
+        "codex": ("run-codex.sh", "CODEX_BIN"),
+        "claude": ("run-claude.sh", "CLAUDE_BIN"),
+        "gemini": ("run-gemini.sh", "AGY_BIN"),
+        "grok": ("run-grok.sh", "GROK_BIN"),
+    }
+
+    def test_prompt_file_gets_rules_once(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="omnilane-rules-") as td:
+            tmp = Path(td)
+            fake = tmp / "fake-cli"
+            fake.write_text("#!/bin/sh\nexit 0\n")
+            fake.chmod(0o755)
+            workdir = tmp / "wd"
+            workdir.mkdir()
+            for vendor, (runner, bin_var) in self.RUNNERS.items():
+                with self.subTest(vendor=vendor):
+                    prompt = tmp / f"{vendor}.txt"
+                    prompt.write_text("task body\n")
+                    env = fixture_environment_with_isolated_tools(self)
+                    env.update(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_REPO=str(ROOT),
+                               OMNILANE_TIMEOUT="5")
+                    env[bin_var] = str(fake)
+                    for key in ("OMNILANE_INBOX", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
+                        env.pop(key, None)
+                    for _ in range(2):
+                        subprocess.run(
+                            ["/bin/bash", str(ROOT / "scripts/runners" / runner), "advise", str(workdir),
+                             "model", "-", str(prompt), str(tmp / f"{vendor}.out")],
+                            env=env, text=True, capture_output=True, check=False,
+                        )
+                    self.assertEqual(prompt.read_text(), "task body\n")
+                    sent = Path(str(prompt) + ".worker")
+                    text = sent.read_text()
+                    self.assertTrue(text.startswith(MARKER + "\n"), text[:200])
+                    self.assertEqual(text.count(MARKER), 1)
+                    self.assertIn("dispatch.sh", text)
+                    self.assertIn("omnilane route", text)
+                    self.assertIn("sub-agent", text)
+                    self.assertNotIn("'", text)
+                    self.assertTrue(text.endswith("task body\n"))
+                    self.assertEqual(stat.S_IMODE(sent.stat().st_mode) & 0o077, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

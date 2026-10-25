@@ -32,6 +32,7 @@ fi
 
 # Text print mode requires a nonempty argv prompt; only stream-json reads stdin.
 validate_gemini_task_size "$PROMPT_FILE" || exit $?
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 
 WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
   echo "omnilane: Gemini workdir is not accessible" >&2
