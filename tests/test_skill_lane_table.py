@@ -1,4 +1,4 @@
-"""The lane table an agent reads in the skill matches routing.yaml, candidate for candidate."""
+"""The skill's lane table names every routing.yaml lane and no model; READMEs match routing.yaml."""
 import offline_env  # Activate suite isolation for direct file execution.
 import re
 import unittest
@@ -40,7 +40,44 @@ def table_chains(path: Path) -> dict:
     return chains
 
 
+def skill_lane_rows() -> dict:
+    """Rows of the skill's `| Lane | Use for |` table, keyed by lane."""
+    rows, inside = {}, False
+    for line in SKILL.read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if cells == ["Lane", "Use for"]:
+            inside = True
+        elif inside and not line.startswith("|"):
+            break
+        elif inside and not set(cells[0]) <= set("-"):
+            rows[cells[0]] = line
+    return rows
+
+
+def flat(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
 class SkillLaneTableTests(unittest.TestCase):
+    def test_skill_table_names_every_routing_lane(self):
+        rows = skill_lane_rows()
+        self.assertGreaterEqual(len(rows), 10, "SKILL.md: lane table not found")
+        for lane in routing_chains():
+            self.assertIn(lane, rows, f"SKILL.md has no row for {lane}")
+
+    def test_skill_table_carries_no_model_names(self):
+        # Chains live in routing.yaml and `omnilane list`; a copy in the skill goes stale.
+        models = set()
+        for segments in routing_chains().values():
+            for segment in segments:
+                if len(segment) > 1 and segment[1] != "-":
+                    models.add(flat(segment[1]))
+                    models.add(flat(re.sub(r"-(low|medium|high)$", "", segment[1])))
+        self.assertIn("claudeopus55", models)
+        for lane, row in skill_lane_rows().items():
+            for model in models:
+                self.assertNotIn(model, flat(row), f"SKILL.md: lane {lane} names model {model}")
+
     def assert_table_matches(self, path: Path):
         routing = routing_chains()
         table = table_chains(path)
@@ -54,9 +91,6 @@ class SkillLaneTableTests(unittest.TestCase):
             self.assertEqual(got, want, f"{path.name}: lane {lane} differs from routing.yaml")
             compared += 1
         self.assertGreaterEqual(compared, 10, f"{path.name}: lane table not found")
-
-    def test_skill_table_matches_routing(self):
-        self.assert_table_matches(SKILL)
 
     def test_readme_tables_match_routing(self):
         checked = 0
