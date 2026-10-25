@@ -44,7 +44,10 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(cp.family("/Users/1.2.3/cli"), "/Users/1.2.3/cli")
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        # Keep lexical fixture paths equal to the policy's resolved paths.
+        sandbox = ROOT / ".sandbox-tmp"
+        sandbox.mkdir(exist_ok=True)
+        self.tmp = tempfile.TemporaryDirectory(dir=sandbox)
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "verify-0.55" / "home-1.2.3"
         self.root.mkdir(parents=True)
