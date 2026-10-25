@@ -548,6 +548,11 @@ case "${1:-}" in
     holder_path="$JOB_DIR/inbox.holder.pid"
     holder_rc=0
     read_job_pid "$holder_path" || holder_rc=$?
+    # A read failure on a file that is now gone means the worker exited between
+    # the existence check and the read: treat it as missing, not as invalid.
+    if [[ "$holder_rc" -eq 2 && ! -e "$holder_path" && ! -L "$holder_path" ]]; then
+      holder_rc=1
+    fi
     [[ "$holder_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
     # The worker clears its holder PID on exit, and the supervisor records the
     # exit status only after finalizing. A close landing in that window waits
