@@ -927,6 +927,77 @@ class EligibleLanesTests(unittest.TestCase):
         self.assertEqual(value["reason"], original)
         self.assertNotIn("required_caller_effort", value)
 
+    def test_a_ceiling_equal_to_the_lanes_cheapest_target_keeps_the_original_reason(self):
+        cheapest = json.loads(self.annotate(self.refusal(), lane="cheap"))["lane_requirement"]["score"]
+        original = "target score 52 exceeds effective caller ceiling"
+        value = json.loads(self.annotate(self.refusal(
+            reason=original, effective_ceiling=cheapest, inherited_ceiling=cheapest,
+            caller_score=cheapest), lane="cheap"))
+        self.assertEqual(value["reason"], original)
+
+    def test_a_ceiling_one_below_the_lanes_cheapest_target_is_explained(self):
+        cheapest = json.loads(self.annotate(self.refusal(), lane="cheap"))["lane_requirement"]["score"]
+        ceiling = cheapest - 1
+        value = json.loads(self.annotate(self.refusal(
+            reason="original", effective_ceiling=ceiling, inherited_ceiling=ceiling,
+            caller_score=ceiling), lane="cheap"))
+        self.assertIn(f"scores {cheapest}, above this caller's ceiling of {ceiling}", value["reason"])
+
+    def test_missing_scores_keep_the_original_reason_without_raising(self):
+        original = "target score 52 exceeds effective caller ceiling 30"
+        both_missing = json.loads(self.annotate(self.refusal(
+            reason=original, effective_ceiling=30, inherited_ceiling=None, caller_score=None),
+            lane="hardest"))
+        self.assertEqual(both_missing["reason"], original)
+        self.assertIn("eligible_lanes", both_missing)
+        sys.path.insert(0, str(ROOT / "scripts/lib"))
+        import aa_lanes
+        stdin = self.refusal(reason=original, effective_ceiling=30, inherited_ceiling=30,
+                             caller_score=30)
+        out = []
+        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+            routing = Path(tmp) / "routing.yaml"
+            routing.write_text(self.ROUTING)
+            with patch.object(aa_lanes, "lane_requirement",
+                              return_value={"target": "x/y", "score": None,
+                                            "required_caller_effort": None}), \
+                    patch.object(sys, "stdin", type("S", (), {"read": lambda self: stdin})()), \
+                    patch.object(sys.stdout, "write", out.append):
+                aa_lanes.main(["--registry", str(REGISTRY_PATH), "--routing", str(routing),
+                               "--lane", "hardest"])
+        value = json.loads("".join(out))
+        self.assertEqual(value["reason"], original)
+        self.assertIn("eligible_lanes", value)
+
+    def upstream_vendor_refusal(self, caller_row, degraded):
+        reg = registry()
+        caller = {"schema_version": 1, "snapshot_id": reg["snapshot"]["id"], "kind": "model",
+                  "caller": {key: caller_row[key] for key in aa_policy.IDENTITY_FIELDS},
+                  "inherited_ceiling": caller_row["score"]}
+        if degraded:
+            caller["effort_unverified"] = True
+        target = next(r for r in reg["scored_configs"] if r["id"] == "codex/gpt-6-astra-xhigh")
+        target["transport_mapping"].update(status="verified", runtime_verified=True,
+                                           runtime_model="gpt-6-astra", runtime_effort="xhigh")
+        return aa_policy.decide(reg, "0" * 64, vendor="codex", model="gpt-6-astra", effort="xhigh",
+                                caller=caller, caller_sha256="1" * 64)
+
+    def test_an_explicit_vendor_refusal_keeps_the_gates_reason_and_effort(self):
+        reg = registry()
+        routing = (ROOT / "routing.yaml").read_text()
+        rows = {"recorded": caller_identity.resolve(reg, "claude", "claude-opus-5-5", "medium")[0],
+                "degraded": caller_identity.floor_row(reg, "claude", "claude-opus-5-5")}
+        for label, row in rows.items():
+            with self.subTest(caller=label):
+                upstream = self.upstream_vendor_refusal(row, degraded=label == "degraded")
+                self.assertEqual(upstream["code"], "target-above-effective-ceiling")
+                value = json.loads(self.annotate(json.dumps(upstream), lane="consult",
+                                                 routing=routing))
+                self.assertLessEqual(value["lane_requirement"]["score"], value["effective_ceiling"])
+                self.assertEqual(value["reason"], upstream["reason"])
+                self.assertEqual(value["required_caller_effort"], upstream["required_caller_effort"])
+                self.assertIs(value["caller_degraded"], label == "degraded")
+
     def test_an_allowed_decision_and_garbage_pass_through_untouched(self):
         allowed = json.dumps({"allowed": True, "effective_ceiling": 48})
         self.assertNotIn("eligible_lanes", self.annotate(allowed))
