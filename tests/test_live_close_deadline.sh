@@ -92,6 +92,26 @@ def wait_for_absent(path, timeout=5):
         assert time.monotonic() < end, f'still present {path}'
         time.sleep(.02)
 
+def wait_for_receipt_waiter(closer, receipt, timeout=5):
+    """Return once jobs close, past its holder checks, polls for the receipt.
+
+    Its receipt poller is a direct child whose arguments name the exit file.
+    A close that returns first never took the missing-holder wait path."""
+    end = time.monotonic() + timeout
+    while True:
+        if closer.poll() is not None:
+            out, err = closer.communicate()
+            raise AssertionError(('close returned before waiting for the exit receipt',
+                                  closer.returncode, out, err))
+        listing = subprocess.run(['ps', '-A', '-o', 'ppid=,command='],
+                                 capture_output=True, text=True).stdout
+        for line in listing.splitlines():
+            fields = line.split(None, 1)
+            if len(fields) == 2 and fields[0] == str(closer.pid) and str(receipt) in fields[1]:
+                return
+        assert time.monotonic() < end, 'close never reached the receipt wait'
+        time.sleep(.02)
+
 def wait_for_stopped(pid, timeout=2):
     """A marker or successful kill(STOP) is not a stopped-state receipt."""
     deadline = time.monotonic() + timeout
@@ -280,7 +300,6 @@ try:
                 # records the exit status. A close landing in that window must
                 # wait for the receipt instead of reporting a missing holder.
                 wait_for_absent(job / 'inbox.holder.pid')
-                threading.Timer(.3, release.set).start()
         if mode in ('ordered', 'partial'):
             fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
             opened_fds.add(fd)
@@ -314,8 +333,19 @@ try:
                                             text=True, start_new_session=True)
             processes.append(second_close)
         started = time.monotonic()
-        result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
-                                env=env, capture_output=True, text=True, timeout=11)
+        if mode == 'finishing':
+            closer = subprocess.Popen(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
+                                      env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      text=True, start_new_session=True)
+            processes.append(closer)
+            # Release the receipt only once close is provably waiting for it.
+            wait_for_receipt_waiter(closer, job / 'exit')
+            release.set()
+            out, err = closer.communicate(timeout=11)
+            result = subprocess.CompletedProcess(closer.args, closer.returncode, out, err)
+        else:
+            result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
+                                    env=env, capture_output=True, text=True, timeout=11)
         elapsed = time.monotonic() - started
         runner_pid = int((case / 'runner.pid').read_text())
         wait_for_exit(runner_pid)
