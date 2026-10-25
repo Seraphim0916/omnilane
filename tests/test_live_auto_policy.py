@@ -6,6 +6,7 @@ import platform
 from pathlib import Path
 import subprocess
 import tempfile
+import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -136,6 +137,11 @@ def main():
             return 1
         print(f"PASS: {count} policy cases; no provider invocation; no job state")
         return 0
+
+
+class LiveAutoPolicyTests(unittest.TestCase):
+    def test_policy_matrix(self):
+        self.assertEqual(main(), 0)
 
 
 if __name__ == "__main__":
