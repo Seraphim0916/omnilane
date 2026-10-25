@@ -17,8 +17,25 @@ def read_object(path: Path) -> dict:
         return {}
 
 
+def validate_unproven(overlay: dict) -> list[dict]:
+    """Reject malformed diagnostic metadata before policy or presentation uses it."""
+    if not isinstance(overlay, dict):
+        raise ValueError("overlay must be an object containing unproven metadata")
+    items = overlay.get("unproven", [])
+    if not isinstance(items, list):
+        raise ValueError("unproven must be an array")
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise ValueError(f"unproven[{index}] must be an object")
+        if not isinstance(item.get("config_id", "unknown"), str):
+            raise ValueError(f"unproven[{index}].config_id must be a string")
+    return items
+
+
 def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
     """Expose metadata and paths, never provider responses or request bodies."""
+    items = validate_unproven(overlay)
+
     import probe_sweep
 
     configs = {row["id"]: row for row in registry["scored_configs"]}
@@ -28,7 +45,7 @@ def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
     for path in manifests:
         failed.update(read_object(path).get("failed_probe_runs", {}))
     rows = []
-    for item in overlay.get("unproven", []):
+    for item in items:
         cid = item.get("config_id", "unknown")
         config = configs.get(cid, {})
         vendor = config.get("vendor") or cid.split("/", 1)[0]

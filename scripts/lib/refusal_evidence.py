@@ -21,7 +21,7 @@ QUOTE_LIMIT = 160
 
 def refusal_from(text: str) -> dict | None:
     found = None
-    for line in text.splitlines():
+    for line in text.split("\n"):
         line = line.strip()
         if not line.startswith("{"):
             continue
@@ -42,11 +42,11 @@ def one_line(value, limit=None) -> str:
 def summary(refusal: dict, path: Path | None) -> str:
     quote = one_line(refusal.get("message"), QUOTE_LIMIT).replace('"', "'")
     reason = one_line(refusal.get("reason") or refusal.get("message"), QUOTE_LIMIT).replace('"', "'")
-    parts = [f"failed_gate={refusal.get('failed_gate') or 'unknown'}",
-             f"code={refusal.get('code') or 'unknown'}",
+    parts = [f"failed_gate={one_line(refusal.get('failed_gate') or 'unknown')}",
+             f"code={one_line(refusal.get('code') or 'unknown')}",
              f'reason="{reason}"', f'quote="{quote}"']
     if path is not None:
-        parts.append(f"evidence={path}")
+        parts.append(f"evidence={one_line(path)}")
     return "omnilane refusal: " + " ".join(parts)
 
 

@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts" / "lib"))
-from overlay_diagnostics import recovery_guidance, row_message, unproven_rows
+from overlay_diagnostics import recovery_guidance, row_message, unproven_rows, validate_unproven
 
 UNPROVEN_ROWS = []
 
@@ -84,6 +84,12 @@ def main() -> None:
         emit("FAIL", f"configured overlay is missing: {overlay_path}")
 
     try:
+        overlay = json.loads(Path(overlay_path).read_text())
+        validate_unproven(overlay)
+    except (OSError, ValueError) as error:
+        emit("FAIL", f"invalid overlay diagnostics: {error}")
+
+    try:
         import aa_policy
     except ImportError as error:
         emit("WARN", f"cannot import aa_policy: {error}")
@@ -103,8 +109,10 @@ def main() -> None:
     summary = ", ".join(f"{vendor} {count} {tier}"
                         for (vendor, tier), count in sorted(verified.items())) or "none"
 
-    overlay = json.loads(Path(overlay_path).read_text())
-    UNPROVEN_ROWS.extend(unproven_rows(overlay, registry))
+    try:
+        UNPROVEN_ROWS.extend(unproven_rows(overlay, registry))
+    except ValueError as error:
+        emit("FAIL", f"invalid overlay diagnostics: {error}")
     pending = pending_summary(overlay)
     unproven = overlay.get("unproven", [])
     extra = f"; {len(unproven)} config(s) recorded unproven" if unproven else ""
