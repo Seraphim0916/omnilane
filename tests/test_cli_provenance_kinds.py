@@ -18,7 +18,7 @@ TEAM = "TEST000001"
 
 class KindTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp")
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = Path(self.tmp.name) / "binary"
         self.path.write_bytes(b"\xcf\xfa\xed\xfe" + b"test")
