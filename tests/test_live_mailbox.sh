@@ -553,7 +553,9 @@ case_json_escape_round_trip() {
   make_claude "$fake"
   printf 'triage: claude claude-default high\n' > "$home/routing.local.yaml"
   printf -v prompt 'lone \\ quote " tab\t control \001 multibyte 測試—…→'
-  printf '%s' "$prompt" > "$expected"
+  # The first live message carries the worker rules ahead of the task.
+  (source "$ROOT/scripts/lib/common.sh"
+   printf '%s\n%s\n\n%s' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES" "$prompt") > "$expected"
 
   job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" FAKE_CLAUDE_ARGS="$args" \
     FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
