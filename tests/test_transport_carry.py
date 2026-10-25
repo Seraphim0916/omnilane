@@ -302,13 +302,11 @@ class CarryTests(unittest.TestCase):
         fake_home = Path(env["OMNILANE_HOME"])
         fake_home.mkdir()
         (fake_home / "routing.local.yaml").write_text("coding: codex gpt-6.1-sol high\n")
-        output = []
         for model, expected in ((self.rows[TARGETS["codex"]]["model"], 0), ("new-model", 1)):
             command = ["bash", str(ROOT / "scripts/dispatch.sh"), "--dry-run",
                        "--vendor", "codex", "--model", model, "--effort", "high",
                        "--caller-context", str(caller), "--workdir", str(self.root), "coding", "fixture"]
             result = subprocess.run(command, env=env, text=True, capture_output=True, timeout=40)
-            output.append(dict(model=model, returncode=result.returncode, stdout=result.stdout, stderr=result.stderr))
             if expected == 0:
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             else:
@@ -317,10 +315,6 @@ class CarryTests(unittest.TestCase):
                 self.assertIn("codex/new-model", result.stderr)
                 self.assertIn("requires_gui_session", result.stderr)
         self.assertFalse(violations.exists())
-        # Retain a short, synthetic-only proof packet for the assigned report.
-        evidence = ROOT / ".sandbox-tmp/resign-ux-p1"
-        if evidence.is_dir():
-            (evidence / "dispatch-dry-run.json").write_text(json.dumps(output, indent=2))
 
 
 # Each generated case has an explicit expected disposition and rationale.
