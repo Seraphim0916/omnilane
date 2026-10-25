@@ -1,5 +1,7 @@
 """Byte compatibility and bounded runtime for the shared Bash JSON escaper."""
 
+import offline_env  # Activate suite isolation for direct file execution.
+
 import os
 from pathlib import Path
 import re
@@ -10,6 +12,35 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BASH = "/bin/bash"  # Same interpreter used by tests/run.sh's isolated child.
+
+# json_escape as of a281821, before the linear rewrite. Pinned here instead of
+# read from origin/main: CI checkouts have no origin/main, and after merge
+# origin/main would hold the new version and compare it with itself.
+OLD_JSON_ESCAPE = rb'''json_escape() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      \\) out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}'''
 
 
 def extract_escape(source):
@@ -22,9 +53,12 @@ def extract_escape(source):
 class JsonEscapeLinearTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.old = extract_escape(subprocess.check_output(
-            ["git", "show", "origin/main:scripts/lib/common.sh"], cwd=ROOT))
+        cls.old = OLD_JSON_ESCAPE
         cls.new = extract_escape((ROOT / "scripts/lib/common.sh").read_bytes())
+
+    def test_reference_is_the_pre_linear_implementation(self):
+        # Equal functions would make the byte comparison vacuous.
+        self.assertNotEqual(self.old, self.new)
 
     def escape(self, function, payload, locale, timeout=30):
         # A sentinel preserves trailing newlines through command substitution.
