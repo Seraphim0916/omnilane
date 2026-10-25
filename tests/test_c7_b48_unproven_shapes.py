@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts/lib"))
@@ -18,6 +19,18 @@ BAD_VALUES = (None, {}, "bad", [None], [[]], ["bad"], [3],
 
 
 class UnprovenShapeTests(unittest.TestCase):
+    def test_health_cli_uses_suite_default_temporary_directory(self):
+        temporary_directory = tempfile.TemporaryDirectory
+
+        def suite_directory(*args, **kwargs):
+            self.assertIsNone(kwargs.get("dir"), "Use the suite's default temporary directory")
+            return temporary_directory(*args, **kwargs)
+
+        with mock.patch(__name__ + ".tempfile", wraps=tempfile) as temp_module:
+            temp_module.TemporaryDirectory.side_effect = suite_directory
+            self.test_health_cli_reports_fail_without_traceback()
+            temp_module.TemporaryDirectory.assert_called_once_with()
+
     def test_invalid_shapes_raise_controlled_validation_error(self):
         for value in BAD_VALUES:
             with self.subTest(value=value):
@@ -34,7 +47,7 @@ class UnprovenShapeTests(unittest.TestCase):
         fixture = health_fixture.OverlayHealthTests("test_loadable_overlay_passes")
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
-        with tempfile.TemporaryDirectory(dir=ROOT / ".wt-tmp") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             env, violations = offline_env.isolated_environment(Path(directory), os.environ["PATH"])
             for value in BAD_VALUES:
                 with self.subTest(value=value):
