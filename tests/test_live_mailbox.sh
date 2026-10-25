@@ -348,6 +348,59 @@ PY
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex live job did not exit zero"
 }
 
+case_codex_live_large_task() {
+  # A live task over the 102400-byte cap: only the worker copy is truncated;
+  # task.txt, the preserved record, keeps every byte. The first live message is
+  # built from that copy (job-worker.sh), so the copy is what the worker gets.
+  # Checked as soon as the copy exists, then cancelled: encoding ~100 KB with the
+  # bash json_escape takes over a minute and is not what this case is about.
+  local home="$TEST_ROOT/codex-live-large" bin="$TEST_ROOT/codex-live-large/bin"
+  local fake="$bin/codex" task="$TEST_ROOT/codex-live-large/task.src" job job_dir tries=0
+  mkdir -p "$home" "$bin"
+  make_codex "$fake"
+  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  python3 - "$task" <<'PY'
+import pathlib
+import sys
+body = "".join(f"{i:06d} large live task line\n" for i in range(4400))
+pathlib.Path(sys.argv[1]).write_bytes(("HEAD-MARKER\n" + body + "TAIL-MARKER\n").encode())
+PY
+  [[ "$(wc -c < "$task")" -gt 102400 && "$(wc -c < "$task")" -lt 140000 ]] ||
+    fail "fixture task must sit between the live cap and the runner cap"
+
+  job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
+    FAKE_CODEX_INPUT="$home/codex.input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="unused" \
+    "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
+    --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    triage - < "$task")"
+  job_dir="$home/jobs/$job"
+  while [[ ! -s "$job_dir/task.txt.worker" && "$tries" -lt 100 ]]; do sleep 0.1; tries=$((tries + 1)); done
+  [[ -s "$job_dir/task.txt.worker" ]] || fail "Codex live worker copy was not written"
+  # The copy is built and then truncated; give the truncation a moment to land.
+  tries=0
+  while ! grep -Fq -- '--- TRUNCATED (original: ' "$job_dir/task.txt.worker" 2>/dev/null && [[ "$tries" -lt 50 ]]; do
+    if ! cmp -s "$task" "$job_dir/task.txt"; then break; fi
+    sleep 0.1; tries=$((tries + 1))
+  done
+  local task_ok=0
+  cmp -s "$task" "$job_dir/task.txt" && task_ok=1
+  TASK="$task" COPY="$job_dir/task.txt.worker" python3 - <<'PY' || { OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1; fail "Codex large live worker copy mismatch"; }
+import os
+import pathlib
+
+marker = "[omnilane worker rules]"
+copy = pathlib.Path(os.environ["COPY"]).read_text(encoding="utf-8")
+original = pathlib.Path(os.environ["TASK"]).stat().st_size
+assert copy.startswith(marker), copy[:80]
+assert copy.count(marker) == 1, copy.count(marker)
+assert f"--- TRUNCATED (original: " in copy, "copy is not truncated"
+assert "HEAD-MARKER" in copy and "TAIL-MARKER" in copy
+assert len(copy.encode()) <= 102400 + 200, len(copy.encode())
+PY
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1 || true
+  [[ "$task_ok" -eq 1 ]] || fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"
+}
+
 case_codex_live_fallback() {
   local home="$TEST_ROOT/codex-fallback" bin="$TEST_ROOT/codex-fallback/bin"
   local fake="$bin/codex" job job_dir doctor_out
@@ -1773,6 +1826,8 @@ case "$CASE" in
   printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
   bash "$0" --omnilane-offline-child codex-live-rpc
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
+  bash "$0" --omnilane-offline-child codex-live-large-task
+  printf 'ok - Codex live large task truncates only the worker copy\n'
     bash "$0" --omnilane-offline-child codex-live-fallback
     printf 'ok - Codex failed handshake degrades to single-shot\n'
     bash "$0" --omnilane-offline-child grok-killed-runner
@@ -1808,6 +1863,7 @@ case "$CASE" in
   json-escape) case_json_escape_round_trip ;;
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   codex-live-rpc) case_codex_live_rpc ;;
+  codex-live-large-task) case_codex_live_large_task ;;
     codex-live-fallback) case_codex_live_fallback ;;
     codex-killed-runner) case_codex_killed_runner_reaps_app_server ;;
     codex-app-server-eof-cleanup) case_codex_app_server_eof_cleanup ;;

@@ -308,12 +308,14 @@ if [[ "$VENDOR" == "codex" ]]; then
   rm "$forward_spool"
   forward_spool=""
 fi
-if [[ "$VENDOR" != "gemini" ]]; then
-  truncate_payload "$PROMPT_FILE" 102400
-fi
 # The first live message gets the same worker rules a single-shot runner
 # sends; later sends reach the worker through the inbox and stay verbatim.
 FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_FILE")" || exit 1
+# Cap only the copy that is sent: task.txt is the preserved record. The rules
+# sit at the head of the copy, which truncate_payload keeps.
+if [[ "$VENDOR" != "gemini" ]]; then
+  truncate_payload "$FIRST_MESSAGE_FILE" 102400
+fi
 # Codex input must not be consumed by Bash read: an interrupted partial read
 # can discard bytes before the close trap runs. Pump raw bytes instead. The
 # anonymous file holds at most one 64 KiB chunk, with shared read offset on FD 6
