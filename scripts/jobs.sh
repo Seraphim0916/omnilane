@@ -546,10 +546,20 @@ case "${1:-}" in
       exit "$RECORDED_EXIT"
     fi
     holder_path="$JOB_DIR/inbox.holder.pid"
-    read_job_pid "$holder_path" || die 1 "live inbox holder is unavailable"
-    holder_pid="$RECORDED_PID"
-    kill -0 "$holder_pid" 2>/dev/null || die 1 "live inbox holder is gone"
-    kill -USR1 "$holder_pid" 2>/dev/null || die 1 "could not signal live inbox holder"
+    holder_rc=0
+    read_job_pid "$holder_path" || holder_rc=$?
+    [[ "$holder_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
+    # The worker clears its holder PID on exit, and the supervisor records the
+    # exit status only after finalizing. A close landing in that window waits
+    # for the receipt rather than reporting a missing or vanished holder.
+    holder_signaled=0
+    if [[ "$holder_rc" -eq 0 ]] && kill -0 "$RECORDED_PID" 2>/dev/null; then
+      if kill -USR1 "$RECORDED_PID" 2>/dev/null; then
+        holder_signaled=1
+      elif kill -0 "$RECORDED_PID" 2>/dev/null; then
+        die 1 "could not signal live inbox holder"
+      fi
+    fi
     # Include the supervisor's final 1s process-group cleanup after live close.
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
     # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
@@ -559,9 +569,17 @@ case "${1:-}" in
       my $end = time + $limit;
       until (-e $exit || -l $exit) { exit 1 if time >= $end; sleep 0.1 }
     ' "$JOB_DIR/exit" 11; then
+      [[ "$holder_signaled" -eq 1 ]] || {
+        if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
+        die 1 "live inbox holder is unavailable"
+      }
       die 124 "close signal sent, but the live worker did not terminate within 11s"
     fi
     read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
+    if [[ "$holder_signaled" -eq 0 ]]; then
+      echo "already closed (exit $RECORDED_EXIT)"
+      exit "$RECORDED_EXIT"
+    fi
     events_path="$JOB_DIR/events.jsonl"
     result_count="$(live_count_result_events "$JOB_VENDOR" "$events_path")"
     echo "closed $2 (result_events=$result_count exit=$RECORDED_EXIT)"
