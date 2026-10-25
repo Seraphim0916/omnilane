@@ -1,5 +1,6 @@
 """Exercise the real send CLI against local FIFOs, without provider processes."""
 
+import offline_env  # Activate suite isolation for direct file execution.
 import json
 import os
 from pathlib import Path
