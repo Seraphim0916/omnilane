@@ -22,8 +22,13 @@ class ProtocolError(RuntimeError):
     pass
 
 
-def codex_app_server_argv(codex_bin: str, sandbox: str) -> list[str]:
-    """Pin every mode-relevant control before app-server starts."""
+def codex_app_server_argv(codex_bin: str, sandbox: str, extra: list[str] | None = None) -> list[str]:
+    """Pin every mode-relevant control before app-server starts.
+
+    `extra` carries the controls run-codex.sh also gives `codex exec`
+    (--disable multi_agent, the optional provider, the workdir temp dir), so
+    the two launch paths cannot drift apart.
+    """
     config = ['approval_policy="never"', f'sandbox_mode="{sandbox}"']
     if sandbox == "workspace-write":
         config.extend(
@@ -43,6 +48,7 @@ def codex_app_server_argv(codex_bin: str, sandbox: str) -> list[str]:
     argv = [codex_bin]
     for value in config:
         argv.extend(["-c", value])
+    argv.extend(extra or [])
     argv.append("app-server")
     return argv
 
@@ -67,7 +73,8 @@ class CodexLiveClient:
 
     def start_server(self) -> None:
         self.process = subprocess.Popen(
-            codex_app_server_argv(self.args.codex_bin, getattr(self.args, "sandbox", "workspace-write")),
+            codex_app_server_argv(self.args.codex_bin, getattr(self.args, "sandbox", "workspace-write"),
+                                  getattr(self.args, "codex_arg", None)),
             cwd=self.args.cwd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -462,6 +469,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True)
     parser.add_argument("--progress", required=True)
     parser.add_argument("--session-id-file", required=True)
+    # One token per flag, passed as --codex-arg=VALUE because the values
+    # themselves start with "-".
+    parser.add_argument("--codex-arg", action="append", default=[])
     parser.add_argument("--version", default="0.41.1")
     parser.add_argument("--rpc-timeout", type=float, default=10.0)
     # Coupled to job-worker.sh's 100 * 0.1s outer grace. The default turn,

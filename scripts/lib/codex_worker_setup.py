@@ -18,7 +18,8 @@ EXCLUDE_LINE = "/" + TMP_NAME + "/"
 # characters a TOML basic string would have to escape.
 HEADER_NAME = r"[!#$%&'*+.^_`|~0-9A-Za-z-]+"
 HEADER_VALUE = r'[ !#-\[\]-~]*'
-PAIR = re.compile(r'\s*(?:"(%s)"|(%s))\s*=\s*"(%s)"\s*' % (HEADER_NAME, HEADER_NAME, HEADER_VALUE))
+# Matched left to right, so a comma inside a quoted value never splits a pair.
+PAIR = re.compile(r'\s*(?:"(%s)"|(%s))\s*=\s*"(%s)"\s*(,|$)' % (HEADER_NAME, HEADER_NAME, HEADER_VALUE))
 
 
 def fail(code, message):
@@ -32,13 +33,14 @@ def headers(value):
         fail(2, "OMNILANE_CODEX_HTTP_HEADERS must be one TOML inline table of string headers")
     body = text[1:-1]
     pairs = []
-    if body.strip():
-        for part in body.split(","):
-            match = PAIR.fullmatch(part)
-            if not match:
-                fail(2, "OMNILANE_CODEX_HTTP_HEADERS accepts only \"Header-Name\"=\"value\" pairs "
-                        "(token names, printable values without quotes or backslashes)")
-            pairs.append((match.group(1) or match.group(2), match.group(3)))
+    position = 0
+    while body[position:].strip():
+        match = PAIR.match(body, position)
+        if not match or (match.group(4) == "," and not body[match.end():].strip()):
+            fail(2, "OMNILANE_CODEX_HTTP_HEADERS accepts only \"Header-Name\"=\"value\" pairs "
+                    "(token names, printable values without quotes or backslashes)")
+        pairs.append((match.group(1) or match.group(2), match.group(3)))
+        position = match.end()
     if not pairs:
         fail(2, "OMNILANE_CODEX_HTTP_HEADERS has no headers")
     names = [name.lower() for name, _ in pairs]
@@ -56,21 +58,35 @@ def add_exclude(workdir):
             capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return  # not a git work tree
-    parent = os.path.join(common, "info")
-    path = os.path.join(parent, "exclude")
+    path = os.path.join(common, "info", "exclude")
+    # The ignore rule is a convenience: any failure here (a link, a full disk)
+    # is a warning and the worker still starts.
     try:
-        if not os.path.isdir(parent):
-            os.mkdir(parent, 0o755)
-        if os.path.islink(parent) or not stat.S_ISDIR(os.lstat(parent).st_mode):
-            raise OSError("info is not a plain directory")
-        fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644)
+        _append_exclude(common)
     except OSError as error:
         print("omnilane: warning: left %s unchanged: %s" % (path, error), file=sys.stderr)
-        return
+
+
+def _append_exclude(common):
+    directory = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+    # Each step opens relative to a descriptor already held, so swapping
+    # `info` for a link after any check cannot redirect the write.
+    common_fd = os.open(common, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        try:
+            os.mkdir("info", 0o755, dir_fd=common_fd)
+        except FileExistsError:
+            pass
+        info_fd = os.open("info", directory, dir_fd=common_fd)
+    finally:
+        os.close(common_fd)
+    try:
+        fd = os.open("exclude", os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o644, dir_fd=info_fd)
+    finally:
+        os.close(info_fd)
     with os.fdopen(fd, "r+", encoding="utf-8", errors="replace") as handle:
         if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-            print("omnilane: warning: left %s unchanged: not a regular file" % path, file=sys.stderr)
-            return
+            raise OSError("not a regular file")
         handle.seek(0)
         content = handle.read()
         if EXCLUDE_LINE in content.splitlines():
