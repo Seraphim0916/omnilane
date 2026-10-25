@@ -26,9 +26,11 @@ class NonpassShortCircuitTests(unittest.TestCase):
                                   observed_model="original-model", evidence_tier="original-tier",
                                   metadata={"nested": ["unchanged"]})
                 before = copy.deepcopy(descriptor)
-                with patch("builtins.__import__", side_effect=guarded_import) as imports, \
-                     patch("builtins.open", side_effect=AssertionError("evidence read")) as opened, \
-                     patch.object(Path, "open", side_effect=AssertionError("evidence read")) as path_open:
+                # __import__ is patched last: on Python 3.9, patch() resolves its
+                # target through __import__, so a later patch would count as a call.
+                with patch("builtins.open", side_effect=AssertionError("evidence read")) as opened, \
+                     patch.object(Path, "open", side_effect=AssertionError("evidence read")) as path_open, \
+                     patch("builtins.__import__", side_effect=guarded_import) as imports:
                     result = transport_compat.checked_descriptor(None, None, None, descriptor)
                 self.assertIs(result, descriptor)
                 self.assertEqual(descriptor, before)
