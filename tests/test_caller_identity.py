@@ -23,7 +23,6 @@ import aa_policy  # noqa: E402
 import caller_identity  # noqa: E402
 
 REGISTRY_PATH = ROOT / "config/aa-model-policy.json"
-SCRATCH = ROOT / ".sandbox-tmp"
 CALLER_IDENTITY = ROOT / "scripts/lib/caller_identity.py"
 DESKTOP_CLAUDE = ("/Users/x/Library/Application Support/Claude/claude-code/2.1.260/"
                   "claude.app/Contents/MacOS/claude")
@@ -127,8 +126,7 @@ class RolloutCallerTests(unittest.TestCase):
     other = "22222222-2222-4222-8222-222222222222"
 
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
         self.path = self.home / "sessions/2026/09/11" / f"rollout-synthetic-{self.thread}.jsonl"
@@ -776,8 +774,7 @@ class WriteContextTests(unittest.TestCase):
     def test_the_written_context_is_what_the_gate_accepts(self):
         reg = registry()
         row, _ = caller_identity.resolve(reg, "claude", "claude-opus-5", "high")
-        SCRATCH.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path = caller_identity.write_context(row, reg, Path(tmp))
             value, _ = aa_policy.load_caller(path, reg)
             self.assertEqual(value["caller"], {key: row[key] for key in aa_policy.IDENTITY_FIELDS})
@@ -799,8 +796,7 @@ class DegradedCallerTests(unittest.TestCase):
     def test_the_degraded_context_is_marked_and_kept_apart(self):
         reg = registry()
         row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
-        SCRATCH.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             exact = caller_identity.write_context(row, reg, Path(tmp))
             degraded = caller_identity.write_context(row, reg, Path(tmp), effort_unverified=True)
             self.assertNotEqual(exact, degraded)
@@ -841,8 +837,7 @@ class DegradedCallerTests(unittest.TestCase):
     def test_effort_unverified_may_only_be_true(self):
         reg = registry()
         row = caller_identity.floor_row(reg, "codex", "gpt-6-astra")
-        SCRATCH.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path = caller_identity.write_context(row, reg, Path(tmp), effort_unverified=True)
             for bad in (False, 1, "true"):
                 with self.subTest(bad=bad):
@@ -877,8 +872,7 @@ class EligibleLanesTests(unittest.TestCase):
                "closed: off - -\n")
 
     def annotate(self, decision, lane=None, routing=None):
-        SCRATCH.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "routing.yaml"
             path.write_text(self.ROUTING if routing is None else routing)
             command = [sys.executable, str(ROOT / "scripts/lib/aa_lanes.py"),
@@ -958,7 +952,7 @@ class EligibleLanesTests(unittest.TestCase):
         stdin = self.refusal(reason=original, effective_ceiling=30, inherited_ceiling=30,
                              caller_score=30)
         out = []
-        with tempfile.TemporaryDirectory(dir=SCRATCH) as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             routing = Path(tmp) / "routing.yaml"
             routing.write_text(self.ROUTING)
             with patch.object(aa_lanes, "lane_requirement",
@@ -1010,8 +1004,7 @@ class EligibleLanesTests(unittest.TestCase):
 
 class WhoamiCommandTests(unittest.TestCase):
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_")}
         self.env["OMNILANE_HOME"] = self.tmp.name
@@ -1116,8 +1109,7 @@ class DispatchReadsCallerTests(unittest.TestCase):
     """The lane's top candidate scores 54, the next 48: the ceiling decides which runs."""
 
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         base = Path(self.tmp.name)
         self.home = base / "home"

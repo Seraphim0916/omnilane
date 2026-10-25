@@ -60,7 +60,7 @@ class RetiredRowTests(unittest.TestCase):
         retired = {cid: ("2026-10-02", REASON) for cid in MINI}
         new_rows = [row for row in aa_rebaseline.NEW_ROWS if row[0] not in retired]
         new_aliases = {k: v for k, v in aa_rebaseline.NEW_ALIASES.items() if k != "gpt-5.4-mini"}
-        with tempfile.TemporaryDirectory(dir=REPO / ".sandbox-tmp") as temp:
+        with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "registry.json"
             path.write_bytes(aa_rebaseline.dump(self.registry))
             args = SimpleNamespace(extract=str(EXTRACT), base=str(path), as_of="2026-10-18",
@@ -96,7 +96,7 @@ class RetiredRowTests(unittest.TestCase):
         retired = {MINI[0]: ("2026-10-02", REASON)}
         args = SimpleNamespace(extract=str(EXTRACT), base=str(REPO / "config/aa-model-policy.json"),
                                as_of="2026-10-18", revision=1, approval="proposed")
-        with tempfile.TemporaryDirectory(dir=REPO / ".sandbox-tmp") as temp:
+        with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "must-not-be-written.json"
             with patch.object(aa_rebaseline, "RETIRED_ROWS", retired), \
                     patch.object(aa_rebaseline, "REGISTRY", path):

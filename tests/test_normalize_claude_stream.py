@@ -22,9 +22,7 @@ def text(value):
 
 class NormalizeClaudeStreamTests(unittest.TestCase):
     def setUp(self):
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        directory = tempfile.TemporaryDirectory(prefix="normalize-stream-", dir=sandbox)
+        directory = tempfile.TemporaryDirectory(prefix="normalize-stream-")
         self.addCleanup(directory.cleanup)
         self.events = Path(directory.name) / "events.jsonl"
         self.output = Path(directory.name) / "out.txt"

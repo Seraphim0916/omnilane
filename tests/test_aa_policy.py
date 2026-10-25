@@ -35,9 +35,7 @@ class ExactAAPolicyTests(unittest.TestCase):
         cls.real = json.loads((ROOT / "config/aa-model-policy.json").read_text())
 
     def setUp(self):
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(prefix="aa-policy-", dir=sandbox)
+        self.temp = tempfile.TemporaryDirectory(prefix="aa-policy-")
         self.addCleanup(self.temp.cleanup)
         self.base = Path(self.temp.name)
         self.registry = copy.deepcopy(self.real)
@@ -449,9 +447,7 @@ def sha256(path: Path) -> str:
 
 class TransportOverlayEvidenceTests(unittest.TestCase):
     def setUp(self) -> None:
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        self.temp_dir = tempfile.TemporaryDirectory(dir=sandbox)
+        self.temp_dir = tempfile.TemporaryDirectory()
         self.work = Path(self.temp_dir.name)
         self.overlay_path = self.work / "transport-overlay.json"
 

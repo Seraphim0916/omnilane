@@ -11,7 +11,6 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = ROOT / ".sandbox-tmp"
 sys.path.insert(0, str(ROOT / "scripts/lib"))
 import host_context
 
@@ -21,8 +20,7 @@ HARNESS_VARIABLES = ("CODEX_THREAD_ID", "CODEX_SANDBOX", "CLAUDECODE", "CLAUDE_C
 
 class Fixture(unittest.TestCase):
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name)
         self.codex = self.base / "codex"

@@ -21,9 +21,7 @@ REGISTRY = json.loads((ROOT / "config" / "aa-model-policy.json").read_text())
 
 
 def run(overlay_path, **extra):
-    sandbox = ROOT / ".sandbox-tmp"
-    sandbox.mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="overlay-health-tools-", dir=sandbox) as directory:
+    with tempfile.TemporaryDirectory(prefix="overlay-health-tools-") as directory:
         env, violations = isolated_environment(Path(directory), os.environ["PATH"])
         env = {k: v for k, v in env.items() if not k.startswith("OMNILANE_AA_")}
         env["OMNILANE_HOME"] = str(Path(directory) / "omnilane")
@@ -42,11 +40,10 @@ def run(overlay_path, **extra):
 
 class OverlayHealthTests(unittest.TestCase):
     def setUp(self):
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(prefix="overlay-health-", dir=sandbox)
+        self.temp = tempfile.TemporaryDirectory(prefix="overlay-health-")
         self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
+        # macOS /var is a symlink to /private/var; the health check compares resolved paths.
+        self.base = Path(self.temp.name).resolve()
         self.evidence = self.base / "fake-cli"
         self.evidence.write_bytes(b"pretend this is a vendor binary\n")
         self.digest = hashlib.sha256(self.evidence.read_bytes()).hexdigest()

@@ -2,7 +2,7 @@
 """Offline tests for the signer check, the probe plan and the re-sign flow.
 
 Nothing here runs a vendor CLI: codesign, launchctl, the probe and the smoke
-dispatch are all replaced, and every file lives under .sandbox-tmp.
+dispatch are all replaced, and every file lives under the suite's default temporary directory.
 """
 from __future__ import annotations
 
@@ -27,7 +27,6 @@ import cli_provenance  # noqa: E402
 import probe_sweep  # noqa: E402
 import resign  # noqa: E402
 
-SCRATCH = ROOT / ".sandbox-tmp"
 
 
 def digest(path: Path) -> str:
@@ -44,10 +43,9 @@ def codesign(described: str, verify_rc: int = 0):
 
 class ProvenanceTests(unittest.TestCase):
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.target = Path(self.tmp.name) / "sample"
+        self.target = Path(self.tmp.name).resolve() / "sample"
         self.target.write_bytes(b"\xcf\xfa\xed\xfe" + b"fake Mach-O")
         platform = patch.object(sys, "platform", "darwin")
         platform.start()
@@ -117,10 +115,9 @@ class ProbePlanTests(unittest.TestCase):
 
 class SweepTests(unittest.TestCase):
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / "sweep"
+        self.root = Path(self.tmp.name).resolve() / "sweep"
 
     def prober(self, verdicts):
         calls = []
@@ -242,10 +239,9 @@ class ResignTests(unittest.TestCase):
     """A host with four fake CLIs, a signed overlay, and then an update."""
 
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
         self.home = self.base / "home"
         self.bins = {}
         for vendor in resign.VENDORS:
@@ -985,9 +981,8 @@ class SmokePromptTests(unittest.TestCase):
                      "that appear designed to test instruction-following boundaries.")
 
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
-        self.home = Path(self.tmp.name)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name).resolve()
         env = patch.dict(os.environ, {"OMNILANE_HOME": str(self.home)})
         env.start()
         self.addCleanup(env.stop)

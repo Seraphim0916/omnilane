@@ -35,11 +35,9 @@ def digest(path):
 
 class CarryTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / ".sandbox-tmp"
-        scratch.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=scratch)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
         self.registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
         self.source_id = self.registry["snapshot"]["id"]
         self.registry["snapshot"]["id"] = "synthetic-next-snapshot"

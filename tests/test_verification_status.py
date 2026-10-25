@@ -20,7 +20,7 @@ import verification_status as status
 
 class DailyStatusTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp")
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name)
         env = patch.dict(os.environ, {"OMNILANE_HOME": str(self.home)})

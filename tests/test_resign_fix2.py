@@ -36,8 +36,8 @@ def baseline_resign():
         raise unittest.SkipTest(
             "baseline comparison cannot read c7c63e8:scripts/lib/resign.py "
             f"from the repository: {detail}") from exc
-    with tempfile.TemporaryDirectory(prefix="fix5-baseline-", dir=ROOT / ".sandbox-tmp") as directory:
-        path = Path(directory) / "resign_c7c63e8.py"
+    with tempfile.TemporaryDirectory(prefix="fix5-baseline-") as directory:
+        path = Path(directory).resolve() / "resign_c7c63e8.py"
         path.write_bytes(source)
         spec = importlib.util.spec_from_file_location("resign_c7c63e8", path)
         module = importlib.util.module_from_spec(spec)

@@ -255,7 +255,7 @@ class EvidenceTierTests(unittest.TestCase):
                               probe.EVIDENCE_TIERS)
 
     def test_codex_record_reads_the_rollout_named_by_the_thread_id(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             sessions = Path(tmp) / "2026/09/10"
             sessions.mkdir(parents=True)
             thread = "01a08774-0fb5-7fd0-aba3-77489839d1c9"
@@ -272,7 +272,7 @@ class EvidenceTierTests(unittest.TestCase):
                 json.dumps({"thread_id": "absent-thread"}), Path(tmp)), "")
 
     def test_agy_record_ignores_logs_written_before_this_run(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".sandbox-tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             app_root = Path(tmp)
             log = app_root / "cli.log"
             log.write_text('model_resolver.go] Resolving model gemini-3.8-flash-low\n'
@@ -287,9 +287,7 @@ class EvidenceTierTests(unittest.TestCase):
 
 class ProbeAndOverlayTests(unittest.TestCase):
     def setUp(self):
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        self.temp = tempfile.TemporaryDirectory(prefix="probe-identity-test-", dir=sandbox)
+        self.temp = tempfile.TemporaryDirectory(prefix="probe-identity-test-")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 

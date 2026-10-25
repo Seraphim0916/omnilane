@@ -15,7 +15,6 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRATCH = ROOT / ".sandbox-tmp"
 sys.path.insert(0, str(ROOT / "scripts/lib"))
 import refusal_evidence
 import self_exec
@@ -27,8 +26,7 @@ REFUSAL = {"allowed": False, "code": "missing-caller-context", "failed_gate": "c
 
 class Fixture(unittest.TestCase):
     def setUp(self):
-        SCRATCH.mkdir(exist_ok=True)
-        self.tmp = tempfile.TemporaryDirectory(dir=SCRATCH)
+        self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / "home"
         env = patch.dict(os.environ, {"OMNILANE_HOME": str(self.home)})

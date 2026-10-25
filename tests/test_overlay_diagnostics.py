@@ -17,9 +17,7 @@ import probe_sweep
 
 class OverlayDiagnosticsTests(unittest.TestCase):
     def setUp(self):
-        sandbox = ROOT / ".sandbox-tmp"
-        sandbox.mkdir(exist_ok=True)
-        directory = tempfile.TemporaryDirectory(prefix="overlay-diagnostics-", dir=sandbox)
+        directory = tempfile.TemporaryDirectory(prefix="overlay-diagnostics-")
         self.addCleanup(directory.cleanup)
         self.base = Path(directory.name)
         self.registry = {"scored_configs": [{
