@@ -74,9 +74,11 @@ def _vendor(executable: str) -> str | None:
 
 
 def _flag(argv: list[str], *names: str) -> str | None:
-    """The last value given for any of names, as `--name value` or `--name=value`."""
+    """The last flag value before `--`, as `--name value` or `--name=value`."""
     value = None
     for index, token in enumerate(argv):
+        if token == "--":
+            break
         for name in names:
             if token == name and index + 1 < len(argv):
                 value = argv[index + 1]
