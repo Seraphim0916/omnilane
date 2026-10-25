@@ -59,9 +59,10 @@ def contextual_failure(verdict, descriptor, stdout, stderr):
     """Identify plain-text login/network failures without changing the proof engine."""
     if verdict[0] == "fail" and verdict[1] in ("invalid-json", "invalid-json-result") \
             and descriptor.get("exit_code") != 0:
-        reason = f"result-error: {(stderr or stdout)[:300]}"
-        if environment_reason(reason):
-            return verdict[0], reason, verdict[2], verdict[3]
+        for stream in (stderr, stdout):
+            reason = f"result-error: {stream[:300]}"
+            if environment_reason(reason):
+                return verdict[0], reason, verdict[2], verdict[3]
     return verdict
 
 
