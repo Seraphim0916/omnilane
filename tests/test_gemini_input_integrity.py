@@ -71,14 +71,14 @@ class GeminiInputIntegrityTests(unittest.TestCase):
              "header", str(ROOT)],
             env=self.env, capture_output=True, check=True, timeout=30).stdout
 
-    def assert_intact(self, payload, result, live=False):
+    def assert_intact(self, payload, result):
         errors = "\n".join(p.read_text() for p in (self.home / "jobs").rglob("*.stderr.log"))
         self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace")[-2000:] + errors)
         self.assertTrue(self.capture.exists(), "fake agy was not reached")
         received = self.capture.read_bytes()
-        # The runner sends the worker rules ahead of the task; the live first
-        # message is built by job-worker.sh before the runner starts.
-        expected = payload if live else self.worker_rules_header() + payload
+        # Both the runner and the live first message (built by job-worker.sh)
+        # send the worker rules ahead of the task.
+        expected = self.worker_rules_header() + payload
         self.assertTrue(received == expected,
                         f"sent={len(payload)} received={len(received)} "
                         f"sent_sha256={hashlib.sha256(payload).hexdigest()} "
@@ -152,7 +152,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
             ['bash', '-c', 'source "$1/scripts/lib/common.sh"; '
              'source "$1/scripts/lib/live-protocol.sh"; '
              'live_encode_message gemini job session "$2"; printf "\\n"',
-             'protocol-check', str(ROOT), payload.decode('utf-8')],
+             'protocol-check', str(ROOT), (self.worker_rules_header() + payload).decode('utf-8')],
             env=self.env, capture_output=True, check=True, timeout=30)
         self.assertEqual(Path(str(self.capture) + '.message').read_bytes(), encoded.stdout)
 
@@ -184,7 +184,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
                 time.sleep(0.1)
             self.assertTrue((job / "exit").exists(), "live worker did not finish")
             self.assertEqual((job / "exit").read_text().strip(), "0")
-            self.assert_intact(payload, result, live=True)
+            self.assert_intact(payload, result)
         finally:
             if not (job / "exit").exists():
                 subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "close", job_id],

@@ -311,6 +311,9 @@ fi
 if [[ "$VENDOR" != "gemini" ]]; then
   truncate_payload "$PROMPT_FILE" 102400
 fi
+# The first live message gets the same worker rules a single-shot runner
+# sends; later sends reach the worker through the inbox and stay verbatim.
+FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_FILE")" || exit 1
 # Codex input must not be consumed by Bash read: an interrupted partial read
 # can discard bytes before the close trap runs. Pump raw bytes instead. The
 # anonymous file holds at most one 64 KiB chunk, with shared read offset on FD 6
@@ -372,7 +375,7 @@ if [[ "$VENDOR" == "gemini" ]]; then
   # Build before starting the runner so invalid UTF-8 fails explicitly.
   INITIAL_MESSAGE_FILE="$JOB_DIR/initial-gemini-message.json"
   private_job_files "$INITIAL_MESSAGE_FILE"
-  python3 - "$PROMPT_FILE" "$INITIAL_MESSAGE_FILE" <<'PY'
+  python3 - "$FIRST_MESSAGE_FILE" "$INITIAL_MESSAGE_FILE" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -387,7 +390,7 @@ message = {"event": "user", "message": {"role": "user", "content": [
 Path(sys.argv[2]).write_bytes((json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
 PY
 else
-  INITIAL_TEXT="$(cat "$PROMPT_FILE")"
+  INITIAL_TEXT="$(cat "$FIRST_MESSAGE_FILE")"
 fi
 if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
   FOREMAN_SESSION_VALUE="$FOREMAN_SESSION"

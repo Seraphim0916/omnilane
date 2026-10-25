@@ -311,7 +311,9 @@ case_codex_live_rpc() {
   wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered agentMessage did not reach output"
   grep -Fxq "$reply" "$job_dir/out.txt" || fail "Codex steered reply was not preserved verbatim"
 
-  INPUT="$input" ROOT="$ROOT" REPLY="$reply" python3 - <<'PY' || fail "Codex JSON-RPC request sequence mismatch"
+  local rules
+  rules="$(source "$ROOT/scripts/lib/common.sh"; printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; printf x)"
+  INPUT="$input" ROOT="$ROOT" REPLY="$reply" RULES="${rules%x}" python3 - <<'PY' || fail "Codex JSON-RPC request sequence mismatch"
 import json
 import os
 import pathlib
@@ -330,11 +332,14 @@ assert thread["sandbox"] == "read-only"
 turn = requests[2]["params"]
 assert turn["threadId"] == "thread-live-1"
 assert turn["effort"] == "medium"
-assert turn["input"] == [{"type": "text", "text": "initial prompt echo marker"}]
+# The first message carries the same worker rules as single-shot mode; a later
+# send is the operator's text only.
+assert turn["input"] == [{"type": "text", "text": os.environ["RULES"] + "initial prompt echo marker"}], turn["input"]
 steer = requests[3]["params"]
 assert steer["threadId"] == "thread-live-1"
 assert steer["expectedTurnId"] == "turn-live-1"
 assert steer["input"] == [{"type": "text", "text": os.environ["REPLY"]}]
+assert "[omnilane worker rules]" not in steer["input"][0]["text"]
 PY
   grep -Fxq 'thread-live-1' "$job_dir/out.txt.session-id" || fail "Codex thread id was not recorded"
 
@@ -1182,7 +1187,9 @@ PY
     tries=$((tries + 1))
   done
 
-  INPUT="$input" ROOT="$ROOT" REPLY="$reply" python3 - <<'PY'
+  local rules
+  rules="$(source "$ROOT/scripts/lib/common.sh"; printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; printf x)"
+  INPUT="$input" ROOT="$ROOT" REPLY="$reply" RULES="${rules%x}" python3 - <<'PY'
 import json
 import os
 import pathlib
@@ -1213,8 +1220,8 @@ cancel = requests[3]
 second_prompt = requests[4]
 assert first_prompt["params"]["sessionId"] == "grok-session-live-1"
 assert first_prompt["params"]["prompt"] == [
-    {"type": "text", "text": "initial Grok prompt"}
-]
+    {"type": "text", "text": os.environ["RULES"] + "initial Grok prompt"}
+], first_prompt["params"]["prompt"]
 assert "id" not in cancel, cancel
 assert cancel["params"] == {"sessionId": "grok-session-live-1"}
 assert second_prompt["params"]["sessionId"] == "grok-session-live-1"
