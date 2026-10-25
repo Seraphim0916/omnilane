@@ -27,8 +27,8 @@ fail() {
 }
 
 wait_for_file() {
-  local path="$1" tries=0
-  while [[ ! -f "$path" && "$tries" -lt 150 ]]; do
+  local path="$1" limit="${2:-150}" tries=0
+  while [[ ! -f "$path" && "$tries" -lt "$limit" ]]; do
     sleep 0.1
     tries=$((tries + 1))
   done
@@ -84,6 +84,10 @@ PY
   printf 'ok - real Claude stream refreshes activity but has no successful terminal event\n'
 }
 
+# The worker measures idleness with integer $SECONDS after a `read -t 1` poll,
+# so a 1 s event gap can register as up to ~3 s. The idle cap (5 s) must clear
+# that jitter, while the whole stream (10 s) must outlast cap + jitter so the job
+# only survives if each valid event really refreshes activity.
 make_slow_claude() {
   local path="$1"
   cat > "$path" <<'EOF'
@@ -91,12 +95,14 @@ make_slow_claude() {
 set -euo pipefail
 IFS= read -r _initial
 printf '{"type":"system","subtype":"init"}\n'
-sleep 1
-printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"working"}]}}\n'
-sleep 1
-printf '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"step"}]}}\n'
-sleep 1
-printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"still working"}]}}\n'
+for step in 1 2 3 4 5 6 7 8 9; do
+  sleep 1
+  if (( step % 2 )); then
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"working %s"}]}}\n' "$step"
+  else
+    printf '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"step %s"}]}}\n' "$step"
+  fi
+done
 sleep 1
 printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"claude normalized ok"}]}}\n'
 EOF
@@ -112,10 +118,10 @@ test_live_activity_and_clean_exit_normalization() {
   printf 'triage: claude claude-default high\n' > "$home/routing.local.yaml"
 
   job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" \
-    "$ROOT/scripts/dispatch.sh" --background --live --timeout 30 \
-    --idle-timeout 2 --vendor claude triage "use streamed activity")"
+    "$ROOT/scripts/dispatch.sh" --background --live --timeout 60 \
+    --idle-timeout 5 --vendor claude triage "use streamed activity")"
   job_dir="$home/jobs/$job"
-  wait_for_file "$job_dir/exit" || fail "slow active live job never finished"
+  wait_for_file "$job_dir/exit" 600 || fail "slow active live job never finished"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "slow active live job was idle-killed or failed"
   ! grep -Fq 'closed by idle cap' "$job_dir/out.txt" || fail "valid events did not refresh activity"
   grep -Fq 'claude normalized ok' "$job_dir/out.txt" || fail "clean Claude stream was not normalized"
