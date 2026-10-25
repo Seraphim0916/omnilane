@@ -84,6 +84,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
                         f"sent_sha256={hashlib.sha256(payload).hexdigest()} "
                         f"received_sha256={hashlib.sha256(received).hexdigest()}")
         self.assertNotIn(b"TRUNCATED (original", received)
+        self.assertEqual(received.count(b"[omnilane worker rules]"), 1)
         self.assertNotIn("\ufffd", received.decode("utf-8"))
         jobs = list((self.home / "jobs").iterdir())
         self.assertTrue(jobs)
