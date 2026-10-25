@@ -661,14 +661,21 @@ OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not
 # runner sends a sibling copy with the rules in front. Rebuilding it from the
 # task each time keeps a retried candidate from stacking the header.
 worker_prompt_file() { # task file -> prints the file to send
-  local f="$1" out="$1.worker"
+  local f="$1" out="$1.worker" tmp
   if [[ -L "$out" || ( -e "$out" && ! -f "$out" ) ]]; then
     echo "omnilane: unsafe worker prompt path" >&2
     return 125
   fi
-  ( umask 077
-    { printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; cat "$f"; } > "$out.tmp" ) &&
-    mv "$out.tmp" "$out" && printf '%s\n' "$out"
+  # mktemp creates a new, unique file (O_EXCL): a planted name next to the
+  # task cannot turn the redirect into a write onto task.txt itself.
+  tmp="$(umask 077; mktemp "$out.XXXXXX")" || return 125
+  if { printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; cat "$f"; } > "$tmp" &&
+    mv -f "$tmp" "$out"; then
+    printf '%s\n' "$out"
+  else
+    rm "$tmp" 2>/dev/null || true
+    return 125
+  fi
 }
 
 strip_ansi() { # file

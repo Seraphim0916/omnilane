@@ -78,7 +78,7 @@ class CodexWorkerContracts(unittest.TestCase):
         result = subprocess.run(
             ["/bin/bash", str(ROOT / "scripts/runners/run-codex.sh"), mode, str(self.workdir),
              "gpt-6-astra", "medium", str(prompt), str(self.tmp / f"{mode}.out")],
-            env=env, text=True, capture_output=True, check=False,
+            env=env, text=True, capture_output=True, check=False, timeout=60,
         )
         data = json.loads(record.read_text()) if record.exists() else {}
         return result, data
@@ -97,9 +97,9 @@ class CodexWorkerContracts(unittest.TestCase):
                 self.assertIn("--disable", argv)
                 self.assertEqual(argv[argv.index("--disable") + 1], "multi_agent")
 
-    def test_work_and_advise_get_temp_dir_inside_workdir(self) -> None:
+    def test_work_gets_temp_dir_inside_workdir(self) -> None:
         tmp_dir = self.workdir / ".omnilane-tmp"
-        for mode in ("work", "advise"):
+        for mode in ("work", "work"):
             with self.subTest(mode=mode):
                 result, data = self.run_codex(mode, self.prompt(f"{mode}.txt"))
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -157,6 +157,78 @@ class CodexWorkerContracts(unittest.TestCase):
         self.assertIn('base_url="http://127.0.0.1:8791/backend-api/codex"', provider[0])
         self.assertIn("requires_openai_auth=true", provider[0])
         self.assertIn('http_headers={"x-headroom-bypass"="true"}', provider[0])
+
+    # --- R4 review (FIX-FIRST) regressions ---
+
+    def test_advise_creates_no_temp_dir_or_exclude(self) -> None:
+        result, data = self.run_codex("advise", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.workdir / ".omnilane-tmp").exists())
+        self.assertNotIn("/.omnilane-tmp/", (self.workdir / ".git/info/exclude").read_text())
+        self.assertEqual(data["TMPDIR"], str(self.tmp) + "/")
+        self.assertFalse(any(v.startswith("shell_environment_policy.set.TMP")
+                             for v in config_values(data["argv"])))
+
+    def test_advise_runs_in_unwritable_workdir(self) -> None:
+        self.workdir.chmod(0o555)
+        self.addCleanup(self.workdir.chmod, 0o755)
+        result, _ = self.run_codex("advise", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_predictable_worker_tmp_link_cannot_truncate_task(self) -> None:
+        prompt = self.prompt("task.txt")
+        Path(str(prompt) + ".worker.tmp").symlink_to(prompt)
+        result, data = self.run_codex("work", prompt)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(prompt.read_text(), "do the thing\n")
+        self.assertTrue(data["stdin"].endswith("do the thing\n"))
+
+    def test_header_value_cannot_inject_provider_fields(self) -> None:
+        for bad in ('{}, env_http_headers={"X-Test"="PATH"}',
+                    '{"x-a"={"nested"="1"}}',
+                    '{"x-a"=1}',
+                    '{"x a"="1"}',
+                    '{"x-a"="1\\"}, base_url=\\"http://evil"}',
+                    '{"x-a"="1"} # c'):
+            with self.subTest(value=bad):
+                result, data = self.run_codex(
+                    "work", self.prompt(),
+                    OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+                    OMNILANE_CODEX_HTTP_HEADERS=bad)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("OMNILANE_CODEX_HTTP_HEADERS", result.stderr)
+                self.assertEqual(data, {})
+
+    def test_header_table_is_reserialized(self) -> None:
+        result, data = self.run_codex(
+            "work", self.prompt(),
+            OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
+            OMNILANE_CODEX_HTTP_HEADERS='{ x-headroom-bypass = "true", "X-Two" = "a b" }')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        provider = [v for v in config_values(data["argv"]) if v.startswith("model_providers.omnilane_codex=")]
+        self.assertEqual(len(provider), 1)
+        self.assertIn('http_headers={"x-headroom-bypass"="true", "X-Two"="a b"}', provider[0])
+
+    def test_exclude_symlink_is_not_followed(self) -> None:
+        outside = self.tmp / "outside-exclude"
+        outside.write_text("keep\n")
+        exclude = self.workdir / ".git/info/exclude"
+        exclude.unlink()
+        exclude.symlink_to(outside)
+        result, data = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outside.read_text(), "keep\n")
+        self.assertTrue(exclude.is_symlink())
+        self.assertEqual(data["TMPDIR"], str(self.workdir / ".omnilane-tmp") + "/")
+
+    def test_symlinked_temp_dir_leaves_target_mode(self) -> None:
+        target = self.tmp / "outside-dir"
+        target.mkdir(mode=0o755)
+        target.chmod(0o755)
+        (self.workdir / ".omnilane-tmp").symlink_to(target)
+        result, _ = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 125)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o755)
 
     def test_codex_prompt_starts_with_worker_rules(self) -> None:
         result, data = self.run_codex("work", self.prompt())
