@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+- `jobs close` on a live job that is finishing on its own no longer fails with "live inbox holder is unavailable": the worker clears its holder PID before the supervisor records the exit status, so a close landing in that window now waits (within the same 11s deadline) for the recorded exit and reports `already closed (exit N)`. The close-deadline fixture gains a `finishing` case that holds the exit receipt to exercise that window every run.
+
 ## [0.57.0] - 2026-10-21
 
 ### Added
