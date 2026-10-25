@@ -6,9 +6,11 @@ set -euo pipefail
 # Usage: run-kimi.sh MODE WORKDIR MODEL EFFORT PROMPT_FILE OUTPUT_FILE
 #   MODE = advise (read-only, plan mode) | work (may edit files in WORKDIR)
 #
-# MODEL is a Kimi Code model alias from the user's config.toml (e.g. kimi-k3);
-# an unknown alias fails at the CLI, not here. Kimi has no reasoning-effort
-# knob, so EFFORT is accepted for interface parity only.
+# MODEL is a Kimi Code CLI (@moonshot-ai/kimi-code) model alias, passed to
+# `kimi -m` (e.g. kimi-code/k3); an unknown alias fails at the CLI, not here.
+# Docs: https://moonshotai.github.io/kimi-code/en/reference/kimi-command.md
+# Kimi has no reasoning-effort knob, so EFFORT is accepted for interface
+# parity only.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 strip_caller_claude_env

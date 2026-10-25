@@ -23,6 +23,10 @@ ROOT = Path(__file__).resolve().parents[1]
 # content at commit e662aba, so it runs in a shallow clone, a release archive, or with no git at all.
 # A legitimate change to a protected file has to update this table in the same commit.
 PROTECTED_BASE = "e662aba"
+# Kimi's comment-only update adds the official URL; pin its new blob for git show.
+PROTECTED_BLOBS = {
+    "scripts/runners/run-kimi.sh": "8cc97136539dc2b92508386ff13f0e88bafe9121",
+}
 # AA snapshot proposals may update these data/pin artifacts while retaining the
 # exact historical bytes and every other protected runtime file as baselines.
 SNAPSHOT_REBASE_BASE_SHA256 = {
@@ -59,8 +63,9 @@ PROTECTED_SHA256 = {
         "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
     "scripts/runners/run-groq.sh":
         "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
+    # Comment-only Kimi update with the official URL; runtime behavior is unchanged.
     "scripts/runners/run-kimi.sh":
-        "0f2b3d3692b9aff1f548c079bc97cbaa56c9661500ee27fee796f4202d5512fc",
+        "10788ad27d80152003c1148a3082babc0f95edac2a5c11350c6429da10cb2b35",
     "scripts/runners/run-mistral.sh":
         "4893c2dc96ef193d6bd679638c81960ec911da82aea47dd0cee77bd459d8825a",
     "scripts/runners/run-openai-compat.sh":
@@ -313,14 +318,15 @@ class IntegrationTests(unittest.TestCase):
 
     def test_protected_files_match_base_commit_when_history_is_available(self):
         for path in PROTECTED_SHA256:
+            revision = PROTECTED_BLOBS.get(path, PROTECTED_BASE + ":" + path)
             try:
-                base = subprocess.run(["git", "show", PROTECTED_BASE + ":" + path], cwd=ROOT, capture_output=True)
+                base = subprocess.run(["git", "show", revision], cwd=ROOT, capture_output=True)
                 reason = base.stderr.decode("utf-8", "replace").strip()
             except OSError as error:
                 base, reason = None, str(error)
             if base is None or base.returncode != 0:
-                self.skipTest("history comparison cannot read {}:{} from the repository: {}".format(
-                    PROTECTED_BASE, path, reason))
+                self.skipTest("history comparison cannot read {} from the repository: {}".format(
+                    revision, reason))
             if path in SNAPSHOT_REBASE_BASE_SHA256:
                 self.assertEqual(hashlib.sha256(base.stdout).hexdigest(),
                                  SNAPSHOT_REBASE_BASE_SHA256[path], path)
