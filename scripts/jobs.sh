@@ -569,17 +569,36 @@ case "${1:-}" in
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
     # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
     # One Perl process waits on a sub-second clock for exactly 11s.
-    if ! perl -MTime::HiRes=time,sleep -e '
-      my ($exit, $limit) = @ARGV;
+    # A close that lands before the worker has written its holder PID keeps
+    # polling for it inside the same deadline and signals it once it appears
+    # (same checks as read_job_pid); it prints "signaled" when it does.
+    late_signal=""
+    [[ "$holder_signaled" -eq 1 ]] || late_signal=1
+    if ! wait_out="$(perl -MTime::HiRes=time,sleep -e '
+      my ($exit, $limit, $holder, $poll_holder) = @ARGV;
       my $end = time + $limit;
-      until (-e $exit || -l $exit) { exit 1 if time >= $end; sleep 0.1 }
-    ' "$JOB_DIR/exit" 11; then
+      $| = 1;
+      until (-e $exit || -l $exit) {
+        if ($poll_holder && -f $holder && !-l $holder && (-s _) <= 11 && open(my $fh, "<", $holder)) {
+          local $/;
+          my $value = <$fh>;
+          close $fh;
+          if (defined $value && $value =~ /\A([1-9][0-9]{0,9})\n?\z/ && kill(0, $1)) {
+            if (kill("USR1", $1)) { print "signaled\n"; $poll_holder = 0 }
+          }
+        }
+        exit 1 if time >= $end;
+        sleep 0.1;
+      }
+    ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal")"; then
+      [[ "$wait_out" != *signaled* ]] || holder_signaled=1
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
         die 1 "live inbox holder is unavailable"
       }
       die 124 "close signal sent, but the live worker did not terminate within 11s"
     fi
+    [[ "$wait_out" != *signaled* ]] || holder_signaled=1
     read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
     if [[ "$holder_signaled" -eq 0 ]]; then
       echo "already closed (exit $RECORDED_EXIT)"
