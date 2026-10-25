@@ -104,7 +104,7 @@ def record(args) -> int:
     return 0
 
 
-def records(cutoff: datetime.datetime) -> list[dict]:
+def records(cutoff: datetime.datetime, until: datetime.datetime | None = None) -> list[dict]:
     found = []
     try:
         with (home() / LOG_NAME).open(encoding="utf-8", newline="") as stream:
@@ -118,12 +118,12 @@ def records(cutoff: datetime.datetime) -> list[dict]:
         except ValueError:
             continue
         moment = parse_stamp(entry.get("recorded_at")) if isinstance(entry, dict) else None
-        if moment is not None and moment >= cutoff:
+        if moment is not None and cutoff <= moment and (until is None or moment <= until):
             found.append(entry)
     return found
 
 
-def dispatched(cutoff: datetime.datetime) -> collections.Counter:
+def dispatched(cutoff: datetime.datetime, until: datetime.datetime) -> collections.Counter:
     count = collections.Counter()
     for meta in (home() / "jobs").glob("*/meta.json"):
         try:
@@ -131,7 +131,7 @@ def dispatched(cutoff: datetime.datetime) -> collections.Counter:
         except (OSError, ValueError):
             continue
         moment = parse_stamp(value.get("started")) if isinstance(value, dict) else None
-        if moment is not None and moment >= cutoff:
+        if moment is not None and cutoff <= moment <= until:
             executor = value.get("executor") or "unknown"
             if not isinstance(executor, str):
                 continue
@@ -142,8 +142,8 @@ def dispatched(cutoff: datetime.datetime) -> collections.Counter:
 def stats(args) -> int:
     moment = now()
     cutoff = since_cutoff(args.since, moment)
-    own = records(cutoff)
-    jobs = dispatched(cutoff)
+    own = records(cutoff, moment)
+    jobs = dispatched(cutoff, moment)
     total = len(own) + sum(jobs.values())
     report = {"since": stamp(cutoff), "until": stamp(moment), "self_exec": len(own),
               "dispatched": sum(jobs.values()), "dispatched_by_executor": dict(sorted(jobs.items())),
