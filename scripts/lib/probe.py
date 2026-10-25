@@ -48,7 +48,8 @@ def codex_failure(stdout_text: str) -> str:
         if not isinstance(event, dict):
             continue
         if event.get("type") == "turn.failed":
-            message = (event.get("error") or {}).get("message")
+            error = event.get("error")
+            message = error.get("message") if isinstance(error, dict) else None
         elif event.get("type") == "error":
             message = event.get("message")
         else:
