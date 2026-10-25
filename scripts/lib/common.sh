@@ -32,32 +32,18 @@ private_job_files() (
   done
 )
 
-# The unquoted backslash case pattern intentionally matches one backslash.
-# shellcheck disable=SC1003
+# Escape bytes without decoding UTF-8 or passing the payload in argv.
 json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      \\) out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
+  printf '%s' "$1" | python3 -B -c '
+import sys
+table = [bytes((c,)) for c in range(256)]
+for c in range(32):
+    table[c] = b"\\u%04x" % c
+for c, escaped in ((8, b"\\b"), (12, b"\\f"), (10, b"\\n"),
+                   (13, b"\\r"), (9, b"\\t"), (34, b"\\\""), (92, b"\\\\")):
+    table[c] = escaped
+sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())))
+'
 }
 
 json_file_round_trip_valid() {
