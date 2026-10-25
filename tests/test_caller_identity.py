@@ -918,22 +918,25 @@ class EligibleLanesTests(unittest.TestCase):
             lane="hardest"))
         self.assertIsNone(value["required_caller_effort"])
 
-    def test_a_reachable_lane_keeps_the_original_reason(self):
+    def test_a_reachable_lane_keeps_the_original_reason_and_adds_retry_hint(self):
         # 2026-10-25 MacMini: an explicit --vendor target above the ceiling was explained as
         # "cheapest target ... scores 41, above this caller's ceiling of 51".
         original = "target score 52 exceeds effective caller ceiling 46"
         value = json.loads(self.annotate(self.refusal(reason=original), lane="cheap"))
         self.assertLessEqual(value["lane_requirement"]["score"], 46)
-        self.assertEqual(value["reason"], original)
+        self.assertTrue(value["reason"].startswith(original + ". "))
+        self.assertIn("retry the lane without --vendor", value["reason"])
         self.assertNotIn("required_caller_effort", value)
 
-    def test_a_ceiling_equal_to_the_lanes_cheapest_target_keeps_the_original_reason(self):
+    def test_a_ceiling_equal_to_the_lanes_cheapest_target_adds_retry_hint(self):
         cheapest = json.loads(self.annotate(self.refusal(), lane="cheap"))["lane_requirement"]["score"]
         original = "target score 52 exceeds effective caller ceiling"
         value = json.loads(self.annotate(self.refusal(
             reason=original, effective_ceiling=cheapest, inherited_ceiling=cheapest,
             caller_score=cheapest), lane="cheap"))
-        self.assertEqual(value["reason"], original)
+        self.assertTrue(value["reason"].startswith(original + ". "))
+        self.assertIn(f"score {cheapest}, ceiling {cheapest}", value["reason"])
+        self.assertIn("retry the lane without --vendor", value["reason"])
 
     def test_a_ceiling_one_below_the_lanes_cheapest_target_is_explained(self):
         cheapest = json.loads(self.annotate(self.refusal(), lane="cheap"))["lane_requirement"]["score"]
@@ -994,7 +997,8 @@ class EligibleLanesTests(unittest.TestCase):
                 value = json.loads(self.annotate(json.dumps(upstream), lane="consult",
                                                  routing=routing))
                 self.assertLessEqual(value["lane_requirement"]["score"], value["effective_ceiling"])
-                self.assertEqual(value["reason"], upstream["reason"])
+                self.assertTrue(value["reason"].startswith(upstream["reason"]))
+                self.assertIn("retry the lane without --vendor", value["reason"])
                 self.assertEqual(value["required_caller_effort"], upstream["required_caller_effort"])
                 self.assertIs(value["caller_degraded"], label == "degraded")
 

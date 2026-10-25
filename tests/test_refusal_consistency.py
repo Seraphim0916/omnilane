@@ -112,6 +112,17 @@ def inconsistencies(registry, refusal, lane):
     for quoted in re.findall(r"reaches (\d+)", reason):
         if int(quoted) != target:
             found.append(f"reason reaches {quoted}, target_score is {target}")
+    for named_lane, named_target, score, quoted in re.findall(
+            r"Lane ([\w-]+) has a target within this caller's ceiling: (\S+) "
+            r"\(score (\d+), ceiling (\d+)\)", reason):
+        if named_lane != lane or named_lane != requirement.get("lane"):
+            found.append(f"hint lane {named_lane} disagrees with lane_requirement")
+        if named_target != requirement.get("target"):
+            found.append(f"hint target {named_target} disagrees with lane_requirement.target")
+        if int(score) != requirement.get("score") or int(quoted) != ceiling:
+            found.append("hint score or ceiling disagrees with its corresponding field")
+        if int(score) > int(quoted):
+            found.append("hint target is above the caller's ceiling")
     message = refusal.get("message") or ""
     for score, quoted in re.findall(r"target score (\d+) exceeds effective caller ceiling (\d+)", message):
         if (int(score), int(quoted)) != (target, ceiling) or not int(score) > int(quoted):
@@ -231,6 +242,60 @@ class RefusalTableTests(unittest.TestCase):
         every = [row["score"] for row in self.registry["scored_configs"]]
         self.assertEqual(len(scores), 3)
         self.assertEqual((min(scores), max(scores)), (min(every), max(every)))
+
+    def test_vendor_refusal_points_to_reachable_lane_target(self):
+        checked = 0
+        for lane, row, degraded, mode, decision in self.cases():
+            if decision is None or mode == "lane" or decision.get("code") != ABOVE:
+                continue
+            refusal = self.annotate(decision, lane)
+            need = refusal.get("lane_requirement")
+            if not need or need["score"] > refusal["effective_ceiling"]:
+                continue
+            with self.subTest(lane=lane, caller=row["id"], degraded=degraded, mode=mode):
+                checked += 1
+                hint = (f"Lane {lane} has a target within this caller's ceiling: "
+                        f"{need['target']} (score {need['score']}, "
+                        f"ceiling {refusal['effective_ceiling']}). "
+                        "If you specified --vendor, retry the lane without --vendor.")
+                separator = " " if decision["reason"].endswith(".") else ". "
+                self.assertEqual(refusal["reason"], decision["reason"] + separator + hint)
+                self.assertEqual(inconsistencies(self.registry, refusal, lane), [])
+                # Adding guidance must preserve every original gate field except reason.
+                for key, value in decision.items():
+                    if key != "reason":
+                        self.assertEqual(refusal[key], value, key)
+        self.assertGreater(checked, 0)
+
+    def test_unreachable_lane_has_no_vendor_retry_hint(self):
+        checked = 0
+        for lane, _, _, _, decision in self.cases():
+            if decision is None or decision.get("code") != ABOVE:
+                continue
+            refusal = self.annotate(decision, lane)
+            need = refusal.get("lane_requirement")
+            if need and need["score"] > refusal["effective_ceiling"]:
+                checked += 1
+                self.assertNotIn("without --vendor", refusal["reason"])
+        self.assertGreater(checked, 0)
+
+    def test_checker_rejects_incorrect_vendor_hint_fields(self):
+        good = {"allowed": False, "code": ABOVE, "target_score": 46,
+                "effective_ceiling": 33,
+                "lane_requirement": {"lane": "example", "target": "vendor/model", "score": 9},
+                "reason": ("Lane example has a target within this caller's ceiling: "
+                           "vendor/model (score 9, ceiling 33). "
+                           "If you specified --vendor, retry the lane without --vendor.")}
+        self.assertEqual(inconsistencies(self.registry, good, "example"), [])
+        for old, new in (("score 9", "score 33"), ("ceiling 33", "ceiling 9"),
+                         ("Lane example", "Lane other"), ("vendor/model", "vendor/other")):
+            with self.subTest(replacement=new):
+                broken = dict(good, reason=good["reason"].replace(old, new))
+                self.assertNotEqual(inconsistencies(self.registry, broken, "example"), [])
+        above = copy.deepcopy(good)
+        above["lane_requirement"]["score"] = 46
+        above["reason"] = above["reason"].replace("score 9", "score 46")
+        self.assertNotEqual(inconsistencies(self.registry, above, "example"), [])
 
     def test_the_checker_flags_each_kind_of_inconsistency(self):
         caller = next(row for row in self.registry["scored_configs"]

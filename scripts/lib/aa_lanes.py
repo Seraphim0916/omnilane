@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
                     # Only a lane whose cheapest target is itself above the ceiling gets the lane
                     # explanation. When it is within reach, the refused target was not the lane
                     # minimum (an explicit --vendor pin, or cheaper candidates unavailable), and
-                    # the gate's own reason for that target stands.
+                    # the gate's own reason for that target stands, with a conditional retry hint.
                     score, caller_score = need.get("score"), decision.get("caller_score")
                     if (type(score) is int and score > ceiling and type(caller_score) is int
                             and decision.get("inherited_ceiling") == caller_score):
@@ -131,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
                                "a human operator dispatch it." if effort else
                                "No effort of the caller's model reaches it; a stronger caller model "
                                "or a human operator has to dispatch it."))
+                    elif type(score) is int and score <= ceiling:
+                        reason = decision.get("reason") or ""
+                        decision["reason"] = reason + ("" if reason.endswith(".") else ".") + (
+                            f" Lane {args.lane} has a target within this caller's ceiling: "
+                            f"{need['target']} (score {score}, ceiling {ceiling}). "
+                            "If you specified --vendor, retry the lane without --vendor.")
         sys.stdout.write(json.dumps(decision, ensure_ascii=False, separators=(",", ":")) + "\n")
     except (ValueError, OSError, aa_policy.PolicyError, KeyError, TypeError):
         # Guidance is best effort; the refusal itself must always get through.
