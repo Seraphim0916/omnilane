@@ -9,6 +9,54 @@ import host_context as hc
 
 
 class TomlFallbackTests(unittest.TestCase):
+    def test_legal_config_corpus_matches_tomllib(self):
+        try:
+            import tomllib
+        except ImportError:
+            self.skipTest('tomllib comparison requires Python 3.11+')
+
+        corpus = [
+            'developer_instructions = """\nhello\nmodel = "not-a-setting"\n"""\n',
+            "developer_instructions = '''\nhello\n[profiles.fake]\n'''\n",
+            'features.multi_agent = true\n',
+            '# comment\nmodel = "base#tag" # trailing\n',
+            'model = "base"\r\nfeatures.multi_agent = true\r\n',
+            '[features.nested]\nenabled = true\n',
+            '[[agents]]\nname = "one"\n[[agents]]\nname = "two"\n',
+            'items = [\n"""multi\nline""", {a.b = true},\n]\n',
+            'options = {nested = {enabled = true}, a.b = [1, 2]}\n',
+            'profile = "p"\nprofiles.p.model = "selected"\n',
+            'profile = "p.q"\n[profiles."p.q"]\nmodel = "selected"\n',
+            'model = """\nbase"""\n',
+            "model = '''\nbase'''\n",
+            'model = """ba\\\n   se"""\n',
+            'developer_instructions = """ends with quote""""\n',
+            "developer_instructions = '''ends with two quotes'''''\n",
+            'stamp = 1979-05-27 07:32:00Z\ndate = 1979-05-27\ntime = 07:32:00\n',
+            '[[agents]]\n[agents.options]\nx = true\n[[agents]]\n[agents.options]\nx = false\n',
+            'profile = "p"\n[profiles.p]\nmodel = "selected"\n'
+            '[[profiles.p.tools]]\nname = "one"\n[[profiles.p.tools]]\nname = "two"\n',
+            'profile = "p.q"\nprofiles."p.q".model = "selected"\n',
+            'model = """base\\\\\nnext\\u0041"""\n',
+            'model = """base\\   \r\n  continued"""\r\n',
+            'model = """base\\"quoted\\""""\n',
+            "model = '''base'''''\n",
+            'profile = "p"\nprofiles = {p.model = "selected"}\n',
+        ]
+
+        def fields(config):
+            result = {key: config[key] for key in ('model', 'profile') if key in config}
+            if 'profiles' in config:
+                result['profiles'] = {
+                    name: {'model': section['model']} if 'model' in section else {}
+                    for name, section in config['profiles'].items()}
+            return result
+
+        for text in corpus:
+            with self.subTest(text=text):
+                expected = tomllib.loads(text)
+                self.assertEqual(fields(hc._toml_fallback(text)), fields(expected))
+
     def test_strings_and_quoted_section(self):
         text = '''model = "name#variant" # comment
 profile = 'a.b'
@@ -62,7 +110,11 @@ multi_agent = true
                      'x = truth', 'x = 01', 'x = 1.2.3', 'x = [1,,2]',
                      'x = [1 2]', 'x = [1', 'x = {a = 1,}',
                      'x = {a = 1, a = 2}', 'x = true junk',
-                     'x = {a = 1}\n[x]\nb = 2'):
+                     'x = {a = 1}\n[x]\nb = 2',
+                     'x = """unterminated', "x = '''unterminated",
+                     r'x = """bad\q"""', 'x = """bad\x00"""',
+                     'features.enabled = true\nfeatures.enabled = false',
+                     '[[agents]\nname = "bad"'):
             with self.subTest(text=text), self.assertRaises(hc.HostContextError):
                 hc._toml_fallback(text)
 
