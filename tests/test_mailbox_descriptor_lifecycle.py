@@ -135,6 +135,10 @@ class MailboxDescriptorLifecycleTests(unittest.TestCase):
             os.killpg(self.process.pid, 0)
         except ProcessLookupError:
             return False
+        except PermissionError:
+            # Darwin answers EPERM, not ESRCH, while the group holds only unreaped zombies;
+            # the group still exists, so keep waiting rather than erroring out.
+            return True
         return True
 
     def await_condition(self, predicate, label, timeout=8):
