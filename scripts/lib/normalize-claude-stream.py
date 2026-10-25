@@ -25,8 +25,10 @@ def main() -> int:
                 continue
             if not isinstance(event, dict):
                 continue
-            if event.get("type") == "result" and isinstance(event.get("result"), str):
-                last_result = event["result"]
+            if event.get("type") == "result" and (
+                isinstance(event.get("result"), str) or event.get("is_error") is True
+            ):
+                last_result = event.get("result") if isinstance(event.get("result"), str) else None
                 last_result_error = event.get("is_error") is True
                 continue
             if event.get("type") != "assistant" or event.get("parent_tool_use_id"):
@@ -47,9 +49,10 @@ def main() -> int:
             if text_blocks:
                 last_top_level_text = "\n".join(text_blocks)
 
+    if last_result_error:
+        return 1
     if last_result is not None:
-        if last_result_error:
-            return 1
+        pass
     elif last_top_level_text is None:
         return 1
     else:
@@ -60,9 +63,13 @@ def main() -> int:
             "result": last_result,
             "normalized_by": "omnilane",
         }
-        with args.events.open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(canonical, ensure_ascii=False, separators=(",", ":")))
-            stream.write("\n")
+        with args.events.open("ab+") as stream:
+            if stream.tell():
+                stream.seek(-1, 2)
+                if stream.read(1) != b"\n":
+                    stream.write(b"\n")
+            stream.write(json.dumps(canonical, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            stream.write(b"\n")
 
     args.output.write_text(last_result.rstrip("\n") + "\n", encoding="utf-8")
     return 0

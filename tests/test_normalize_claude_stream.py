@@ -146,12 +146,12 @@ class NormalizeClaudeStreamTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.output.read_bytes(), b"valid\n")
 
-    def test_non_string_result_does_not_override_top_level_text(self):
+    def test_error_result_without_text_fails(self):
         result = self.run_stream([
             assistant(text("valid")), {"type": "result", "result": None, "is_error": True},
         ])
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.output.read_bytes(), b"valid\n")
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(self.output.exists())
 
 
 if __name__ == "__main__":
