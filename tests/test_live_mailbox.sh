@@ -349,13 +349,14 @@ PY
 }
 
 case_codex_live_large_task() {
-  # A live task over the 102400-byte cap: only the worker copy is truncated;
-  # task.txt, the preserved record, keeps every byte. The first live message is
-  # built from that copy (job-worker.sh), so the copy is what the worker gets.
-  # Checked as soon as the copy exists, then cancelled: encoding ~100 KB with the
-  # bash json_escape takes over a minute and is not what this case is about.
+  # A live task over the 102400-byte cap: only what is sent is truncated;
+  # task.txt, the preserved record, keeps every byte. This checks the first
+  # turn/start the fake Codex actually received, not task.txt.worker: run-codex.sh
+  # rebuilds that file from the full task after job-worker.sh has read it.
+  # The fixture is ASCII, so LC_ALL=C only speeds up the bash json_escape of the
+  # ~100 KB first message (it is quadratic); it does not change the bytes sent.
   local home="$TEST_ROOT/codex-live-large" bin="$TEST_ROOT/codex-live-large/bin"
-  local fake="$bin/codex" task="$TEST_ROOT/codex-live-large/task.src" job job_dir tries=0
+  local fake="$bin/codex" input="$home/codex.input" task="$home/task.src" job job_dir close_out tries=0
   mkdir -p "$home" "$bin"
   make_codex "$fake"
   printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
@@ -368,37 +369,46 @@ PY
   [[ "$(wc -c < "$task")" -gt 102400 && "$(wc -c < "$task")" -lt 140000 ]] ||
     fail "fixture task must sit between the live cap and the runner cap"
 
-  job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
-    FAKE_CODEX_INPUT="$home/codex.input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="unused" \
+  job="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" \
+    FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="done" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
     --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
     triage - < "$task")"
   job_dir="$home/jobs/$job"
-  while [[ ! -s "$job_dir/task.txt.worker" && "$tries" -lt 100 ]]; do sleep 0.1; tries=$((tries + 1)); done
-  [[ -s "$job_dir/task.txt.worker" ]] || fail "Codex live worker copy was not written"
-  # The copy is built and then truncated; give the truncation a moment to land.
-  tries=0
-  while ! grep -Fq -- '--- TRUNCATED (original: ' "$job_dir/task.txt.worker" 2>/dev/null && [[ "$tries" -lt 50 ]]; do
-    if ! cmp -s "$task" "$job_dir/task.txt"; then break; fi
+  while ! grep -Fq '"method":"turn/start"' "$input" 2>/dev/null && [[ "$tries" -lt 1800 ]]; do
     sleep 0.1; tries=$((tries + 1))
   done
-  local task_ok=0
-  cmp -s "$task" "$job_dir/task.txt" && task_ok=1
-  TASK="$task" COPY="$job_dir/task.txt.worker" python3 - <<'PY' || { OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1; fail "Codex large live worker copy mismatch"; }
+  grep -Fq '"method":"turn/start"' "$input" 2>/dev/null || {
+    OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1
+    fail "fake Codex did not receive the first turn"
+  }
+  wait_for_lines "$job_dir/out.txt" 1 || fail "Codex agentMessage was not written"
+  # The fake completes the turn only after a steer; finish it so close exits 0.
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "done" >/dev/null
+  wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered reply did not complete the turn"
+  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+    fail "Codex live close failed: $close_out"
+  [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex large live job did not exit zero"
+
+  cmp -s "$task" "$job_dir/task.txt" ||
+    fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"
+  TASK="$task" INPUT="$input" python3 - <<'PY' || fail "Codex large live first message mismatch"
+import json
 import os
 import pathlib
 
 marker = "[omnilane worker rules]"
-copy = pathlib.Path(os.environ["COPY"]).read_text(encoding="utf-8")
-original = pathlib.Path(os.environ["TASK"]).stat().st_size
-assert copy.startswith(marker), copy[:80]
-assert copy.count(marker) == 1, copy.count(marker)
-assert f"--- TRUNCATED (original: " in copy, "copy is not truncated"
-assert "HEAD-MARKER" in copy and "TAIL-MARKER" in copy
-assert len(copy.encode()) <= 102400 + 200, len(copy.encode())
+requests = [json.loads(l) for l in pathlib.Path(os.environ["INPUT"]).read_text(encoding="utf-8").splitlines()]
+turns = [r for r in requests if r.get("method") == "turn/start"]
+assert len(turns) == 1, len(turns)
+sent = turns[0]["params"]["input"][0]["text"]
+assert sent.startswith(marker), sent[:80]
+assert sent.count(marker) == 1, sent.count(marker)
+assert "--- TRUNCATED (original: " in sent, "first message is not truncated"
+assert "HEAD-MARKER" in sent and "TAIL-MARKER" in sent
+assert len(sent.encode()) <= 102400 + 200, len(sent.encode())
+assert len(sent.encode()) < pathlib.Path(os.environ["TASK"]).stat().st_size
 PY
-  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1 || true
-  [[ "$task_ok" -eq 1 ]] || fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"
 }
 
 case_codex_live_fallback() {
