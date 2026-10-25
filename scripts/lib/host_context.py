@@ -94,15 +94,18 @@ def _toml_strings(text: str) -> dict:
 def _toml_fallback(text: str) -> dict:
     """Parse common TOML settings without dependencies on Python 3.9/3.10.
 
-    Preserve value types for configured_model's shape checks. Unsupported syntax
-    still fails closed instead of hiding a malformed or ambiguous model setting.
+    Preserve value types for configured_model's shape checks. Consume unrelated
+    settings too, including multiline values, so their contents cannot become
+    model settings. This is a compatibility reader, not a full TOML validator.
     """
     value: dict = {}
     current = value
     tables = set()
     inline_tables = set()
+    array_tables = set()
     quoted = r""""(?:[^"\\\x00-\x08\x0a-\x1f]|\\(?:["\\btnfr]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*"|'[^'\x00-\x08\x0a-\x1f]*'"""
     key = r"(?:[A-Za-z0-9_-]+|" + quoted + r")"
+    key_path = key + r"(?:[ \t]*\.[ \t]*" + key + r")*"
 
     def decode(token):
         if token.startswith("'"):
@@ -126,8 +129,70 @@ def _toml_fallback(text: str) -> dict:
         pattern = r"(?:\s|#[^\n]*(?:\n|$))*" if multiline else r"[ \t]*"
         return re.compile(pattern).match(text, pos).end()
 
+    def parts(token):
+        return tuple(decode(m.group()) for m in re.finditer(key, token))
+
+    def descend(target, names):
+        for name in names:
+            target = target.setdefault(name, {})
+            if id(target) in array_tables:
+                target = target[-1]
+            if not isinstance(target, dict) or id(target) in inline_tables:
+                raise ValueError("table conflicts with a value")
+        return target
+
+    def assign(target, names, content):
+        target = descend(target, names[:-1])
+        if names[-1] in target:
+            raise ValueError("duplicate key")
+        target[names[-1]] = content
+
+    def multiline_string(pos):
+        delimiter = text[pos:pos + 3]
+        basic = delimiter == '"""'
+        start = pos + 3
+        pos = start
+        while pos < len(text):
+            if basic and text[pos] == '\\':
+                pos += 2
+                continue
+            if text.startswith(delimiter, pos):
+                end = pos + 3
+                # TOML allows one or two quote characters before the terminator.
+                while end < len(text) and text[end] == delimiter[0] and end < pos + 5:
+                    end += 1
+                raw = text[start:end - 3].replace('\r\n', '\n')
+                if raw.startswith('\n'):
+                    raw = raw[1:]
+                if re.search(r'[\x00-\x08\x0b-\x1f\x7f]', raw):
+                    raise ValueError("invalid multiline string control character")
+                if basic:
+                    # Process escapes as tokens: an escaped backslash must not
+                    # accidentally turn into a line-continuation marker.
+                    escape = re.compile(
+                        r'\\(?:[ \t]*\n[ \t\n]*|["\\btnfr]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})')
+                    chunks = []
+                    cursor = 0
+                    while cursor < len(raw):
+                        if raw[cursor] != '\\':
+                            chunks.append(raw[cursor])
+                            cursor += 1
+                            continue
+                        match = escape.match(raw, cursor)
+                        if not match:
+                            raise ValueError("invalid multiline string escape")
+                        token = match.group()
+                        chunks.append('' if '\n' in token else decode('"' + token + '"'))
+                        cursor = match.end()
+                    raw = ''.join(chunks)
+                return raw, end
+            pos += 1
+        raise ValueError("unterminated multiline string")
+
     def parse_value(pos):
         pos = whitespace(pos)
+        if text[pos:pos + 3] in ('"""', "'''"):
+            return multiline_string(pos)
         string = re.compile(quoted).match(text, pos)
         if string:
             return decode(string.group()), string.end()
@@ -148,16 +213,13 @@ def _toml_fallback(text: str) -> dict:
             return items, pos + 1
         if pos < len(text) and text[pos] == '{':
             fields = {}
-            inline_tables.add(id(fields))
             pos = whitespace(pos + 1)
             while pos < len(text) and text[pos] != '}':
-                field = re.compile(r"(" + key + r")[ \t]*=[ \t]*").match(text, pos)
+                field = re.compile(r"(" + key_path + r")[ \t]*=[ \t]*").match(text, pos)
                 if not field:
                     raise ValueError("invalid inline table key")
-                name = decode(field.group(1))
-                if name in fields:
-                    raise ValueError("duplicate inline table key")
-                fields[name], pos = parse_value(field.end())
+                content, pos = parse_value(field.end())
+                assign(fields, parts(field.group(1)), content)
                 pos = whitespace(pos)
                 if pos < len(text) and text[pos] == '}':
                     break
@@ -168,7 +230,23 @@ def _toml_fallback(text: str) -> dict:
                     raise ValueError("trailing inline table comma")
             if pos >= len(text):
                 raise ValueError("unterminated inline table")
+            inline_tables.add(id(fields))
             return fields, pos + 1
+        # Dates/times are legal unrelated settings, including a space between
+        # the date and time. Their precise type is not used by model selection.
+        temporal = re.compile(
+            r'(?:\d{4}-\d{2}-\d{2}(?:[Tt ]\d{2}:\d{2}:\d{2}'
+            r'(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})?)?|\d{2}:\d{2}:\d{2}(?:\.\d+)?)'
+            r'(?=$|[\s,#\]}])').match(text, pos)
+        if temporal:
+            raw = temporal.group().replace('t', 'T').replace('z', '+00:00').replace('Z', '+00:00')
+            if len(raw) == 10:
+                parsed = datetime.date.fromisoformat(raw)
+            elif raw[2] == ':':
+                parsed = datetime.time.fromisoformat(raw)
+            else:
+                parsed = datetime.datetime.fromisoformat(raw)
+            return parsed, temporal.end()
         token = re.compile(r"[^\s,#\]}]+").match(text, pos)
         if not token:
             raise ValueError("missing value")
@@ -198,32 +276,39 @@ def _toml_fallback(text: str) -> dict:
         if re.fullmatch(r"\s*(?:#.*)?", line):
             continue
         try:
-            header = re.fullmatch(r"\s*\[\s*(" + key + r"(?:\s*\.\s*" + key
-                                  + r")*)\s*\]\s*(?:#.*)?", line)
+            header = re.fullmatch(r"\s*(\[\[?)\s*(" + key_path
+                                  + r")\s*(\]\]?)\s*(?:#.*)?", line)
             if header:
-                parts = tuple(decode(m.group()) for m in re.finditer(key, header.group(1)))
-                if parts in tables:
-                    raise ValueError("duplicate table")
-                tables.add(parts)
-                current = value
-                for part in parts:
-                    current = current.setdefault(part, {})
-                    if not isinstance(current, dict) or id(current) in inline_tables:
+                if len(header.group(1)) != len(header.group(3)):
+                    raise ValueError("mismatched table brackets")
+                names = parts(header.group(2))
+                parent = descend(value, names[:-1])
+                name = names[-1]
+                if header.group(1) == '[[':
+                    if name not in parent:
+                        parent[name] = []
+                        array_tables.add(id(parent[name]))
+                    if id(parent[name]) not in array_tables:
                         raise ValueError("table conflicts with a value")
+                    current = {}
+                    parent[name].append(current)
+                else:
+                    table_id = (id(parent), name)
+                    if table_id in tables:
+                        raise ValueError("duplicate table")
+                    tables.add(table_id)
+                    current = descend(parent, (name,))
                 continue
-            pair = re.match(r"[ \t]*(" + key + r")[ \t]*=[ \t]*", line)
+            pair = re.match(r"[ \t]*(" + key_path + r")[ \t]*=[ \t]*", line)
             if not pair:
                 raise ValueError("unsupported or invalid syntax")
-            name = decode(pair.group(1))
             content, stop = parse_value(start + pair.end())
             end = text.find('\n', stop)
             end = len(text) if end < 0 else end
             if not re.fullmatch(r"[ \t\r]*(?:#.*)?", text[stop:end]):
                 raise ValueError("unexpected content after value")
             pos = end + 1
-            if name in current:
-                raise ValueError("duplicate key")
-            current[name] = content
+            assign(current, parts(pair.group(1)), content)
         except ValueError as error:
             raise HostContextError(f"TOML fallback line {number}: {error}") from error
     return value
