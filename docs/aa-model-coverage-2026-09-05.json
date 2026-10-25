@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 114,
+    "catalogEntries": 117,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1318,6 +1318,34 @@
     {
       "vendor": "kimi",
       "access": "cli",
+      "catalogModel": "kimi-code/k3",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "coding-overflow",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Kimi Code CLI alias, not an AA row; AA lists kimi-k3 under the API ID and this inventory has no verified one-to-one row for the CLI alias"
+    },
+    {
+      "vendor": "kimi",
+      "access": "cli",
+      "catalogModel": "kimi-code/kimi-for-coding",
+      "lifecycle": "active",
+      "disposition": "legacy-compatible",
+      "routeRefs": [],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Kimi Code CLI alias, not an AA row; no verified like-for-like AA row was found"
+    },
+    {
+      "vendor": "kimi",
+      "access": "cli",
       "catalogModel": "kimi-k3",
       "lifecycle": "active",
       "disposition": "fallback",
@@ -1361,6 +1389,25 @@
         "kimi-k2-5-non-reasoning"
       ],
       "mappingReason": "Includes reasoning/non-reasoning AA rows"
+    },
+    {
+      "vendor": "qwen",
+      "access": "cli",
+      "catalogModel": "qwen3.8-max",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "coding-overflow",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-release",
+      "aaSlugs": [
+        "qwen3-8-max"
+      ],
+      "mappingReason": "Punctuation differs"
     },
     {
       "vendor": "qwen",

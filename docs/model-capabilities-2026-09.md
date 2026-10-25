@@ -239,8 +239,8 @@ The historical sections below retain their original captures.
 | 1 | grok grok-4.7 high | 46 | 0.247 | 0.578 | 3881 |
 | 2 | gemini gemini-4-argon-high | 53 | 0.571 | 0.618 | 2407 |
 | 3 | gemini gemini-3.8-flash-high | 41 | 0.197 | 0.566 | 1623 |
-| 4 | kimi kimi-k3 | not scored | — | — | — |
-| 5 | qwen qwen3-coder-plus | not scored | — | — | — |
+| 4 | kimi kimi-code/k3 | not scored | — | — | — |
+| 5 | qwen qwen3.8-max | not scored | — | — | — |
 | 6 | opencode - | not scored | — | — | — |
 
 ## Previous approved snapshot — 2026-10-08

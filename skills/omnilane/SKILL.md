@@ -572,8 +572,8 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
 | Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
 | Gemini 3.7 Flash | gemini | gemini-3.7-flash-high | - |
-| Kimi | kimi | kimi-k3 | - |
-| Qwen | qwen | qwen3-coder-plus | - |
+| Kimi | kimi | kimi-code/k3 | - |
+| Qwen | qwen | qwen3.8-max | - |
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
 | OpenRouter | openrouter | explicit OpenRouter slug (e.g. anthropic/claude-sonnet-5) | - |
 

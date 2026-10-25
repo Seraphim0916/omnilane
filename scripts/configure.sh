@@ -250,8 +250,8 @@ CLAUDE_MODELS=("default" "best" "fable" "opus" "sonnet" "haiku" "opus[1m]" "sonn
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")
 GEMINI_MODELS=("gemini-4-argon-high" "gemini-3.8-flash-high" "gemini-3.8-flash-medium" "gemini-3.8-flash-low" "gemini-3.1-pro-high" "gemini-3.1-pro-low" "claude-sonnet-4-6" "claude-opus-4-6-thinking" "gpt-oss-120b-medium")
 GROK_MODELS=("grok-4.7" "headroom-grok-build" "grok-4.3-official")
-KIMI_MODELS=("kimi-k3" "kimi-k2.7-code" "kimi-k2.5")
-QWEN_MODELS=("qwen3.7-max" "qwen3.7-plus" "qwen3.6-plus" "qwen3.5-plus" "qwen3-max-2026-01-23" "qwen3-coder-next" "qwen3-coder-plus" "qwen3-coder-flash")
+KIMI_MODELS=("kimi-code/k3" "kimi-code/kimi-for-coding" "kimi-k3" "kimi-k2.7-code" "kimi-k2.5")
+QWEN_MODELS=("qwen3.8-max" "qwen3.7-max" "qwen3.7-plus" "qwen3.6-plus" "qwen3.5-plus" "qwen3-max-2026-01-23" "qwen3-coder-next" "qwen3-coder-plus" "qwen3-coder-flash")
 # OpenCode models use provider/model form; OpenRouter models use catalog slugs.
 OPENCODE_MODELS=("openrouter/anthropic/claude-opus-5" "openrouter/anthropic/claude-fable-5" "openrouter/anthropic/claude-sonnet-5" "openrouter/openai/gpt-5.6-sol" "openrouter/openai/gpt-5.6-terra" "openrouter/openai/gpt-5.6-luna" "openrouter/x-ai/grok-4.5" "openrouter/google/gemini-3.6-flash" "openrouter/moonshotai/kimi-k3" "openrouter/moonshotai/kimi-k2.7-code" "openrouter/qwen/qwen3.7-max" "openrouter/qwen/qwen3.7-plus" "openrouter/qwen/qwen3-coder-plus" "opencode/default (leave model to opencode)")
 OPENROUTER_MODELS=("anthropic/claude-opus-5" "anthropic/claude-fable-5" "anthropic/claude-sonnet-5" "openai/gpt-5.6-sol" "openai/gpt-5.6-terra" "openai/gpt-5.6-luna" "x-ai/grok-4.5" "google/gemini-3.6-flash" "moonshotai/kimi-k3" "moonshotai/kimi-k2.7-code" "qwen/qwen3.7-max" "qwen/qwen3.7-plus" "qwen/qwen3-coder-plus")

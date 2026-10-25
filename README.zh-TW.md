@@ -241,7 +241,7 @@ AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已於 2026-10-08 核准）
 | 📚 long-context | Claude Opus 5 （high） | Claude Opus 5 （medium） → Claude Opus 5 （low） → GPT-5.6 Terra （xhigh） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 長文件整合；上下文容量本身不證明任務品質 |
 | ⚡ fast-agentic | GPT-6.1 Sol （medium） | GPT-6 Astra （medium） → GPT-6.1 Sol （low） → GPT-6 Sol （low） → GPT-6 Astra （low） → Gemini 4 Argon （High） → Gemini 3.8 Flash （Medium） → Claude Sonnet 5.5 （medium） → Claude Opus 5.5 （low） | 高速多步驟工具迴圈、多模態檢查 |
 | 📡 live-search | Grok 4.7 | Gemini 4 Argon （High） → Gemini 3.8 Flash （High） → Claude Opus 5.5 （low） → off | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon （High） → Gemini 3.8 Flash （High） → Kimi K3 → Qwen3 Coder Plus → OpenCode → off | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon （High） → Gemini 3.8 Flash （High） → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
 
 Argon High 已加入所有原有 Flash 的車道，需要 Google AI Ultra 與成功的主機傳輸驗證。在 bulk-mechanical、triage、fast-agentic、live-search 與 coding-overflow，Argon 放在 Gemini 3.8 Flash 正前方，保留原本符合性價比或用途的首選。其他六條位置不變；UI／長文的候選位置不代表評測勝出。Grok 仍是即時 X／網頁搜尋與 Codex 額度替代的首選，Argon 備援提供一般網頁搜尋。`consult --vendor gemini` 只選 Gemini。Medium／Low 仍無評分。
