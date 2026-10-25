@@ -58,6 +58,28 @@ class PythonHomeIsolationTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout.strip(), os.environ["OMNILANE_HOME"])
 
+    def test_inherited_omnilane_configuration_is_removed_and_tmpdir_is_private(self):
+        environment = dict(os.environ, OMNILANE_AA_TRANSPORT_OVERLAY="/nonexistent",
+                           OMNILANE_AA_CALLER_CONTEXT="/nonexistent", OMNILANE_DEPTH="3",
+                           OMNILANE_TEST_UNRELATED="kept")
+        result = subprocess.run(
+            [sys.executable, "-I", "-c",
+             f"import sys; sys.path.insert(0, {str(ROOT / 'tests')!r}); "
+             "import json, os, tempfile, offline_env; print(json.dumps({"
+             "'root': str(offline_env.SUITE_ROOT), 'tmpdir': os.environ['TMPDIR'], "
+             "'gettempdir': tempfile.gettempdir(), "
+             "'omnilane': {k: v for k, v in os.environ.items() if k.startswith('OMNILANE_')}}))"],
+            env=environment, capture_output=True, text=True, check=True,
+        )
+        child = json.loads(result.stdout)
+        root = Path(child["root"])
+        self.assertEqual(child["omnilane"], {
+            "OMNILANE_HOME": str(root / "home" / ".omnilane"),
+            "OMNILANE_TEST_UNRELATED": "kept",
+        })
+        self.assertEqual(Path(child["tmpdir"]), root / "tmp")
+        self.assertEqual(Path(child["gettempdir"]), root / "tmp")
+
     def test_private_directory_is_removed_at_process_exit(self):
         result = subprocess.run(
             [sys.executable, "-I", "-c",

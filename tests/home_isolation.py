@@ -1,4 +1,5 @@
 # Keep HOME and OMNILANE_HOME in a temporary home until process exit.
+# Inherited OMNILANE_* (except OMNILANE_TEST_*) are removed and TMPDIR is private.
 # The audit hook watches open, os.listdir/os.scandir, os.chdir,
 # os.remove/os.rmdir/os.mkdir, os.rename/os.link/os.symlink,
 # os.chmod/os.chown/os.utime/os.truncate, and subprocess.Popen.
@@ -61,8 +62,18 @@ def activate():
     SUITE_ROOT = Path(temporary.name)
     home = SUITE_ROOT / "home"
     (home / ".omnilane").mkdir(parents=True)
+    # Caller configuration must not change results; OMNILANE_TEST_* are suite
+    # switches that runtime code never reads, so they stay.
+    for name in list(os.environ):
+        if name.startswith("OMNILANE_") and not name.startswith("OMNILANE_TEST_"):
+            del os.environ[name]
     os.environ["HOME"] = str(home)
     os.environ["OMNILANE_HOME"] = str(home / ".omnilane")
+    private_tmp = SUITE_ROOT / "tmp"
+    private_tmp.mkdir()
+    os.environ["TMPDIR"] = str(private_tmp)
+    # TemporaryDirectory above already cached the caller's temporary directory.
+    tempfile.tempdir = str(private_tmp)
     violations = []
     current_test = ""
     original_run = unittest.TestCase.run
@@ -156,11 +167,13 @@ def activate():
     sys.addaudithook(audit)
 
     def finish():
-        temporary.cleanup()
-        if violations:
-            # Swallowing the immediate exception must not turn the run green.
-            print("\n".join(violations), file=sys.stderr, flush=True)
-            os._exit(1)
+        try:
+            temporary.cleanup()
+        finally:
+            if violations:
+                # Swallowing the immediate exception must not turn the run green.
+                print("\n".join(violations), file=sys.stderr, flush=True)
+                os._exit(1)
 
     atexit.register(finish)
     return SUITE_ROOT
