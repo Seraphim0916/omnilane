@@ -39,7 +39,8 @@ class OriginDecodeErrorsTests(unittest.TestCase):
                         self.assertTrue(str(error).startswith("invalid origin policy: "))
                         self.assertIsNone(error.__cause__)
                         self.assertTrue(error.__suppress_context__)
-                        rendered = "".join(traceback.format_exception(error))
+                        rendered = "".join(traceback.format_exception(
+                            type(error), error, error.__traceback__))
                         self.assertNotIn(underlying.__name__ + ":", rendered)
                     else:
                         self.fail("load accepted malformed policy bytes")
