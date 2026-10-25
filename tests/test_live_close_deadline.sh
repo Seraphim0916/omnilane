@@ -103,8 +103,10 @@ def wait_for_receipt_waiter(closer, receipt, timeout=5):
             out, err = closer.communicate()
             raise AssertionError(('close returned before waiting for the exit receipt',
                                   closer.returncode, out, err))
-        listing = subprocess.run(['ps', '-A', '-o', 'ppid=,command='],
-                                 capture_output=True, text=True).stdout
+        # -ww: unlimited width on procps and BSD ps, so the exit path is never cut.
+        listing = subprocess.run(['ps', '-A', '-ww', '-o', 'ppid=,command='],
+                                 capture_output=True, text=True,
+                                 timeout=max(.1, end - time.monotonic())).stdout
         for line in listing.splitlines():
             fields = line.split(None, 1)
             if len(fields) == 2 and fields[0] == str(closer.pid) and str(receipt) in fields[1]:
