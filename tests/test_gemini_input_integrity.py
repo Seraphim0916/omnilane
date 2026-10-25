@@ -64,12 +64,22 @@ class GeminiInputIntegrityTests(unittest.TestCase):
              "--timeout", "30", "--vendor", "gemini", *flags, "consult", "-"],
             input=payload, env=self.env, capture_output=True, timeout=90)
 
-    def assert_intact(self, payload, result):
+    def worker_rules_header(self):
+        return subprocess.run(
+            ["bash", "-c", 'source "$1/scripts/lib/common.sh"; '
+             'printf "%s\\n%s\\n\\n" "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"',
+             "header", str(ROOT)],
+            env=self.env, capture_output=True, check=True, timeout=30).stdout
+
+    def assert_intact(self, payload, result, live=False):
         errors = "\n".join(p.read_text() for p in (self.home / "jobs").rglob("*.stderr.log"))
         self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace")[-2000:] + errors)
         self.assertTrue(self.capture.exists(), "fake agy was not reached")
         received = self.capture.read_bytes()
-        self.assertTrue(received == payload,
+        # The runner sends the worker rules ahead of the task; the live first
+        # message is built by job-worker.sh before the runner starts.
+        expected = payload if live else self.worker_rules_header() + payload
+        self.assertTrue(received == expected,
                         f"sent={len(payload)} received={len(received)} "
                         f"sent_sha256={hashlib.sha256(payload).hexdigest()} "
                         f"received_sha256={hashlib.sha256(received).hexdigest()}")
@@ -174,7 +184,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
                 time.sleep(0.1)
             self.assertTrue((job / "exit").exists(), "live worker did not finish")
             self.assertEqual((job / "exit").read_text().strip(), "0")
-            self.assert_intact(payload, result)
+            self.assert_intact(payload, result, live=True)
         finally:
             if not (job / "exit").exists():
                 subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "close", job_id],

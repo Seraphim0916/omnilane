@@ -653,6 +653,24 @@ truncate_payload() { # file, cap_bytes
   fi
 }
 
+OMNILANE_WORKER_RULES_MARKER='[omnilane worker rules]'
+# No quote characters: fixtures and logs re-split the worker argv with shlex.
+OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent.'
+
+# The task file stays byte-identical (task.txt is the preserved record); the
+# runner sends a sibling copy with the rules in front. Rebuilding it from the
+# task each time keeps a retried candidate from stacking the header.
+worker_prompt_file() { # task file -> prints the file to send
+  local f="$1" out="$1.worker"
+  if [[ -L "$out" || ( -e "$out" && ! -f "$out" ) ]]; then
+    echo "omnilane: unsafe worker prompt path" >&2
+    return 125
+  fi
+  ( umask 077
+    { printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; cat "$f"; } > "$out.tmp" ) &&
+    mv "$out.tmp" "$out" && printf '%s\n' "$out"
+}
+
 strip_ansi() { # file
   sed -i '' 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null || sed -i 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null || true
 }

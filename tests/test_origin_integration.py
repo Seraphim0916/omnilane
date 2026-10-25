@@ -37,6 +37,14 @@ SNAPSHOT_REBASE_BASE_SHA256 = {
     # The Gemini runner stopped silently truncating large tasks (G1).
     "scripts/runners/run-gemini.sh":
         "2e4c4c064f3228293ff63e882154be77bac256e6c40add3f25403f1e539ff12c",
+    # Workers are told not to delegate; Codex also loses multi_agent and gets a
+    # workdir temp dir; Claude thread parsing skips non-object events (C2-B06).
+    "scripts/runners/run-claude.sh":
+        "a84c59ec7adf04893b2833c503606717a3288ca290138e8176adc4bc42448945",
+    "scripts/runners/run-codex.sh":
+        "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
+    "scripts/runners/run-grok.sh":
+        "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
 }
 PROTECTED_SHA256 = {
     "scripts/lib/probe.py":
@@ -50,17 +58,17 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
-        "a84c59ec7adf04893b2833c503606717a3288ca290138e8176adc4bc42448945",
+        "ace5f5826204903feecc9b4faea8702ef050bdcfa332304c3ae32bd5aae54e7a",
     "scripts/runners/run-codex.sh":
-        "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
+        "33f26509993fcff28a687bc0b5fc5a0edffaa5aed65a5c66b9a3826a9ba886be",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":
         "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
     "scripts/runners/run-gemini.sh":
-        "27ac29d5631a2962e7741c9e6793c5f59e0038a34027e34aa73fca82febdd8af",
+        "c6912d9eb90ac46e57f8e1b4d08a52acd9a247fb5ffbf2c21bd1e5cf6557c981",
     "scripts/runners/run-grok.sh":
-        "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
+        "2e66ee72ef4019a405f6fb64faa78aa68299d7272821acf85cd16619a6519ef1",
     "scripts/runners/run-groq.sh":
         "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
     # Comment-only Kimi update with the official URL; runtime behavior is unchanged.
