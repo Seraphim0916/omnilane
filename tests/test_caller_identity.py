@@ -918,6 +918,15 @@ class EligibleLanesTests(unittest.TestCase):
             lane="hardest"))
         self.assertIsNone(value["required_caller_effort"])
 
+    def test_a_reachable_lane_keeps_the_original_reason(self):
+        # 2026-10-25 MacMini: an explicit --vendor target above the ceiling was explained as
+        # "cheapest target ... scores 41, above this caller's ceiling of 51".
+        original = "target score 52 exceeds effective caller ceiling 46"
+        value = json.loads(self.annotate(self.refusal(reason=original), lane="cheap"))
+        self.assertLessEqual(value["lane_requirement"]["score"], 46)
+        self.assertEqual(value["reason"], original)
+        self.assertNotIn("required_caller_effort", value)
+
     def test_an_allowed_decision_and_garbage_pass_through_untouched(self):
         allowed = json.dumps({"allowed": True, "effective_ceiling": 48})
         self.assertNotIn("eligible_lanes", self.annotate(allowed))

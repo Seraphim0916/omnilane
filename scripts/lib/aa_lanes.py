@@ -113,7 +113,10 @@ def main(argv: list[str] | None = None) -> int:
                 need = lane_requirement(registry, table[args.lane], decision.get("caller"))
                 if need is not None:
                     decision["lane_requirement"] = dict(need, lane=args.lane)
-                    if decision.get("inherited_ceiling") == decision.get("caller_score"):
+                    # A lane whose cheapest target is within reach was refused for another reason
+                    # (e.g. an explicit --vendor target); keep the gate's own explanation.
+                    if (need["score"] > ceiling
+                            and decision.get("inherited_ceiling") == decision.get("caller_score")):
                         decision["required_caller_effort"] = need["required_caller_effort"]
                         effort = need["required_caller_effort"]
                         held = (" The harness recorded no effort, so this caller is held to its "
