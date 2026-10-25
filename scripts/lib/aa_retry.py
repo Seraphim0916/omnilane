@@ -65,6 +65,8 @@ def retry_args(directory):
 def metadata_fields(directory):
     value, _ = aa_policy._read_json(Path(directory) / "meta.json")
     keys = ("lane", "vendor", "model", "effort", "timeout", "job_timeout", "mode", "workdir")
+    for key in keys:
+        aa_policy._check(key in value, f"invalid retry metadata: missing required field {key}")
     aa_policy._check(value.get("mode") in ("advise", "work"), "invalid retry mode")
     aa_policy._check(type(value.get("timeout")) is int and value["timeout"] > 0, "invalid retry timeout")
     aa_policy._check(value.get("job_timeout") is None or (type(value["job_timeout"]) is int and value["job_timeout"] > 0), "invalid retry job timeout")
@@ -80,6 +82,9 @@ def metadata_fields(directory):
 if __name__ == "__main__":
     try:
         print("\n".join(metadata_fields(sys.argv[2]) if sys.argv[1] == "--metadata" else retry_args(sys.argv[1])))
-    except (aa_policy.PolicyError, OSError, KeyError, TypeError):
-        print("omnilane: retry requires intact AA lineage; current caller is missing or original authorizer/registry is changed", file=sys.stderr)
+    except (aa_policy.PolicyError, OSError, KeyError, TypeError) as error:
+        if sys.argv[1] == "--metadata":
+            print(f"omnilane: invalid retry metadata: {error}", file=sys.stderr)
+        else:
+            print("omnilane: retry requires intact AA lineage; current caller is missing or original authorizer/registry is changed", file=sys.stderr)
         sys.exit(3)

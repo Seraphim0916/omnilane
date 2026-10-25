@@ -92,32 +92,81 @@ def _toml_strings(text: str) -> dict:
 
 
 def _toml_fallback(text: str) -> dict:
-    """Top-level and `[profiles.NAME]` string keys of a Codex config, for Python before 3.11."""
+    """Parse a string-only TOML subset; reject syntax we cannot safely interpret."""
     value: dict = {}
-    section: list[str] = []
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].strip()
-        header = re.fullmatch(r"\[\s*([^\]]+?)\s*\]", line)
-        if header:
-            section = [part.strip().strip('"') for part in header.group(1).split(".")]
+    current = value
+    tables = set()
+    quoted = r""""(?:[^"\\\x00-\x08\x0a-\x1f]|\\(?:["\\btnfr]|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}))*"|'[^'\x00-\x08\x0a-\x1f]*'"""
+    key = r"(?:[A-Za-z0-9_-]+|" + quoted + r")"
+
+    def decode(token):
+        if token.startswith("'"):
+            return token[1:-1]
+        if not token.startswith('"'):
+            return token
+        escapes = {'b': '\b', 't': '\t', 'n': '\n', 'f': '\f', 'r': '\r',
+                   '"': '"', '\\': '\\'}
+
+        def replace(match):
+            escape = match.group(1)
+            if escape[0] in ('u', 'U'):
+                point = int(escape[1:], 16)
+                if point > 0x10ffff or 0xd800 <= point <= 0xdfff:
+                    raise ValueError("invalid Unicode scalar")
+                return chr(point)
+            return escapes[escape]
+        return re.sub(r'\\(u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|.)', replace, token[1:-1])
+
+    for number, line in enumerate(text.splitlines(), 1):
+        if re.fullmatch(r"\s*(?:#.*)?", line):
             continue
-        pair = re.fullmatch(r'([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"', line)
-        if not pair:
-            continue
-        if not section:
-            value[pair.group(1)] = pair.group(2)
-        elif len(section) == 2 and section[0] == "profiles":
-            value.setdefault("profiles", {}).setdefault(section[1], {})[pair.group(1)] = pair.group(2)
+        try:
+            header = re.fullmatch(r"\s*\[\s*(" + key + r"(?:\s*\.\s*" + key
+                                  + r")*)\s*\]\s*(?:#.*)?", line)
+            if header:
+                parts = tuple(decode(m.group()) for m in re.finditer(key, header.group(1)))
+                if parts in tables:
+                    raise ValueError("duplicate table")
+                tables.add(parts)
+                current = value
+                for part in parts:
+                    current = current.setdefault(part, {})
+                    if not isinstance(current, dict):
+                        raise ValueError("table conflicts with a value")
+                continue
+            pair = re.fullmatch(r"\s*(" + key + r")\s*=\s*(" + quoted + r")\s*(?:#.*)?", line)
+            if not pair:
+                raise ValueError("unsupported or invalid syntax (fallback supports strings only)")
+            name, content = decode(pair.group(1)), decode(pair.group(2))
+            if name in current:
+                raise ValueError("duplicate key")
+            current[name] = content
+        except ValueError as error:
+            raise HostContextError(f"TOML fallback line {number}: {error}") from error
     return value
 
 
 def configured_model(harness: str, environment=os.environ) -> tuple[str, dict]:
     """The model a new session of `harness` starts with, and where that was read."""
+    def mapping(value, key):
+        if not isinstance(value, dict):
+            raise HostContextError(f"invalid configuration: {key} must be a table/object")
+        return value
+
+    def string_field(value, key, location):
+        if key in value and not isinstance(value[key], str):
+            raise HostContextError(f"invalid configuration: {location} must be a string")
+        return value.get(key)
+
     if harness == "codex":
         path = Path(environment.get("CODEX_HOME") or Path.home() / ".codex") / "config.toml"
-        config = _toml_strings(path.read_text(encoding="utf-8"))
-        profile = config.get("profile")
-        profiles = config.get("profiles") or {}
+        config = mapping(_toml_strings(path.read_text(encoding="utf-8")), "root")
+        profile = string_field(config, "profile", "profile")
+        string_field(config, "model", "model")
+        profiles = mapping(config.get("profiles", {}), "profiles")
+        for name, section in profiles.items():
+            mapping(section, f"profiles.{name}")
+            string_field(section, "model", f"profiles.{name}.model")
         if profile and isinstance(profiles.get(profile), dict) and profiles[profile].get("model"):
             return profiles[profile]["model"], {"file": str(path), "key": f"profiles.{profile}.model"}
         if config.get("model"):
@@ -125,15 +174,17 @@ def configured_model(harness: str, environment=os.environ) -> tuple[str, dict]:
         raise HostContextError(f"{path} names no model")
     if harness == "claude-code":
         path = Path(environment.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "settings.json"
-        settings = json.loads(path.read_text(encoding="utf-8"))
+        settings = mapping(json.loads(path.read_text(encoding="utf-8")), "root")
+        settings_env = mapping(settings.get("env", {}), "env")
+        string_field(settings, "model", "model")
+        env_model = string_field(settings_env, "ANTHROPIC_MODEL", "env.ANTHROPIC_MODEL")
         # Claude Code resolves aliases per provider; the alias table and the scored ids are first-party.
-        for source, values in (("settings env", settings.get("env") or {}), ("environment", environment)):
+        for source, values in (("settings env", settings_env), ("environment", environment)):
             chosen = [name for name in CLAUDE_PROVIDER_FLAGS
                       if str(values.get(name, "")).strip().lower() not in ("", "0", "false")]
             if chosen:
                 raise HostContextError(f"{source} selects another provider ({', '.join(chosen)}); "
                                        "host files cover the first-party provider only")
-        env_model = (settings.get("env") or {}).get("ANTHROPIC_MODEL")
         if env_model:
             return env_model, {"file": str(path), "key": "env.ANTHROPIC_MODEL"}
         if settings.get("model"):
