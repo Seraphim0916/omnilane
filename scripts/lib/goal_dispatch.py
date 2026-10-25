@@ -123,7 +123,8 @@ class Store(contextlib.ExitStack):
         value = read_json(self.journal, name + ".json")
         required = {"schema_version", "intent_id", "goal_id", "ordinal", "lane", "task",
                     "fingerprint", "workdir", "submitted_epoch", "submitted"}
-        if (set(value) != required or value["schema_version"] != 1
+        if (set(value) != required or type(value["schema_version"]) is not int
+                or value["schema_version"] != 1
                 or value["intent_id"] != name or value["goal_id"] != self.goal_id
                 or type(value["ordinal"]) is not int or value["ordinal"] != int(match[1])
                 or name != f"intent-{value['ordinal']:08d}-{match[2]}"
@@ -143,7 +144,8 @@ class Store(contextlib.ExitStack):
         expected = {"schema_version", "intent_id", "goal_id", "kind"}
         if value.get("kind") == "claim":
             expected.add("job_id")
-        if (set(value) != expected or value.get("schema_version") != 1
+        if (set(value) != expected or type(value.get("schema_version")) is not int
+                or value.get("schema_version") != 1
                 or value.get("intent_id") != intent["intent_id"]
                 or value.get("goal_id") != self.goal_id
                 or value.get("kind") not in {"claim", "no-launch"}
