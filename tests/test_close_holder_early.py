@@ -37,6 +37,50 @@ HOLDER = textwrap.dedent("""
 """)
 
 
+# A virtual clock for the receipt wait in jobs.sh close: a Time::HiRes found
+# first on PERL5LIB replaces time and sleep, so the 11s deadline passes at once
+# and file events land at exact virtual times. FAKE_EVENTS is
+# "seconds:path:content;..." relative to the first time() call; an event at
+# "deadline" fires during the sleep that crosses FAKE_DEADLINE.
+FAKE_HIRES = textwrap.dedent("""
+    package Time::HiRes;
+    use strict;
+    my $now;
+    my @events = map { [split /:/, $_, 3] } grep { length } split /;/, ($ENV{FAKE_EVENTS} // "");
+    sub _fire {
+        my ($from, $to) = @_;
+        for my $event (@events) {
+            next if $event->[3];
+            my $at = $event->[0] eq "deadline" ? $ENV{FAKE_DEADLINE} : $event->[0];
+            next unless $from < $at && $at <= $to;
+            my $tmp = "$event->[1].fake-tmp";
+            open(my $fh, ">", $tmp) or die "fake clock: $tmp: $!";
+            print $fh $event->[2];
+            close $fh;
+            rename $tmp, $event->[1] or die "fake clock: rename: $!";
+            $event->[3] = 1;
+        }
+    }
+    # Whole milliseconds, so 110 sleeps of 0.1s land exactly on 11s.
+    sub time () { $now //= 0; return 1000 + $now / 1000 }
+    sub sleep {
+        my ($seconds) = @_;
+        $now //= 0;
+        my $step = int($seconds * 1000 + 0.5);
+        _fire($now / 1000, ($now + $step) / 1000);
+        $now += $step;
+        CORE::select(undef, undef, undef, 0.002);
+        return $seconds;
+    }
+    sub import {
+        my $caller = caller;
+        no strict "refs";
+        for my $name (@_[1 .. $#_]) { *{"${caller}::$name"} = \\&{$name} }
+    }
+    1;
+""")
+
+
 class CloseBeforeHolderPidTests(unittest.TestCase):
     def setUp(self):
         scratch = ROOT / ".test-scratch"
@@ -111,6 +155,45 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         out, err = closer.communicate(timeout=15)
         self.assertEqual(closer.returncode, 0, (out, err))
         self.assertEqual(out, "already closed (exit 0)\n")
+
+
+    def fake_close(self, events):
+        lib = self.home / "fake-perl" / "Time"
+        lib.mkdir(parents=True)
+        (lib / "HiRes.pm").write_text(FAKE_HIRES)
+        env = dict(self.env, PERL5LIB=str(self.home / "fake-perl"), FAKE_DEADLINE="11",
+                   FAKE_EVENTS=";".join(f"{at}:{path}:{content}" for at, path, content in events))
+        return subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
+                              env=env, capture_output=True, text=True, timeout=20)
+
+    def test_late_invalid_holder_pid_fails_at_once(self):
+        # The PID file appears at 1s with junk; an exit receipt shows up at 2s.
+        # Junk must fail right away with the existing message, not wait for
+        # the receipt and report the job as already closed.
+        result = self.fake_close([("1", self.job / "inbox.holder.pid", "abc\n"),
+                                  ("2", self.job / "exit", "0\n")])
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        self.assertEqual(result.stderr, "live inbox holder is unavailable\n")
+        self.assertNotIn("already closed", result.stdout)
+        self.assertFalse((self.job / "exit").exists(), "close kept waiting past the invalid PID file")
+
+    def test_holder_appearing_after_the_deadline_is_not_signaled(self):
+        # The holder PID is published during the sleep that crosses the 11s
+        # deadline. Close must give up without signalling it.
+        self.start_holder()
+        result = self.fake_close([("deadline", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")])
+        self.assertEqual(result.returncode, 1, (result.stdout, result.stderr))
+        self.assertEqual(result.stderr, "live inbox holder is unavailable\n")
+        time.sleep(0.3)
+        self.assertIsNone(self.holder.poll(), "holder was signalled after the deadline")
+        self.assertFalse((self.job / "exit").exists(), "holder was signalled after the deadline")
+
+    def test_fake_clock_still_signals_a_holder_before_the_deadline(self):
+        # Guards the fake clock itself: a PID published at 10.5s is signalled.
+        self.start_holder()
+        result = self.fake_close([("10.5", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")])
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn(f"closed {JOB_ID}", result.stdout)
 
 
 if __name__ == "__main__":
