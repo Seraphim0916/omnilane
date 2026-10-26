@@ -569,11 +569,38 @@ case "${1:-}" in
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
     # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
     # One Perl process waits on a sub-second clock for exactly 11s.
-    if ! perl -MTime::HiRes=time,sleep -e '
-      my ($exit, $limit) = @ARGV;
+    # A close that lands before the worker has written its holder PID keeps
+    # polling for it inside the same deadline and signals it once it appears
+    # (same checks as read_job_pid); it prints "signaled" when it does. A PID
+    # file that appears with invalid contents fails at once (exit 2), like one
+    # present from the start. The deadline is checked before every poll and
+    # the last sleep stops at it, so nothing is signalled after it.
+    late_signal=""
+    [[ "$holder_signaled" -eq 1 ]] || late_signal=1
+    wait_rc=0
+    wait_out="$(perl -MTime::HiRes=time,sleep -e '
+      my ($exit, $limit, $holder, $poll_holder) = @ARGV;
       my $end = time + $limit;
-      until (-e $exit || -l $exit) { exit 1 if time >= $end; sleep 0.1 }
-    ' "$JOB_DIR/exit" 11; then
+      $| = 1;
+      until (-e $exit || -l $exit) {
+        my $left = $end - time;
+        exit 1 if $left <= 0;
+        if ($poll_holder && (-e $holder || -l $holder)) {
+          exit 2 if -l $holder || !-f _ || (-s _) > 11;
+          if (open(my $fh, "<", $holder)) {
+            local $/;
+            my $value = <$fh>;
+            close $fh;
+            exit 2 unless defined $value && $value =~ /\A([1-9][0-9]{0,9})\n?\z/;
+            if (kill(0, $1) && kill("USR1", $1)) { print "signaled\n"; $poll_holder = 0 }
+          }
+        }
+        sleep($left < 0.1 ? $left : 0.1);
+      }
+    ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal")" || wait_rc=$?
+    [[ "$wait_out" != *signaled* ]] || holder_signaled=1
+    [[ "$wait_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
+    if [[ "$wait_rc" -ne 0 ]]; then
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
         die 1 "live inbox holder is unavailable"
