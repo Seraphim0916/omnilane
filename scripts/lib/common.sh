@@ -655,7 +655,7 @@ truncate_payload() { # file, cap_bytes
 
 OMNILANE_WORKER_RULES_MARKER='[omnilane worker rules]'
 # No quote characters: fixtures and logs re-split the worker argv with shlex.
-OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent.'
+OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent. If a permission, sandbox, hook or missing dependency blocks a step, stop and report the exact error; do not work around it with a different command or tool.'
 
 # The task file stays byte-identical (task.txt is the preserved record); the
 # runner sends a sibling copy with the rules in front. Rebuilding it from the
