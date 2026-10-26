@@ -174,6 +174,21 @@ class MailboxBackpressureTests(unittest.TestCase):
     def test_reader_disappears_during_blocked_write(self):
         self.open_reader()
         self.assertGreater(self.fill_fifo(), 0)
+        writer_opened = self.home / "writer-opened"
+        bash_env = self.home / "writer-open-sync.sh"
+        # Bash applies the caller's FIFO redirection before entering a function.
+        # Mark that point, then retain the real builtin write to the full FIFO.
+        # Unlike xtrace, this marker cannot precede a successful write-side open.
+        bash_env.write_text(
+            "printf() {\n"
+            "  if [[ ${2-} == *codex-user* ]]; then\n"
+            '    : > "$WRITER_OPENED_MARKER"\n'
+            "  fi\n"
+            '  builtin printf "$@"\n'
+            "}\n"
+        )
+        self.env["BASH_ENV"] = str(bash_env)
+        self.env["WRITER_OPENED_MARKER"] = str(writer_opened)
         # Transfer the sole read end to a real process. Its normal exit, rather
         # than the test closing a descriptor, removes the reader mid-send.
         reader_process = subprocess.Popen(
@@ -193,6 +208,11 @@ class MailboxBackpressureTests(unittest.TestCase):
         self.reader = None
         self.start_send()
         self.wait_for_blocked_writer()
+        deadline = self.started + HARD_TIMEOUT
+        while not writer_opened.exists() and time.monotonic() < deadline:
+            self.assertIsNone(self.process.poll(), "send exited before write-side open")
+            time.sleep(0.01)
+        self.assertTrue(writer_opened.exists(), "writer did not confirm write-side open")
         reader_process.communicate(b"q", timeout=2)
         self.assertEqual(reader_process.returncode, 0)
         # SIGPIPE proves the writer opened the FIFO before its reader vanished;
