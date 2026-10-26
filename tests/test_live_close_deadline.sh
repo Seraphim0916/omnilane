@@ -112,7 +112,10 @@ def wait_for_receipt_waiter(closer, receipt, timeout=GENEROUS):
     end = time.monotonic() + timeout
     while True:
         if closer.poll() is not None:
-            out, err = closer.communicate()
+            try:
+                out, err = drain_close(closer, timeout=5)
+            except AssertionError as error:
+                out, err = '', str(error)
             raise AssertionError(('close returned before waiting for the exit receipt',
                                   closer.returncode, out, err))
         # -ww: unlimited width on procps and BSD ps, so the exit path is never cut.
@@ -176,6 +179,8 @@ def group_gone(pgid, timeout=GENEROUS):
             os.killpg(pgid, 0)
         except ProcessLookupError:
             return True
+        except PermissionError:
+            pass  # macOS answers EPERM for a group whose members are still dying; poll again
         time.sleep(.02)
     return False
 
@@ -189,20 +194,51 @@ def start_close(job_id, env):
     return closer
 
 
+def kill_group(pgid):
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass  # gone, or (EPERM on macOS) already dying
+
+
+def drain_close(closer, timeout=GENEROUS):
+    """Observe close's own exit and its output pipes separately; every wait is bounded.
+
+    communicate() would wait for whatever still holds stdout, so a child left behind by
+    an early close would be waited out instead of caught. Readers run in threads while
+    the leader is awaited; a group that outlives the leader is killed and fails the run."""
+    chunks = {}
+    readers = [threading.Thread(target=lambda s=s: chunks.__setitem__(s, s.read()), daemon=True)
+               for s in (closer.stdout, closer.stderr)]
+    for reader in readers:
+        reader.start()
+    try:
+        closer.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        kill_group(closer.pid)
+        closer.wait(timeout=5)
+        raise AssertionError(f'jobs close {closer.args} hung past {timeout}s')
+    finally:
+        # Unconditional: a close that already returned can still have members in its group.
+        leftover = not group_gone(closer.pid, timeout=1)
+        kill_group(closer.pid)
+    if leftover:
+        raise AssertionError(f'jobs close {closer.args} exited but left processes in group {closer.pid}')
+    for reader in readers:
+        reader.join(timeout=5)
+        if reader.is_alive():
+            raise AssertionError(f'jobs close {closer.args}: output pipe stayed open after its group was gone')
+    for stream in (closer.stdout, closer.stderr):
+        stream.close()
+    return chunks[closer.stdout], chunks[closer.stderr]
+
+
 def finish_close(closer):
     """Wait for close under the generous guard, then require its whole group to be gone.
 
-    On a hang the whole group is killed, receipt poller included, before failing."""
-    try:
-        out, err = closer.communicate(timeout=GENEROUS)
-    except subprocess.TimeoutExpired:
-        os.killpg(closer.pid, signal.SIGKILL)
-        closer.communicate()
-        raise AssertionError(f'jobs close {closer.args} hung past {GENEROUS}s')
-    # A finished close has already reaped its poller; 5s stays far below the 11s a left-over poller would live.
-    if not group_gone(closer.pid, timeout=5):
-        os.killpg(closer.pid, signal.SIGKILL)
-        raise AssertionError(f'jobs close left processes in group {closer.pid}')
+    A finished close has already reaped its receipt poller, so any member still in the
+    group a second after the leader exits is a leftover (a poller would live for 11s)."""
+    out, err = drain_close(closer)
     return subprocess.CompletedProcess(closer.args, closer.returncode, out, err)
 
 
@@ -219,7 +255,7 @@ def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_err
             # that returned can still leave its receipt poller in the group.
             try:
                 os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 pass
             try:
                 proc.wait(timeout=GENEROUS)

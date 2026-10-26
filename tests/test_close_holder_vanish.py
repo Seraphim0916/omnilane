@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 import unittest
 
@@ -51,26 +52,44 @@ class CloseHolderVanishTests(unittest.TestCase):
                                 env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 start_new_session=True)
 
+    def drain(self, closer, timeout=GENEROUS):
+        """Observe close's own exit and its output pipes separately; every wait is bounded.
+
+        communicate() would wait for whatever still holds stdout, so a child left behind by
+        an early close would be waited out instead of caught. A group that outlives its
+        leader by a second (a receipt poller would live 11s) is killed and fails the test."""
+        chunks = {}
+        readers = [threading.Thread(target=lambda s=s: chunks.__setitem__(s, s.read()), daemon=True)
+                   for s in (closer.stdout, closer.stderr)]
+        for reader in readers:
+            reader.start()
+        try:
+            closer.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            kill_group(closer.pid)
+            closer.wait(timeout=5)
+            self.fail(f"jobs close hung past {timeout}s")
+        finally:
+            leftover = not group_gone(closer.pid, timeout=1)
+            kill_group(closer.pid)
+        if leftover:
+            self.fail(f"jobs close exited but left processes in group {closer.pid}")
+        for reader in readers:
+            reader.join(timeout=5)
+            if reader.is_alive():
+                self.fail("jobs close output pipe stayed open after its group was gone")
+        return chunks[closer.stdout], chunks[closer.stderr]
+
     def reap(self, closer):
-        """Kill what is left of close's process group, reap it, and check nothing in the group survived."""
-        if closer.poll() is None:
-            try:
-                os.killpg(closer.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+        """Kill close's whole process group unconditionally, reap it, and check nothing survived."""
+        kill_group(closer.pid)
         closer.wait(timeout=GENEROUS)
         for stream in (closer.stdout, closer.stderr):
-            stream.close()
-        deadline = time.monotonic() + GENEROUS
-        while True:
-            try:
-                os.killpg(closer.pid, 0)
-            except ProcessLookupError:
-                return
-            if time.monotonic() > deadline:
-                os.killpg(closer.pid, signal.SIGKILL)
-                self.fail(f"process group {closer.pid} survived jobs close")
-            time.sleep(.02)
+            if not stream.closed:
+                stream.close()
+        if not group_gone(closer.pid, timeout=GENEROUS):
+            kill_group(closer.pid)
+            self.fail(f"process group {closer.pid} survived jobs close")
 
     def receipt_poller_running(self, closer, end):
         """Whether close's direct child polling for the exit receipt is in the process table now."""
@@ -87,7 +106,10 @@ class CloseHolderVanishTests(unittest.TestCase):
         end = time.monotonic() + timeout
         while True:
             if closer.poll() is not None:
-                out, err = closer.communicate()
+                try:
+                    out, err = self.drain(closer, timeout=5)
+                except AssertionError as error:
+                    out, err = "", str(error)
                 self.fail(("close returned before waiting for the exit receipt", closer.returncode, out, err))
             if self.receipt_poller_running(closer, end):
                 return
@@ -105,7 +127,7 @@ class CloseHolderVanishTests(unittest.TestCase):
             receipt = self.job / ".exit.tmp"
             receipt.write_text("0\n")
             os.replace(receipt, self.job / "exit")
-            out, err = closer.communicate(timeout=GENEROUS)
+            out, err = self.drain(closer)
         finally:
             self.reap(closer)
         self.assertEqual((closer.returncode, out, err), (0, "already closed (exit 0)\n", ""))
@@ -123,12 +145,62 @@ class CloseHolderVanishTests(unittest.TestCase):
                 polled = polled or self.receipt_poller_running(closer, end)
                 self.assertLess(time.monotonic(), end, "close with an invalid holder file hung")
                 time.sleep(.02)
-            out, err = closer.communicate(timeout=GENEROUS)
+            out, err = self.drain(closer)
         finally:
             self.reap(closer)
         self.assertFalse(polled, "close waited for the exit receipt instead of failing at once")
         self.assertEqual((closer.returncode, out, err), (1, "", "live inbox holder is unavailable\n"))
         self.assertTrue(self.holder.exists())
+
+    def leaky_close(self, marker):
+        """A stand-in close that exits at once but leaves a child holding its stdout;
+        the child writes `marker` only if it is allowed to finish on its own."""
+        return subprocess.Popen(["/bin/bash", "-c", f'(/bin/sleep 30; : > "{marker}") & echo started; exit 0'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                start_new_session=True)
+
+    def test_a_left_over_child_fails_the_drain_instead_of_being_waited_out(self):
+        marker = Path(self.scratch.name) / "leftover-finished"
+        closer = self.leaky_close(marker)
+        try:
+            with self.assertRaisesRegex(AssertionError, "left processes in group"):
+                self.drain(closer)
+            self.assertTrue(group_gone(closer.pid, timeout=GENEROUS))
+        finally:
+            self.reap(closer)
+        self.assertFalse(marker.exists(), "the left-over child was waited out")
+
+    def test_an_early_exit_with_a_pipe_holder_does_not_hang_the_receipt_wait(self):
+        marker = Path(self.scratch.name) / "leftover-finished"
+        closer = self.leaky_close(marker)
+        try:
+            closer.wait(timeout=GENEROUS)
+            with self.assertRaisesRegex(AssertionError, "close returned before waiting for the exit receipt"):
+                self.wait_for_receipt_poller(closer)
+        finally:
+            self.reap(closer)
+        self.assertFalse(marker.exists(), "the left-over child was waited out")
+
+
+def kill_group(pgid):
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass  # gone, or (EPERM on macOS) already dying
+
+
+def group_gone(pgid, timeout):
+    """True once no process is left in the group; SIGKILL needs a scheduling turn to land."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            pass  # macOS answers EPERM for a group whose members are still dying; poll again
+        time.sleep(.02)
+    return False
 
 
 if __name__ == "__main__":
