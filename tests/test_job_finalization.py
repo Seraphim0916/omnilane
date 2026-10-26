@@ -30,13 +30,12 @@ class JobFinalizationTests(unittest.TestCase):
         self.pids = []
         self.addCleanup(self.stop_owned_processes)
 
-    @staticmethod
-    def alive(pid):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        return True
+    def alive(self, pid):
+        result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], env=self.env,
+                                capture_output=True, text=True, timeout=5)
+        state = result.stdout.strip()
+        # A zombie cannot execute; the host init process owns reaping it.
+        return bool(state) and not state.startswith("Z")
 
     def stop_owned_processes(self):
         (self.root / "publish.release").touch()
