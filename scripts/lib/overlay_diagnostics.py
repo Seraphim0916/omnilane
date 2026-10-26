@@ -11,10 +11,14 @@ from probe_failure import environment_reason
 
 def read_object(path: Path) -> dict:
     try:
-        value = json.loads(path.read_text())
-        return value if isinstance(value, dict) else {}
+        raw = path.read_text()
     except (OSError, ValueError):
         return {}
+    try:
+        value = json.loads(raw)
+    except (ValueError, RecursionError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def validate_unproven(overlay: dict) -> list[dict]:

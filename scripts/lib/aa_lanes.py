@@ -103,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     raw = sys.stdin.read()
     try:
         decision = json.loads(raw)
+        if not isinstance(decision, dict):
+            raise ValueError("decision must be a JSON object")
         ceiling = decision.get("effective_ceiling")
         if decision.get("allowed") is False and type(ceiling) is int:
             registry, _ = aa_policy.load_registry(args.registry)
