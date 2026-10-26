@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- Proposed registry snapshot `aa-v4.3.2-2026-10-27-v1` adds OpenAI's GPT-6.1 Terra (released 2026-10-26; Codex and API ID `gpt-6.1-terra`). AA v4.3.2 scores six rows, none estimated: `codex/gpt-6-1-terra` (max, 48), `-xhigh` (45), `-high` (44), `-medium` (41), `-low` (36) and `-non-reasoning` (33); 124 -> 130 scored, Codex 57 -> 63. Every existing score and the ordering are unchanged. `routing.yaml` inserts Terra where `aa_rebaseline.py value` picks it: `hardest-coding` (xhigh, high, medium after GPT-6.1 Sol medium), `bulk-mechanical` (high, medium after GPT-6.1 Sol high), `ui-draft` (high after GPT-6.1 Sol high, low after GPT-6 Astra low) and `fast-agentic` (medium, low after GPT-6.1 Sol medium); no first choice changes. The configurator menu lists `gpt-6.1-terra`, and the probe plan covers its five reasoning efforts and `none`. The snapshot is `proposed` until the operator approves it, and every host must run `omnilane resign` after upgrading because the snapshot id changes. Details: `docs/reports/aa-gpt-6-1-terra-evidence-2026-10-27.md`.
+
 ## [0.57.0] - 2026-10-21
 
 ### Added

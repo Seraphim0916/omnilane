@@ -111,12 +111,19 @@ NEW_ROWS = [
      "gpt-5-4-mini-medium", "codex/gpt-5-4"),
     ("codex/gpt-5-4-mini-non-reasoning", "codex", "gpt-5.4-mini", None, "non-reasoning",
      "gpt-5-4-mini-non-reasoning", "codex/gpt-5-4-non-reasoning"),
+    # Unlike GPT-6.1 Sol, AA scores GPT-6.1 Terra without reasoning too, and the API
+    # accepts reasoning.effort "none"; each row copies its GPT-5.6 Terra sibling's shape.
+    *[(f"codex/gpt-6-1-terra{suffix}", "codex", "gpt-6.1-terra", effort,
+       "non-reasoning" if effort is None else "reasoning",
+       f"gpt-6-1-terra{suffix}", f"codex/gpt-5-6-terra{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low", None)
+      for suffix in ["" if effort == "max" else f"-{effort or 'non-reasoning'}"]],
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
                "gemini-4-argon-high": "gemini-3.8-flash-high",
-               "gpt-5.4-mini": "gpt-5.4"}  # catalog selector -> alias to clone
+               "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra"}  # catalog selector -> alias to clone
 # AA's family slug and agy's effort-encoded selector are different identities.
 # A known selector is a probe target, never proof that this host can use it.
 RUNTIME_SELECTORS = {"gemini-4-argon": "gemini-4-argon-high"}
@@ -612,7 +619,7 @@ VALUE_LANES = {
 VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
 STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-sonnet-5",
-                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
+                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 

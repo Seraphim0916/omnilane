@@ -512,8 +512,14 @@ lane table; do not assume an older model is equivalent.
   bulk-mechanical, behind GPT-6.1 Sol low for every caller that can reach that row;
   Sol high and medium stand behind GPT-6.1 Sol. Luna high
   remains the low-cost first choice in triage. Do not promote Luna's low price into correctness-critical work.
-- **GPT-5.6 Sol / Terra / Luna:** fallbacks behind their GPT-6 successors; Terra
-  xhigh is the Codex row in long-context.
+- **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol (proposed 2026-10-27
+  snapshot): xhigh, high and medium in hardest-coding; high and medium in
+  bulk-mechanical; high and low in ui-draft; medium and low in fast-agentic. It
+  leads no lane. Max and the non-reasoning row are explicit-only. A host has to
+  prove it with `omnilane resign` first; until then each chain serves the row
+  right behind it.
+- **GPT-5.6 Sol / Terra / Luna:** fallbacks behind their GPT-6 successors; GPT-5.6
+  Terra xhigh is still the Codex row in long-context.
 - **Grok 4.7 / 4.6:** first in live-search for native X/web search and in
   coding-overflow for Codex-quota relief; the third family in the hard lanes.
   4.7 precedes 4.6 within Grok. Verify API signatures and cited facts before shipping.
@@ -535,6 +541,9 @@ lane table; do not assume an older model is equivalent.
 ## Reference
 
 ### Model aliases
+
+Proposed snapshot `aa-v4.3.2-2026-10-27-v1` (not yet approved): 130 scored rows, 9 unknown;
+adds GPT-6.1 Terra at max/xhigh/high/medium/low/non-reasoning, which needs host proof like every other row.
 
 Current operator-approved snapshot `aa-v4.3.2-2026-10-18-v1` (2026-10-19): 124 scored rows, 9 unknown;
 the three `gpt-5.4-mini` rows are scored again but listed in no lane, and need host proof like every other row.
@@ -563,6 +572,7 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Luna | codex | gpt-5.6-luna | high |
 | Astra | codex | gpt-6-astra | xhigh |
 | GPT-6.1 Sol | codex | gpt-6.1-sol | xhigh |
+| GPT-6.1 Terra | codex | gpt-6.1-terra | high |
 | GPT-6 Sol | codex | gpt-6-sol | xhigh |
 | GPT-6 Luna | codex | gpt-6-luna | high |
 | Grok 4.7 | grok | grok-4.7 | - |

@@ -39,7 +39,7 @@ PROVEN: dict[str, tuple[str, str, str]] = {}
 for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6.1-sol", "gpt-6_1-sol"), ("gpt-6-sol", "gpt-6-sol"),
                     ("gpt-6-luna", "gpt-6-luna"),
                     ("gpt-5.6-sol", "gpt-5_6-sol"), ("gpt-5.6-luna", "gpt-5_6-luna"),
-                    ("gpt-5.6-terra", "gpt-5_6-terra")]:
+                    ("gpt-5.6-terra", "gpt-5_6-terra"), ("gpt-6.1-terra", "gpt-6_1-terra")]:
     base = model.replace(".", "-").replace("gpt-", "gpt-")
     for effort in ["max", "xhigh", "high", "medium", "low"]:
         cid = f"codex/{model.replace('.', '-')}" + ("" if effort == "max" else f"-{effort}")
@@ -73,7 +73,7 @@ for model in ["claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-h
         PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-{effort}")
 # gpt-6-astra rejects effort "none" upstream ("Unsupported value: 'none' is not
 # supported with the 'gpt-6-astra' model"), so it has no non-reasoning selector.
-for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini"]:
+for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini", "gpt-6.1-terra"]:
     PROVEN[f"codex/{model.replace('.', '-')}-non-reasoning"] = (
         "model_and_effort", model, f"cx-{model.replace('.', '_')}-none")
 

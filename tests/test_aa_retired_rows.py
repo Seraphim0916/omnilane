@@ -25,7 +25,7 @@ import probe_sweep  # noqa: E402
 MINI = ("codex/gpt-5-4-mini", "codex/gpt-5-4-mini-medium",
         "codex/gpt-5-4-mini-non-reasoning")
 REASON = "HTTP 400: not supported when using Codex with a ChatGPT account"
-EXTRACT = REPO / "docs/reports/aa-v4.3.2-extract-2026-10-14.json"
+EXTRACT = REPO / "docs/reports/aa-v4.3.2-extract-2026-10-27.json"
 
 
 class RetiredRowTests(unittest.TestCase):
