@@ -13,7 +13,9 @@ import overlay_diagnostics as diagnostics
 class DiagnosticDepthTests(unittest.TestCase):
     def deep_path(self):
         path = Mock(spec=Path)
-        path.read_text.return_value = "[" * 10000 + "0" + "]" * 10000
+        path.read_text.return_value = '{"a":' * 10000 + '{}' + '}' * 10000
+        with self.assertRaises(RecursionError):
+            json.loads(path.read_text.return_value)
         return path
 
     def test_deep_json_returns_empty_object(self):
@@ -47,6 +49,16 @@ class DiagnosticDepthTests(unittest.TestCase):
                 path.read_text.side_effect = error
                 self.assertEqual(diagnostics.read_object(path), {})
                 self.assertIn("omnilane doctor", diagnostics.recovery_guidance(ROOT, path))
+
+    def test_unexpected_read_errors_propagate(self):
+        for error_type in (RecursionError, RuntimeError, TypeError, AttributeError, MemoryError):
+            with self.subTest(error=error_type.__name__):
+                path = Mock(spec=Path)
+                error = error_type("unexpected read failure")
+                path.read_text.side_effect = error
+                with self.assertRaises(error_type) as caught:
+                    diagnostics.read_object(path)
+                self.assertIs(caught.exception, error)
 
 
 if __name__ == "__main__":
