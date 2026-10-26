@@ -27,7 +27,7 @@ def refusal_from(text: str) -> dict | None:
             continue
         try:
             value = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if isinstance(value, dict) and value.get("allowed") is False:
             found = value

@@ -50,14 +50,14 @@ def parse_stamp(text) -> datetime.datetime | None:
 
 def since_cutoff(text: str, moment: datetime.datetime) -> datetime.datetime:
     match = re.fullmatch(r"([1-9][0-9]*)([dh])", text)
-    if match:
-        amount = int(match.group(1))
-        return moment - (datetime.timedelta(days=amount) if match.group(2) == "d"
-                         else datetime.timedelta(hours=amount))
     try:
+        if match:
+            amount = int(match.group(1))
+            return moment - (datetime.timedelta(days=amount) if match.group(2) == "d"
+                             else datetime.timedelta(hours=amount))
         return datetime.datetime.strptime(text, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
-    except ValueError:
-        raise SystemExit("omnilane: --since takes Nd, Nh or YYYY-MM-DD") from None
+    except (ValueError, OverflowError):
+        raise SystemExit("omnilane: --since takes Nd, Nh or YYYY-MM-DD within the supported date range") from None
 
 
 def clean(text: str, name: str) -> str:
@@ -104,7 +104,7 @@ def record(args) -> int:
     return 0
 
 
-def records(cutoff: datetime.datetime) -> list[dict]:
+def records(cutoff: datetime.datetime, until: datetime.datetime) -> list[dict]:
     found = []
     try:
         lines = (home() / LOG_NAME).read_text(encoding="utf-8").splitlines()
@@ -116,12 +116,12 @@ def records(cutoff: datetime.datetime) -> list[dict]:
         except ValueError:
             continue
         moment = parse_stamp(entry.get("recorded_at")) if isinstance(entry, dict) else None
-        if moment is not None and moment >= cutoff:
+        if moment is not None and cutoff <= moment <= until:
             found.append(entry)
     return found
 
 
-def dispatched(cutoff: datetime.datetime) -> collections.Counter:
+def dispatched(cutoff: datetime.datetime, until: datetime.datetime) -> collections.Counter:
     count = collections.Counter()
     for meta in (home() / "jobs").glob("*/meta.json"):
         try:
@@ -129,7 +129,7 @@ def dispatched(cutoff: datetime.datetime) -> collections.Counter:
         except (OSError, ValueError):
             continue
         moment = parse_stamp(value.get("started")) if isinstance(value, dict) else None
-        if moment is not None and moment >= cutoff:
+        if moment is not None and cutoff <= moment <= until:
             count[value.get("executor") or "unknown"] += 1
     return count
 
@@ -137,8 +137,8 @@ def dispatched(cutoff: datetime.datetime) -> collections.Counter:
 def stats(args) -> int:
     moment = now()
     cutoff = since_cutoff(args.since, moment)
-    own = records(cutoff)
-    jobs = dispatched(cutoff)
+    own = records(cutoff, moment)
+    jobs = dispatched(cutoff, moment)
     total = len(own) + sum(jobs.values())
     report = {"since": stamp(cutoff), "until": stamp(moment), "self_exec": len(own),
               "dispatched": sum(jobs.values()), "dispatched_by_executor": dict(sorted(jobs.items())),
