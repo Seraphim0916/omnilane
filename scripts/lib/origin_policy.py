@@ -78,7 +78,10 @@ def validate(data):
             if channel["approved_via"] not in ("operator", "first-use", "migrated-from-overlay"):
                 raise OriginError("invalid approval source")
             try:
-                stamp = datetime.fromisoformat(channel["approved_at"])
+                approval_time = channel["approved_at"]
+                if isinstance(approval_time, str) and approval_time.endswith(("Z", "z")):
+                    approval_time = approval_time[:-1] + "+00:00"
+                stamp = datetime.fromisoformat(approval_time)
                 if stamp.tzinfo is None:
                     raise ValueError()
             except (ValueError, TypeError):
