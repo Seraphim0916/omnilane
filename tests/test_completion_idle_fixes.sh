@@ -52,7 +52,7 @@ cleanup() {
     tries=$((tries + 1))
   done
   if [[ "$alive" -ne 0 ]]; then
-    printf 'not ok - cleanup left %s recorded processes; retained %s\n' "$alive" "$TEST_ROOT" >&2
+    printf 'not ok - cleanup left %s recorded processes; test directory deliberately retained: %s\n' "$alive" "$TEST_ROOT" >&2
     exit 1
   fi
   if [[ -n "${CLEANUP_AUDIT:-}" ]]; then
@@ -431,10 +431,10 @@ test_background_worker_uses_readonly_snapshot() {
 set -euo pipefail
 : > "${SNAPSHOT_READY:?}"
 printf '%s\n' "$$" >> "$COMPLETION_TEST_PIDS"
-tries=0
-while [[ ! -f "${SNAPSHOT_RELEASE:?}" && "$tries" -lt 100 ]]; do
+# Wait for the parent to mutate the source, even when it is heavily delayed.
+deadline=$((SECONDS + 300))
+while [[ ! -f "${SNAPSHOT_RELEASE:?}" && "$SECONDS" -lt "$deadline" ]]; do
   sleep 0.05
-  tries=$((tries + 1))
 done
 [[ -f "$SNAPSHOT_RELEASE" ]] || exit 91
 printf 'snapshot worker ok\n' > "$5"
@@ -518,11 +518,16 @@ test_timeout_diagnostic_on_live_dispatch() {
 
 test_lock_timeout_hint() {
   local home="$TEST_ROOT/lock-home" workdir="$TEST_ROOT/lock-work"
-  local ready="$TEST_ROOT/lock.ready" out rc=0 holder
+  local ready="$TEST_ROOT/lock.ready" release="$TEST_ROOT/lock.release" out rc=0 holder
   mkdir -p "$home" "$workdir"
   OMNILANE_HOME="$home" /bin/bash -c \
-    'source "$1"; acquire_cwd_lock codex "$2"; : > "$3"; exec sleep 4' \
-    _ "$ROOT/scripts/lib/common.sh" "$workdir" "$ready" &
+    'source "$1"
+     acquire_cwd_lock codex "$2" || exit $?
+     : > "$3"
+     deadline=$((SECONDS + 300))
+     while [[ ! -f "$4" && "$SECONDS" -lt "$deadline" ]]; do sleep 0.05; done
+     [[ -f "$4" ]] || exit 92' \
+    _ "$ROOT/scripts/lib/common.sh" "$workdir" "$ready" "$release" &
   holder=$!
   CHILD_PIDS+=("$holder")
   printf '%s\n' "$holder" >> "$PIDS_FILE"
@@ -530,10 +535,12 @@ test_lock_timeout_hint() {
   out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_TIMEOUT=1 /bin/bash -c \
     'source "$1"; acquire_cwd_lock codex "$2"' \
     _ "$ROOT/scripts/lib/common.sh" "$workdir" 2>&1)" || rc=$?
+  # Release only after observing the competitor's result, never on a timer.
+  : > "$release"
   [[ "$rc" -eq 87 ]] || fail "lock waiter did not exit 87"
   [[ "$out" == *'advise/read-only'* && "$out" == *'different --workdir'* ]] \
     || fail "lock timeout lacks read-only workdir hint"
-  wait "$holder"
+  wait "$holder" || fail "lock holder timed out before the competitor result was observed"
   printf 'ok - lock timeout keeps serialization and suggests another read-only workdir\n'
 }
 
@@ -564,6 +571,7 @@ test_cleanup_after_forced_exit() {
     [[ ! -e "$directory" ]] || fail "cleanup left its directory ($mode)"
     printf 'ok - cleanup %s: recorded=%s remaining=0 directory_removed=yes\n' "$mode" "$count"
   done
+  printf 'ok - cleanup removal verified for fail/INT/TERM probes; if processes survive cleanup, their test directory is retained and its path reported\n'
 }
 
 if [[ "${1:-}" == --cleanup-probe ]]; then
