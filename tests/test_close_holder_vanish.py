@@ -2,6 +2,7 @@
 import offline_env  # noqa: F401
 import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import time
@@ -22,13 +23,10 @@ exec /bin/cat "$@"
 """
 
 
-def setUpModule():
-    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
-
-
 class CloseHolderVanishTests(unittest.TestCase):
     def setUp(self):
-        self.scratch = tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch")
+        # offline_env points tempfile at the suite's private temporary root, outside the checkout.
+        self.scratch = tempfile.TemporaryDirectory()
         base = Path(self.scratch.name)
         self.job = base / "home" / "jobs" / JOB_ID
         self.job.mkdir(parents=True)
@@ -46,8 +44,31 @@ class CloseHolderVanishTests(unittest.TestCase):
         self.scratch.cleanup()
 
     def close(self, env):
+        # Its own process group, so cleanup also reaches the receipt poller close starts.
         return subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
-                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                start_new_session=True)
+
+    def reap(self, closer):
+        """Kill what is left of close's process group, reap it, and check nothing in the group survived."""
+        if closer.poll() is None:
+            try:
+                os.killpg(closer.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        closer.wait(timeout=10)
+        for stream in (closer.stdout, closer.stderr):
+            stream.close()
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                os.killpg(closer.pid, 0)
+            except ProcessLookupError:
+                return
+            if time.monotonic() > deadline:
+                os.killpg(closer.pid, signal.SIGKILL)
+                self.fail(f"process group {closer.pid} survived jobs close")
+            time.sleep(.02)
 
     def wait_for_receipt_poller(self, closer, timeout=5):
         end = time.monotonic() + timeout
@@ -78,16 +99,17 @@ class CloseHolderVanishTests(unittest.TestCase):
             os.replace(receipt, self.job / "exit")
             out, err = closer.communicate(timeout=15)
         finally:
-            if closer.poll() is None:
-                closer.kill()
-                closer.communicate()
+            self.reap(closer)
         self.assertEqual((closer.returncode, out, err), (0, "already closed (exit 0)\n", ""))
 
     def test_holder_file_that_stays_invalid_fails_at_once(self):
         self.holder.write_text("not-a-pid\n")
         started = time.monotonic()
         closer = self.close(self.env)
-        out, err = closer.communicate(timeout=10)
+        try:
+            out, err = closer.communicate(timeout=10)
+        finally:
+            self.reap(closer)
         self.assertLess(time.monotonic() - started, 5)
         self.assertEqual((closer.returncode, out, err), (1, "", "live inbox holder is unavailable\n"))
         self.assertTrue(self.holder.exists())

@@ -10,7 +10,12 @@ shift
 # Isolated worker + real jobs.sh close; never invokes a provider.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-mkdir -p "$ROOT/.test-scratch"
+# Run directly, this script creates the scratch root and leaves nothing behind;
+# under tests/run.sh the root already exists and run.sh removes it.
+if [[ ! -d "$ROOT/.test-scratch" ]]; then
+  mkdir "$ROOT/.test-scratch"
+  trap 'rmdir "$ROOT/.test-scratch" 2>/dev/null || true' EXIT
+fi
 ROOT="$ROOT" python3 - <<'PY'
 import array
 import fcntl
@@ -149,7 +154,10 @@ class ReleasedReceipt:
 
     def wait(self):
         status = self.worker.wait()
-        self.release.wait(timeout=10)
+        # No timeout: the receipt appears only once close is seen waiting for it, or when
+        # the fixture's finally block releases it. A self-release under load would let
+        # close find the receipt before it starts waiting and fail the run spuriously.
+        self.release.wait()
         return status
 
 
