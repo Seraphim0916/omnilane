@@ -15,10 +15,6 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def setUpModule():
-    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
-
-
 class CloseSynchronizationTests(unittest.TestCase):
     def setUp(self):
         source_path = Path(os.environ.get("CLOSE_SYNC_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
@@ -28,7 +24,7 @@ class CloseSynchronizationTests(unittest.TestCase):
         exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), self.helpers)
 
     def test_marker_does_not_mean_sigstop_has_completed(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "at-loop-boundary"
             child = subprocess.Popen([sys.executable, "-c", """
 import os, pathlib, signal, sys

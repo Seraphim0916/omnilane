@@ -11,7 +11,12 @@ shift
 # before giving up, wherever the wall-clock second happens to be.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-mkdir -p "$ROOT/.test-scratch"
+# Run directly, this script creates the scratch root and leaves nothing behind;
+# under tests/run.sh the root already exists and run.sh removes it.
+if [[ ! -d "$ROOT/.test-scratch" ]]; then
+  mkdir "$ROOT/.test-scratch"
+  trap 'rmdir "$ROOT/.test-scratch" 2>/dev/null || true' EXIT
+fi
 ROOT="$ROOT" python3 - <<'PY'
 import os
 import pathlib
