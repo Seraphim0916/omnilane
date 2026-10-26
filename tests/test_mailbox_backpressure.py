@@ -21,9 +21,8 @@ STARTUP_TIMEOUT = 30
 
 class MailboxBackpressureTests(unittest.TestCase):
     def setUp(self):
-        scratch = ROOT / ".wt-tmp"
-        scratch.mkdir(exist_ok=True)
-        self.directory = tempfile.TemporaryDirectory(prefix="mailbox-", dir=scratch)
+        # offline_env directs tempfile to the suite's isolated temporary root.
+        self.directory = tempfile.TemporaryDirectory(prefix="mailbox-")
         self.addCleanup(self.directory.cleanup)
         self.home = Path(self.directory.name)
         job = self.home / "jobs" / JOB_ID
@@ -119,8 +118,11 @@ class MailboxBackpressureTests(unittest.TestCase):
     def wait_for_blocked_writer(self):
         # Observe the real writer PID and its printf attempt without requiring ps
         # (process enumeration is denied in the macOS execution sandbox).
-        deadline = self.started + 3
+        # Allow scheduling delays up to the existing outer hard deadline;
+        # elapsed time alone must never count as evidence of backpressure.
+        deadline = self.started + HARD_TIMEOUT
         while time.monotonic() < deadline:
+            self.assertIsNone(self.process.poll(), "send exited before backpressure")
             trace = self.trace_path.read_text()
             match = re.search(r"^\+ writer_pid=(\d+)$", trace, re.MULTILINE)
             if match and re.search(r"^\+ printf .*codex-user", trace, re.MULTILINE):
@@ -129,7 +131,7 @@ class MailboxBackpressureTests(unittest.TestCase):
                 self.assertIsNone(self.process.poll(), "send exited before backpressure")
                 return
             time.sleep(0.1)
-        self.fail("did not observe a persistent FIFO writer child")
+        self.fail("did not observe a persistent FIFO writer child within hard timeout (12s)")
 
     def finish(self, expected):
         try:
