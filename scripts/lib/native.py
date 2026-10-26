@@ -318,10 +318,15 @@ def stamp():
 
 def write_new(path, content):
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(content)
-        stream.flush()
-        os.fsync(stream.fileno())
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        # Only clean up after our exclusive creation succeeded, never a collision.
+        path.unlink(missing_ok=True)
+        raise
 
 
 def json_text(value):
