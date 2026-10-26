@@ -137,11 +137,17 @@ class OverlayHealthInProcessTests(unittest.TestCase):
         overlay = self.overlay(unproven=[{"config_id": "claude/claude-fable-5-1", "verdict_reason": "quota"}])
         code, lines = self.check(overlay)
         self.assertEqual(code, 0)
+        # The summary plus exactly one warning row; a check that drops the warnings must fail here.
+        self.assertEqual([len(line) for line in lines], [2, 3], lines)
         self.assertEqual(lines[0][0], "PASS")
         self.assertIn("1 config(s) recorded unproven", lines[0][1])
-        for warning in lines[1:]:
-            self.assertEqual(warning[0], "WARN")
-            self.assertEqual(json.loads(warning[2])["config_id"], "claude/claude-fable-5-1")
+        level, message, row = lines[1]
+        self.assertEqual(level, "WARN")
+        self.assertTrue(message.startswith("claude/claude-fable-5-1: requested model=claude-fable-5-1, "), message)
+        self.assertIn("conclusive: quota", message)
+        row = json.loads(row)
+        self.assertEqual((row["config_id"], row["vendor"], row["requested_model"], row["failure_class"], row["reason"]),
+                         ("claude/claude-fable-5-1", "claude", "claude-fable-5-1", "conclusive", "quota"))
 
     def test_tagged_drift_degrades_the_vendor(self):
         level, message = self.single(self.overlay(evidence={"sha256": "0" * 64, "vendor": "codex"}))

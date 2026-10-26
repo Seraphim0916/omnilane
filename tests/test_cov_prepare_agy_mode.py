@@ -19,6 +19,29 @@ SPEC = importlib.util.spec_from_file_location("prepare_agy_mode", SCRIPT)
 agy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(agy)
 
+# Written out here, not read from the module: a tool or path wrongly added to (or dropped from) the script must
+# change what it produces without changing what these tests expect.
+EXPECTED_WORK_TOOLS = ["view_file", "write_to_file", "run_command", "finish"]
+EXPECTED_SECRET_ROOTS = [
+    ".ssh", ".gnupg", ".aws", ".mcp-auth", ".netrc", "Library/Keychains", ".openclaw/secrets",
+    ".openclaw/openclaw.json", ".codex/auth.json", ".claude/projects", ".claude/.credentials.json", ".config/gh",
+    ".gemini/oauth_creds.json", ".gemini/google_accounts.json",
+]
+
+
+def expected_advise_policy():
+    return {
+        "toolPermission": "proceed-in-sandbox",
+        "enableTerminalSandbox": True,
+        "allowNonWorkspaceAccess": True,
+        "permissions": {
+            "allow": ["read_file(*)", "read_url(*)"],
+            "ask": [],
+            "deny": ["write_file(*)", "command(*)", "execute_url(*)", "mcp(*)", "unsandboxed(*)",
+                     *(f"read_file({Path.home() / root})" for root in EXPECTED_SECRET_ROOTS)],
+        },
+    }
+
 
 class AgyFixture(unittest.TestCase):
     def setUp(self):
@@ -57,7 +80,11 @@ class PolicyTests(unittest.TestCase):
         self.assertIn("write_file(*)", deny)
         self.assertIn("command(*)", deny)
         self.assertIn(f"read_file({Path.home() / '.ssh'})", deny)
-        self.assertEqual(len(agy.advise_secret_roots()), 14)
+        # Every sensitive path by name: swapping one for another keeps the count, not the list.
+        self.assertEqual([str(Path(p).relative_to(Path.home())) for p in agy.advise_secret_roots()],
+                         EXPECTED_SECRET_ROOTS)
+        for root in EXPECTED_SECRET_ROOTS:
+            self.assertIn(f"read_file({Path.home() / root})", deny)
         self.assertEqual(value["permissions"]["ask"], [])
 
     def test_work_confines_writes_and_denies_cache_roots_once(self):
@@ -243,6 +270,8 @@ class WorkAgentTests(AgyFixture):
         first = agy.ensure_work_agent(self.app, "omnilane-work")
         self.assertEqual(first.parent.stat().st_mode & 0o777, 0o700)
         self.assertIn("name: omnilane-work\n", first.read_text())
+        listed = [line[len("  - "):] for line in first.read_text().splitlines() if line.startswith("  - ")]
+        self.assertEqual(listed, EXPECTED_WORK_TOOLS)
         for tool in agy.WORK_TOOLS:
             self.assertIn(f"  - {tool}\n", first.read_text())
         self.assertEqual(agy.ensure_work_agent(self.app, "omnilane-work"), first)
@@ -425,6 +454,7 @@ class MainTests(AgyFixture):
         code, stdout = self.run_main("advise")
         self.assertEqual((code, stdout), (0, "app\n"))
         settings = json.loads((self.app / "settings.json").read_text())
+        self.assertEqual(settings, expected_advise_policy())
         self.assertEqual(settings, agy.policy("advise", str(self.workdir), str(self.app)))
         self.assertFalse((self.workdir / ".agents").exists())
 

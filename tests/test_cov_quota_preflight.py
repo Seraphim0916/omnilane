@@ -19,6 +19,19 @@ import quota_preflight as qp
 NOW = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
 
 
+def frozen_datetime(now):
+    """A stand-in for the datetime module whose datetime.now() always answers now; the rest is the real module."""
+    class FrozenDateTime(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now if tz is None else now.astimezone(tz)
+
+    module = ModuleType("datetime")
+    module.__dict__.update(vars(dt))
+    module.datetime = FrozenDateTime
+    return module
+
+
 def run_main(*argv):
     stdout = io.StringIO()
     with mock.patch.object(sys, "argv", ["quota_preflight.py", *argv]), \
@@ -132,9 +145,11 @@ class SnapshotFileTests(unittest.TestCase):
                                  "invalid-configuration")
 
     def test_snapshot_command_prints_flag_status_and_json(self):
-        self.write(used_percent=99, captured_at=dt.datetime.now(dt.timezone.utc).isoformat(),
-                   resets_at="2999-01-01T00:00:00+0000")
-        code, stdout = run_main("snapshot", "codex", str(self.home))
+        # The command reads the clock itself; pin it to the time the snapshot is written, or a clock step back
+        # makes the snapshot "future" and a pause past the maximum age makes it stale.
+        self.write(used_percent=99, captured_at=NOW.isoformat(), resets_at="2999-01-01T00:00:00+0000")
+        with mock.patch.object(qp, "dt", frozen_datetime(NOW)):
+            code, stdout = run_main("snapshot", "codex", str(self.home))
         flag, status, payload = stdout.rstrip("\n").split("\t")
         self.assertEqual((code, flag, status), (0, "1", "fresh"))
         self.assertEqual(json.loads(payload)["reason"], "weekly-snapshot")
