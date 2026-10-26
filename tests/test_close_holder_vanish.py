@@ -116,6 +116,7 @@ class CloseHolderVanishTests(unittest.TestCase):
         try:
             # "At once" means close never reaches the 11s receipt wait: watch its children
             # until it exits instead of timing it, so host load cannot fail or pass this.
+            # Relies on the receipt poll being jobs close's only long wait; if close gains another, check that too.
             end = time.monotonic() + GENEROUS
             polled = False
             while closer.poll() is None:
