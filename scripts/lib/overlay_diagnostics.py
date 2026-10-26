@@ -13,7 +13,7 @@ def read_object(path: Path) -> dict:
     try:
         value = json.loads(path.read_text())
         return value if isinstance(value, dict) else {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return {}
 
 
