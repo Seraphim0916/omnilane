@@ -19,7 +19,9 @@ class CloseSynchronizationTests(unittest.TestCase):
     def setUp(self):
         source_path = Path(os.environ.get("CLOSE_SYNC_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
         source = source_path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-        definitions = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)]
+        # Helpers read the fixture's module-level hang guard (GENEROUS) as a default argument.
+        definitions = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)
+                       or (isinstance(node, ast.Assign) and [getattr(t, 'id', None) for t in node.targets] == ['GENEROUS'])]
         self.helpers = dict(os=os, subprocess=subprocess, time=time)
         exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), self.helpers)
 

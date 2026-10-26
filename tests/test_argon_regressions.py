@@ -27,13 +27,17 @@ def fixture_tree():
 
 
 def helpers():
-    definitions = [node for node in ast.walk(fixture_tree()) if isinstance(node, ast.FunctionDef)
+    tree = fixture_tree()
+    # Helpers read the fixture's module-level hang guard (GENEROUS) as a default argument.
+    guard = [node for node in tree.body if isinstance(node, ast.Assign)
+             and [getattr(t, 'id', None) for t in node.targets] == ['GENEROUS']]
+    definitions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
                    and node.name in {"wait_for_stopped", "wait_for_exit", "record_exit", "cleanup_fixture"}]
     for node in definitions:
         if node.name == "record_exit":
             node.args.defaults = []
     namespace = dict(os=os, time=time, signal=signal, sys=sys, shutil=shutil)
-    exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), namespace)
+    exec(compile(ast.Module(body=guard + definitions, type_ignores=[]), "close-helpers", "exec"), namespace)
     return namespace
 
 
