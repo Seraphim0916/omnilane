@@ -83,16 +83,33 @@ class ProcessTableTests(unittest.TestCase):
         return mock.patch.object(ci.subprocess, "run", side_effect=lambda *a, **k:
                                  subprocess.CompletedProcess(a[0], 0, next(outputs), ""))
 
+    def platform(self, name):
+        return mock.patch.object(ci.sys, "platform", name)
+
     def test_unreadable_proc_entry_is_not_a_process(self):
-        with mock.patch.object(Path, "read_bytes", side_effect=PermissionError(13, "denied")):
+        # Pretend /proc exists so the /proc branch runs on macOS too.
+        with mock.patch.object(Path, "is_dir", return_value=True), \
+                mock.patch.object(Path, "read_bytes", side_effect=PermissionError(13, "denied")):
             self.assertIsNone(ci._process(os.getpid()))
 
     def test_ps_fallback_keeps_comm_whole_and_splits_the_rest(self):
         comm = "/Applications/App Support/codex"
-        with self.ps(f" 41 {comm}\n", f"{comm} -m gpt --config x=1\n"):
+        with self.platform("linux"), self.ps(f" 41 {comm}\n", f"{comm} -m gpt --config x=1\n"):
             self.assertEqual(ci._process(NO_SUCH_PID), (41, [comm, "-m", "gpt", "--config", "x=1"]))
-        with self.ps("7 bash\n", "-bash -lc true\n"):
+        with self.platform("linux"), self.ps("7 bash\n", "-bash -lc true\n"):
             self.assertEqual(ci._process(NO_SUCH_PID), (7, ["bash", "-lc", "true"]))
+
+    def test_darwin_codex_argv_comes_from_procargs_not_ps_text(self):
+        comm = "/Applications/App Support/codex"
+        exact = [comm, "-m", "gpt with space"]
+        with self.platform("darwin"), self.ps(f"41 {comm}\n", f"{comm} -m gpt with space\n"), \
+                mock.patch.object(ci, "_darwin_procargs", return_value=(exact, {})) as procargs:
+            self.assertEqual(ci._process(NO_SUCH_PID), (41, exact))
+        procargs.assert_called_once_with(NO_SUCH_PID)
+        with self.platform("darwin"), self.ps("7 bash\n", "bash -lc true\n"), \
+                mock.patch.object(ci, "_darwin_procargs") as procargs:
+            self.assertEqual(ci._process(NO_SUCH_PID), (7, ["bash", "-lc", "true"]))
+        procargs.assert_not_called()
 
     def test_ps_fallback_without_a_parseable_row_is_not_a_process(self):
         for head in ("", "ppid-only\n", "x codex\n"):
