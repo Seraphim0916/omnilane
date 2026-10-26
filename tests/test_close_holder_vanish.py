@@ -2,8 +2,10 @@
 import offline_env  # noqa: F401
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -42,6 +44,7 @@ class CloseHolderVanishTests(unittest.TestCase):
         self.env = dict(os.environ, OMNILANE_HOME=str(base / "home"),
                         CLOSE_TEST_HOLDER=str(self.holder))
         self.shim_env = dict(self.env, PATH=f"{shims}:{os.environ['PATH']}")
+        self.readers, self.stops = [], []
 
     def tearDown(self):
         self.scratch.cleanup()
@@ -58,9 +61,11 @@ class CloseHolderVanishTests(unittest.TestCase):
         communicate() would wait for whatever still holds stdout, so a child left behind by
         an early close would be waited out instead of caught. A group that outlives its
         leader by a second (a receipt poller would live 11s) is killed and fails the test."""
-        chunks = {}
-        readers = [threading.Thread(target=lambda s=s: chunks.__setitem__(s, s.read()), daemon=True)
+        chunks, stop = {}, threading.Event()
+        readers = [threading.Thread(target=read_pipe, args=(s, stop, chunks), daemon=True)
                    for s in (closer.stdout, closer.stderr)]
+        self.readers += readers
+        self.stops.append(stop)
         for reader in readers:
             reader.start()
         try:
@@ -77,13 +82,23 @@ class CloseHolderVanishTests(unittest.TestCase):
         for reader in readers:
             reader.join(timeout=5)
             if reader.is_alive():
+                stop.set()
                 self.fail("jobs close output pipe stayed open after its group was gone")
         return chunks[closer.stdout], chunks[closer.stderr]
 
     def reap(self, closer):
-        """Kill close's whole process group unconditionally, reap it, and check nothing survived."""
+        """Kill close's whole process group unconditionally, reap it, and check nothing survived.
+
+        A process that left the group can still hold close's pipes: the readers are stopped rather
+        than waited out, and the streams are closed only once no reader is left using them."""
         kill_group(closer.pid)
         closer.wait(timeout=GENEROUS)
+        for stop in self.stops:
+            stop.set()
+        for reader in self.readers:
+            reader.join(timeout=GENEROUS)
+        if any(reader.is_alive() for reader in self.readers):
+            self.fail("a pipe reader did not stop")
         for stream in (closer.stdout, closer.stderr):
             if not stream.closed:
                 stream.close()
@@ -180,6 +195,44 @@ class CloseHolderVanishTests(unittest.TestCase):
         finally:
             self.reap(closer)
         self.assertFalse(marker.exists(), "the left-over child was waited out")
+
+    def test_a_pipe_holder_that_left_the_group_cannot_hang_the_cleanup(self):
+        pidfile = Path(self.scratch.name) / "escaped.pid"
+        script = 'import os, sys, time; os.setsid(); open(sys.argv[1], "w").write(str(os.getpid())); time.sleep(600)'
+        closer = subprocess.Popen(["/bin/bash", "-c", '"$PY" -c "$SCRIPT" "$PIDFILE" & echo started; exit 0'],
+                                  env=dict(os.environ, PY=sys.executable, SCRIPT=script, PIDFILE=str(pidfile)),
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                  start_new_session=True)
+        escaped = None
+        try:
+            with self.assertRaisesRegex(AssertionError, "output pipe stayed open"):
+                self.drain(closer)
+            escaped = int(pidfile.read_text())
+            reaped = threading.Event()
+            threading.Thread(target=lambda: (self.reap(closer), reaped.set()), daemon=True).start()
+            self.assertTrue(reaped.wait(GENEROUS), "cleanup hung on a pipe held outside the group")
+            # It finished while the holder still runs: the cleanup was bounded, not waited out.
+            os.kill(escaped, 0)
+        finally:
+            if escaped is not None:
+                os.kill(escaped, signal.SIGKILL)
+            self.reap(closer)
+
+
+def read_pipe(stream, stop, chunks):
+    """Read a pipe until EOF or until stop is set, in short polls on its descriptor.
+
+    stream.read() blocks for as long as anything holds the write end, holding the stream's
+    buffer lock, and closing the stream would then wait for that lock as well."""
+    fd, data = stream.fileno(), []
+    while not stop.is_set():
+        if not select.select([fd], [], [], .05)[0]:
+            continue
+        block = os.read(fd, 65536)
+        if not block:
+            break
+        data.append(block)
+    chunks[stream] = b"".join(data).decode(stream.encoding)
 
 
 def kill_group(pgid):

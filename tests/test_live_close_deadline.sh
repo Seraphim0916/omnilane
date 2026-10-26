@@ -22,6 +22,7 @@ import fcntl
 import json
 import os
 import pathlib
+import select
 import shutil
 import signal
 import subprocess
@@ -201,14 +202,30 @@ def kill_group(pgid):
         pass  # gone, or (EPERM on macOS) already dying
 
 
+def read_pipe(stream, stop, chunks):
+    """Read a pipe until EOF or until stop is set, in short polls on its descriptor.
+
+    stream.read() blocks for as long as anything holds the write end, holding the stream's
+    buffer lock, so a holder outside close's group could keep a reader thread alive for good."""
+    fd, data = stream.fileno(), []
+    while not stop.is_set():
+        if not select.select([fd], [], [], .05)[0]:
+            continue
+        block = os.read(fd, 65536)
+        if not block:
+            break
+        data.append(block)
+    chunks[stream] = b''.join(data).decode(stream.encoding)
+
+
 def drain_close(closer, timeout=GENEROUS):
     """Observe close's own exit and its output pipes separately; every wait is bounded.
 
     communicate() would wait for whatever still holds stdout, so a child left behind by
     an early close would be waited out instead of caught. Readers run in threads while
     the leader is awaited; a group that outlives the leader is killed and fails the run."""
-    chunks = {}
-    readers = [threading.Thread(target=lambda s=s: chunks.__setitem__(s, s.read()), daemon=True)
+    chunks, stop = {}, threading.Event()
+    readers = [threading.Thread(target=read_pipe, args=(s, stop, chunks), daemon=True)
                for s in (closer.stdout, closer.stderr)]
     for reader in readers:
         reader.start()
@@ -227,6 +244,7 @@ def drain_close(closer, timeout=GENEROUS):
     for reader in readers:
         reader.join(timeout=5)
         if reader.is_alive():
+            stop.set()
             raise AssertionError(f'jobs close {closer.args}: output pipe stayed open after its group was gone')
     for stream in (closer.stdout, closer.stderr):
         stream.close()
