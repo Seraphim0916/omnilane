@@ -10,6 +10,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 JOB_ID = "20260905-160000-12345-1"
+# Hang guard only; the tests check observable state, not how fast the host schedules them.
+GENEROUS = 60
 
 # Stands in for the worker exiting at the worst moment: jobs close has seen the
 # holder PID file, then the file is gone when cat opens it.
@@ -56,10 +58,10 @@ class CloseHolderVanishTests(unittest.TestCase):
                 os.killpg(closer.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-        closer.wait(timeout=10)
+        closer.wait(timeout=GENEROUS)
         for stream in (closer.stdout, closer.stderr):
             stream.close()
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + GENEROUS
         while True:
             try:
                 os.killpg(closer.pid, 0)
@@ -70,19 +72,25 @@ class CloseHolderVanishTests(unittest.TestCase):
                 self.fail(f"process group {closer.pid} survived jobs close")
             time.sleep(.02)
 
-    def wait_for_receipt_poller(self, closer, timeout=5):
-        end = time.monotonic() + timeout
+    def receipt_poller_running(self, closer, end):
+        """Whether close's direct child polling for the exit receipt is in the process table now."""
         receipt = str(self.job / "exit")
+        listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="], capture_output=True,
+                                 text=True, timeout=max(.1, end - time.monotonic())).stdout
+        for line in listing.splitlines():
+            fields = line.split(None, 1)
+            if len(fields) == 2 and fields[0] == str(closer.pid) and receipt in fields[1]:
+                return True
+        return False
+
+    def wait_for_receipt_poller(self, closer, timeout=GENEROUS):
+        end = time.monotonic() + timeout
         while True:
             if closer.poll() is not None:
                 out, err = closer.communicate()
                 self.fail(("close returned before waiting for the exit receipt", closer.returncode, out, err))
-            listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="], capture_output=True,
-                                     text=True, timeout=max(.1, end - time.monotonic())).stdout
-            for line in listing.splitlines():
-                fields = line.split(None, 1)
-                if len(fields) == 2 and fields[0] == str(closer.pid) and receipt in fields[1]:
-                    return
+            if self.receipt_poller_running(closer, end):
+                return
             self.assertLess(time.monotonic(), end, "close never reached the receipt wait")
             time.sleep(.02)
 
@@ -97,20 +105,27 @@ class CloseHolderVanishTests(unittest.TestCase):
             receipt = self.job / ".exit.tmp"
             receipt.write_text("0\n")
             os.replace(receipt, self.job / "exit")
-            out, err = closer.communicate(timeout=15)
+            out, err = closer.communicate(timeout=GENEROUS)
         finally:
             self.reap(closer)
         self.assertEqual((closer.returncode, out, err), (0, "already closed (exit 0)\n", ""))
 
     def test_holder_file_that_stays_invalid_fails_at_once(self):
         self.holder.write_text("not-a-pid\n")
-        started = time.monotonic()
         closer = self.close(self.env)
         try:
-            out, err = closer.communicate(timeout=10)
+            # "At once" means close never reaches the 11s receipt wait: watch its children
+            # until it exits instead of timing it, so host load cannot fail or pass this.
+            end = time.monotonic() + GENEROUS
+            polled = False
+            while closer.poll() is None:
+                polled = polled or self.receipt_poller_running(closer, end)
+                self.assertLess(time.monotonic(), end, "close with an invalid holder file hung")
+                time.sleep(.02)
+            out, err = closer.communicate(timeout=GENEROUS)
         finally:
             self.reap(closer)
-        self.assertLess(time.monotonic() - started, 5)
+        self.assertFalse(polled, "close waited for the exit receipt instead of failing at once")
         self.assertEqual((closer.returncode, out, err), (1, "", "live inbox holder is unavailable\n"))
         self.assertTrue(self.holder.exists())
 
