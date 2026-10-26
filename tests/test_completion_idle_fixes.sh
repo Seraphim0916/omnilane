@@ -15,11 +15,62 @@ unset OMNILANE_JOB_SUPERVISED OMNILANE_IDLE_TIMEOUT OMNILANE_LOCK_TIMEOUT
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-completion-idle.XXXXXX")"
 REAL_SAMPLE="${OMNILANE_REAL_EVENTS_SAMPLE:-$HOME/.omnilane/jobs/20260903-095954-85706-7650/events.jsonl}"
+PIDS_FILE="$TEST_ROOT/pids"
+: > "$PIDS_FILE"
+export COMPLETION_TEST_PIDS="$PIDS_FILE"
+CHILD_PIDS=()
 
 cleanup() {
+  local rc=$? directory pid tries alive=0
+  trap - EXIT INT TERM
+  set +eu
+  # Background dispatch detaches its worker. Cancel via its supervisor first,
+  # which terminates and reaps the runner tree, then wait for recorded PIDs.
+  # Scan only this test's job stores, including a dispatch interrupted before
+  # track_job returned. The PID files are authoritative, not a ps snapshot.
+  for directory in "$TEST_ROOT"/*/jobs/*; do
+    [[ -f "$directory/pid" ]] || continue
+    pid="$(cat "$directory/pid")"
+    if ! grep -Fxq "$pid" "$PIDS_FILE"; then
+      printf '%s\n' "$pid" >> "$PIDS_FILE"
+    fi
+    OMNILANE_HOME="${directory%/jobs/*}" "$ROOT/scripts/jobs.sh" cancel \
+      "${directory##*/}" >/dev/null 2>&1
+  done
+  while IFS= read -r pid; do
+    kill -TERM "$pid" 2>/dev/null
+  done < "$PIDS_FILE"
+  for pid in "${CHILD_PIDS[@]}"; do wait "$pid" 2>/dev/null; done
+  tries=0
+  while [[ "$tries" -lt 200 ]]; do
+    alive=0
+    while IFS= read -r pid; do
+      if kill -0 "$pid" 2>/dev/null; then alive=$((alive + 1)); fi
+    done < "$PIDS_FILE"
+    [[ "$alive" -ne 0 ]] || break
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  if [[ "$alive" -ne 0 ]]; then
+    printf 'not ok - cleanup left %s recorded processes; retained %s\n' "$alive" "$TEST_ROOT" >&2
+    exit 1
+  fi
+  if [[ -n "${CLEANUP_AUDIT:-}" ]]; then
+    cp "$PIDS_FILE" "$CLEANUP_AUDIT"
+    printf '%s\n' "$TEST_ROOT" > "$CLEANUP_AUDIT.root"
+  fi
   /bin/rm -rf -- "$TEST_ROOT"
+  exit "$rc"
 }
 trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+track_job() {
+  local directory="$1"
+  wait_for_file "$directory/pid" || fail "background worker PID missing"
+  printf '%s\n' "$(cat "$directory/pid")" >> "$PIDS_FILE"
+}
 
 fail() {
   printf 'not ok - %s\n' "$1" >&2
@@ -84,28 +135,60 @@ PY
   printf 'ok - real Claude stream refreshes activity but has no successful terminal event\n'
 }
 
-# The worker measures idleness with integer $SECONDS after a `read -t 1` poll,
-# so a 1 s event gap can register as up to ~3 s. The idle cap (5 s) must clear
-# that jitter, while the whole stream (10 s) must outlast cap + jitter so the job
-# only survives if each valid event really refreshes activity.
+# Execute the production event drain and idle decision with a fixed clock.
+# Only clock references change; copying the decision into the test would mask
+# a regression in job-worker.sh. Fail closed if the extraction anchors drift.
+test_activity_refresh_with_fixed_clock() (
+  trap - EXIT INT TERM
+  local fragment="$TEST_ROOT/activity.sh" event_file="$TEST_ROOT/activity.jsonl"
+  python3 -c '
+import pathlib, sys
+source = pathlib.Path(sys.argv[1]).read_text()
+start = "  while IFS= read -r event <&5; do\n"
+end = "\ndone\n\nif [[ \"$forward_spool_open\""
+assert source.count(start) == source.count(end) == 1
+fragment = source.split(start, 1)[1].split(end, 1)[0]
+assert "closed by idle cap" in fragment
+pathlib.Path(sys.argv[2]).write_text((start + fragment).replace("SECONDS", "test_now") + "\n")
+' "$ROOT/scripts/lib/job-worker.sh" "$fragment"
+  source "$ROOT/scripts/lib/live-protocol.sh"
+  local VENDOR=claude IDLE_TIMEOUT=5 last_activity=0 test_now=0
+  local close_requested=0 close_reason="" last_result_event="" event
+  # Each valid event arrives at the idle boundary. Ten virtual seconds pass
+  # without any input-side refresh, regardless of host scheduling delays.
+  for test_now in 5 10; do
+    printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[]}}' > "$event_file"
+    source "$fragment" 5< "$event_file"
+    [[ "$last_activity" -eq "$test_now" && "$close_requested" -eq 0 ]] \
+      || fail "valid events did not refresh activity"
+  done
+  test_now=14
+  printf '%s\n' 'not json' > "$event_file"
+  source "$fragment" 5< "$event_file"
+  [[ "$last_activity" -eq 10 && "$close_requested" -eq 0 ]] \
+    || fail "invalid event refreshed activity or idle cap fired early"
+  test_now=15
+  source "$fragment" 5< "$event_file"
+  [[ "$close_requested" -eq 1 && "$close_reason" == 'closed by idle cap after 5s' ]] \
+    || fail "idle cap did not close an inactive stream at its boundary"
+  printf 'ok - production activity refresh and idle boundary use a fixed clock\n'
+)
+
 make_slow_claude() {
   local path="$1"
-  cat > "$path" <<'EOF'
-#!/usr/bin/env bash
+  printf '%s\n' '#!/usr/bin/env bash
 set -euo pipefail
+printf "%s\n" "$$" >> "$COMPLETION_TEST_PIDS"
 IFS= read -r _initial
-printf '{"type":"system","subtype":"init"}\n'
-for step in 1 2 3 4 5 6 7 8 9; do
-  sleep 1
-  if (( step % 2 )); then
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"working %s"}]}}\n' "$step"
-  else
-    printf '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"step %s"}]}}\n' "$step"
-  fi
+printf "%s\n" "{\"type\":\"system\",\"subtype\":\"init\"}"
+: > "$COMPLETION_READY"
+deadline=$((SECONDS + 60))
+while [[ ! -f "$COMPLETION_RELEASE" && "$SECONDS" -lt "$deadline" ]]; do
+  sleep 0.1
 done
-sleep 1
-printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"claude normalized ok"}]}}\n'
-EOF
+[[ -f "$COMPLETION_RELEASE" ]] || exit 91
+printf "%s\n" "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"claude normalized ok\"}]}}"
+' > "$path"
   chmod +x "$path"
 }
 
@@ -118,9 +201,23 @@ test_live_activity_and_clean_exit_normalization() {
   printf 'triage: claude claude-default high\n' > "$home/routing.local.yaml"
 
   job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" \
-    "$ROOT/scripts/dispatch.sh" --background --live --timeout 60 \
-    --idle-timeout 5 --vendor claude triage "use streamed activity")"
+    COMPLETION_READY="$home/ready" COMPLETION_RELEASE="$home/release" \
+    "$ROOT/scripts/dispatch.sh" --background --live --timeout 120 \
+    --idle-timeout 90 --vendor claude triage "use streamed activity")"
   job_dir="$home/jobs/$job"
+  track_job "$job_dir"
+  wait_for_file "$home/ready" 600 || fail "event producer never became ready"
+  if [[ -n "${CLEANUP_PROBE:-}" ]]; then
+    # Also exercise wait(1) for a direct child, alongside detached job trees.
+    sleep 120 &
+    CHILD_PIDS+=("$!")
+    printf '%s\n' "$!" >> "$PIDS_FILE"
+    case "$CLEANUP_PROBE" in
+      fail) fail "forced failure with a live producer" ;;
+      INT|TERM) kill -s "$CLEANUP_PROBE" "$$" ;;
+    esac
+  fi
+  : > "$home/release"
   wait_for_file "$job_dir/exit" 600 || fail "slow active live job never finished"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "slow active live job was idle-killed or failed"
   ! grep -Fq 'closed by idle cap' "$job_dir/out.txt" || fail "valid events did not refresh activity"
@@ -138,7 +235,7 @@ assert results[0].get("result") == "claude normalized ok"
 assert results[0].get("normalized_by") == "omnilane"
 print("normalized_result count=1 success=true")
 PY
-  printf 'ok - live activity survives idle cap and clean exit gains canonical result\n'
+  printf 'ok - marker-synchronized live stream gains canonical result\n'
 }
 
 make_stalling_claude() {
@@ -146,9 +243,10 @@ make_stalling_claude() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$$" >> "$COMPLETION_TEST_PIDS"
 IFS= read -r _initial
 printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"partial work before the watchdog"}]}}\n'
-sleep 30
+exec sleep 30
 EOF
   chmod +x "$path"
 }
@@ -165,6 +263,7 @@ test_timed_out_live_run_still_normalizes() {
     "$ROOT/scripts/dispatch.sh" --background --live --timeout 3 \
     --idle-timeout 30 --vendor claude triage "stall past the watchdog")"
   job_dir="$home/jobs/$job"
+  track_job "$job_dir"
   wait_for_file "$job_dir/exit" || fail "watchdog-killed live job never finished"
   recorded_exit="$(cat "$job_dir/exit")"
   # The watchdog code depends on which implementation ran (124 from timeout(1),
@@ -211,6 +310,7 @@ make_stdin_bound_claude() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$$" >> "$COMPLETION_TEST_PIDS"
 IFS= read -r _initial
 printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"let me read the file first"}]}}\n'
 while IFS= read -r _line; do :; done
@@ -230,6 +330,7 @@ test_operator_close_reports_aborted_turn() {
     "$ROOT/scripts/dispatch.sh" --background --live --timeout 45 \
     --idle-timeout 45 --vendor claude triage "abort me mid-turn")"
   job_dir="$home/jobs/$job"
+  track_job "$job_dir"
   wait_for_text "$job_dir/events.jsonl" 'let me read the file first' \
     || fail "live job never streamed its partial transcript"
   OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" >/dev/null 2>&1 || close_rc=$?
@@ -329,6 +430,7 @@ test_background_worker_uses_readonly_snapshot() {
 #!/usr/bin/env bash
 set -euo pipefail
 : > "${SNAPSHOT_READY:?}"
+printf '%s\n' "$$" >> "$COMPLETION_TEST_PIDS"
 tries=0
 while [[ ! -f "${SNAPSHOT_RELEASE:?}" && "$tries" -lt 100 ]]; do
   sleep 0.05
@@ -344,6 +446,7 @@ EOF
     "$fixture/scripts/dispatch.sh" --background --workdir "$workdir" \
     probe "snapshot mutation probe")"
   job_dir="$home/jobs/$job"
+  track_job "$job_dir"
   wait_for_file "$ready" || fail "snapshot worker did not reach runner"
   printf '# source changed after snapshot\nexit 97\n' > "$fixture/scripts/lib/job-worker.sh"
   : > "$release"
@@ -387,6 +490,7 @@ make_result_only_claude() {
   cat > "$path" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+printf '%s\n' "$$" >> "$COMPLETION_TEST_PIDS"
 IFS= read -r _initial
 printf '{"type":"result","subtype":"success","is_error":false,"result":"live diagnostic ok"}\n'
 EOF
@@ -405,6 +509,7 @@ test_timeout_diagnostic_on_live_dispatch() {
     "$ROOT/scripts/dispatch.sh" --background --live --timeout 1200 \
     --idle-timeout 900 --vendor claude triage "diagnostic surface" 2> "$stderr")"
   job_dir="$home/jobs/$job"
+  track_job "$job_dir"
   wait_for_file "$job_dir/exit" || fail "live diagnostic job never finished"
   grep -Fq 'idle cap remains 900s' "$stderr" || fail "live dispatch lost the idle cap diagnostic"
   grep -Fq -- '--idle-timeout' "$stderr" || fail "live diagnostic missing adjustment flag"
@@ -416,9 +521,11 @@ test_lock_timeout_hint() {
   local ready="$TEST_ROOT/lock.ready" out rc=0 holder
   mkdir -p "$home" "$workdir"
   OMNILANE_HOME="$home" /bin/bash -c \
-    'source "$1"; acquire_cwd_lock codex "$2"; : > "$3"; sleep 4' \
+    'source "$1"; acquire_cwd_lock codex "$2"; : > "$3"; exec sleep 4' \
     _ "$ROOT/scripts/lib/common.sh" "$workdir" "$ready" &
   holder=$!
+  CHILD_PIDS+=("$holder")
+  printf '%s\n' "$holder" >> "$PIDS_FILE"
   wait_for_file "$ready" || fail "lock holder did not acquire lock"
   out="$(OMNILANE_HOME="$home" OMNILANE_LOCK_TIMEOUT=1 /bin/bash -c \
     'source "$1"; acquire_cwd_lock codex "$2"' \
@@ -430,6 +537,44 @@ test_lock_timeout_hint() {
   printf 'ok - lock timeout keeps serialization and suggests another read-only workdir\n'
 }
 
+test_cleanup_after_forced_exit() {
+  local mode rc audit pid directory count
+  for mode in fail INT TERM; do
+    audit="$TEST_ROOT/cleanup-$mode.pids"
+    rc=0
+    /bin/bash "$0" --omnilane-offline-child --cleanup-probe "$mode" "$audit" \
+      > "$TEST_ROOT/cleanup-$mode.out" 2>&1 || rc=$?
+    case "$mode" in
+      fail)
+        [[ "$rc" -eq 1 ]] || fail "forced failure returned $rc"
+        grep -Fq 'not ok - forced failure with a live producer' "$TEST_ROOT/cleanup-$mode.out" \
+          || fail "cleanup probe failed before the forced failure"
+        ;;
+      INT) [[ "$rc" -eq 130 ]] || fail "INT cleanup returned $rc" ;;
+      TERM) [[ "$rc" -eq 143 ]] || fail "TERM cleanup returned $rc" ;;
+    esac
+    [[ -s "$audit" ]] || fail "cleanup did not publish its PID list ($mode)"
+    count=0
+    while IFS= read -r pid; do
+      ! kill -0 "$pid" 2>/dev/null || fail "recorded PID $pid survived $mode"
+      count=$((count + 1))
+    done < "$audit"
+    [[ "$count" -ge 3 ]] || fail "cleanup probe missed worker, producer or direct child PID"
+    directory="$(cat "$audit.root")"
+    [[ ! -e "$directory" ]] || fail "cleanup left its directory ($mode)"
+    printf 'ok - cleanup %s: recorded=%s remaining=0 directory_removed=yes\n' "$mode" "$count"
+  done
+}
+
+if [[ "${1:-}" == --cleanup-probe ]]; then
+  CLEANUP_PROBE="$2"
+  CLEANUP_AUDIT="$3"
+  test_live_activity_and_clean_exit_normalization
+  fail "cleanup probe unexpectedly returned"
+fi
+
+test_activity_refresh_with_fixed_clock
+test_cleanup_after_forced_exit
 test_real_stream_activity_and_terminal_classification
 test_live_activity_and_clean_exit_normalization
 test_timed_out_live_run_still_normalizes
