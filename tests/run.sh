@@ -72,10 +72,17 @@ fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 # kill -0 also succeeds for a zombie. A zombie cannot execute; the host init
 # process owns reaping it, and some inits reap orphans only seconds later.
 process_running() {
-  local state
-  state="$(ps -o stat= -p "$1" 2>/dev/null)" || return 1
-  state="${state#"${state%%[![:space:]]*}"}"
-  [[ -n "$state" && "$state" != Z* ]]
+  local stat state
+  kill -0 "$1" 2>/dev/null || return 1
+  if [[ -e "/proc/$1/stat" ]]; then
+    stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
+    if [[ "$stat" == *') '* ]]; then
+      state="${stat##*) }"
+      state="${state%% *}"
+      [[ "$state" == Z ]] && return 1
+    fi
+  fi
+  return 0
 }
 
 mode_notice_contract() {
