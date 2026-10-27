@@ -134,9 +134,11 @@ def _require_identity(expected, actual):
 
 def _remove_entry(parent_fd, name, expected, is_directory=False):
     _require_identity(expected, os.stat(name, dir_fd=parent_fd, follow_symlinks=False))
-    # Python's portable unlink/rmdir APIs have no atomic expected-inode
-    # condition. A name can still change between this check and removal;
-    # dir_fd pins the parent and neither operation follows a replaced symlink.
+    # POSIX has no identity-checked unlinkat: a post-check swap can still
+    # remove an EMPTY directory or unlink a single name in the job's private
+    # tree. Replacement contents are never read, chmod'ed, or recursed into.
+    # Every chmod and descent uses an opened directory descriptor whose
+    # (st_dev, st_ino) was verified; dir_fd pins the removal's parent.
     if is_directory:
         os.rmdir(name, dir_fd=parent_fd)
     else:

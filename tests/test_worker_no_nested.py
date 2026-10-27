@@ -596,7 +596,7 @@ class ExcludeWriteContracts(unittest.TestCase):
         self.assertEqual([stat.S_IMODE(p.stat().st_mode) for p in (outside, target)], modes)
         self.assertEqual(target.read_text(), "untouched")
 
-    def test_cleanup_refuses_concurrently_swapped_directory(self) -> None:
+    def test_cleanup_refuses_symlink_swap_before_open(self) -> None:
         from unittest import mock
         job = self.make_job()
         nested = job / "nested"
@@ -695,6 +695,79 @@ class ExcludeWriteContracts(unittest.TestCase):
                                  (before.st_dev, before.st_ino, before.st_mode))
                 if not directory:
                     self.assertEqual(victim.read_text(), "keep")
+
+    def test_cleanup_nonempty_swap_after_final_check_surfaces_125(self) -> None:
+        self._check_directory_swap_after_final_check(nonempty=True)
+
+    def test_cleanup_empty_swap_after_final_check_removes_only_empty_directory(self) -> None:
+        self._check_directory_swap_after_final_check(nonempty=False)
+
+    def _check_directory_swap_after_final_check(self, nonempty: bool) -> None:
+        import contextlib
+        import errno
+        import io
+        from unittest import mock
+        job = self.make_job()
+        victim = job / "victim"
+        victim.mkdir()
+        original = self.tmp / "original"
+        replacement = self.tmp / "replacement"
+        replacement.mkdir()
+        if nonempty:
+            (replacement / "keep").write_text("untouched")
+            (replacement / "keep").chmod(0o400)
+        before = replacement.stat()
+        outside = self.tmp / "outside"
+        outside.write_text("outside untouched")
+        outside.chmod(0o400)
+        outside_before = outside.stat()
+        real_rmdir = os.rmdir
+        swapped = []
+        removal_errors = []
+
+        def swap_at_rmdir(name, *args, **kwargs):
+            # _remove_entry has already completed its final identity check.
+            if name == "victim" and not swapped:
+                victim.rename(original)
+                replacement.rename(victim)
+                victim.chmod(0o500)
+                swapped.append(True)
+            try:
+                return real_rmdir(name, *args, **kwargs)
+            except OSError as error:
+                removal_errors.append(error)
+                raise
+
+        stderr = io.StringIO()
+        with mock.patch.object(self.setup.os, "rmdir", swap_at_rmdir), contextlib.redirect_stderr(stderr):
+            if nonempty:
+                with self.assertRaises(SystemExit) as error:
+                    self.setup.cleanup(str(job))
+                self.assertEqual(error.exception.code, 125)
+            else:
+                self.setup.cleanup(str(job))
+        self.assertEqual(swapped, [True])
+        self.assertEqual(list(original.iterdir()), [])
+        self.assertEqual(outside.read_text(), "outside untouched")
+        after = outside.stat()
+        self.assertEqual((after.st_dev, after.st_ino, after.st_mode),
+                         (outside_before.st_dev, outside_before.st_ino, outside_before.st_mode))
+        if nonempty:
+            self.assertEqual(len(removal_errors), 1)
+            self.assertIn(removal_errors[0].errno, (errno.ENOTEMPTY, errno.EEXIST))
+            self.assertIn("unsafe Codex cleanup path", stderr.getvalue())
+            self.assertIn(str(removal_errors[0]), stderr.getvalue())
+            after = victim.stat()
+            self.assertEqual((after.st_dev, after.st_ino, after.st_mode),
+                             (before.st_dev, before.st_ino, stat.S_IFDIR | 0o500))
+            self.assertEqual([p.name for p in victim.iterdir()], ["keep"])
+            self.assertEqual((victim / "keep").read_text(), "untouched")
+            self.assertEqual(stat.S_IMODE((victim / "keep").stat().st_mode), 0o400)
+        else:
+            self.assertEqual(removal_errors, [])
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertFalse(victim.exists())
+            self.assertFalse(job.exists())
 
     def test_write_failure_only_warns(self) -> None:
         import contextlib
