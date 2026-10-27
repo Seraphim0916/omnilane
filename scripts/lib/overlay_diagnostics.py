@@ -48,7 +48,18 @@ def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
                  if "vendor" not in e and Path(e["path"]).name == "probe-manifest.json"]
     failed = {}
     for path in manifests:
-        failed.update(read_object(path).get("failed_probe_runs", {}))
+        runs = read_object(path).get("failed_probe_runs", {})
+        if not isinstance(runs, dict):
+            raise ValueError("failed_probe_runs must be an object")
+        for cid, files in runs.items():
+            if not isinstance(files, dict):
+                raise ValueError(f"failed_probe_runs[{cid}] must be an object")
+            for kind, entry in files.items():
+                if not isinstance(entry, dict):
+                    raise ValueError(f"failed_probe_runs[{cid}][{kind}] must be an object")
+                if "path" in entry and not isinstance(entry["path"], str):
+                    raise ValueError(f"failed_probe_runs[{cid}][{kind}].path must be a string")
+        failed.update(runs)
     rows = []
     for item in items:
         cid = item.get("config_id", "unknown")

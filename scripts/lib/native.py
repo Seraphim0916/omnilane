@@ -75,7 +75,15 @@ def unique_object(pairs):
 def read_json(path):
     # Never follow a submitted symlink (context, completion, or job state).
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, "r", encoding="utf-8") as stream:
+    try:
+        stream = os.fdopen(fd, "r", encoding="utf-8")
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass  # Preserve the stream construction error.
+        raise
+    with stream:
         info = os.fstat(stream.fileno())
         check(stat.S_ISREG(info.st_mode) and info.st_size <= MAX_BYTES, "invalid JSON file")
         raw = stream.read(MAX_BYTES + 1)

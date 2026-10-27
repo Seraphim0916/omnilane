@@ -113,7 +113,9 @@ def load_host_rows(path: Path) -> dict[str, list[tuple[str, list[str]]]]:
     """harness -> [(model, efforts)], from a file shaped exactly as documented in --help."""
     try:
         value = json_depth.loads(path.read_text(), object_pairs_hook=_unique_keys)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, json_depth.JSONDepthError, RecursionError) as error:
+    except HostRowsError:
+        raise
+    except (OSError, ValueError, RecursionError) as error:
         raise HostRowsError(f"cannot read: {error}") from None
     if not isinstance(value, dict) or set(value) != {"schema_version", "harnesses"}:
         raise HostRowsError('top level must have exactly the keys "schema_version" and "harnesses"')
