@@ -38,11 +38,14 @@ TASK_PROMPT_FILE="$PROMPT_FILE"
 PROMPT_COPY_DIR=""
 PROMPT_COPY_ID=""
 live_mailbox_cleanup_ready=0
+job_worker_completed=0
 # One exit handler owns prompt copies, mailbox resources, and the cwd lock.
 # Install after lock acquisition, which sets its own EXIT trap.
 # shellcheck disable=SC2329
 cleanup_job_worker() {
   local rc=$?
+  trap - EXIT
+  if [[ "$rc" -eq 0 && "$job_worker_completed" -ne 1 ]]; then rc=1; fi
   if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox || true; fi
   # Runners atomically replace their .worker copies (including truncation).
   # Own a private namespace instead of guessing ownership of shared names.
@@ -80,7 +83,7 @@ finally:
 ' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" || true
   fi
   release_cwd_lock || true
-  return "$rc"
+  exit "$rc"
 }
 trap cleanup_job_worker EXIT
 trap 'exit 143' TERM
@@ -177,6 +180,7 @@ if [[ "$SESSION_MODE" == "single-shot" ]]; then
   fi
   rc=$?
   set -e
+  job_worker_completed=1
   exit "$rc"
 fi
 
@@ -371,6 +375,7 @@ if ! prepare_live_mailbox; then
   run_single_shot "omnilane: $VENDOR live mailbox unavailable because FIFO setup failed; ran in single-shot mode"
   rc=$?
   set -e
+  job_worker_completed=1
   exit "$rc"
 fi
 
@@ -933,4 +938,5 @@ fi
 # with 158 instead of $rc.
 trap '' USR1
 trap - PIPE
+job_worker_completed=1
 exit "$rc"

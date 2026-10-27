@@ -8,7 +8,11 @@ if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
 fi
 mkdir -p "$ROOT/.test-scratch"
 TEST_ROOT="$(mktemp -d "$ROOT/.test-scratch/c16-trunc.XXXXXX")"
-trap 'rm -rf -- "$TEST_ROOT"' EXIT
+test_completed=0
+trap 'test_rc=$?; trap - EXIT
+if [[ "$test_rc" -eq 0 && "$test_completed" -ne 1 ]]; then test_rc=1; fi
+rm -rf -- "$TEST_ROOT"
+exit "$test_rc"' EXIT
 mkdir -p "$TEST_ROOT/runtime/scripts" "$TEST_ROOT/home"
 cp -R "$ROOT/scripts/lib" "$ROOT/scripts/runners" "$TEST_ROOT/runtime/scripts/"
 cp -R "$ROOT/config" "$TEST_ROOT/runtime/"
@@ -137,3 +141,30 @@ for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
         assert not list(job.glob("task.txt.copies.*"))
         print("PASS pre-existing %s %s preserved" % (name, kind), flush=True)
 ' "$TEST_ROOT"
+# Exercise the actual worker and both test scripts with Bash 3.2 nounset
+# failures. Prefix fixtures retain each scripts own EXIT handler, but skip
+# expensive test bodies; no production fault-injection switch is needed.
+python3 -B -c '
+import os, pathlib, subprocess, sys
+base, root = map(pathlib.Path, sys.argv[1:])
+runtime = base / "runtime"
+with (runtime / "scripts/lib/common.sh").open("a") as out:
+    out.write("\naa_policy_gate() { unset R154_UNBOUND; : \"$R154_UNBOUND\"; }\n")
+job = base / "nounset-worker"
+job.mkdir()
+(job / "task.txt").write_text("nounset regression\n")
+env = dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", CLAUDE_BIN=str(base / "live-claude"))
+cmd = ["/bin/bash", str(runtime / "scripts/lib/job-worker.sh"), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
+result = subprocess.run(cmd, env=env, capture_output=True, timeout=10)
+assert result.returncode != 0 and b"R154_UNBOUND: unbound variable" in result.stderr, (result.returncode, result.stderr)
+assert not list(job.glob("task.txt.copies.*"))
+print("PASS worker nounset exits nonzero (%s) and cleans copies" % result.returncode, flush=True)
+for name, boundary in (("test_c16_task_txt_preserved.sh", "mkdir -p \"$TEST_ROOT/runtime/scripts\""), ("test_live_mailbox.sh", "fail() {")):
+    prefix = (root / "tests" / name).read_text().split(boundary, 1)[0]
+    probe = base / name
+    probe.write_text(prefix + "\nunset R154_UNBOUND\n: \"$R154_UNBOUND\"\n")
+    result = subprocess.run(["/bin/bash", str(probe), "--omnilane-offline-child"], env=env, capture_output=True, timeout=10)
+    assert result.returncode != 0 and b"R154_UNBOUND: unbound variable" in result.stderr, (name, result.returncode, result.stderr)
+    print("PASS %s nounset exits nonzero (%s)" % (name, result.returncode), flush=True)
+' "$TEST_ROOT" "$ROOT"
+test_completed=1

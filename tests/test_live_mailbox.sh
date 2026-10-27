@@ -18,9 +18,14 @@ TEST_BASE="$ROOT/.test-scratch"
 mkdir -p "$TEST_BASE"
 TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-tests.XXXXXX")"
 
+test_completed=0
 cleanup() {
+  local rc=$?
+  trap - EXIT
+  if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
   /bin/rm -rf -- "$TEST_ROOT"
   rmdir "$TEST_BASE" 2>/dev/null || true
+  exit "$rc"
 }
 trap cleanup EXIT
 
@@ -1900,3 +1905,4 @@ case "$CASE" in
     grok-probe-stdin-open) case_grok_probe_stdin_open ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac
+test_completed=1
