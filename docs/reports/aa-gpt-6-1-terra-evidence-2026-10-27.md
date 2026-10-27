@@ -19,7 +19,7 @@
 - 抽取檔：`docs/reports/aa-v4.3.2-extract-2026-10-27.json`，用 `aa_rebaseline.py fetch --slug gemini-4-argon` 抓取。
   - sha256 `7562dc0103b9d8d5aa6d6217af8fb4a953387c373331d704095802b20e9d3697`。
   - `fetched_at` `2026-10-27T07:08:28+08:00`，頁面 sha256 `5bb3868b9806b43689f67adf86e1a37156baac6e90a046c942452087a3b40ec7`，頁面 715 筆、保留 237 筆廠商紀錄。
-- 為什麼不用 Terra 本頁：`fetch --slug gpt-6-1-terra` 只帶 17 筆廠商紀錄，`build` 會把抽取檔裡沒有的 108 個現行列退到 unknown。Argon 頁涵蓋現行政策檔全部 125 個 `aa_slug`，做法同 2026-10-14。
+- 為什麼不用 Terra 本頁：`fetch --slug gpt-6-1-terra` 只帶 17 筆廠商紀錄，`build` 會把抽取檔裡沒有的 109 個現行計分列退到 unknown（124 個計分 slug 只有 15 個在該頁）。Argon 頁涵蓋現行政策檔全部 125 個 `aa_slug`，做法同 2026-10-14。
 - 核對：六個 Terra 本頁（`gpt-6-1-terra`、`-xhigh`、`-high`、`-medium`、`-low`、`-non-reasoning`）各自抓一次，與 Argon 頁的同一筆逐欄相同，只有 max 列的 `name` 不同（本頁 `GPT-6.1 Terra`，Argon 頁 `GPT-6.1 Terra (Max)`）。
 
 | 評分列 | AA slug | AA 名稱 | intelligenceIndex | 估計值 | score_raw / score | 跑完整個指數的成本 ($) |
