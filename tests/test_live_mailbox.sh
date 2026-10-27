@@ -348,6 +348,69 @@ PY
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex live job did not exit zero"
 }
 
+case_codex_live_large_task() {
+  # A live task over the 102400-byte cap: only what is sent is truncated;
+  # task.txt, the preserved record, keeps every byte. This checks the first
+  # turn/start the fake Codex actually received, not task.txt.worker: run-codex.sh
+  # rebuilds that file from the full task after job-worker.sh has read it.
+  # The fixture is ASCII, so LC_ALL=C only speeds up the bash json_escape of the
+  # ~100 KB first message (it is quadratic); it does not change the bytes sent.
+  local home="$TEST_ROOT/codex-live-large" bin="$TEST_ROOT/codex-live-large/bin"
+  local fake="$bin/codex" input="$home/codex.input" task="$home/task.src" job job_dir close_out tries=0
+  mkdir -p "$home" "$bin"
+  make_codex "$fake"
+  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  python3 - "$task" <<'PY'
+import pathlib
+import sys
+body = "".join(f"{i:06d} large live task line\n" for i in range(4400))
+pathlib.Path(sys.argv[1]).write_bytes(("HEAD-MARKER\n" + body + "TAIL-MARKER\n").encode())
+PY
+  [[ "$(wc -c < "$task")" -gt 102400 && "$(wc -c < "$task")" -lt 140000 ]] ||
+    fail "fixture task must sit between the live cap and the runner cap"
+
+  job="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" \
+    FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="done" \
+    "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
+    --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    triage - < "$task")"
+  job_dir="$home/jobs/$job"
+  while ! grep -Fq '"method":"turn/start"' "$input" 2>/dev/null && [[ "$tries" -lt 1800 ]]; do
+    sleep 0.1; tries=$((tries + 1))
+  done
+  grep -Fq '"method":"turn/start"' "$input" 2>/dev/null || {
+    OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1
+    fail "fake Codex did not receive the first turn"
+  }
+  wait_for_lines "$job_dir/out.txt" 1 || fail "Codex agentMessage was not written"
+  # The fake completes the turn only after a steer; finish it so close exits 0.
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "done" >/dev/null
+  wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered reply did not complete the turn"
+  close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
+    fail "Codex live close failed: $close_out"
+  [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex large live job did not exit zero"
+
+  cmp -s "$task" "$job_dir/task.txt" ||
+    fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"
+  TASK="$task" INPUT="$input" python3 - <<'PY' || fail "Codex large live first message mismatch"
+import json
+import os
+import pathlib
+
+marker = "[omnilane worker rules]"
+requests = [json.loads(l) for l in pathlib.Path(os.environ["INPUT"]).read_text(encoding="utf-8").splitlines()]
+turns = [r for r in requests if r.get("method") == "turn/start"]
+assert len(turns) == 1, len(turns)
+sent = turns[0]["params"]["input"][0]["text"]
+assert sent.startswith(marker), sent[:80]
+assert sent.count(marker) == 1, sent.count(marker)
+assert "--- TRUNCATED (original: " in sent, "first message is not truncated"
+assert "HEAD-MARKER" in sent and "TAIL-MARKER" in sent
+assert len(sent.encode()) <= 102400 + 200, len(sent.encode())
+assert len(sent.encode()) < pathlib.Path(os.environ["TASK"]).stat().st_size
+PY
+}
+
 case_codex_live_fallback() {
   local home="$TEST_ROOT/codex-fallback" bin="$TEST_ROOT/codex-fallback/bin"
   local fake="$bin/codex" job job_dir doctor_out
@@ -1773,6 +1836,8 @@ case "$CASE" in
   printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
   bash "$0" --omnilane-offline-child codex-live-rpc
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
+  bash "$0" --omnilane-offline-child codex-live-large-task
+  printf 'ok - Codex live large task truncates only the worker copy\n'
     bash "$0" --omnilane-offline-child codex-live-fallback
     printf 'ok - Codex failed handshake degrades to single-shot\n'
     bash "$0" --omnilane-offline-child grok-killed-runner
@@ -1808,6 +1873,7 @@ case "$CASE" in
   json-escape) case_json_escape_round_trip ;;
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   codex-live-rpc) case_codex_live_rpc ;;
+  codex-live-large-task) case_codex_live_large_task ;;
     codex-live-fallback) case_codex_live_fallback ;;
     codex-killed-runner) case_codex_killed_runner_reaps_app_server ;;
     codex-app-server-eof-cleanup) case_codex_app_server_eof_cleanup ;;
