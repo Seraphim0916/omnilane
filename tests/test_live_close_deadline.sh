@@ -10,13 +10,19 @@ shift
 # Isolated worker + real jobs.sh close; never invokes a provider.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-mkdir -p "$ROOT/.test-scratch"
+# Run directly, this script creates the scratch root and leaves nothing behind;
+# under tests/run.sh the root already exists and run.sh removes it.
+if [[ ! -d "$ROOT/.test-scratch" ]]; then
+  mkdir "$ROOT/.test-scratch"
+  trap 'rmdir "$ROOT/.test-scratch" 2>/dev/null || true' EXIT
+fi
 ROOT="$ROOT" python3 - <<'PY'
 import array
 import fcntl
 import json
 import os
 import pathlib
+import select
 import shutil
 import signal
 import subprocess
@@ -27,32 +33,41 @@ import threading
 import time
 
 root = pathlib.Path(os.environ['ROOT'])
-scratch = pathlib.Path(tempfile.mkdtemp(prefix='close-deadline-', dir=root / '.test-scratch'))
-fixture = scratch / 'repo'
-(fixture / 'scripts/lib').mkdir(parents=True)
-(fixture / 'scripts/runners').mkdir()
-(fixture / 'config').mkdir()
-shutil.copyfile(root / 'config/aa-model-policy.json', fixture / 'config/aa-model-policy.json')
-for name in ('common.sh', 'live-protocol.sh', 'aa_policy.py'):
-    shutil.copyfile(root / 'scripts/lib' / name, fixture / 'scripts/lib' / name)
-with (fixture / 'scripts/lib/live-protocol.sh').open('a') as stream:
-    stream.write('\ncodex_live_surface_available() { return 0; }\n')
-shutil.copyfile(os.environ.get('CLOSE_WORKER_UNDER_TEST', root / 'scripts/lib/job-worker.sh'), fixture / 'scripts/lib/job-worker.sh')
-# Pause only the idle-exit fixture at the exact idle-pump/loop-guard boundary.
-# Production forwarding/drain code is unchanged by this scheduling hook.
-worker_copy = fixture / 'scripts/lib/job-worker.sh'
-worker_text = worker_copy.read_text()
-loop_boundary = 'done\n\nif [[ "$forward_spool_open"'
-assert worker_text.count(loop_boundary) == 1
-pause = '''
+# Generous hang guard for every wait below. The checks themselves come from observable
+# state (files, process groups, close's own sub-second clock), not from host scheduling.
+GENEROUS = 60
+processes = []
+exit_recorders = []
+opened_fds = set()
+scratch = None
+
+def build_fixture(scratch):
+    """Copy the code under test into the scratch tree; runs inside the guarded region."""
+    fixture = scratch / 'repo'
+    (fixture / 'scripts/lib').mkdir(parents=True)
+    (fixture / 'scripts/runners').mkdir()
+    (fixture / 'config').mkdir()
+    shutil.copyfile(root / 'config/aa-model-policy.json', fixture / 'config/aa-model-policy.json')
+    for name in ('common.sh', 'live-protocol.sh', 'aa_policy.py'):
+        shutil.copyfile(root / 'scripts/lib' / name, fixture / 'scripts/lib' / name)
+    with (fixture / 'scripts/lib/live-protocol.sh').open('a') as stream:
+        stream.write('\ncodex_live_surface_available() { return 0; }\n')
+    shutil.copyfile(os.environ.get('CLOSE_WORKER_UNDER_TEST', root / 'scripts/lib/job-worker.sh'), fixture / 'scripts/lib/job-worker.sh')
+    # Pause only the idle-exit fixture at the exact idle-pump/loop-guard boundary.
+    # Production forwarding/drain code is unchanged by this scheduling hook.
+    worker_copy = fixture / 'scripts/lib/job-worker.sh'
+    worker_text = worker_copy.read_text()
+    loop_boundary = 'done\n\nif [[ "$forward_spool_open"'
+    assert worker_text.count(loop_boundary) == 1
+    pause = '''
   if [[ "$CASE_MODE" == "idle-exit" && "$close_requested" -eq 0 && ! -e "$CASE_DIR/at-loop-boundary" ]]; then
     : > "$CASE_DIR/at-loop-boundary"
     kill -STOP "$$"
   fi
 '''
-worker_copy.write_text(worker_text.replace(loop_boundary, pause + loop_boundary))
-runner = fixture / 'scripts/runners/run-codex.sh'
-runner.write_text('''#!/usr/bin/env python3
+    worker_copy.write_text(worker_text.replace(loop_boundary, pause + loop_boundary))
+    runner = fixture / 'scripts/runners/run-codex.sh'
+    runner.write_text('''#!/usr/bin/env python3
 import os, pathlib, signal, sys, time
 case = pathlib.Path(os.environ['CASE_DIR'])
 mode = os.environ['CASE_MODE']
@@ -75,18 +90,47 @@ if mode == 'full-grace': time.sleep(7)
 if mode == 'stuck':
     while True: time.sleep(.05)
 ''')
-runner.chmod(0o755)
-processes = []
-exit_recorders = []
-opened_fds = set()
+    runner.chmod(0o755)
+    return fixture
 
-def wait_for(path, timeout=5):
+def wait_for(path, timeout=GENEROUS):
     end = time.monotonic() + timeout
     while not path.exists():
         assert time.monotonic() < end, f'missing {path}'
         time.sleep(.02)
 
-def wait_for_stopped(pid, timeout=2):
+def wait_for_absent(path, timeout=GENEROUS):
+    end = time.monotonic() + timeout
+    while path.exists():
+        assert time.monotonic() < end, f'still present {path}'
+        time.sleep(.02)
+
+def wait_for_receipt_waiter(closer, receipt, timeout=GENEROUS):
+    """Return once jobs close, past its holder checks, polls for the receipt.
+
+    Its receipt poller is a direct child whose arguments name the exit file.
+    A close that returns first never took the missing-holder wait path."""
+    end = time.monotonic() + timeout
+    while True:
+        if closer.poll() is not None:
+            try:
+                out, err = drain_close(closer, timeout=5)
+            except AssertionError as error:
+                out, err = '', str(error)
+            raise AssertionError(('close returned before waiting for the exit receipt',
+                                  closer.returncode, out, err))
+        # -ww: unlimited width on procps and BSD ps, so the exit path is never cut.
+        listing = subprocess.run(['ps', '-A', '-ww', '-o', 'ppid=,command='],
+                                 capture_output=True, text=True,
+                                 timeout=max(.1, end - time.monotonic())).stdout
+        for line in listing.splitlines():
+            fields = line.split(None, 1)
+            if len(fields) == 2 and fields[0] == str(closer.pid) and str(receipt) in fields[1]:
+                return
+        assert time.monotonic() < end, 'close never reached the receipt wait'
+        time.sleep(.02)
+
+def wait_for_stopped(pid, timeout=GENEROUS):
     """A marker or successful kill(STOP) is not a stopped-state receipt."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -113,6 +157,109 @@ def record_exit(worker, destination):
     os.replace(receipt, destination)
 
 
+class ReleasedReceipt:
+    """Holds the exit receipt after the worker is reaped, as the real
+    supervisor does while it finalizes: holder PID gone, no exit file yet."""
+    def __init__(self, worker, release):
+        self.worker, self.release = worker, release
+
+    def wait(self):
+        status = self.worker.wait()
+        # No timeout: the receipt appears only once close is seen waiting for it, or when
+        # the fixture's finally block releases it. A self-release under load would let
+        # close find the receipt before it starts waiting and fail the run spuriously.
+        self.release.wait()
+        return status
+
+
+def group_gone(pgid, timeout=GENEROUS):
+    """True once no process is left in the group; SIGKILL needs a scheduling turn to land."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            pass  # macOS answers EPERM for a group whose members are still dying; poll again
+        time.sleep(.02)
+    return False
+
+
+def start_close(job_id, env):
+    """Every jobs close runs in its own process group, registered for group cleanup."""
+    closer = subprocess.Popen(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
+                              env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, start_new_session=True)
+    processes.append(closer)
+    return closer
+
+
+def kill_group(pgid):
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass  # gone, or (EPERM on macOS) already dying
+
+
+def read_pipe(stream, stop, chunks):
+    """Read a pipe until EOF or until stop is set, in short polls on its descriptor.
+
+    stream.read() blocks for as long as anything holds the write end, holding the stream's
+    buffer lock, so a holder outside close's group could keep a reader thread alive for good."""
+    fd, data = stream.fileno(), []
+    while not stop.is_set():
+        if not select.select([fd], [], [], .05)[0]:
+            continue
+        block = os.read(fd, 65536)
+        if not block:
+            break
+        data.append(block)
+    chunks[stream] = b''.join(data).decode(stream.encoding)
+
+
+def drain_close(closer, timeout=GENEROUS):
+    """Observe close's own exit and its output pipes separately; every wait is bounded.
+
+    communicate() would wait for whatever still holds stdout, so a child left behind by
+    an early close would be waited out instead of caught. Readers run in threads while
+    the leader is awaited; a group that outlives the leader is killed and fails the run."""
+    chunks, stop = {}, threading.Event()
+    readers = [threading.Thread(target=read_pipe, args=(s, stop, chunks), daemon=True)
+               for s in (closer.stdout, closer.stderr)]
+    for reader in readers:
+        reader.start()
+    try:
+        closer.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        kill_group(closer.pid)
+        closer.wait(timeout=5)
+        raise AssertionError(f'jobs close {closer.args} hung past {timeout}s')
+    finally:
+        # Unconditional: a close that already returned can still have members in its group.
+        leftover = not group_gone(closer.pid, timeout=1)
+        kill_group(closer.pid)
+    if leftover:
+        raise AssertionError(f'jobs close {closer.args} exited but left processes in group {closer.pid}')
+    for reader in readers:
+        reader.join(timeout=5)
+        if reader.is_alive():
+            stop.set()
+            raise AssertionError(f'jobs close {closer.args}: output pipe stayed open after its group was gone')
+    for stream in (closer.stdout, closer.stderr):
+        stream.close()
+    return chunks[closer.stdout], chunks[closer.stderr]
+
+
+def finish_close(closer):
+    """Wait for close under the generous guard, then require its whole group to be gone.
+
+    A finished close has already reaped its receipt poller, so any member still in the
+    group a second after the leader exits is a leftover (a poller would live for 11s)."""
+    out, err = drain_close(closer)
+    return subprocess.CompletedProcess(closer.args, closer.returncode, out, err)
+
+
 def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_error):
     errors = []
     try:
@@ -122,21 +269,26 @@ def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_err
             except OSError:
                 pass
         for proc in processes:
+            # Kill the whole group even when its leader already exited: a close
+            # that returned can still leave its receipt poller in the group.
             try:
-                if proc.poll() is None:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                proc.wait(timeout=2)
-            except ProcessLookupError:
-                proc.wait(timeout=2)
+                os.killpg(proc.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                proc.wait(timeout=GENEROUS)
             except Exception as error:
                 errors.append(str(error))
+            if not group_gone(proc.pid):
+                errors.append(f'process group {proc.pid} survived fixture cleanup')
         for recorder in exit_recorders:
-            recorder.join(timeout=2)
+            recorder.join(timeout=GENEROUS)
             if recorder.is_alive():
                 errors.append('exit recorder survived fixture cleanup')
     finally:
         try:
-            shutil.rmtree(scratch)
+            if scratch is not None:
+                shutil.rmtree(scratch)
         except OSError as error:
             errors.append(str(error))
     if errors:
@@ -147,7 +299,7 @@ def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_err
             raise AssertionError(message)
 
 
-def wait_for_consumed(fd, timeout=2):
+def wait_for_consumed(fd, timeout=GENEROUS):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         available = array.array('i', [0])
@@ -157,7 +309,7 @@ def wait_for_consumed(fd, timeout=2):
         time.sleep(.01)
     raise AssertionError('holder did not consume the queued input')
 
-def fill_fifo(fd, limit=8 * 1024 * 1024, timeout=2):
+def fill_fifo(fd, limit=8 * 1024 * 1024, timeout=GENEROUS):
     """Establish backpressure, not a platform-dependent producer race."""
     deadline = time.monotonic() + timeout
     written = 0
@@ -174,7 +326,10 @@ def fill_fifo(fd, limit=8 * 1024 * 1024, timeout=2):
     raise AssertionError(f'runner FIFO did not reach bounded backpressure: {written}')
 
 try:
-    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,ordered,partial,flow,epipe,idle-exit,stuck,full-grace,repeat-close').split(',')
+    # Created inside the guarded region: an init failure still removes the whole tree.
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix='close-deadline-', dir=root / '.test-scratch'))
+    fixture = build_fixture(scratch)
+    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,finishing,ordered,partial,flow,epipe,idle-exit,stuck,full-grace,repeat-close').split(',')
     for number, mode in enumerate(modes, 1):
         case = scratch / mode
         home = case / 'home'
@@ -197,7 +352,9 @@ try:
         processes.append(proc)
         # The holder is this direct child, so waitpid can observe STOP without ps.
         # Preserve the old supervisor's exit-file receipt for the real jobs CLI.
-        recorder = threading.Thread(target=record_exit, args=(proc, job / 'exit'))
+        release = threading.Event()
+        reaped = ReleasedReceipt(proc, release) if mode == 'finishing' else proc
+        recorder = threading.Thread(target=record_exit, args=(reaped, job / 'exit'))
         recorder.start()
         exit_recorders.append(recorder)
         wait_for(job / 'inbox.ready')
@@ -217,7 +374,7 @@ try:
                     time.sleep(.0005)
             hammer = threading.Thread(target=hammer_usr1, daemon=True)
             hammer.start()
-        if mode in ('queued', 'flow', 'epipe'):
+        if mode in ('queued', 'finishing', 'flow', 'epipe'):
             if mode in ('flow', 'epipe'):
                 wait_for(case / 'runner-stopped-reading')
             os.kill(holder, signal.SIGSTOP)
@@ -236,7 +393,7 @@ try:
                         opened_fds.remove(runner_fd)
                 fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
                 opened_fds.add(fd)
-                payload = b'{"queued":true}\n' if mode == 'queued' else b'{"text":"' + b'x' * 1000 + b'"}\n'
+                payload = b'{"queued":true}\n' if mode in ('queued', 'finishing') else b'{"text":"' + b'x' * 1000 + b'"}\n'
                 assert os.write(fd, payload) == len(payload)
                 if mode == 'flow':
                     def produce():
@@ -255,6 +412,11 @@ try:
                 # A setup failure must never leave this fixture's holder stopped.
                 try: os.kill(holder, signal.SIGCONT)
                 except ProcessLookupError: pass
+            if mode == 'finishing':
+                # The worker clears its holder PID on exit, before the supervisor
+                # records the exit status. A close landing in that window must
+                # wait for the receipt instead of reporting a missing holder.
+                wait_for_absent(job / 'inbox.holder.pid')
         if mode in ('ordered', 'partial'):
             fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
             opened_fds.add(fd)
@@ -280,23 +442,23 @@ try:
                 try: os.kill(holder, signal.SIGCONT)
                 except ProcessLookupError: pass
             # No operator close signal may mask this natural reader failure.
-            wait_for(job / 'exit', timeout=5)
+            wait_for(job / 'exit')
         second_close = None
         if mode == 'flow':
-            second_close = subprocess.Popen(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
-                                            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                            text=True, start_new_session=True)
-            processes.append(second_close)
+            second_close = start_close(job_id, env)
         started = time.monotonic()
-        result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
-                                env=env, capture_output=True, text=True, timeout=11)
+        closer = start_close(job_id, env)
+        if mode == 'finishing':
+            # Release the receipt only once close is provably waiting for it.
+            wait_for_receipt_waiter(closer, job / 'exit')
+            release.set()
+        result = finish_close(closer)
         elapsed = time.monotonic() - started
         runner_pid = int((case / 'runner.pid').read_text())
         wait_for_exit(runner_pid)
-        if hammer: hammer.join(timeout=3)
+        if hammer: hammer.join(timeout=GENEROUS)
         if second_close:
-            second_close.communicate(timeout=2)
-            assert second_close.returncode == result.returncode
+            assert finish_close(second_close).returncode == result.returncode
         stop.set()
         if producer:
             producer.join(timeout=1)
@@ -305,18 +467,21 @@ try:
         if mode in ('ordered', 'partial', 'epipe'):
             os.close(fd)
             opened_fds.remove(fd)
+        # job-worker.sh budgets a stuck runner at up to 9.91s; close must beat its own
+        # 11s deadline. jobs close measures that deadline itself on a sub-second clock
+        # and exits 124 with this message when it is missed, so the check reads close's
+        # own verdict instead of an outer wall-clock window that host load can stretch.
         assert result.returncode != 124, (mode, elapsed, result.stderr)
+        assert 'did not terminate within' not in result.stderr, (mode, elapsed, result.stderr)
         # jobs close tracks the worker PID; the outer fixture shell still needs
         # one scheduling turn to persist its exit code and reap that worker.
-        wait_for(job / 'exit', timeout=3)
-        proc.wait(timeout=1)
-        # job-worker.sh budgets a stuck runner at up to 9.91s; close must still
-        # beat jobs close's 11s deadline with room to spare.
-        assert elapsed < 10.0, (mode, elapsed, result.stdout, result.stderr)
+        wait_for(job / 'exit')
+        proc.wait(timeout=GENEROUS)
         expected = (1, 137) if mode == 'idle-exit' else ((1,) if mode in ('empty', 'flow', 'epipe') else (0,))
         assert result.returncode == proc.returncode and result.returncode in expected, (mode, result.returncode, proc.returncode, result.stdout, result.stderr, (case / 'stderr').read_text())
         assert 'invalid timeout specification' not in (case / 'stderr').read_text()
-        if mode == 'queued': assert b'{"queued":true}\n' in (case / 'received').read_bytes()
+        if mode in ('queued', 'finishing'): assert b'{"queued":true}\n' in (case / 'received').read_bytes()
+        if mode == 'finishing': assert result.stdout == 'already closed (exit 0)\n', (mode, result.stdout, result.stderr)
         if mode in ('ordered', 'partial'):
             received = (case / 'received').read_bytes()
             assert received.endswith(payload), (mode, 'input suffix lost or reordered')
@@ -331,6 +496,7 @@ try:
         if mode == 'full-grace': assert not (case / 'term').exists(), '7-second normal shutdown interrupted'
         print(f'PASS {mode}: jobs close exit={result.returncode}, elapsed={elapsed:.3f}s', flush=True)
 finally:
+    if 'release' in locals(): release.set()
     if 'stop' in locals(): stop.set()
     if 'producer' in locals() and producer: producer.join(timeout=1)
     cleanup_fixture(scratch, processes, opened_fds, exit_recorders, sys.exc_info()[1])

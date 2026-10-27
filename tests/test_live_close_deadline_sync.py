@@ -15,20 +15,18 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def setUpModule():
-    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
-
-
 class CloseSynchronizationTests(unittest.TestCase):
     def setUp(self):
         source_path = Path(os.environ.get("CLOSE_SYNC_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
         source = source_path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-        definitions = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)]
+        # Helpers read the fixture's module-level hang guard (GENEROUS) as a default argument.
+        definitions = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)
+                       or (isinstance(node, ast.Assign) and [getattr(t, 'id', None) for t in node.targets] == ['GENEROUS'])]
         self.helpers = dict(os=os, subprocess=subprocess, time=time)
         exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), self.helpers)
 
     def test_marker_does_not_mean_sigstop_has_completed(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "at-loop-boundary"
             child = subprocess.Popen([sys.executable, "-c", """
 import os, pathlib, signal, sys

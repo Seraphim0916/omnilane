@@ -20,10 +20,6 @@ import cli_provenance as cp
 import origin_policy as op
 
 
-def setUpModule():
-    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
-
-
 def fixture_tree():
     path = Path(os.environ.get("ARGON_FIXTURE_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
     source = path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
@@ -31,13 +27,17 @@ def fixture_tree():
 
 
 def helpers():
-    definitions = [node for node in ast.walk(fixture_tree()) if isinstance(node, ast.FunctionDef)
+    tree = fixture_tree()
+    # Helpers read the fixture's module-level hang guard (GENEROUS) as a default argument.
+    guard = [node for node in tree.body if isinstance(node, ast.Assign)
+             and [getattr(t, 'id', None) for t in node.targets] == ['GENEROUS']]
+    definitions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
                    and node.name in {"wait_for_stopped", "wait_for_exit", "record_exit", "cleanup_fixture"}]
     for node in definitions:
         if node.name == "record_exit":
             node.args.defaults = []
     namespace = dict(os=os, time=time, signal=signal, sys=sys, shutil=shutil)
-    exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), namespace)
+    exec(compile(ast.Module(body=guard + definitions, type_ignores=[]), "close-helpers", "exec"), namespace)
     return namespace
 
 
@@ -49,7 +49,7 @@ class PathRegressions(unittest.TestCase):
                 self.assertEqual(cp.family(value), value)
 
     def test_II1_identifier_channel_still_accepts_version_updates(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "cli"
             path.touch()
             channel = op._channel("developer-id", path, dict(signer="TEST000001", identifier="vendor.1.2.3"))
@@ -96,7 +96,7 @@ class FixtureRegressions(unittest.TestCase):
             child.wait()
 
     def test_I4_exit_receipt_is_atomically_published(self):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / "exit"
             original = Path.write_text
 
@@ -110,7 +110,7 @@ class FixtureRegressions(unittest.TestCase):
             self.assertEqual(list(Path(directory).iterdir()), [destination])
 
     def test_I4_cleanup_preserves_original_error_and_removes_scratch(self):
-        scratch = Path(tempfile.mkdtemp(dir=ROOT / ".test-scratch"))
+        scratch = Path(tempfile.mkdtemp())
         finalbody = next(node.finalbody for node in fixture_tree().body if isinstance(node, ast.Try))
         namespace = helpers()
         namespace.update(scratch=scratch, processes=[], opened_fds=set(),
@@ -139,7 +139,7 @@ class ShutdownRegressions(unittest.TestCase):
         return source[start:source.index('\nset -e', start)]
 
     def run_shutdown(self, mode, delayed_wait=False):
-        with tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch") as directory:
+        with tempfile.TemporaryDirectory() as directory:
             case = Path(directory)
             runner = case / "runner.py"
             runner.write_text("""import os, pathlib, signal, sys, time
