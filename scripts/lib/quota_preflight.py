@@ -69,7 +69,13 @@ def read_snapshot(directory):
             if not stat.S_ISREG(info.st_mode) or info.st_size > 262144:
                 raise ValueError("unsafe or oversized snapshot")
             raw = stream.read(262145)
-    finally:
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass  # Preserve the original construction, validation, or read error.
+        raise
+    else:
         os.close(fd)
     if len(raw) > 262144:
         raise ValueError("oversized snapshot")
