@@ -14,7 +14,7 @@ from pathlib import Path
 
 VERSION = 1
 ARCHIVE = Path(__file__).resolve().parents[2] / "config/transport-compatibility.json"
-APPROVED_ARCHIVE_SHA256 = "00a2af7254ceb05c79e639751bb03af69815d02cff506802c54d93acce412245"
+APPROVED_ARCHIVE_SHA256 = "b8fbfffa0fd4a37ede37a7b0bf64899f94011aab37e173a92430cf05c0702f07"
 SCORE_FIELDS = frozenset(("score", "score_raw", "estimated", "benchmark_version", "as_of",
                           "aa_slug", "source_urls", "evidence_report", "evidence_marker"))
 

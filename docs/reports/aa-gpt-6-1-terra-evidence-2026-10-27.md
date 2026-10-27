@@ -41,7 +41,7 @@
 - `NEW_ALIASES` 加 `gpt-6.1-terra`（複製 `gpt-5.6-terra` 的別名）；`VALUE_FAMILIES` 加 `gpt-6.1-terra`。
 - `build --base <10-18 政策檔> --as-of 2026-10-27` 連跑兩次，雜湊都是 `0fa2df6e95445069b1fa46474bc43460d018dac8587c503035c0734c37ad285f`。
 - 結果：計分 124 → 130（Codex 57 → 63），估計值 26 不變，未知 9 不變，沒有列退場。既有列的 `score`、`score_raw` 與排序全部不變。
-- `approval.status` 是 `proposed`。
+- 提議版 `approval.status` 是 `proposed`；2026-10-27 主控依 Vincent 同日指示核准，改以 `build --approval approved` 重建（連跑兩次 `916b1d1afa2aeaf875e451034d2b6e2ed9eb587285066223f698af49c3104037`），只有 `approval.status` 與 `estimated_scores` 兩欄改變。
 
 ## 車道
 

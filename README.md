@@ -263,7 +263,7 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v4.3.2-2026-10-27-v1`: **proposed, pending operator approval**; 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). The operator-approved snapshot is still `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
+AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 

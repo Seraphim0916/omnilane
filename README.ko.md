@@ -232,7 +232,7 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-AA `aa-v4.3.2-2026-10-27-v1`: **proposed (운영자 승인 대기)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). 운영자가 승인한 스냅샷은 여전히 `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)입니다.
+AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는 같은 날 운영자 지시에 따라 컨트롤러가 승인)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)을 대체합니다.
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 

@@ -234,7 +234,7 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
-AA `aa-v4.3.2-2026-10-27-v1`：**proposed（操作者の承認待ち）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。操作者承認済みのスナップショットは引き続き `aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）です。
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 

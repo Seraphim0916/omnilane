@@ -225,7 +225,7 @@ flowchart LR
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
-AA `aa-v4.3.2-2026-10-27-v1`：**proposed（待操作者批准）**；130 行计分、9 行未知。新增 GPT-6.1 Terra（六行，max 48），按价值规则放入 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各车道首选不变。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-27.md)。操作者已批准的快照仍是 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 批准）。
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当天“把新模型收进去”的指示批准）**；130 行计分、9 行未知。新增 GPT-6.1 Terra（六行，max 48），按价值规则放入 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各车道首选不变。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 批准）。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 

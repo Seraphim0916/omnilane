@@ -1,15 +1,14 @@
 # Model capabilities — AA routing snapshots
 
-The current operator-approved snapshot is **2026-10-18**, snapshot `aa-v4.3.2-2026-10-18-v1`.
-The operator approved it on 2026-10-19; host transport proof is still required.
-Snapshot `aa-v4.3.2-2026-10-27-v1` (GPT-6.1 Terra added) is **proposed**, not yet approved;
-its lane measurements below are the current routing table's.
+The current approved snapshot is **2026-10-27**, snapshot `aa-v4.3.2-2026-10-27-v1` (GPT-6.1 Terra added).
+The controller approved it on 2026-10-27, acting on the operator's request that day to add the new model;
+host transport proof is still required. The previous snapshot `aa-v4.3.2-2026-10-18-v1` was approved on 2026-10-19.
 Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Proposed snapshot — 2026-10-27 (GPT-6.1 Terra added; awaiting operator approval)
+## Current approved snapshot — 2026-10-27 (GPT-6.1 Terra added; approved 2026-10-27)
 
 OpenAI released GPT-6.1 Terra on 2026-10-26 (API model ID `gpt-6.1-terra`;
 `reasoning.effort` none, low, medium (default), high, xhigh and max; $1 / $5 per
@@ -317,7 +316,7 @@ The historical sections below retain their original captures.
 | 5 | qwen qwen3.8-max | not scored | — | — | — |
 | 6 | opencode - | not scored | — | — | — |
 
-## Current approved snapshot — 2026-10-18 (approved 2026-10-19; no new routing decision)
+## Previous approved snapshot — 2026-10-18 (approved 2026-10-19; no new routing decision)
 
 Snapshot `aa-v4.3.2-2026-10-18-v1` is built from the same 2026-10-14 extract and
 reverses the 2026-10-02 retirement of the three `gpt-5.4-mini` rows. The score

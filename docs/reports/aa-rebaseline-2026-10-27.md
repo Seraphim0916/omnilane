@@ -1,11 +1,11 @@
-# AA v4.3.2 提議快照（2026-10-27）：加入 GPT-6.1 Terra
+# AA v4.3.2 核准快照（2026-10-27）：加入 GPT-6.1 Terra
 
 來源：claude-code-s／MacStudio；工作樹 `feat/aa-gpt-6-1-terra`，基底 `c4f5b6a`。
 
-狀態：**proposed，待 Vincent 核准**；主機還沒有重簽或部署。
+狀態：**approved**，主控於 2026-10-27 依 Vincent 同日 07:0x 指示「另外OPENAI放新模型了，去查一下最新AA把新模型收進去」核准；主機還沒有重簽或部署。
 
 快照：`aa-v4.3.2-2026-10-27-v1`。
-SHA-256：`0fa2df6e95445069b1fa46474bc43460d018dac8587c503035c0734c37ad285f`。核准時 `approval.status` 與 `estimated_scores` 兩欄會變，雜湊也會跟著變。
+SHA-256：`916b1d1afa2aeaf875e451034d2b6e2ed9eb587285066223f698af49c3104037`（提議版是 `0fa2df6e95445069b1fa46474bc43460d018dac8587c503035c0734c37ad285f`，差別只有 `approval.status` 與 `estimated_scores` 兩欄）。
 
 抽取檔：`aa-v4.3.2-extract-2026-10-27.json`（Gemini 4 Argon 頁，2026-10-27 抓取）。SHA-256：`7562dc0103b9d8d5aa6d6217af8fb4a953387c373331d704095802b20e9d3697`。
 

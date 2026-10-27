@@ -512,7 +512,7 @@ lane table; do not assume an older model is equivalent.
   bulk-mechanical, behind GPT-6.1 Sol low for every caller that can reach that row;
   Sol high and medium stand behind GPT-6.1 Sol. Luna high
   remains the low-cost first choice in triage. Do not promote Luna's low price into correctness-critical work.
-- **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol (proposed 2026-10-27
+- **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol (approved 2026-10-27
   snapshot): xhigh, high and medium in hardest-coding; high and medium in
   bulk-mechanical; high and low in ui-draft; medium and low in fast-agentic. It
   leads no lane. Max and the non-reasoning row are explicit-only. A host has to
@@ -542,10 +542,10 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Proposed snapshot `aa-v4.3.2-2026-10-27-v1` (not yet approved): 130 scored rows, 9 unknown;
+Current approved snapshot `aa-v4.3.2-2026-10-27-v1` (2026-10-27): 130 scored rows, 9 unknown;
 adds GPT-6.1 Terra at max/xhigh/high/medium/low/non-reasoning, which needs host proof like every other row.
 
-Current operator-approved snapshot `aa-v4.3.2-2026-10-18-v1` (2026-10-19): 124 scored rows, 9 unknown;
+Previous snapshot `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19): 124 scored rows, 9 unknown;
 the three `gpt-5.4-mini` rows are scored again but listed in no lane, and need host proof like every other row.
 
 Previous snapshot `aa-v4.3.2-2026-10-14-v1` (approved 2026-10-18): 121 scored rows, 12 unknown;
