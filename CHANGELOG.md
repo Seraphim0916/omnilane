@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- The worker rules that every runner puts in front of a task (and that the first live message carries) now also say: if a permission, sandbox, hook or missing dependency blocks a step, stop and report the exact error instead of working around it with a different command or tool. The text lives in `OMNILANE_WORKER_RULES` in `scripts/lib/common.sh`, so single-shot and live workers of every vendor get the same sentence.
+
 ## [0.58.0] - 2026-10-27
 
 ### Changed

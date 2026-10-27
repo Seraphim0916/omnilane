@@ -32,32 +32,18 @@ private_job_files() (
   done
 )
 
-# The unquoted backslash case pattern intentionally matches one backslash.
-# shellcheck disable=SC1003
+# Escape bytes without decoding UTF-8 or passing the payload in argv.
 json_escape() {
-  local s="$1" out="" ch escaped code i
-  for ((i = 0; i < ${#s}; i++)); do
-    ch="${s:i:1}"
-    case "$ch" in
-      '"') out="$out\\\"" ;;
-      \\) out="$out\\\\" ;;
-      $'\b') out="$out\\b" ;;
-      $'\f') out="$out\\f" ;;
-      $'\n') out="$out\\n" ;;
-      $'\r') out="$out\\r" ;;
-      $'\t') out="$out\\t" ;;
-      *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
-        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
-          printf -v escaped '\\u%04x' "$code"
-          out="$out$escaped"
-        else
-          out="$out$ch"
-        fi
-        ;;
-    esac
-  done
-  printf '%s' "$out"
+  printf '%s' "$1" | python3 -B -c '
+import sys
+table = [bytes((c,)) for c in range(256)]
+for c in range(32):
+    table[c] = b"\\u%04x" % c
+for c, escaped in ((8, b"\\b"), (12, b"\\f"), (10, b"\\n"),
+                   (13, b"\\r"), (9, b"\\t"), (34, b"\\\""), (92, b"\\\\")):
+    table[c] = escaped
+sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())))
+'
 }
 
 json_file_round_trip_valid() {
@@ -655,7 +641,7 @@ truncate_payload() { # file, cap_bytes
 
 OMNILANE_WORKER_RULES_MARKER='[omnilane worker rules]'
 # No quote characters: fixtures and logs re-split the worker argv with shlex.
-OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent.'
+OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent. If a permission, sandbox, hook or missing dependency blocks a step, stop and report the exact error; do not work around it with a different command or tool.'
 
 # The task file stays byte-identical (task.txt is the preserved record); the
 # runner sends a sibling copy with the rules in front. Rebuilding it from the
