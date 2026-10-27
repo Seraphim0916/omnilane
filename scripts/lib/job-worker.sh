@@ -37,7 +37,7 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 TASK_PROMPT_FILE="$PROMPT_FILE"
 PROMPT_COPY_DIR=""
 PROMPT_COPY_ID=""
-PROMPT_LEDGER_ID=""
+PROMPT_IDENTITIES=""
 live_mailbox_cleanup_ready=0
 job_worker_completed=0
 # One exit handler owns prompt copies, mailbox resources, and the cwd lock.
@@ -52,8 +52,8 @@ cleanup_job_worker() {
   # identity. Names alone never confer ownership, even in a private directory.
   if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
     python3 -c '
-import json, os, stat, sys
-path, identity, ledger_identity = sys.argv[1:]
+import os, stat, subprocess, sys, uuid
+path, identity, receipts = sys.argv[1:]
 try:
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
 except OSError:
@@ -62,33 +62,41 @@ try:
     info = os.fstat(fd)
     if "%s:%s" % (info.st_dev, info.st_ino) != identity:
         sys.exit(0)
-    owned = {}
-    try:
-        ledger = os.open(".identities", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
-        with os.fdopen(ledger) as records:
-            info = os.fstat(records.fileno())
-            if "%s:%s" % (info.st_dev, info.st_ino) == ledger_identity:
-                for line in records:
-                    name, device, inode = json.loads(line)
-                    owned.setdefault(name, set()).add((device, inode))
-                owned[".identities"] = {(info.st_dev, info.st_ino)}
-    except (OSError, ValueError):
-        owned = {}
+    owned = dict(record.split("=", 1) for record in receipts.split())
     for name in os.listdir(fd):
         try:
             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-            if stat.S_ISREG(info.st_mode) and (info.st_dev, info.st_ino) in owned.get(name, set()):
-                os.unlink(name, dir_fd=fd)
+            if not stat.S_ISREG(info.st_mode) or "%s:%s" % (info.st_dev, info.st_ino) != owned.get(name):
+                continue
+            hook = os.environ.get("OMNILANE_TEST_CLEANUP_SWAP_HOOK")
+            if hook:
+                subprocess.run(["/bin/bash", hook, os.path.join(path, name)], check=True)
+            # Move the name before deciding what may be unlinked. A replacement
+            # in the check/rename window is inspected at its quarantined name.
+            temporary = ".cleanup-" + uuid.uuid4().hex
+            os.rename(name, temporary, src_dir_fd=fd, dst_dir_fd=fd)
+            info = os.stat(temporary, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISREG(info.st_mode) and "%s:%s" % (info.st_dev, info.st_ino) == owned.get(name):
+                os.unlink(temporary, dir_fd=fd)
             else:
-                print("omnilane: left foreign file " + name, file=sys.stderr)
+                # link is a no-clobber restore: a concurrently occupied original
+                # name must not be overwritten. Directories stay quarantined.
+                try:
+                    os.link(temporary, name, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                except OSError:
+                    pass
+                else:
+                    os.unlink(temporary, dir_fd=fd)
         except FileNotFoundError:
             pass
+    for name in os.listdir(fd):
+        print("omnilane: left foreign file " + name, file=sys.stderr)
     current = os.lstat(path)
     if not os.listdir(fd) and (current.st_dev, current.st_ino) == (os.fstat(fd).st_dev, os.fstat(fd).st_ino):
         os.rmdir(path)
 finally:
     os.close(fd)
-' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_LEDGER_ID" || true
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_IDENTITIES" || true
   fi
   release_cwd_lock || true
   exit "$rc"
@@ -107,35 +115,47 @@ for copy_path in "${TASK_PROMPT_FILE}.worker" "${TASK_PROMPT_FILE}.runner" "${TA
 done
 PROMPT_COPY_DIR="$(umask 077; mktemp -d "${TASK_PROMPT_FILE}.copies.XXXXXX")" || exit 1
 PROMPT_COPY_ID="$(python3 -c 'import os,sys; s=os.lstat(sys.argv[1]); print("%s:%s" % (s.st_dev,s.st_ino))' "$PROMPT_COPY_DIR")" || exit 1
-PROMPT_LEDGER_ID="$(python3 -c 'import os,sys; fd=os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); s=os.fstat(fd); print("%s:%s" % (s.st_dev,s.st_ino)); os.close(fd)' "$PROMPT_COPY_DIR/.identities")" || exit 1
+# Allocate every helper target in the parent shell. Receipts never reside on
+# disk and are inherited read-only by runner/substitution processes. Updating
+# a target uses its verified open fd, so no child must register a new inode.
+for prompt_name in task.txt.runner task.txt.runner.worker task.txt task.txt.worker; do
+  PROMPT_IDENTITIES="$PROMPT_IDENTITIES $prompt_name=$(python3 -c '
+import os, subprocess, sys
+directory, identity, name = sys.argv[1:]
+root = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    info = os.fstat(root)
+    if "%s:%s" % (info.st_dev, info.st_ino) != identity:
+        sys.exit("omnilane: prompt directory identity changed")
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=root)
+    try:
+        hook = os.environ.get("OMNILANE_TEST_PROMPT_CREATE_HOOK")
+        if hook:
+            subprocess.run(["/bin/bash", hook, os.path.join(directory, name)], check=True)
+        info = os.fstat(fd)
+        print("%s:%s" % (info.st_dev, info.st_ino), flush=True)
+    finally:
+        os.close(fd)
+finally:
+    os.close(root)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$prompt_name")" || exit 1
+done
 
-# Keep creation receipts across command substitutions and runner subshells.
-# Record via the open creation fd before writing bytes, including staging
-# files, then carry that same identity across the atomic rename.
 owned_prompt_operation() {
   python3 -c '
-import json, os, pathlib, sys, tempfile
-directory, directory_id, ledger_id, action, source, argument = sys.argv[1:]
+import os, pathlib, sys
+directory, directory_id, receipts, action, source, argument = sys.argv[1:]
 root = pathlib.Path(directory).resolve()
-info = root.lstat()
-if "%s:%s" % (info.st_dev, info.st_ino) != directory_id:
-    sys.exit("omnilane: prompt directory identity changed")
-ledger_fd = os.open(str(root / ".identities"), os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
-with os.fdopen(ledger_fd, "a") as ledger:
-    info = os.fstat(ledger.fileno())
-    if "%s:%s" % (info.st_dev, info.st_ino) != ledger_id:
-        sys.exit("omnilane: prompt ledger identity changed")
-    def record(name, fd):
-        info = os.fstat(fd)
-        ledger.write(json.dumps([name, info.st_dev, info.st_ino]) + "\n")
-        ledger.flush()
+root_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    info = os.fstat(root_fd)
+    if "%s:%s" % (info.st_dev, info.st_ino) != directory_id:
+        sys.exit("omnilane: prompt directory identity changed")
+    owned = dict(record.split("=", 1) for record in receipts.split())
     src = pathlib.Path(source)
     if action == "copy":
         target = root / argument
-        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        record(target.name, fd)
-        with os.fdopen(fd, "wb") as out:
-            out.write(src.read_bytes())
+        data = src.read_bytes()
     else:
         if src.parent.resolve() != root:
             sys.exit("omnilane: prompt outside private directory")
@@ -151,16 +171,20 @@ with os.fdopen(ledger_fd, "a") as ledger:
             if len(data) <= cap:
                 sys.exit(0)
             data = data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original_size).encode() + data[-(cap // 4):]
-        fd, temporary = tempfile.mkstemp(prefix=target.name + ".", dir=str(root))
-        record(pathlib.Path(temporary).name, fd)
-        with os.fdopen(fd, "wb") as out:
-            out.write(data)
-            out.flush()
-            record(target.name, out.fileno())
-            os.replace(temporary, str(target))
-        if action == "decorate":
-            print(target)
-' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_LEDGER_ID" "$@"
+    fd = os.open(target.name, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
+    with os.fdopen(fd, "wb") as out:
+        info = os.fstat(out.fileno())
+        if "%s:%s" % (info.st_dev, info.st_ino) != owned.get(target.name):
+            sys.exit("omnilane: prompt file identity changed")
+        # The open fd pins the owned inode even if its name is replaced now.
+        out.write(data)
+        out.flush()
+        out.truncate()
+    if action == "decorate":
+        print(target)
+finally:
+    os.close(root_fd)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_IDENTITIES" "$@"
 }
 
 worker_prompt_file() {
@@ -196,7 +220,7 @@ run_job_runner() {
   if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$RUNNER"; then
     exec "$RUNNER" "$@"
   fi
-  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_LEDGER_ID
+  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_IDENTITIES
   exec bash -c '
     overrides="$1"
     runner="$2"

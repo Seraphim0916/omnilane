@@ -82,6 +82,79 @@ def command(job):
     return ["/bin/bash", str(runtime / "scripts/lib/job-worker.sh"), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
 def environment():
     return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(fake))
+# These cases run the worker boundary, including its actual EXIT handler.
+regressions = []
+for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal"):
+    job = base / scenario
+    job.mkdir()
+    (job / "task.txt").write_bytes(b"original task\n")
+    env = environment()
+    hook = job / "hook.sh"
+    marker = job / "hook-ready"
+    env["HOOK_MARKER"] = str(marker)
+    if scenario == "cleanup-window-swap":
+        hook.write_text("mv \"$1\" \"$1.saved\"\nprintf \"foreign-swap:%s\" \"${1##*/}\" > \"$1\"\nprintf \"%s\\n\" \"$1\" >> \"$HOOK_MARKER\"\n")
+        env["OMNILANE_TEST_CLEANUP_SWAP_HOOK"] = str(hook)
+    if scenario == "create-window-signal":
+        hook.write_text("printf ready > \"$HOOK_MARKER\"\nwhile :; do sleep 1; done\n")
+        env["OMNILANE_TEST_PROMPT_CREATE_HOOK"] = str(hook)
+    stderr = (job / "stderr").open("wb")
+    process = subprocess.Popen(command(job), env=env, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True)
+    try:
+        if scenario == "create-window-signal":
+            deadline = time.monotonic() + 3
+            while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(.02)
+            assert marker.exists(), "creation hook never reached"
+            private = next(job.glob("task.txt.copies.*"))
+            created = list(private.iterdir())
+            assert len(created) == 1, created
+            foreign = private / "foreign.txt"
+            foreign.write_bytes(b"foreign-create")
+            os.killpg(process.pid, signal.SIGTERM)
+            assert process.wait(timeout=10) == 143
+            assert foreign.read_bytes() == b"foreign-create"
+            assert created[0].exists(), "unreceipted creation must be retained"
+            diagnostics = (job / "stderr").read_text()
+            for item in (foreign, created[0]):
+                assert "omnilane: left foreign file " + item.name in diagnostics
+        else:
+            events = job / "out.txt.events.jsonl"
+            wait_until(lambda: (job / "inbox.ready").exists() and events.exists() and "fixture result" in events.read_text(), process)
+            private = next(job.glob("task.txt.copies.*"))
+            if scenario == "ledger-tamper":
+                import json
+                foreign = private / "foreign.txt"
+                foreign.write_bytes(b"foreign-ledger")
+                info = foreign.stat()
+                entry = json.dumps([foreign.name, info.st_dev, info.st_ino]) + "\n"
+                # Mutate every existing file in place, including a ledger if any.
+                for item in private.iterdir():
+                    if item != foreign and item.is_file():
+                        with item.open("a") as out: out.write(entry)
+            process.send_signal(signal.SIGUSR1)
+            assert process.wait(timeout=10) == 0
+            diagnostics = (job / "stderr").read_text()
+            if scenario == "ledger-tamper":
+                assert foreign.exists() and foreign.read_bytes() == b"foreign-ledger", "forged receipt deleted foreign file"
+                assert "omnilane: left foreign file foreign.txt" in diagnostics
+            else:
+                assert marker.exists(), "cleanup swap hook never reached"
+                for original in marker.read_text().splitlines():
+                    content = ("foreign-swap:" + pathlib.Path(original).name).encode()
+                    swapped = [p for p in private.iterdir() if p.is_file() and p.read_bytes() == content]
+                    assert swapped, "swapped-in foreign content was deleted: " + original
+                    assert any("omnilane: left foreign file " + p.name in diagnostics for p in swapped)
+        print("PASS R165 " + scenario, flush=True)
+    except (AssertionError, OSError, subprocess.TimeoutExpired) as error:
+        regressions.append(scenario)
+        print("FAIL R165 %s: %s" % (scenario, error), flush=True)
+    finally:
+        try: os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        process.wait()
+        stderr.close()
+assert not regressions, "R165 regressions: " + ", ".join(regressions)
 swap_failures = []
 for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-directory", "swap-runner", "swap-worker"):
     job = base / ("lifecycle-" + scenario)
@@ -178,12 +251,12 @@ base, root = map(pathlib.Path, sys.argv[1:])
 runtime = base / "runtime"
 worker = runtime / "scripts/lib/job-worker.sh"
 original_worker = worker.read_text()
-# Stop after the staging receipt, before rename, for both copy producers.
-# The actual worker EXIT path must remove the staged file and the old target.
+# Stop after writing to the parent-registered inode for both copy producers.
+# The actual worker EXIT path must remove all parent-registered targets.
 for operation in ("decorate", "truncate"):
-    seam = "            record(target.name, out.fileno())"
+    seam = "        out.flush()"
     assert original_worker.count(seam) == 1
-    worker.write_text(original_worker.replace(seam, seam + "\n            if action == " + json.dumps(operation) + ": sys.exit(23)"))
+    worker.write_text(original_worker.replace(seam, seam + "\n        if action == " + json.dumps(operation) + ": sys.exit(23)"))
     job = base / ("interrupted-" + operation)
     job.mkdir()
     (job / "task.txt").write_bytes(b"x" * 200000)
@@ -193,7 +266,7 @@ for operation in ("decorate", "truncate"):
     assert result.returncode == expected, (operation, result.returncode, result.stderr)
     assert not list(job.glob("task.txt.copies.*")), (operation, result.stderr)
     assert (job / "task.txt").read_bytes() == b"x" * 200000
-    print("PASS interrupted %s staging and old copies removed exit=%s" % (operation, expected), flush=True)
+    print("PASS interrupted %s registered copies removed exit=%s" % (operation, expected), flush=True)
 worker.write_text(original_worker)
 with (runtime / "scripts/lib/common.sh").open("a") as out:
     out.write("\naa_policy_gate() { unset R154_UNBOUND; : \"$R154_UNBOUND\"; }\n")
