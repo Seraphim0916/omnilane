@@ -103,7 +103,8 @@ cleanup_codex_tmp() {
   fi
   return "$rc"
 }
-trap cleanup_codex_tmp EXIT
+omnilane_track_completion
+trap 'omnilane_exit_trap $? cleanup_codex_tmp' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
@@ -180,6 +181,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
   RC=$?
   set -e
   [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
+  omnilane_mark_completed
   exit "$RC"
 fi
 # `codex exec resume` has no -s/--sandbox flag (rejects it with exit 2); the
@@ -238,4 +240,5 @@ if [[ -f "${OUTPUT_FILE}.tmp" ]]; then
 fi
 # no -f: force-flag rm is blocked by some environments' destructive guards
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
+omnilane_mark_completed
 exit "$RC"

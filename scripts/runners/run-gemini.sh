@@ -65,6 +65,7 @@ if [[ "$MODE" == "work" ]]; then
   agy_cleanup_workspace_policy() {
     local previous_rc=$?
     trap - EXIT
+    [[ "$previous_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || previous_rc=1
     if ! python3 "$AGY_PREPARE" --cleanup --mode "$MODE" --workdir "$WORKDIR" \
         --app-root "$AGY_APP_ROOT" --gemini-dir "$HOME/.gemini"; then
       echo "omnilane: agy workspace policy cleanup/integrity check failed; inspect owned leaf" >&2
@@ -72,6 +73,7 @@ if [[ "$MODE" == "work" ]]; then
     fi
     exit "$previous_rc"
   }
+  omnilane_track_completion
   trap agy_cleanup_workspace_policy EXIT
   AGY_WORK_META="$(python3 - "$AGY_APP_ROOT/workspace-agent.json" <<'PY'
 import json, pathlib, sys
@@ -229,6 +231,7 @@ PY
     RC=126
   fi
   [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
+  omnilane_mark_completed
   exit "$RC"
 fi
 
@@ -298,4 +301,5 @@ fi
 
 [[ -f "${OUTPUT_FILE}.tmp" ]] && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
+omnilane_mark_completed
 exit "$RC"

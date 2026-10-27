@@ -14,6 +14,7 @@ set -euo pipefail
 # builds/parses the JSON so prompt content never needs shell escaping.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+omnilane_track_completion
 strip_caller_claude_env
 
 MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
@@ -52,7 +53,7 @@ RESPONSE_FILE="${OUTPUT_FILE}.response.json"
 # Authorization header from a 0600 file, not a -H command-line flag.
 HEADER_FILE="${OUTPUT_FILE}.headers"
 cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" "$HEADER_FILE" 2>/dev/null || true; }
-trap cleanup EXIT
+trap 'omnilane_exit_trap $? cleanup' EXIT
 private_job_files "$HEADER_FILE"
 ( umask 077; printf 'Authorization: Bearer %s\n' "$API_KEY" > "$HEADER_FILE" )
 
@@ -108,4 +109,5 @@ fi
 
 [[ -f "${OUTPUT_FILE}.tmp" ]] && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
+omnilane_mark_completed
 exit "$RC"
