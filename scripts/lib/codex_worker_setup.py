@@ -2,15 +2,18 @@
 
   headers VALUE   print VALUE re-serialized as a TOML inline table of string
                   header names to string values; exit 2 if it is anything else
-  tmpdir WORKDIR  create WORKDIR/.omnilane-tmp without following links, print
+  tmpdir WORKDIR  create a per-job directory in WORKDIR/.omnilane-tmp, print
                   its path; exit 125 if the name is not a directory we own
+  cleanup PATH    remove the per-job directory without following parent links
 """
 
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
+import uuid
 
 TMP_NAME = ".omnilane-tmp"
 EXCLUDE_LINE = "/" + TMP_NAME + "/"
@@ -101,32 +104,102 @@ def tmpdir(workdir):
     except OSError as error:
         fail(125, "Codex workdir cannot be opened: %s" % error)
     try:
-        try:
-            os.mkdir(TMP_NAME, 0o700, dir_fd=parent)
-        except FileExistsError:
-            pass
-        try:
-            fd = os.open(TMP_NAME, flags, dir_fd=parent)
-        except OSError:
-            fail(125, "unsafe Codex work temp path")
-        try:
-            info = os.fstat(fd)
-            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-                fail(125, "unsafe Codex work temp path")
-            # chmod the object we opened, not whatever the name points to now.
-            os.fchmod(fd, 0o700)
-        finally:
-            os.close(fd)
+        for attempt in range(32):
+            fd = None
+            try:
+                os.makedirs(os.path.join(workdir, TMP_NAME), mode=0o700, exist_ok=True)
+                fd = os.open(TMP_NAME, flags, dir_fd=parent)
+                info = os.fstat(fd)
+                if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                    fail(125, "unsafe Codex work temp path")
+                os.fchmod(fd, 0o700)
+                job = "job-" + uuid.uuid4().hex
+                os.mkdir(job, 0o700, dir_fd=fd)
+                break
+            except FileNotFoundError:
+                # Another cleanup can unlink the empty parent even after open.
+                if attempt == 31:
+                    fail(125, "Codex work temp parent kept disappearing")
+            except FileExistsError:
+                # makedirs checks isdir after EEXIST; cleanup may remove it
+                # between those operations, leaving the original EEXIST.
+                base = os.path.join(workdir, TMP_NAME)
+                if (os.path.islink(base) or
+                        (os.path.lexists(base) and not os.path.isdir(base)) or attempt == 31):
+                    fail(125, "unsafe Codex work temp path")
+            except OSError as error:
+                fail(125, "unsafe Codex work temp path: %s" % error)
+            finally:
+                if fd is not None:
+                    os.close(fd)
     finally:
         os.close(parent)
     add_exclude(workdir)
-    print(os.path.join(workdir, TMP_NAME))
+    print(os.path.join(workdir, TMP_NAME, job))
+
+
+def cleanup(path):
+    if not os.path.isabs(path) or os.path.normpath(path) != path:
+        fail(125, "unsafe Codex cleanup path")
+    base, job = os.path.split(path)
+    if (os.path.basename(base) != TMP_NAME or
+            not re.fullmatch(r"job-[0-9a-f]{32}", job) or
+            os.path.realpath(base) != base):
+        fail(125, "unsafe Codex cleanup path")
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+    try:
+        parent = os.open(os.path.dirname(base), flags)
+    except FileNotFoundError:
+        return
+    cwd = os.open(".", flags)
+    try:
+        try:
+            fd = os.open(TMP_NAME, flags, dir_fd=parent)
+        except FileNotFoundError:
+            return
+        try:
+            # Pin the parent before recursion; a renamed/replaced path must
+            # never redirect cleanup into another directory.
+            os.fchdir(fd)
+            if os.path.islink(job):
+                fail(125, "unsafe Codex cleanup path")
+
+            def retry_readonly(function, name, exc_info):
+                if isinstance(exc_info[1], FileNotFoundError):
+                    return
+                if not isinstance(exc_info[1], PermissionError):
+                    raise exc_info[1]
+                # Never chmod through a link, including links inside the job.
+                for target in (os.path.dirname(name) or ".", name):
+                    if os.path.islink(target):
+                        fail(125, "unsafe Codex cleanup path")
+                    os.chmod(target, 0o700, follow_symlinks=False)
+                if function in (os.open, os.scandir, os.listdir):
+                    shutil.rmtree(name, onerror=retry_readonly)
+                else:
+                    function(name)
+
+            try:
+                shutil.rmtree(job, onerror=retry_readonly)
+            except FileNotFoundError:
+                pass
+        finally:
+            os.fchdir(cwd)
+            os.close(fd)
+        try:
+            os.rmdir(TMP_NAME, dir_fd=parent)
+        except OSError:
+            pass  # Other jobs may still own directories in the shared base.
+    finally:
+        os.close(cwd)
+        os.close(parent)
 
 
 def main(argv):
-    if len(argv) != 3 or argv[1] not in ("headers", "tmpdir"):
-        fail(2, "usage: codex_worker_setup.py headers VALUE | tmpdir WORKDIR")
-    (headers if argv[1] == "headers" else tmpdir)(argv[2])
+    commands = {"headers": headers, "tmpdir": tmpdir, "cleanup": cleanup}
+    if len(argv) != 3 or argv[1] not in commands:
+        fail(2, "usage: codex_worker_setup.py headers VALUE | tmpdir WORKDIR | cleanup PATH")
+    commands[argv[1]](argv[2])
 
 
 if __name__ == "__main__":
