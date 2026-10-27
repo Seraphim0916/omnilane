@@ -61,7 +61,7 @@ case "$MODE" in
     MODE_ARGS=(
       --settings '{"sandbox":{"enabled":false}}'
       --permission-mode bypassPermissions --dangerously-skip-permissions
-      --disallowedTools 'Agent,Task'
+      --disallowedTools Agent Task
     )
     ;;
   *)

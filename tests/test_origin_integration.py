@@ -58,9 +58,9 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
-        "ace5f5826204903feecc9b4faea8702ef050bdcfa332304c3ae32bd5aae54e7a",
+        "df7f0c623b412bd9912b00a6d0d9d2ab8104ce8ed32b9ccbc7caa4e7a1e86e8b",
     "scripts/runners/run-codex.sh":
-        "8c9516ba9c9ef026badca58842987576b12b121b7aec5f89bcc18e091d70f31c",
+        "5869b92a459545c4705ac9090c16fcc944af7a640193405ca5fc916c4d326ad9",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":

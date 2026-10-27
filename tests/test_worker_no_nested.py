@@ -397,7 +397,7 @@ print("fixture")
                     if mode == "sysops":
                         expected += ["--settings", '{"sandbox":{"enabled":false}}',
                                      "--permission-mode", "bypassPermissions",
-                                     "--dangerously-skip-permissions", "--disallowedTools", "Agent,Task"]
+                                     "--dangerously-skip-permissions", "--disallowedTools", "Agent", "Task"]
                     else:
                         settings = {"sandbox": {"enabled": True, "failIfUnavailable": True,
                             "allowUnsandboxedCommands": False, "autoAllowBashIfSandboxed": True,
