@@ -389,6 +389,11 @@ PY
   close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
     fail "Codex live close failed: $close_out"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex large live job did not exit zero"
+  local copy
+  for copy in "$job_dir/task.txt.worker" "$job_dir/task.txt.runner" \
+    "$job_dir/task.txt.runner.worker" "$job_dir"/task.txt.copies.*; do
+    [[ ! -e "$copy" && ! -L "$copy" ]] || fail "Codex live close left prompt copy: $copy"
+  done
 
   cmp -s "$task" "$job_dir/task.txt" ||
     fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"

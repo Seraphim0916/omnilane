@@ -6,7 +6,8 @@ if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
   exec python3 -B -c 'import runpy,sys; sys.argv=[sys.argv[1]]+sys.argv[2:]; runpy.run_path(sys.argv[0],run_name="__main__")' \
     "$ROOT/tests/offline_env.py" /bin/bash "$0" --omnilane-offline-child
 fi
-TEST_ROOT="$(mktemp -d "$TMPDIR/c16-trunc.XXXXXX")"
+mkdir -p "$ROOT/.test-scratch"
+TEST_ROOT="$(mktemp -d "$ROOT/.test-scratch/c16-trunc.XXXXXX")"
 trap 'rm -rf -- "$TEST_ROOT"' EXIT
 mkdir -p "$TEST_ROOT/runtime/scripts" "$TEST_ROOT/home"
 cp -R "$ROOT/scripts/lib" "$ROOT/scripts/runners" "$TEST_ROOT/runtime/scripts/"
@@ -17,7 +18,7 @@ cp -R "$ROOT/config" "$TEST_ROOT/runtime/"
 printf '\nacquire_cwd_lock() { :; }\naa_policy_gate() { :; }\nrun_with_timeout() { shift; "$@"; }\n' \
   >> "$TEST_ROOT/runtime/scripts/lib/common.sh"
 # Reuse the aggregate suite's fake CLIs, adding byte-exact input capture.
-python3 -B -c 'import pathlib,sys; root,out=map(pathlib.Path,sys.argv[1:]); src=(root/"tests/run.sh").read_text(); capture="python3 -B -c '\''import os,pathlib,sys; a=sys.argv[1:]; data=sys.stdin.buffer.read() if \"-o\" in a else a[a.index(\"-p\")+1].encode(); pathlib.Path(os.environ[\"CAPTURE\"]).write_bytes(data)'\'' \"$@\"\n"; [(out/ ("fake-"+v)).write_text("#!/usr/bin/env bash\n"+capture+"if [[ ${FAKE_CLI_EXIT:-0} -ne 0 ]]; then exit \"$FAKE_CLI_EXIT\"; fi\n"+src.split("cat > \"$bin/fake-"+v+"\" <<'\''EOF'\''\n",1)[1].split("\nEOF",1)[0].split("\n",1)[1]) for v in ("codex","claude")]' "$ROOT" "$TEST_ROOT"
+python3 -B -c 'import pathlib,sys; root,out=map(pathlib.Path,sys.argv[1:]); src=(root/"tests/run.sh").read_text(); capture="python3 -B -c '\''import os,pathlib,sys; a=sys.argv[1:]; data=sys.stdin.buffer.read() if \"-o\" in a else a[-1].encode(); pathlib.Path(os.environ[\"CAPTURE\"]).write_bytes(data)'\'' \"$@\"\n"; [(out/ ("fake-"+v)).write_text("#!/usr/bin/env bash\n"+capture+"if [[ ${FAKE_CLI_EXIT:-0} -ne 0 ]]; then exit \"$FAKE_CLI_EXIT\"; fi\n"+src.split("cat > \"$bin/fake-"+v+"\" <<'\''EOF'\''\n",1)[1].split("\nEOF",1)[0].split("\n",1)[1]) for v in ("codex","claude")]' "$ROOT" "$TEST_ROOT"
 chmod +x "$TEST_ROOT/fake-codex" "$TEST_ROOT/fake-claude"
 for vendor in codex claude; do
   case "$vendor" in codex) cap=140000 ;; claude) cap=102400 ;; esac
@@ -38,6 +39,9 @@ for vendor in codex claude; do
       for copy in task.txt.worker task.txt.runner task.txt.runner.worker; do
         [[ ! -e "$job/$copy" && ! -L "$job/$copy" ]] || { echo "FAIL leftover $copy" >&2; exit 1; }
       done
+      for copy in "$job"/task.txt.copies.*; do
+        [[ ! -e "$copy" && ! -L "$copy" ]] || { echo "FAIL leftover private copies: $copy" >&2; exit 1; }
+      done
       # The received payload still contains exactly one header.
       source "$TEST_ROOT/runtime/scripts/lib/common.sh"
       printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES" > "$job/expected"
@@ -48,3 +52,88 @@ for vendor in codex claude; do
   done
 done
 printf 'PASS task.txt preserved; existing CLI truncation verified and copies removed (16 success/failure cases)\n'
+
+# Exercise the real worker/Claude runner lifecycle without dispatch policy or
+# process inspection. Readiness and bounded process waits are the oracle;
+# polling delays are never treated as proof of success.
+python3 -B -c '
+import os, pathlib, signal, subprocess, sys, time
+base = pathlib.Path(sys.argv[1])
+runtime = base / "runtime"
+fake = base / "live-claude"
+fake.write_text("#!/usr/bin/env python3\nimport json,os,sys\nfor line in sys.stdin:\n print(json.dumps(dict(type=\"result\",is_error=os.environ.get(\"LIVE_FAIL\")==\"1\",result=\"fixture result\")),flush=True)\n if os.environ.get(\"LIVE_FAIL\")==\"1\": sys.exit(23)\n")
+fake.chmod(0o755)
+def clean(job):
+    assert (job / "task.txt").read_bytes() == b"original task\n"
+    assert not list(job.glob("task.txt.copies.*")), list(job.iterdir())
+    for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
+        assert not os.path.lexists(job / name), name
+def wait_until(predicate, process):
+    deadline = time.monotonic() + 15
+    while not predicate():
+        assert process.poll() is None, "worker exited before readiness: %s" % process.returncode
+        assert time.monotonic() < deadline, "readiness deadline"
+        time.sleep(.02)
+def command(job):
+    return ["/bin/bash", str(runtime / "scripts/lib/job-worker.sh"), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
+def environment():
+    return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(fake))
+for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-directory"):
+    job = base / ("lifecycle-" + scenario)
+    job.mkdir()
+    (job / "task.txt").write_bytes(b"original task\n")
+    env = environment()
+    if scenario == "failure": env["LIVE_FAIL"] = "1"
+    cmd = command(job)
+    if scenario == "timeout":
+        cmd = ["perl", str(runtime / "scripts/lib/job-timeout.pl"), "3"] + cmd
+    process = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        if scenario != "failure":
+            events = job / "out.txt.events.jsonl"
+            wait_until(lambda: (job / "inbox.ready").exists() and events.exists() and "fixture result" in events.read_text(), process)
+        if scenario == "replaced-directory":
+            owned = list(job.glob("task.txt.copies.*"))
+            assert len(owned) == 1
+            replacement = owned[0]
+            replacement.rename(job / "moved-owned-copies")
+            replacement.mkdir()
+            (replacement / "task.txt.runner").write_bytes(b"foreign replacement\n")
+            identity = replacement.stat().st_ino
+        if scenario in ("close", "replaced-directory"): process.send_signal(signal.SIGUSR1)
+        elif scenario in ("TERM", "HUP", "INT"):
+            os.killpg(process.pid, getattr(signal, "SIG" + scenario))
+        rc = process.wait(timeout=20)
+        expected = {"close": 0, "failure": 23, "TERM": 143, "HUP": 129, "INT": 130, "timeout": 124, "replaced-directory": 0}[scenario]
+        assert rc == expected, (scenario, rc, expected)
+        if scenario == "replaced-directory":
+            assert replacement.stat().st_ino == identity
+            assert (replacement / "task.txt.runner").read_bytes() == b"foreign replacement\n"
+            print("PASS replacement directory identity preserved", flush=True)
+        else:
+            clean(job)
+            print("PASS live lifecycle %s exit=%s; copies removed" % (scenario, rc), flush=True)
+    finally:
+        try: os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        process.wait()
+for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
+    for kind in ("file", "symlink", "directory"):
+        job = base / ("existing-" + name + "-" + kind)
+        job.mkdir()
+        (job / "task.txt").write_bytes(b"original task\n")
+        target = job / name
+        if kind == "file": target.write_bytes(b"pre-existing\n")
+        elif kind == "symlink": target.symlink_to("missing-target")
+        else: target.mkdir()
+        before = target.lstat()
+        rc = subprocess.run(command(job), env=environment(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10).returncode
+        assert rc == 125, (name, kind, rc)
+        after = target.lstat()
+        assert (before.st_dev, before.st_ino, before.st_mode) == (after.st_dev, after.st_ino, after.st_mode)
+        if kind == "file": assert target.read_bytes() == b"pre-existing\n"
+        if kind == "symlink": assert os.readlink(target) == "missing-target"
+        assert (job / "task.txt").read_bytes() == b"original task\n"
+        assert not list(job.glob("task.txt.copies.*"))
+        print("PASS pre-existing %s %s preserved" % (name, kind), flush=True)
+' "$TEST_ROOT"

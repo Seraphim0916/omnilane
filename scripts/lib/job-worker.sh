@@ -31,29 +31,73 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # Two concurrent codex execs in one target dir corrupt its job index — serialize.
 [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
 
-# Reuse the guarded sibling-copy mechanism before any mode or fallback path.
-# Keep this boundary copy raw: the vendor runners (and the first live message)
+# Isolate prompt copies before any mode or fallback path. Keep the boundary
+# copy raw: the vendor runners (and the first live message)
 # add worker rules themselves. Passing the decorated copy would double them.
 TASK_PROMPT_FILE="$PROMPT_FILE"
-RUNNER_PROMPT_FILE="${PROMPT_FILE}.runner"
-if [[ -L "$RUNNER_PROMPT_FILE" || ( -e "$RUNNER_PROMPT_FILE" && ! -f "$RUNNER_PROMPT_FILE" ) ]]; then
-  echo "omnilane: unsafe runner prompt path" >&2
-  exit 125
-fi
+PROMPT_COPY_DIR=""
+PROMPT_COPY_ID=""
 live_mailbox_cleanup_ready=0
 # One exit handler owns prompt copies, mailbox resources, and the cwd lock.
 # Install after lock acquisition, which sets its own EXIT trap.
 # shellcheck disable=SC2329
 cleanup_job_worker() {
-  if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox; fi
-  rm -f -- "${TASK_PROMPT_FILE}.worker" "$RUNNER_PROMPT_FILE" \
-    "${RUNNER_PROMPT_FILE}.worker" 2>/dev/null || true
-  release_cwd_lock
+  local rc=$?
+  if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox || true; fi
+  # Runners atomically replace their .worker copies (including truncation).
+  # Own a private namespace instead of guessing ownership of shared names.
+  # Pin its device/inode, never follow a replacement symlink, and do not
+  # recursively remove unexpected contents planted in that namespace.
+  if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
+    python3 -c '
+import os, stat, sys
+path, identity = sys.argv[1:]
+try:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+except OSError:
+    sys.exit(0)
+try:
+    info = os.fstat(fd)
+    if "%s:%s" % (info.st_dev, info.st_ino) != identity:
+        sys.exit(0)
+    names = ("task.txt", "task.txt.worker", "task.txt.runner", "task.txt.runner.worker")
+    for name in os.listdir(fd):
+        # Include interrupted mktemp/truncate staging files owned by the same
+        # private namespace; leave unrelated entries and symlinks untouched.
+        if name not in names and not name.startswith(("task.txt.worker.", "task.txt.runner.worker.")):
+            continue
+        try:
+            info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISREG(info.st_mode):
+                os.unlink(name, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+    current = os.lstat(path)
+    if (current.st_dev, current.st_ino) == (os.fstat(fd).st_dev, os.fstat(fd).st_ino):
+        os.rmdir(path)
+finally:
+    os.close(fd)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" || true
+  fi
+  release_cwd_lock || true
+  return "$rc"
 }
 trap cleanup_job_worker EXIT
-WORKER_PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")" || exit 1
-mv -f "$WORKER_PROMPT_FILE" "$RUNNER_PROMPT_FILE" || exit 1
-cat "$PROMPT_FILE" > "$RUNNER_PROMPT_FILE" || exit 1
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+trap 'exit 130' INT
+# Refuse all pre-existing legacy sibling paths without overwriting or deleting
+# them. New copies live only in this invocation's exclusive 0700 directory.
+for copy_path in "${TASK_PROMPT_FILE}.worker" "${TASK_PROMPT_FILE}.runner" "${TASK_PROMPT_FILE}.runner.worker"; do
+  if [[ -e "$copy_path" || -L "$copy_path" ]]; then
+    echo "omnilane: pre-existing worker prompt path: $copy_path" >&2
+    exit 125
+  fi
+done
+PROMPT_COPY_DIR="$(umask 077; mktemp -d "${TASK_PROMPT_FILE}.copies.XXXXXX")" || exit 1
+PROMPT_COPY_ID="$(python3 -c 'import os,sys; s=os.lstat(sys.argv[1]); print("%s:%s" % (s.st_dev,s.st_ino))' "$PROMPT_COPY_DIR")" || exit 1
+RUNNER_PROMPT_FILE="$PROMPT_COPY_DIR/task.txt.runner"
+cat "$TASK_PROMPT_FILE" > "$RUNNER_PROMPT_FILE" || exit 1
 PROMPT_FILE="$RUNNER_PROMPT_FILE"
 
 emit_mode_notice() {
@@ -345,7 +389,8 @@ if [[ "$VENDOR" == "codex" ]]; then
 fi
 # The first live message gets the same worker rules a single-shot runner
 # sends; later sends reach the worker through the inbox and stay verbatim.
-FIRST_MESSAGE_FILE="$(worker_prompt_file "$TASK_PROMPT_FILE")" || exit 1
+cat "$TASK_PROMPT_FILE" > "$PROMPT_COPY_DIR/task.txt" || exit 1
+FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_COPY_DIR/task.txt")" || exit 1
 # Cap only the copy that is sent: task.txt is the preserved record. The rules
 # sit at the head of the copy, which truncate_payload keeps.
 if [[ "$VENDOR" != "gemini" ]]; then
