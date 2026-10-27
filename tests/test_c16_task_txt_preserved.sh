@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# Use the same isolated tools and fake CLI contracts as tests/run.sh.
+
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
-  exec python3 -B -c 'import runpy,sys; sys.argv=[sys.argv[1]]+sys.argv[2:]; runpy.run_path(sys.argv[0],run_name="__main__")' \
-    "$ROOT/tests/offline_env.py" /bin/bash "$0" --omnilane-offline-child
-fi
 mkdir -p "$ROOT/.test-scratch"
 TEST_ROOT="$(mktemp -d "$ROOT/.test-scratch/c16-trunc.XXXXXX")"
 test_completed=0
