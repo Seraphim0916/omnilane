@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/common.sh"
+omnilane_track_completion
 
 DISPATCH="$REPO/scripts/dispatch.sh"
 DEFAULT_BUDGET_JOBS=""
@@ -139,7 +140,7 @@ acquire_lock() {
   LOCK_HELD=1
   printf '%s\n' "$$" > "$GOAL_DIR/.lock/pid"
   chmod 600 "$GOAL_DIR/.lock/pid"
-  trap release_lock EXIT
+  trap 'omnilane_exit_trap $? release_lock' EXIT
 }
 
 refresh_goal() {
@@ -817,3 +818,4 @@ case "$subcommand" in
   close) close_goal "$@" ;;
   *) usage ;;
 esac
+omnilane_mark_completed

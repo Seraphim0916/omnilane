@@ -62,7 +62,8 @@ cfg_set() (
   fi
   tmp="$(mktemp "$LOCAL_FILE.tmp.XXXXXX")"
   # Keep cleanup local to this command, including validation/publication errors.
-  trap '/bin/rm -f -- "$tmp"' EXIT
+  omnilane_track_completion
+  trap 'omnilane_exit_trap $? /bin/rm -f -- "$tmp"' EXIT
   {
     echo "# updated by 'configure set' on $(date +%F) — first match per lane wins"
     echo "$lane: $spec"
@@ -106,6 +107,7 @@ cfg_set() (
   fi
   mv "$tmp" "$LOCAL_FILE"
   echo "set $lane -> $spec"
+  omnilane_mark_completed
 )
 
 cfg_get() {
@@ -152,7 +154,8 @@ cfg_unset() (
     printf 'omnilane: configure unset: failed to prepare routing candidate (exit %s)\n' "$status" >&2
     exit "$status"
   fi
-  trap '/bin/rm -f -- "$tmp"' EXIT
+  omnilane_track_completion
+  trap 'omnilane_exit_trap $? /bin/rm -f -- "$tmp"' EXIT
   # Retain every other row, including all comments and configure-set stamps.
   # Empty output is valid; a failed read must never reach the public file.
   if awk -v lane="$lane:" 'index($0, lane) != 1' "$LOCAL_FILE" 2>/dev/null > "$tmp"; then
@@ -172,6 +175,7 @@ cfg_unset() (
     exit "$status"
   fi
   echo "unset $lane (local override removed)"
+  omnilane_mark_completed
 )
 
 cfg_list() {
