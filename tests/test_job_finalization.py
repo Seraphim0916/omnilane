@@ -31,11 +31,22 @@ class JobFinalizationTests(unittest.TestCase):
         self.addCleanup(self.stop_owned_processes)
 
     def alive(self, pid):
-        result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], env=self.env,
-                                capture_output=True, text=True, timeout=5)
-        state = result.stdout.strip()
-        # A zombie cannot execute; the host init process owns reaping it.
-        return bool(state) and not state.startswith("Z")
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        stat = Path("/proc") / str(pid) / "stat"
+        try:
+            if stat.exists():
+                _, separator, fields = stat.read_text().rpartition(") ")
+                # Only a positively read zombie state overrides kill(pid, 0).
+                if separator and fields.split()[:1] == ["Z"]:
+                    return False
+        except (OSError, UnicodeError):
+            pass
+        return True
 
     def stop_owned_processes(self):
         (self.root / "publish.release").touch()
