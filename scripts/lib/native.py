@@ -76,17 +76,20 @@ def read_json(path):
     # Never follow a submitted symlink (context, completion, or job state).
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        stream = os.fdopen(fd, "r", encoding="utf-8")
+        # Keep ownership here even if stream construction partially succeeds
+        # before raising. Stream cleanup must never close a reusable fd number.
+        with os.fdopen(fd, "r", encoding="utf-8", closefd=False) as stream:
+            info = os.fstat(stream.fileno())
+            check(stat.S_ISREG(info.st_mode) and info.st_size <= MAX_BYTES, "invalid JSON file")
+            raw = stream.read(MAX_BYTES + 1)
     except BaseException:
         try:
             os.close(fd)
         except OSError:
-            pass  # Preserve the stream construction error.
+            pass  # Preserve the original construction, validation, or read error.
         raise
-    with stream:
-        info = os.fstat(stream.fileno())
-        check(stat.S_ISREG(info.st_mode) and info.st_size <= MAX_BYTES, "invalid JSON file")
-        raw = stream.read(MAX_BYTES + 1)
+    else:
+        os.close(fd)
     check(len(raw.encode("utf-8")) <= MAX_BYTES, "JSON file too large")
     return json_depth.loads(raw, object_pairs_hook=unique_object,
                             parse_constant=lambda _: (_ for _ in ()).throw(ValueError("invalid JSON number")))
