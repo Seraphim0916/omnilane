@@ -6,8 +6,21 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.58.0] - 2026-10-27
+
 ### Changed
 - Approved on 2026-10-27 (by the controller, on the operator's request that day to add the new model): registry snapshot `aa-v4.3.2-2026-10-27-v1` adds OpenAI's GPT-6.1 Terra (released 2026-10-26; Codex and API ID `gpt-6.1-terra`). AA v4.3.2 scores six rows, none estimated: `codex/gpt-6-1-terra` (max, 48), `-xhigh` (45), `-high` (44), `-medium` (41), `-low` (36) and `-non-reasoning` (33); 124 -> 130 scored, Codex 57 -> 63. Every existing score and the ordering are unchanged. `routing.yaml` inserts Terra where `aa_rebaseline.py value` picks it: `hardest-coding` (xhigh, high, medium after GPT-6.1 Sol medium), `bulk-mechanical` (high, medium after GPT-6.1 Sol high), `ui-draft` (high after GPT-6.1 Sol high, low after GPT-6 Astra low) and `fast-agentic` (medium, low after GPT-6.1 Sol medium); no first choice changes. The configurator menu lists `gpt-6.1-terra`, and the probe plan covers its five reasoning efforts and `none`. Every host must run `omnilane resign` after upgrading because the snapshot id changes. Details: `docs/reports/aa-gpt-6-1-terra-evidence-2026-10-27.md`.
+
+### Fixed
+- Refusals: when the lane's cheapest target is reachable the gate keeps its own reason, missing scores no longer break the message, and `--vendor` callers are told when the lane has a reachable target. Refusal JSONL is split on LF only with single-line summaries, and an over-deep refusal record no longer stops later records from being parsed.
+- `coding-overflow` uses the current Kimi and Qwen model ids.
+- Codex live sessions validate their timeouts, reject mixed RPC envelopes, keep a completion that arrives before the start reply, scope their events and guard against PID reuse.
+- Caller identity stops reading flags at `--`.
+- Result normalization fails on an error result without text and keeps the JSONL separator.
+- The job journal and the verification status file must carry version `1` as an integer; a verification status file whose root is not an object is rejected without being overwritten; deeply nested host-rows JSON raises `HostRowsError`.
+- Approval times ending in `Z` are accepted on Python 3.9.
+- Overlay diagnostics report read errors and parse errors separately and survive over-deep JSON.
+- A native completion write removes its own file when write, flush or fsync fails.
 
 ## [0.57.0] - 2026-10-21
 
@@ -1778,7 +1791,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.57.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.58.0...HEAD
+[0.58.0]: https://github.com/Seraphim0916/omnilane/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/Seraphim0916/omnilane/compare/v0.56.0...v0.57.0
 [0.56.0]: https://github.com/Seraphim0916/omnilane/compare/v0.55.0...v0.56.0
 [0.55.0]: https://github.com/Seraphim0916/omnilane/compare/v0.54.0...v0.55.0

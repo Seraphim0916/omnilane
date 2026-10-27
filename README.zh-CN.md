@@ -753,6 +753,13 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.58.0 新功能
+
+- 升级后，每台主机都必须运行 `omnilane resign`，因为 AA 快照已更新。
+- AA 快照 `aa-v4.3.2-2026-10-27-v1` 新增 GPT-6.1 Terra 的六个推理档位评分，评分行总数为 130。Terra 加入部分通道的备选顺序；现有分数和各通道首选保持不变。
+- 修复派工拒绝信息、Codex 实时会话、调用方身份读取、结果规范化，以及状态文件与 overlay 文件解析的多项问题；清单见 CHANGELOG。
+- 升级：`npm i -g omnilane@0.58.0`。
+
 ## v0.57.0 新功能
 
 - 升级后，每台主机都要在终端跑一次 `omnilane native-context --install`；从 0.56.0 升级的主机，因为 AA 快照换版，还要在图形终端跑一次 `omnilane resign`。

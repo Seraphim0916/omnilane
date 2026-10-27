@@ -927,6 +927,13 @@ working notes, including per-benchmark caveats, live in
 
 ## 📜 Release history
 
+## What's new in v0.58.0
+
+- After upgrading, every host must run `omnilane resign` because the AA snapshot has changed.
+- AA snapshot `aa-v4.3.2-2026-10-27-v1` adds GPT-6.1 Terra with six scored efforts (130 scored rows in total). Terra joins selected lane fallback chains; existing scores and every lane's first choice stay unchanged.
+- Fixes in refusal messages, Codex live sessions, caller identity, result normalization and the parsing of status and overlay files; see CHANGELOG for the list.
+- Upgrade: `npm i -g omnilane@0.58.0`.
+
 ## What's new in v0.57.0
 
 - After upgrading, run `omnilane native-context --install` once from a terminal on each host; when upgrading from 0.56.0, also run `omnilane resign` once from a GUI terminal because the AA snapshot has changed.
