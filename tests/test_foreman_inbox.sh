@@ -17,7 +17,8 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-inbox-tests.XXXXXX")"
 cleanup() {
   /bin/rm -rf -- "$TEST_ROOT"
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 fail() {
   printf 'not ok - foreman completion inbox: %s\n' "$1" >&2
@@ -198,11 +199,13 @@ case "${1:-}" in
   --doctor-settings)
     test_completion_settings_detection
     printf 'ok - completion settings detection\n'
+    OMNILANE_COMPLETED=1
     exit 0
     ;;
   --install-readonly)
     test_install_check_read_only
     printf 'ok - installer check is read-only\n'
+    OMNILANE_COMPLETED=1
     exit 0
     ;;
   "") ;;
@@ -686,3 +689,4 @@ test_writer_json_escape_round_trip
 test_reader_repairs_invalid_utf8
 test_reader_consumes_unparseable_record
 test_desktop_session_binding
+OMNILANE_COMPLETED=1

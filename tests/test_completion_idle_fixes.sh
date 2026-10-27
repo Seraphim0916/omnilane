@@ -23,6 +23,8 @@ CHILD_PIDS=()
 cleanup() {
   local rc=$? directory pid tries alive=0
   trap - EXIT INT TERM
+  # Bash 3.2 reports a set -u abort here as 0; only a marked finish may exit 0.
+  [[ "$rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || rc=1
   set +eu
   # Background dispatch detaches its worker. Cancel via its supervisor first,
   # which terminates and reaps the runner tree, then wait for recorded PIDs.
@@ -62,6 +64,7 @@ cleanup() {
   /bin/rm -rf -- "$TEST_ROOT"
   exit "$rc"
 }
+OMNILANE_COMPLETED=0
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
@@ -594,3 +597,4 @@ test_background_worker_uses_readonly_snapshot
 test_worker_snapshot_rejects_sha_mismatch
 test_timeout_diagnostic_on_live_dispatch
 test_lock_timeout_hint
+OMNILANE_COMPLETED=1

@@ -19,7 +19,8 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-thread-tests.XXXXXX")"
 cleanup() {
   /bin/rm -r -- "$TEST_ROOT"
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 fail() {
   printf 'not ok - threaded dispatch: %s\n' "$1" >&2
@@ -499,3 +500,4 @@ set -e
 [[ ! -e "$TEST_ROOT/bad.json" ]] || fail "invalid thread name escaped store"
 
 printf 'ok - four-vendor threaded dispatch state resume refusals and jobs CLI\n'
+OMNILANE_COMPLETED=1
