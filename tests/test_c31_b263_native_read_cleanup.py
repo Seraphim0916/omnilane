@@ -33,10 +33,15 @@ class FailingStream(MemoryStream):
 class NativeReadCleanupTests(unittest.TestCase):
     def read_stream(self, stream):
         with patch.object(native.os, "open", return_value=42), \
-                patch.object(native.os, "fdopen", return_value=stream), \
+                patch.object(native.os, "fdopen", return_value=stream) as fdopen, \
+                patch.object(native.os, "close") as close, \
                 patch.object(native.os, "fstat", return_value=SimpleNamespace(
                     st_mode=stat.S_IFREG | 0o600, st_size=2)):
-            return native.read_json("memory.json")
+            try:
+                return native.read_json("memory.json")
+            finally:
+                fdopen.assert_called_once_with(42, "r", encoding="utf-8", closefd=False)
+                close.assert_called_once_with(42)
 
     def test_valid_json_closes_stream(self):
         stream = MemoryStream("{}")

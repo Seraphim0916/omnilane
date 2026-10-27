@@ -21,13 +21,16 @@ class NativeJsonBytesTests(unittest.TestCase):
         stream.read = mock.Mock(wraps=stream.read)
         info = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_size=0)
         with mock.patch.object(native.os, "open", return_value=123), \
-                mock.patch.object(native.os, "fdopen", return_value=stream), \
+                mock.patch.object(native.os, "fdopen", return_value=stream) as fdopen, \
+                mock.patch.object(native.os, "close") as close, \
                 mock.patch.object(native.os, "fstat", return_value=info) as fstat:
             if error:
                 with self.assertRaisesRegex(ValueError, "^" + error + "$"):
                     native.read_json("fixture.json")
             else:
                 self.assertEqual(native.read_json("fixture.json"), expected)
+        fdopen.assert_called_once_with(123, "r", encoding="utf-8", closefd=False)
+        close.assert_called_once_with(123)
         fstat.assert_called_once_with(123)
         stream.read.assert_called_once_with(native.MAX_BYTES + 1)
         self.assertTrue(stream.closed)
