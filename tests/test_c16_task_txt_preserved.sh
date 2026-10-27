@@ -38,7 +38,7 @@ for vendor in codex claude; do
         FAKE_CLI_EXIT="$expected_rc" CAPTURE="$job/received" bash "$TEST_ROOT/runtime/scripts/lib/job-worker.sh" \
         "$vendor" advise "$job" fixture low "$job/task.txt" "$job/out.txt" \
         > "$job/stdout" 2> "$job/stderr" || rc=$?
-      [[ "$rc" -eq "$expected_rc" ]] || { echo "FAIL unexpected exit: $rc (expected $expected_rc)" >&2; exit 1; }
+      [[ "$rc" -eq "$expected_rc" ]] || { echo "FAIL unexpected exit: $rc (expected $expected_rc)" >&2; tail -n 10 "$job/stderr" >&2; exit 1; }
       cmp "$job/original" "$job/task.txt" || exit 1
       for copy in task.txt.worker task.txt.runner task.txt.runner.worker; do
         [[ ! -e "$job/$copy" && ! -L "$job/$copy" ]] || { echo "FAIL leftover $copy" >&2; exit 1; }
@@ -82,7 +82,8 @@ def command(job):
     return ["/bin/bash", str(runtime / "scripts/lib/job-worker.sh"), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
 def environment():
     return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(fake))
-for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-directory"):
+swap_failures = []
+for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-directory", "swap-runner", "swap-worker"):
     job = base / ("lifecycle-" + scenario)
     job.mkdir()
     (job / "task.txt").write_bytes(b"original task\n")
@@ -91,7 +92,8 @@ for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-
     cmd = command(job)
     if scenario == "timeout":
         cmd = ["perl", str(runtime / "scripts/lib/job-timeout.pl"), "3"] + cmd
-    process = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    stderr = (job / "stderr").open("wb")
+    process = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True)
     try:
         if scenario != "failure":
             events = job / "out.txt.events.jsonl"
@@ -104,13 +106,37 @@ for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-
             replacement.mkdir()
             (replacement / "task.txt.runner").write_bytes(b"foreign replacement\n")
             identity = replacement.stat().st_ino
-        if scenario in ("close", "replaced-directory"): process.send_signal(signal.SIGUSR1)
+        if scenario.startswith("swap-"):
+            owned = list(job.glob("task.txt.copies.*"))
+            assert len(owned) == 1
+            replacement = owned[0] / ("task.txt.runner" if scenario == "swap-runner" else "task.txt.worker")
+            before = replacement.lstat()
+            # Hold the old inode open so rm + create cannot recycle it.
+            old_file = replacement.open("rb")
+            replacement.unlink()
+            replacement.write_bytes(b"foreign same-directory replacement\n")
+            identity = replacement.lstat()
+            assert (before.st_dev, before.st_ino) != (identity.st_dev, identity.st_ino)
+            old_file.close()
+        if scenario in ("close", "replaced-directory", "swap-runner", "swap-worker"): process.send_signal(signal.SIGUSR1)
         elif scenario in ("TERM", "HUP", "INT"):
             os.killpg(process.pid, getattr(signal, "SIG" + scenario))
         rc = process.wait(timeout=20)
-        expected = {"close": 0, "failure": 23, "TERM": 143, "HUP": 129, "INT": 130, "timeout": 124, "replaced-directory": 0}[scenario]
+        expected = {"close": 0, "failure": 23, "TERM": 143, "HUP": 129, "INT": 130, "timeout": 124, "replaced-directory": 0, "swap-runner": 0, "swap-worker": 0}[scenario]
         assert rc == expected, (scenario, rc, expected)
-        if scenario == "replaced-directory":
+        if scenario.startswith("swap-"):
+            stderr.flush()
+            preserved = replacement.exists() and replacement.read_bytes() == b"foreign same-directory replacement\n"
+            diagnostic = "omnilane: left foreign file " + replacement.name
+            reported = diagnostic in (job / "stderr").read_text().splitlines()
+            if not preserved or not reported:
+                swap_failures.append(scenario)
+                print("FAIL %s preserved=%s diagnostic=%s" % (scenario, preserved, reported), flush=True)
+            else:
+                assert replacement.lstat().st_ino == identity.st_ino
+                assert list(replacement.parent.iterdir()) == [replacement]
+                print("PASS %s foreign inode/content preserved; %s" % (scenario, diagnostic), flush=True)
+        elif scenario == "replaced-directory":
             assert replacement.stat().st_ino == identity
             assert (replacement / "task.txt.runner").read_bytes() == b"foreign replacement\n"
             print("PASS replacement directory identity preserved", flush=True)
@@ -121,6 +147,8 @@ for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-
         try: os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError: pass
         process.wait()
+        stderr.close()
+assert not swap_failures, "foreign-file cleanup regressions: " + ", ".join(swap_failures)
 for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
     for kind in ("file", "symlink", "directory"):
         job = base / ("existing-" + name + "-" + kind)
@@ -145,9 +173,28 @@ for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
 # failures. Prefix fixtures retain each scripts own EXIT handler, but skip
 # expensive test bodies; no production fault-injection switch is needed.
 python3 -B -c '
-import os, pathlib, subprocess, sys
+import json, os, pathlib, subprocess, sys
 base, root = map(pathlib.Path, sys.argv[1:])
 runtime = base / "runtime"
+worker = runtime / "scripts/lib/job-worker.sh"
+original_worker = worker.read_text()
+# Stop after the staging receipt, before rename, for both copy producers.
+# The actual worker EXIT path must remove the staged file and the old target.
+for operation in ("decorate", "truncate"):
+    seam = "            record(target.name, out.fileno())"
+    assert original_worker.count(seam) == 1
+    worker.write_text(original_worker.replace(seam, seam + "\n            if action == " + json.dumps(operation) + ": sys.exit(23)"))
+    job = base / ("interrupted-" + operation)
+    job.mkdir()
+    (job / "task.txt").write_bytes(b"x" * 200000)
+    env = dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="single-shot", CLAUDE_BIN=str(base / "fake-claude"), CAPTURE=str(job / "received"))
+    result = subprocess.run(["/bin/bash", str(worker), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")], env=env, capture_output=True, timeout=10)
+    expected = 125 if operation == "decorate" else 23
+    assert result.returncode == expected, (operation, result.returncode, result.stderr)
+    assert not list(job.glob("task.txt.copies.*")), (operation, result.stderr)
+    assert (job / "task.txt").read_bytes() == b"x" * 200000
+    print("PASS interrupted %s staging and old copies removed exit=%s" % (operation, expected), flush=True)
+worker.write_text(original_worker)
 with (runtime / "scripts/lib/common.sh").open("a") as out:
     out.write("\naa_policy_gate() { unset R154_UNBOUND; : \"$R154_UNBOUND\"; }\n")
 job = base / "nounset-worker"

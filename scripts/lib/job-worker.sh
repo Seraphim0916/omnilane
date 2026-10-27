@@ -37,6 +37,7 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 TASK_PROMPT_FILE="$PROMPT_FILE"
 PROMPT_COPY_DIR=""
 PROMPT_COPY_ID=""
+PROMPT_LEDGER_ID=""
 live_mailbox_cleanup_ready=0
 job_worker_completed=0
 # One exit handler owns prompt copies, mailbox resources, and the cwd lock.
@@ -47,14 +48,12 @@ cleanup_job_worker() {
   trap - EXIT
   if [[ "$rc" -eq 0 && "$job_worker_completed" -ne 1 ]]; then rc=1; fi
   if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox || true; fi
-  # Runners atomically replace their .worker copies (including truncation).
-  # Own a private namespace instead of guessing ownership of shared names.
-  # Pin its device/inode, never follow a replacement symlink, and do not
-  # recursively remove unexpected contents planted in that namespace.
+  # Both the directory and each creation must still have their original
+  # identity. Names alone never confer ownership, even in a private directory.
   if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
     python3 -c '
-import os, stat, sys
-path, identity = sys.argv[1:]
+import json, os, stat, sys
+path, identity, ledger_identity = sys.argv[1:]
 try:
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
 except OSError:
@@ -63,24 +62,33 @@ try:
     info = os.fstat(fd)
     if "%s:%s" % (info.st_dev, info.st_ino) != identity:
         sys.exit(0)
-    names = ("task.txt", "task.txt.worker", "task.txt.runner", "task.txt.runner.worker")
+    owned = {}
+    try:
+        ledger = os.open(".identities", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+        with os.fdopen(ledger) as records:
+            info = os.fstat(records.fileno())
+            if "%s:%s" % (info.st_dev, info.st_ino) == ledger_identity:
+                for line in records:
+                    name, device, inode = json.loads(line)
+                    owned.setdefault(name, set()).add((device, inode))
+                owned[".identities"] = {(info.st_dev, info.st_ino)}
+    except (OSError, ValueError):
+        owned = {}
     for name in os.listdir(fd):
-        # Include interrupted mktemp/truncate staging files owned by the same
-        # private namespace; leave unrelated entries and symlinks untouched.
-        if name not in names and not name.startswith(("task.txt.worker.", "task.txt.runner.worker.")):
-            continue
         try:
             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
-            if stat.S_ISREG(info.st_mode):
+            if stat.S_ISREG(info.st_mode) and (info.st_dev, info.st_ino) in owned.get(name, set()):
                 os.unlink(name, dir_fd=fd)
+            else:
+                print("omnilane: left foreign file " + name, file=sys.stderr)
         except FileNotFoundError:
             pass
     current = os.lstat(path)
-    if (current.st_dev, current.st_ino) == (os.fstat(fd).st_dev, os.fstat(fd).st_ino):
+    if not os.listdir(fd) and (current.st_dev, current.st_ino) == (os.fstat(fd).st_dev, os.fstat(fd).st_ino):
         os.rmdir(path)
 finally:
     os.close(fd)
-' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" || true
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_LEDGER_ID" || true
   fi
   release_cwd_lock || true
   exit "$rc"
@@ -99,8 +107,111 @@ for copy_path in "${TASK_PROMPT_FILE}.worker" "${TASK_PROMPT_FILE}.runner" "${TA
 done
 PROMPT_COPY_DIR="$(umask 077; mktemp -d "${TASK_PROMPT_FILE}.copies.XXXXXX")" || exit 1
 PROMPT_COPY_ID="$(python3 -c 'import os,sys; s=os.lstat(sys.argv[1]); print("%s:%s" % (s.st_dev,s.st_ino))' "$PROMPT_COPY_DIR")" || exit 1
+PROMPT_LEDGER_ID="$(python3 -c 'import os,sys; fd=os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); s=os.fstat(fd); print("%s:%s" % (s.st_dev,s.st_ino)); os.close(fd)' "$PROMPT_COPY_DIR/.identities")" || exit 1
+
+# Keep creation receipts across command substitutions and runner subshells.
+# Record via the open creation fd before writing bytes, including staging
+# files, then carry that same identity across the atomic rename.
+owned_prompt_operation() {
+  python3 -c '
+import json, os, pathlib, sys, tempfile
+directory, directory_id, ledger_id, action, source, argument = sys.argv[1:]
+root = pathlib.Path(directory).resolve()
+info = root.lstat()
+if "%s:%s" % (info.st_dev, info.st_ino) != directory_id:
+    sys.exit("omnilane: prompt directory identity changed")
+ledger_fd = os.open(str(root / ".identities"), os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+with os.fdopen(ledger_fd, "a") as ledger:
+    info = os.fstat(ledger.fileno())
+    if "%s:%s" % (info.st_dev, info.st_ino) != ledger_id:
+        sys.exit("omnilane: prompt ledger identity changed")
+    def record(name, fd):
+        info = os.fstat(fd)
+        ledger.write(json.dumps([name, info.st_dev, info.st_ino]) + "\n")
+        ledger.flush()
+    src = pathlib.Path(source)
+    if action == "copy":
+        target = root / argument
+        fd = os.open(str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        record(target.name, fd)
+        with os.fdopen(fd, "wb") as out:
+            out.write(src.read_bytes())
+    else:
+        if src.parent.resolve() != root:
+            sys.exit("omnilane: prompt outside private directory")
+        target = src.with_name(src.name + ".worker") if action == "decorate" else src
+        if action == "decorate":
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                sys.exit(125)
+            data = argument.encode() + src.read_bytes()
+        else:
+            cap, original_size = argument.split(":", 1)
+            cap = int(cap)
+            data = src.read_bytes()
+            if len(data) <= cap:
+                sys.exit(0)
+            data = data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original_size).encode() + data[-(cap // 4):]
+        fd, temporary = tempfile.mkstemp(prefix=target.name + ".", dir=str(root))
+        record(pathlib.Path(temporary).name, fd)
+        with os.fdopen(fd, "wb") as out:
+            out.write(data)
+            out.flush()
+            record(target.name, out.fileno())
+            os.replace(temporary, str(target))
+        if action == "decorate":
+            print(target)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_LEDGER_ID" "$@"
+}
+
+worker_prompt_file() {
+  local header
+  printf -v header '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"
+  owned_prompt_operation decorate "$1" "$header" || return 125
+}
+
+untracked_truncate_definition="$(declare -f truncate_payload)"
+eval "${untracked_truncate_definition/truncate_payload/untracked_truncate_payload}"
+unset untracked_truncate_definition
+truncate_payload() {
+  local size
+  if [[ ! "${1%/*}" -ef "$PROMPT_COPY_DIR" ]]; then
+    untracked_truncate_payload "$@"
+    return $?
+  fi
+  size="$(wc -c < "$1")" || return 1
+  owned_prompt_operation truncate "$1" "${2:-140000}:$size"
+}
+
+# Keep the runner in a fresh Bash process, including its own PID and traps.
+# Install the tracked helpers immediately after the runner loads common.
+# A one-shot DEBUG hook avoids wrapping source (which corrupts BASH_SOURCE
+# on Bash 3.2). It is removed before any runner work or trap setup occurs.
+run_job_runner() {
+  # Custom runners without the shared prompt helpers run unchanged.
+  IFS= read -r runner_header < "$RUNNER"
+  case "$runner_header" in
+    '#!'*bash*) ;;
+    *) exec "$RUNNER" "$@" ;;
+  esac
+  if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$RUNNER"; then
+    exec "$RUNNER" "$@"
+  fi
+  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_LEDGER_ID
+  exec bash -c '
+    overrides="$1"
+    runner="$2"
+    shift 2
+    set -T
+    trap '\''if [[ "${BASH_SOURCE[0]:-}" == "$runner" ]] && declare -F worker_prompt_file >/dev/null; then
+      eval "$overrides"
+      trap - DEBUG
+      set +T
+    fi'\'' DEBUG
+    builtin source "$runner" "$@"
+  ' bash "$(declare -f owned_prompt_operation worker_prompt_file truncate_payload untracked_truncate_payload)" "$RUNNER" "$@"
+}
 RUNNER_PROMPT_FILE="$PROMPT_COPY_DIR/task.txt.runner"
-cat "$TASK_PROMPT_FILE" > "$RUNNER_PROMPT_FILE" || exit 1
+owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt.runner || exit 1
 PROMPT_FILE="$RUNNER_PROMPT_FILE"
 
 emit_mode_notice() {
@@ -119,7 +230,7 @@ run_single_shot() {
   set +e
   (
     unset OMNILANE_INBOX
-    "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE"
+    run_job_runner "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE"
   )
   rc=$?
   set -e
@@ -394,7 +505,7 @@ if [[ "$VENDOR" == "codex" ]]; then
 fi
 # The first live message gets the same worker rules a single-shot runner
 # sends; later sends reach the worker through the inbox and stay verbatim.
-cat "$TASK_PROMPT_FILE" > "$PROMPT_COPY_DIR/task.txt" || exit 1
+owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt || exit 1
 FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_COPY_DIR/task.txt")" || exit 1
 # Cap only the copy that is sent: task.txt is the preserved record. The rules
 # sit at the head of the copy, which truncate_payload keeps.
@@ -488,7 +599,7 @@ fi
 write_current_pid_file "$HOLDER_PID_FILE"
 export OMNILANE_INBOX="$RUNNER_INBOX_FIFO"
 aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || exit $?
-"$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
+run_job_runner "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
 runner_pid=$!
 
 # Open the runner writer only after its FIFO reader starts. A plain blocking
