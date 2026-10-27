@@ -223,6 +223,14 @@ def automation_receipt(args, expected):
             'trust': 'caller-attested tool result; not independent scheduler verification'}
 
 
+def parse_exit(data):
+    raw = data.decode().strip()
+    check(re.fullmatch(r'-?\d{1,5}', raw), 'invalid_exit')
+    rc = int(raw)
+    check(-32768 <= rc <= 32767, 'invalid_exit')
+    return rc
+
+
 def poll(args, state, path, now):
     result = summary(state, path)
     result.update(events=[], errors=[], needs_disable=False)
@@ -240,10 +248,7 @@ def poll(args, state, path, now):
             marker = Path(args.home) / 'jobs' / job / 'exit'
             if not os.path.lexists(marker):
                 continue
-            raw = read_bytes(marker, 32).decode().strip()
-            check(re.fullmatch(r'-?\d{1,5}', raw), 'invalid_exit')
-            rc = int(raw)
-            check(-32768 <= rc <= 32767, 'invalid_exit')
+            rc = parse_exit(read_bytes(marker, 32))
             key = digest([args.run_id, job, frozen, rc])
             # Changing an already observed terminal exit is not a fresh generation.
             prior = [k for k, e in state['events'].items() if e['job_id'] == job]
@@ -322,7 +327,7 @@ def act(args):
                       == state['jobs'][event['job_id']],
                       'binding_changed')
                 current_exit = read_bytes(Path(args.home) / 'jobs' / event['job_id'] / 'exit', 32)
-                check(current_exit.decode().strip() == str(event['exit_code']), 'terminal_changed')
+                check(parse_exit(current_exit) == event['exit_code'], 'terminal_changed')
                 if args.action == 'ack-delivered':
                     check(event['state'] in ('claimed', 'delivered', 'accepted'), 'invalid delivery state')
                     if event['state'] == 'claimed':
