@@ -18,7 +18,7 @@ cp -R "$ROOT/scripts/lib" "$ROOT/scripts/runners" "$TEST_ROOT/runtime/scripts/"
 cp -R "$ROOT/config" "$TEST_ROOT/runtime/"
 # Scope this fixture to prompt delivery. Locks, policy and the watchdog have
 # separate integration tests; bypass their process inspection (ps is denied
-# in the worker sandbox). The worker and vendor runners remain unmodified.
+# in the worker sandbox). Vendor runners remain unmodified.
 printf '\nacquire_cwd_lock() { :; }\naa_policy_gate() { :; }\nrun_with_timeout() { shift; "$@"; }\n' \
   >> "$TEST_ROOT/runtime/scripts/lib/common.sh"
 # Reuse the aggregate suite's fake CLIs, adding byte-exact input capture.
@@ -62,8 +62,27 @@ printf 'PASS task.txt preserved; existing CLI truncation verified and copies rem
 # polling delays are never treated as proof of success.
 python3 -B -c '
 import os, pathlib, signal, subprocess, sys, time
-base = pathlib.Path(sys.argv[1])
+base, root = (pathlib.Path(arg).resolve() for arg in sys.argv[1:])
 runtime = base / "runtime"
+# Fault injection belongs only to this disposable copy, never production.
+worker = runtime / "scripts/lib/job-worker.sh"
+source = worker.read_text()
+cleanup_hook = "            hook = os.environ.get(\"OMNILANE_TEST_CLEANUP_SWAP_HOOK\")\n            if hook:\n                subprocess.run([\"/bin/bash\", hook, os.path.join(path, name)], check=True)\n"
+create_hook = "        hook = os.environ.get(\"OMNILANE_TEST_PROMPT_CREATE_HOOK\")\n        if hook:\n            subprocess.run([\"/bin/bash\", hook, os.path.join(directory, name)], check=True)\n"
+# Strip the old hooks too, so this exact regression can run against 465fb54.
+source = source.replace(cleanup_hook, "").replace(create_hook, "")
+old_anchor = "            os.rename(name, temporary, src_dir_fd=fd, dst_dir_fd=fd)"
+new_anchor = "                os.rename(name, name, src_dir_fd=fd, dst_dir_fd=quarantine_fd)"
+if new_anchor in source:
+    anchor, indent, target = new_anchor, "                ", "os.path.join(quarantine, name)"
+else:
+    anchor, indent, target = old_anchor, "            ", "os.path.join(path, temporary)"
+assert source.count(anchor) == 1
+source = source.replace(anchor, anchor + "\n" + indent + "import subprocess\n" + indent + "hook = os.environ.get(\"OMNILANE_TEST_CLEANUP_SWAP_HOOK\")\n" + indent + "if hook:\n" + indent + "    subprocess.run([\"/bin/bash\", hook, " + target + "], check=True)")
+anchor = "        info = os.fstat(fd)"
+assert source.count(anchor) == 1
+source = source.replace(anchor, "        import subprocess\n" + create_hook + anchor)
+worker.write_text(source)
 fake = base / "live-claude"
 fake.write_text("#!/usr/bin/env python3\nimport json,os,sys\nfor line in sys.stdin:\n print(json.dumps(dict(type=\"result\",is_error=os.environ.get(\"LIVE_FAIL\")==\"1\",result=\"fixture result\")),flush=True)\n if os.environ.get(\"LIVE_FAIL\")==\"1\": sys.exit(23)\n")
 fake.chmod(0o755)
@@ -84,7 +103,7 @@ def environment():
     return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(fake))
 # These cases run the worker boundary, including its actual EXIT handler.
 regressions = []
-for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal"):
+for scenario in ("production-hooks", "ledger-tamper", "cleanup-window-swap", "create-window-signal"):
     job = base / scenario
     job.mkdir()
     (job / "task.txt").write_bytes(b"original task\n")
@@ -92,6 +111,13 @@ for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal")
     hook = job / "hook.sh"
     marker = job / "hook-ready"
     env["HOOK_MARKER"] = str(marker)
+    cmd = command(job)
+    if scenario == "production-hooks":
+        hook.write_text("printf executed >> \"$HOOK_MARKER\"\n")
+        env["OMNILANE_TEST_CLEANUP_SWAP_HOOK"] = str(hook)
+        env["OMNILANE_TEST_PROMPT_CREATE_HOOK"] = str(hook)
+        env["OMNILANE_JOB_WORKER_REPO"] = str(runtime)
+        cmd[1] = str(root / "scripts/lib/job-worker.sh")
     if scenario == "cleanup-window-swap":
         hook.write_text("mv \"$1\" \"$1.saved\"\nprintf \"foreign-swap:%s\" \"${1##*/}\" > \"$1\"\nprintf \"%s\\n\" \"$1\" >> \"$HOOK_MARKER\"\n")
         env["OMNILANE_TEST_CLEANUP_SWAP_HOOK"] = str(hook)
@@ -99,7 +125,7 @@ for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal")
         hook.write_text("printf ready > \"$HOOK_MARKER\"\nwhile :; do sleep 1; done\n")
         env["OMNILANE_TEST_PROMPT_CREATE_HOOK"] = str(hook)
     stderr = (job / "stderr").open("wb")
-    process = subprocess.Popen(command(job), env=env, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True)
+    process = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=stderr, start_new_session=True)
     try:
         if scenario == "create-window-signal":
             deadline = time.monotonic() + 3
@@ -135,7 +161,10 @@ for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal")
             process.send_signal(signal.SIGUSR1)
             assert process.wait(timeout=10) == 0
             diagnostics = (job / "stderr").read_text()
-            if scenario == "ledger-tamper":
+            if scenario == "production-hooks":
+                assert not marker.exists(), "production executed test hook environment variables"
+                clean(job)
+            elif scenario == "ledger-tamper":
                 assert foreign.exists() and foreign.read_bytes() == b"foreign-ledger", "forged receipt deleted foreign file"
                 assert "omnilane: left foreign file foreign.txt" in diagnostics
             else:
@@ -145,6 +174,9 @@ for scenario in ("ledger-tamper", "cleanup-window-swap", "create-window-signal")
                     swapped = [p for p in private.iterdir() if p.is_file() and p.read_bytes() == content]
                     assert swapped, "swapped-in foreign content was deleted: " + original
                     assert any("omnilane: left foreign file " + p.name in diagnostics for p in swapped)
+                    quarantine = pathlib.Path(original).parent
+                    assert quarantine != private and quarantine.parent == private, "post-rename candidate exposed in parent listing"
+                    assert quarantine.stat().st_mode & 0o777 == 0o700
         print("PASS R165 " + scenario, flush=True)
     except (AssertionError, OSError, subprocess.TimeoutExpired) as error:
         regressions.append(scenario)
@@ -241,7 +273,7 @@ for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
         assert (job / "task.txt").read_bytes() == b"original task\n"
         assert not list(job.glob("task.txt.copies.*"))
         print("PASS pre-existing %s %s preserved" % (name, kind), flush=True)
-' "$TEST_ROOT"
+' "$TEST_ROOT" "$ROOT"
 # Exercise the actual worker and both test scripts with Bash 3.2 nounset
 # failures. Prefix fixtures retain each scripts own EXIT handler, but skip
 # expensive test bodies; no production fault-injection switch is needed.

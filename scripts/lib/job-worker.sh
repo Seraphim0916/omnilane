@@ -52,7 +52,7 @@ cleanup_job_worker() {
   # identity. Names alone never confer ownership, even in a private directory.
   if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
     python3 -c '
-import os, stat, subprocess, sys, uuid
+import os, stat, sys, tempfile, uuid
 path, identity, receipts = sys.argv[1:]
 try:
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -68,25 +68,31 @@ try:
             info = os.stat(name, dir_fd=fd, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode) or "%s:%s" % (info.st_dev, info.st_ino) != owned.get(name):
                 continue
-            hook = os.environ.get("OMNILANE_TEST_CLEANUP_SWAP_HOOK")
-            if hook:
-                subprocess.run(["/bin/bash", hook, os.path.join(path, name)], check=True)
-            # Move the name before deciding what may be unlinked. A replacement
-            # in the check/rename window is inspected at its quarantined name.
-            temporary = ".cleanup-" + uuid.uuid4().hex
-            os.rename(name, temporary, src_dir_fd=fd, dst_dir_fd=fd)
-            info = os.stat(temporary, dir_fd=fd, follow_symlinks=False)
-            if stat.S_ISREG(info.st_mode) and "%s:%s" % (info.st_dev, info.st_ino) == owned.get(name):
-                os.unlink(temporary, dir_fd=fd)
-            else:
-                # link is a no-clobber restore: a concurrently occupied original
-                # name must not be overwritten. Directories stay quarantined.
-                try:
-                    os.link(temporary, name, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
-                except OSError:
-                    pass
+            # Hide the candidate name from the parent listing in a fresh 0700
+            # directory, pinning that directory for every inspection/removal.
+            quarantine = tempfile.mkdtemp(prefix=".cleanup-", dir=path)
+            quarantine_name = os.path.basename(quarantine)
+            quarantine_fd = os.open(quarantine_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                os.rename(name, name, src_dir_fd=fd, dst_dir_fd=quarantine_fd)
+                info = os.lstat(name, dir_fd=quarantine_fd)
+                # macOS has no inode-based unlink; a same-uid writer that opens
+                # this 0700 subdirectory can still race the final check/unlink.
+                if stat.S_ISREG(info.st_mode) and "%s:%s" % (info.st_dev, info.st_ino) == owned.get(name):
+                    os.unlink(name, dir_fd=quarantine_fd)
                 else:
-                    os.unlink(temporary, dir_fd=fd)
+                    # Rename back under a fresh recovery name, leaving any
+                    # concurrent occupant of the original name untouched.
+                    recovered = ".preserved-" + uuid.uuid4().hex + "-" + name
+                    os.rename(name, recovered, src_dir_fd=quarantine_fd, dst_dir_fd=fd)
+                    print("omnilane: left foreign file " + recovered, file=sys.stderr)
+            finally:
+                try:
+                    os.rmdir(quarantine_name, dir_fd=fd)
+                except OSError:
+                    print("omnilane: left foreign file " + quarantine_name, file=sys.stderr)
+                finally:
+                    os.close(quarantine_fd)
         except FileNotFoundError:
             pass
     for name in os.listdir(fd):
@@ -120,7 +126,7 @@ PROMPT_COPY_ID="$(python3 -c 'import os,sys; s=os.lstat(sys.argv[1]); print("%s:
 # a target uses its verified open fd, so no child must register a new inode.
 for prompt_name in task.txt.runner task.txt.runner.worker task.txt task.txt.worker; do
   PROMPT_IDENTITIES="$PROMPT_IDENTITIES $prompt_name=$(python3 -c '
-import os, subprocess, sys
+import os, sys
 directory, identity, name = sys.argv[1:]
 root = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
 try:
@@ -129,9 +135,6 @@ try:
         sys.exit("omnilane: prompt directory identity changed")
     fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=root)
     try:
-        hook = os.environ.get("OMNILANE_TEST_PROMPT_CREATE_HOOK")
-        if hook:
-            subprocess.run(["/bin/bash", hook, os.path.join(directory, name)], check=True)
         info = os.fstat(fd)
         print("%s:%s" % (info.st_dev, info.st_ino), flush=True)
     finally:
