@@ -133,6 +133,8 @@ def load():
     aa_policy._check(type(value.get("schema_version")) is int
                      and value.get("schema_version") == 1 and isinstance(value.get("pending"), dict),
                      "invalid local verification status")
+    aa_policy._check(all(isinstance(entry, dict) for entry in value["pending"].values()),
+                     "invalid local verification status")
     return value
 
 
