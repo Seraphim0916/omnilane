@@ -1,0 +1,97 @@
+"""jobs close when the holder PID file vanishes between its existence check and its read."""
+import offline_env  # noqa: F401
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import time
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+JOB_ID = "20260905-160000-12345-1"
+
+# Stands in for the worker exiting at the worst moment: jobs close has seen the
+# holder PID file, then the file is gone when cat opens it.
+CAT_SHIM = """#!/bin/bash
+for arg in "$@"; do
+  if [[ "$arg" == "$CLOSE_TEST_HOLDER" && -f "$arg" ]]; then
+    /bin/mv "$arg" "$arg.vanished"
+  fi
+done
+exec /bin/cat "$@"
+"""
+
+
+def setUpModule():
+    (ROOT / ".test-scratch").mkdir(parents=True, exist_ok=True)
+
+
+class CloseHolderVanishTests(unittest.TestCase):
+    def setUp(self):
+        self.scratch = tempfile.TemporaryDirectory(dir=ROOT / ".test-scratch")
+        base = Path(self.scratch.name)
+        self.job = base / "home" / "jobs" / JOB_ID
+        self.job.mkdir(parents=True)
+        (self.job / "meta.json").write_text('{"lane":"hardest-coding","vendor":"codex","session_mode":"live"}')
+        self.holder = self.job / "inbox.holder.pid"
+        shims = base / "shims"
+        shims.mkdir()
+        (shims / "cat").write_text(CAT_SHIM)
+        (shims / "cat").chmod(0o755)
+        self.env = dict(os.environ, OMNILANE_HOME=str(base / "home"),
+                        CLOSE_TEST_HOLDER=str(self.holder))
+        self.shim_env = dict(self.env, PATH=f"{shims}:{os.environ['PATH']}")
+
+    def tearDown(self):
+        self.scratch.cleanup()
+
+    def close(self, env):
+        return subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    def wait_for_receipt_poller(self, closer, timeout=5):
+        end = time.monotonic() + timeout
+        receipt = str(self.job / "exit")
+        while True:
+            if closer.poll() is not None:
+                out, err = closer.communicate()
+                self.fail(("close returned before waiting for the exit receipt", closer.returncode, out, err))
+            listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="], capture_output=True,
+                                     text=True, timeout=max(.1, end - time.monotonic())).stdout
+            for line in listing.splitlines():
+                fields = line.split(None, 1)
+                if len(fields) == 2 and fields[0] == str(closer.pid) and receipt in fields[1]:
+                    return
+            self.assertLess(time.monotonic(), end, "close never reached the receipt wait")
+            time.sleep(.02)
+
+    def test_holder_vanishing_during_read_waits_for_the_receipt(self):
+        self.holder.write_text("999999\n")
+        closer = self.close(self.shim_env)
+        try:
+            self.wait_for_receipt_poller(closer)
+            # The race really happened: the file existed, then vanished at read time.
+            self.assertFalse(self.holder.exists())
+            self.assertTrue(self.holder.with_name("inbox.holder.pid.vanished").exists())
+            receipt = self.job / ".exit.tmp"
+            receipt.write_text("0\n")
+            os.replace(receipt, self.job / "exit")
+            out, err = closer.communicate(timeout=15)
+        finally:
+            if closer.poll() is None:
+                closer.kill()
+                closer.communicate()
+        self.assertEqual((closer.returncode, out, err), (0, "already closed (exit 0)\n", ""))
+
+    def test_holder_file_that_stays_invalid_fails_at_once(self):
+        self.holder.write_text("not-a-pid\n")
+        started = time.monotonic()
+        closer = self.close(self.env)
+        out, err = closer.communicate(timeout=10)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual((closer.returncode, out, err), (1, "", "live inbox holder is unavailable\n"))
+        self.assertTrue(self.holder.exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

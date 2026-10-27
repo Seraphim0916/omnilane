@@ -19,7 +19,8 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-goal-tests.XXXXXX")"
 cleanup() {
   /bin/rm -r -- "$TEST_ROOT" 2>/dev/null || true
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -277,3 +278,4 @@ case "$CASE" in
   cli-surface) case_cli_surface ;;
   *) fail "unknown case: $CASE" ;;
 esac
+OMNILANE_COMPLETED=1

@@ -12,6 +12,7 @@ set -euo pipefail
 # Exit 5 = too few Round 1 successes; exit 6 = no Round 2 rebuttal succeeded.
 
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+omnilane_track_completion
 
 MODE="$1"; WORKDIR="$2"; VENDORS="$3"; ROUNDS="$4"; PROMPT_FILE="$5"; OUTPUT_FILE="$6"
 : "$MODE" # voters always run read-only regardless of mode
@@ -26,7 +27,8 @@ cleanup_temp_files() {
   # an unbound-variable error under set -u on Bash 3.2.
   for f in ${TEMP_FILES[@]+"${TEMP_FILES[@]}"}; do /bin/rm -f -- "$f"; done
 }
-trap cleanup_temp_files EXIT
+release_lock_and_temp_files() { release_cwd_lock; cleanup_temp_files; }
+trap 'omnilane_exit_trap $? cleanup_temp_files' EXIT
 
 voter_spec() { # vendor -> "model<TAB>effort"
   case "$1" in
@@ -47,7 +49,7 @@ run_voter() { # vendor, prompt_file, out_file -> rc
   aa_policy_gate "$v" "$model" "$effort" || return $?
   if [[ "$v" == "codex" ]]; then
     acquire_cwd_lock codex "$WORKDIR"
-    trap 'release_cwd_lock; cleanup_temp_files' EXIT
+    trap 'omnilane_exit_trap $? release_lock_and_temp_files' EXIT
   fi
   set +e
   "$RUNNER_DIR/run-$v.sh" advise "$WORKDIR" "$model" "$effort" "$pf" "$out"
@@ -55,7 +57,7 @@ run_voter() { # vendor, prompt_file, out_file -> rc
   set -e
   if [[ "$v" == "codex" ]]; then
     release_cwd_lock
-    trap cleanup_temp_files EXIT
+    trap 'omnilane_exit_trap $? cleanup_temp_files' EXIT
   fi
   return "$rc"
 }
@@ -120,4 +122,5 @@ if [[ "$ROUNDS" == "2" ]]; then
     exit 6
   fi
 fi
+omnilane_mark_completed
 exit 0

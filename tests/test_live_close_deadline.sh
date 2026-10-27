@@ -86,6 +86,34 @@ def wait_for(path, timeout=5):
         assert time.monotonic() < end, f'missing {path}'
         time.sleep(.02)
 
+def wait_for_absent(path, timeout=5):
+    end = time.monotonic() + timeout
+    while path.exists():
+        assert time.monotonic() < end, f'still present {path}'
+        time.sleep(.02)
+
+def wait_for_receipt_waiter(closer, receipt, timeout=5):
+    """Return once jobs close, past its holder checks, polls for the receipt.
+
+    Its receipt poller is a direct child whose arguments name the exit file.
+    A close that returns first never took the missing-holder wait path."""
+    end = time.monotonic() + timeout
+    while True:
+        if closer.poll() is not None:
+            out, err = closer.communicate()
+            raise AssertionError(('close returned before waiting for the exit receipt',
+                                  closer.returncode, out, err))
+        # -ww: unlimited width on procps and BSD ps, so the exit path is never cut.
+        listing = subprocess.run(['ps', '-A', '-ww', '-o', 'ppid=,command='],
+                                 capture_output=True, text=True,
+                                 timeout=max(.1, end - time.monotonic())).stdout
+        for line in listing.splitlines():
+            fields = line.split(None, 1)
+            if len(fields) == 2 and fields[0] == str(closer.pid) and str(receipt) in fields[1]:
+                return
+        assert time.monotonic() < end, 'close never reached the receipt wait'
+        time.sleep(.02)
+
 def wait_for_stopped(pid, timeout=2):
     """A marker or successful kill(STOP) is not a stopped-state receipt."""
     deadline = time.monotonic() + timeout
@@ -111,6 +139,18 @@ def record_exit(worker, destination):
     receipt = destination.with_name('.exit.tmp')
     receipt.write_text(str(worker.wait()) + '\n')
     os.replace(receipt, destination)
+
+
+class ReleasedReceipt:
+    """Holds the exit receipt after the worker is reaped, as the real
+    supervisor does while it finalizes: holder PID gone, no exit file yet."""
+    def __init__(self, worker, release):
+        self.worker, self.release = worker, release
+
+    def wait(self):
+        status = self.worker.wait()
+        self.release.wait(timeout=10)
+        return status
 
 
 def cleanup_fixture(scratch, processes, opened_fds, exit_recorders, original_error):
@@ -174,7 +214,7 @@ def fill_fifo(fd, limit=8 * 1024 * 1024, timeout=2):
     raise AssertionError(f'runner FIFO did not reach bounded backpressure: {written}')
 
 try:
-    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,ordered,partial,flow,epipe,idle-exit,stuck,full-grace,repeat-close').split(',')
+    modes = os.environ.get('CLOSE_TEST_CASES', 'empty,queued,finishing,ordered,partial,flow,epipe,idle-exit,stuck,full-grace,repeat-close').split(',')
     for number, mode in enumerate(modes, 1):
         case = scratch / mode
         home = case / 'home'
@@ -197,7 +237,9 @@ try:
         processes.append(proc)
         # The holder is this direct child, so waitpid can observe STOP without ps.
         # Preserve the old supervisor's exit-file receipt for the real jobs CLI.
-        recorder = threading.Thread(target=record_exit, args=(proc, job / 'exit'))
+        release = threading.Event()
+        reaped = ReleasedReceipt(proc, release) if mode == 'finishing' else proc
+        recorder = threading.Thread(target=record_exit, args=(reaped, job / 'exit'))
         recorder.start()
         exit_recorders.append(recorder)
         wait_for(job / 'inbox.ready')
@@ -217,7 +259,7 @@ try:
                     time.sleep(.0005)
             hammer = threading.Thread(target=hammer_usr1, daemon=True)
             hammer.start()
-        if mode in ('queued', 'flow', 'epipe'):
+        if mode in ('queued', 'finishing', 'flow', 'epipe'):
             if mode in ('flow', 'epipe'):
                 wait_for(case / 'runner-stopped-reading')
             os.kill(holder, signal.SIGSTOP)
@@ -236,7 +278,7 @@ try:
                         opened_fds.remove(runner_fd)
                 fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
                 opened_fds.add(fd)
-                payload = b'{"queued":true}\n' if mode == 'queued' else b'{"text":"' + b'x' * 1000 + b'"}\n'
+                payload = b'{"queued":true}\n' if mode in ('queued', 'finishing') else b'{"text":"' + b'x' * 1000 + b'"}\n'
                 assert os.write(fd, payload) == len(payload)
                 if mode == 'flow':
                     def produce():
@@ -255,6 +297,11 @@ try:
                 # A setup failure must never leave this fixture's holder stopped.
                 try: os.kill(holder, signal.SIGCONT)
                 except ProcessLookupError: pass
+            if mode == 'finishing':
+                # The worker clears its holder PID on exit, before the supervisor
+                # records the exit status. A close landing in that window must
+                # wait for the receipt instead of reporting a missing holder.
+                wait_for_absent(job / 'inbox.holder.pid')
         if mode in ('ordered', 'partial'):
             fd = os.open(job / 'inbox.fifo', os.O_WRONLY | os.O_NONBLOCK)
             opened_fds.add(fd)
@@ -288,8 +335,19 @@ try:
                                             text=True, start_new_session=True)
             processes.append(second_close)
         started = time.monotonic()
-        result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
-                                env=env, capture_output=True, text=True, timeout=11)
+        if mode == 'finishing':
+            closer = subprocess.Popen(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
+                                      env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      text=True, start_new_session=True)
+            processes.append(closer)
+            # Release the receipt only once close is provably waiting for it.
+            wait_for_receipt_waiter(closer, job / 'exit')
+            release.set()
+            out, err = closer.communicate(timeout=11)
+            result = subprocess.CompletedProcess(closer.args, closer.returncode, out, err)
+        else:
+            result = subprocess.run(['/bin/bash', str(root / 'scripts/jobs.sh'), 'close', job_id],
+                                    env=env, capture_output=True, text=True, timeout=11)
         elapsed = time.monotonic() - started
         runner_pid = int((case / 'runner.pid').read_text())
         wait_for_exit(runner_pid)
@@ -316,7 +374,8 @@ try:
         expected = (1, 137) if mode == 'idle-exit' else ((1,) if mode in ('empty', 'flow', 'epipe') else (0,))
         assert result.returncode == proc.returncode and result.returncode in expected, (mode, result.returncode, proc.returncode, result.stdout, result.stderr, (case / 'stderr').read_text())
         assert 'invalid timeout specification' not in (case / 'stderr').read_text()
-        if mode == 'queued': assert b'{"queued":true}\n' in (case / 'received').read_bytes()
+        if mode in ('queued', 'finishing'): assert b'{"queued":true}\n' in (case / 'received').read_bytes()
+        if mode == 'finishing': assert result.stdout == 'already closed (exit 0)\n', (mode, result.stdout, result.stderr)
         if mode in ('ordered', 'partial'):
             received = (case / 'received').read_bytes()
             assert received.endswith(payload), (mode, 'input suffix lost or reordered')
@@ -331,6 +390,7 @@ try:
         if mode == 'full-grace': assert not (case / 'term').exists(), '7-second normal shutdown interrupted'
         print(f'PASS {mode}: jobs close exit={result.returncode}, elapsed={elapsed:.3f}s', flush=True)
 finally:
+    if 'release' in locals(): release.set()
     if 'stop' in locals(): stop.set()
     if 'producer' in locals() and producer: producer.join(timeout=1)
     cleanup_fixture(scratch, processes, opened_fds, exit_recorders, sys.exc_info()[1])

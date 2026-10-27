@@ -17,7 +17,8 @@ FAIL=0
 cleanup() {
   /bin/rm -rf -- "$TEST_ROOT"
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 pass() {
   PASS=$((PASS + 1))
@@ -109,4 +110,5 @@ test_usage_doc_complete_passes
 test_usage_doc_missing_token_fails_and_names_it
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
-[[ "$FAIL" -eq 0 ]]
+[[ "$FAIL" -eq 0 ]] || exit 1
+OMNILANE_COMPLETED=1
