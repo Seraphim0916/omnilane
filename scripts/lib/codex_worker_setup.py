@@ -127,26 +127,43 @@ def tmpdir(workdir):
     print(os.path.join(workdir, TMP_NAME, job))
 
 
-def _remove_directory(parent_fd, name, flags):
+def _require_identity(expected, actual):
+    if (expected.st_dev, expected.st_ino) != (actual.st_dev, actual.st_ino):
+        raise OSError("Codex cleanup entry identity changed")
+
+
+def _remove_entry(parent_fd, name, expected, is_directory=False):
+    _require_identity(expected, os.stat(name, dir_fd=parent_fd, follow_symlinks=False))
+    # Python's portable unlink/rmdir APIs have no atomic expected-inode
+    # condition. A name can still change between this check and removal;
+    # dir_fd pins the parent and neither operation follows a replaced symlink.
+    if is_directory:
+        os.rmdir(name, dir_fd=parent_fd)
+    else:
+        os.unlink(name, dir_fd=parent_fd)
+
+
+def _remove_directory(parent_fd, name, flags, expected=None):
     # Every name is a single component relative to a pinned directory. Never
     # chmod a file or symlink: unlink only needs write access to its parent.
+    if expected is None:
+        expected = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    # Refuse an unreadable directory rather than chmod by name: that could
+    # change a replacement before we have a descriptor to verify its identity.
+    fd = os.open(name, flags, dir_fd=parent_fd)
     try:
-        fd = os.open(name, flags, dir_fd=parent_fd)
-    except PermissionError:
-        os.chmod(name, 0o700, dir_fd=parent_fd, follow_symlinks=False)
-        fd = os.open(name, flags, dir_fd=parent_fd)
-    try:
+        _require_identity(expected, os.fstat(fd))
         os.fchmod(fd, 0o700)
         for entry in os.listdir(fd):
             try:
                 info = os.stat(entry, dir_fd=fd, follow_symlinks=False)
                 if stat.S_ISDIR(info.st_mode):
-                    _remove_directory(fd, entry, flags)
+                    _remove_directory(fd, entry, flags, info)
                 else:
-                    os.unlink(entry, dir_fd=fd)
+                    _remove_entry(fd, entry, info)
             except FileNotFoundError:
                 pass
-        os.rmdir(name, dir_fd=parent_fd)
+        _remove_entry(parent_fd, name, expected, is_directory=True)
     finally:
         os.close(fd)
 

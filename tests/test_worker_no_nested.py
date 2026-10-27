@@ -622,6 +622,80 @@ class ExcludeWriteContracts(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(outside.stat().st_mode), before)
         self.setup.cleanup(str(job))
 
+    def test_cleanup_refuses_real_directory_swap_before_open(self) -> None:
+        import contextlib
+        import io
+        from unittest import mock
+        job = self.make_job()
+        nested = job / "nested"
+        nested.mkdir()
+        replacement = self.tmp / "replacement"
+        replacement.mkdir()
+        (replacement / "keep").write_text("untouched")
+        before = replacement.stat()
+        real_open = os.open
+        swapped = []
+
+        def swap_before_open(name, flags, *args, **kwargs):
+            if name == "nested" and not swapped:
+                nested.rename(self.tmp / "original")
+                replacement.rename(nested)
+                nested.chmod(0o500)
+                swapped.append(True)
+            return real_open(name, flags, *args, **kwargs)
+
+        stderr = io.StringIO()
+        with mock.patch.object(self.setup.os, "open", swap_before_open), contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as error:
+                self.setup.cleanup(str(job))
+        self.assertEqual(error.exception.code, 125)
+        self.assertEqual(swapped, [True], stderr.getvalue())
+        self.assertIn("identity changed", stderr.getvalue())
+        after = nested.stat()
+        self.assertEqual((after.st_dev, after.st_ino), (before.st_dev, before.st_ino))
+        self.assertEqual(stat.S_IMODE(after.st_mode), 0o500)
+        self.assertEqual((nested / "keep").read_text(), "untouched")
+
+    def test_cleanup_rechecks_identity_before_removal(self) -> None:
+        import contextlib
+        import io
+        from unittest import mock
+        for directory in (False, True):
+            with self.subTest(directory=directory):
+                job = self.make_job()
+                victim = job / "victim"
+                replacement = self.tmp / ("replacement-dir" if directory else "replacement-file")
+                if directory:
+                    victim.mkdir()
+                    replacement.mkdir()
+                else:
+                    victim.write_text("original")
+                    replacement.write_text("keep")
+                before = replacement.stat()
+                real_stat = os.stat
+                calls = []
+
+                def swap_before_recheck(name, *args, **kwargs):
+                    if name == "victim" and kwargs.get("dir_fd") is not None:
+                        calls.append(name)
+                        if len(calls) == 2:
+                            victim.rename(self.tmp / ("old-dir" if directory else "old-file"))
+                            replacement.rename(victim)
+                    return real_stat(name, *args, **kwargs)
+
+                stderr = io.StringIO()
+                with mock.patch.object(self.setup.os, "stat", swap_before_recheck), contextlib.redirect_stderr(stderr):
+                    with self.assertRaises(SystemExit) as error:
+                        self.setup.cleanup(str(job))
+                self.assertEqual(error.exception.code, 125)
+                self.assertEqual(len(calls), 2)
+                self.assertIn("identity changed", stderr.getvalue())
+                after = victim.stat()
+                self.assertEqual((after.st_dev, after.st_ino, after.st_mode),
+                                 (before.st_dev, before.st_ino, before.st_mode))
+                if not directory:
+                    self.assertEqual(victim.read_text(), "keep")
+
     def test_write_failure_only_warns(self) -> None:
         import contextlib
         import errno
