@@ -45,6 +45,11 @@ SNAPSHOT_REBASE_BASE_SHA256 = {
         "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
     "scripts/runners/run-grok.sh":
         "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
+    # Bash 3.2 EXIT traps keep a set -u abort nonzero (TRAP32).
+    "scripts/runners/run-openai-compat.sh":
+        "e6e7b0cbf600823035f1714f0c617af14ddf530ecd4954744ad76ccea123e4f2",
+    "scripts/runners/run-vote.sh":
+        "22825848e8dfedd27b16029917cfbd4105a07b6f06e15ea1b0cb9c7d7d46c618",
 }
 PROTECTED_SHA256 = {
     "scripts/lib/probe.py":
@@ -60,15 +65,15 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-claude.sh":
         "df7f0c623b412bd9912b00a6d0d9d2ab8104ce8ed32b9ccbc7caa4e7a1e86e8b",
     "scripts/runners/run-codex.sh":
-        "5869b92a459545c4705ac9090c16fcc944af7a640193405ca5fc916c4d326ad9",
+        "1532b0b60dedcdee038257fdd9c4897fcd3f6bddf8222fd97322d380cb202b9e",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":
         "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
     "scripts/runners/run-gemini.sh":
-        "c6912d9eb90ac46e57f8e1b4d08a52acd9a247fb5ffbf2c21bd1e5cf6557c981",
+        "b3c69019e8d756fe4e9e5afc41ead18a567bff2c52a3083c718e2eb8705fff57",
     "scripts/runners/run-grok.sh":
-        "2e66ee72ef4019a405f6fb64faa78aa68299d7272821acf85cd16619a6519ef1",
+        "3bb8018c38ca1c3ca5cdfc8a9c5cecdf8cedf5448408340069c44aab1488ae69",
     "scripts/runners/run-groq.sh":
         "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
     # Comment-only Kimi update with the official URL; runtime behavior is unchanged.
@@ -77,7 +82,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-mistral.sh":
         "4893c2dc96ef193d6bd679638c81960ec911da82aea47dd0cee77bd459d8825a",
     "scripts/runners/run-openai-compat.sh":
-        "e6e7b0cbf600823035f1714f0c617af14ddf530ecd4954744ad76ccea123e4f2",
+        "cecece9de551cd1f8f939fec3688d961e9307ee1e1dd4dc528791a034b34611b",
     "scripts/runners/run-opencode.sh":
         "7dd07be771fb8a60194cacd18b0eeeebd6535bd9a7d0a5e4bad314c87651c90d",
     "scripts/runners/run-openrouter.sh":
@@ -85,7 +90,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-qwen.sh":
         "aed846b06a287291c210b153f727153a537aae8bfc9b49894f431298db24183d",
     "scripts/runners/run-vote.sh":
-        "22825848e8dfedd27b16029917cfbd4105a07b6f06e15ea1b0cb9c7d7d46c618",
+        "59ee974d39e2683a8eb1acaa6143b63ad313696879e08e7332b75272032bddd2",
     "scripts/runners/run-zai.sh":
         "45a05bf343ec4523d5f51ae1491ee444b26246576e8366c92a8f7238217833bc",
 }
