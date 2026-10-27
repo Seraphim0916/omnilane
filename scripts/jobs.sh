@@ -585,16 +585,28 @@ case "${1:-}" in
       until (-e $exit || -l $exit) {
         my $left = $end - time;
         exit 1 if $left <= 0;
-        if ($poll_holder && (-e $holder || -l $holder)) {
-          exit 2 if -l $holder || !-f _ || (-s _) > 11;
+        HOLDER: {
+          last HOLDER unless $poll_holder && (-e $holder || -l $holder);
+          if (-l $holder || !-f _ || (-s _) > 11) {
+            last HOLDER unless -e $holder || -l $holder;
+            exit 2;
+          }
           if (open(my $fh, "<", $holder)) {
             local $/;
             my $value = <$fh>;
             close $fh;
+            # The worker may remove the PID while we check or read it.
+            last HOLDER unless -e $holder || -l $holder;
             exit 2 unless defined $value && $value =~ /\A([1-9][0-9]{0,9})\n?\z/;
-            if (kill(0, $1) && kill("USR1", $1)) { print "signaled\n"; $poll_holder = 0 }
+            my $pid = $1;
+            if (kill(0, $pid)) {
+              exit 1 if time >= $end;
+              if (kill("USR1", $pid)) { print "signaled\n"; $poll_holder = 0 }
+            }
           }
         }
+        $left = $end - time;
+        exit 1 if $left <= 0;
         sleep($left < 0.1 ? $left : 0.1);
       }
     ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal")" || wait_rc=$?

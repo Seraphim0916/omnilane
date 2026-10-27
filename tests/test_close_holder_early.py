@@ -46,6 +46,22 @@ FAKE_HIRES = textwrap.dedent("""
     package Time::HiRes;
     use strict;
     my $now;
+    BEGIN {
+        *CORE::GLOBAL::readline = sub (*) {
+            my $value = CORE::readline($_[0]);
+            if ($ENV{FAKE_READ_ACTION}) {
+                open(my $marker, ">", $ENV{FAKE_READ_MARKER}) or die $!;
+                print $marker "read";
+                close $marker;
+                if ($ENV{FAKE_READ_ACTION} eq "deadline") {
+                    $now = 1000 * $ENV{FAKE_DEADLINE};
+                } else {
+                    unlink $ENV{FAKE_HOLDER} or die $!;
+                }
+            }
+            return $value;
+        };
+    }
     my @events = map { [split /:/, $_, 3] } grep { length } split /;/, ($ENV{FAKE_EVENTS} // "");
     sub _fire {
         my ($from, $to) = @_;
@@ -115,10 +131,24 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         return subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
                                 env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+    def wait_for_receipt_poller(self, closer):
+        end = time.monotonic() + 5
+        while time.monotonic() < end:
+            self.assertIsNone(closer.poll(), "close returned before entering its receipt wait")
+            listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="],
+                                     capture_output=True, text=True, timeout=5).stdout
+            for line in listing.splitlines():
+                fields = line.split(None, 1)
+                if (len(fields) == 2 and fields[0] == str(closer.pid)
+                        and str(self.job / "exit") in fields[1]):
+                    return
+            time.sleep(0.02)
+        self.fail("close never entered its receipt wait")
+
     def test_holder_pid_written_after_close_started(self):
         self.start_holder()
         closer = self.close()
-        time.sleep(1.0)
+        self.wait_for_receipt_poller(closer)
         self.assertIsNone(closer.poll(), "close returned before the holder PID existed")
         self.publish_pid()
         started = time.monotonic()
@@ -148,7 +178,7 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
 
     def test_exit_receipt_without_holder_is_already_closed(self):
         closer = self.close()
-        time.sleep(0.5)
+        self.wait_for_receipt_poller(closer)
         tmp = self.job / ".exit.tmp"
         tmp.write_text("0\n")
         os.replace(tmp, self.job / "exit")
@@ -157,11 +187,13 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertEqual(out, "already closed (exit 0)\n")
 
 
-    def fake_close(self, events):
+    def fake_close(self, events, read_action=""):
         lib = self.home / "fake-perl" / "Time"
         lib.mkdir(parents=True)
         (lib / "HiRes.pm").write_text(FAKE_HIRES)
         env = dict(self.env, PERL5LIB=str(self.home / "fake-perl"), FAKE_DEADLINE="11",
+                   FAKE_READ_ACTION=read_action, FAKE_READ_MARKER=str(self.home / "read-marker"),
+                   FAKE_HOLDER=str(self.job / "inbox.holder.pid"),
                    FAKE_EVENTS=";".join(f"{at}:{path}:{content}" for at, path, content in events))
         return subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
                               env=env, capture_output=True, text=True, timeout=20)
@@ -194,6 +226,25 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         result = self.fake_close([("10.5", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")])
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
         self.assertIn(f"closed {JOB_ID}", result.stdout)
+
+    def test_read_crossing_deadline_expires_unsignaled_with_status_one(self):
+        self.start_holder()
+        result = self.fake_close([("10.5", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")],
+                                 read_action="deadline")
+        self.assertTrue((self.home / "read-marker").exists())
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, "", "live inbox holder is unavailable\n"))
+        time.sleep(0.3)
+        self.assertIsNone(self.holder.poll(), "holder was signalled after reading crossed the deadline")
+        self.assertFalse((self.job / "exit").exists())
+
+    def test_holder_removed_during_read_waits_for_receipt(self):
+        result = self.fake_close([("1", self.job / "inbox.holder.pid", "invalid\n"),
+                                  ("2", self.job / "exit", "0\n")], read_action="vanish")
+        self.assertTrue((self.home / "read-marker").exists())
+        self.assertFalse((self.job / "inbox.holder.pid").exists())
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (0, "already closed (exit 0)\n", ""))
 
 
 if __name__ == "__main__":
