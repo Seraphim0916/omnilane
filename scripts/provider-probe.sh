@@ -146,7 +146,10 @@ cleanup() {
       ;;
   esac
 }
-trap cleanup EXIT HUP INT TERM
+OMNILANE_COMPLETED=0
+trap cleanup HUP INT TERM
+# shellcheck disable=SC2154  # omnilane_rc is assigned inside the trap string
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 PROMPT_FILE="$TMP_ROOT/prompt.txt"
 OUTPUT_FILE="$TMP_ROOT/output.txt"
 (umask 077; printf '%s\n' \
@@ -170,6 +173,7 @@ fi
 
 if [[ "$runner_rc" -eq 0 && "$response_bytes" -gt 0 ]]; then
   emit_result true usable true "bounded live inference returned output" "$duration" "$response_bytes"
+  OMNILANE_COMPLETED=1
   exit 0
 fi
 if [[ "$runner_rc" -eq 124 || "$runner_rc" -eq 142 ]]; then

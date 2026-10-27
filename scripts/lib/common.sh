@@ -610,7 +610,29 @@ acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not 
   }
   OMNILANE_LOCK_OWNER="$LOCK_OWNER_VALUE"
   OMNILANE_LOCKDIR="$lockdir"
-  trap 'release_cwd_lock' EXIT
+  if [[ -n "${OMNILANE_COMPLETED+x}" ]]; then
+    trap 'omnilane_exit_trap $? release_cwd_lock' EXIT
+  else
+    trap 'release_cwd_lock' EXIT
+  fi
+}
+
+# Bash 3.2 runs an EXIT trap with $? = 0 after a set -u abort, so a trap whose
+# last command succeeds turns the abort into exit 0. Scripts that opt in call
+# omnilane_track_completion early and omnilane_mark_completed just before every
+# successful exit; an exit status of 0 without that mark becomes 1.
+# Usage: trap 'omnilane_exit_trap $? CMD...' EXIT
+omnilane_track_completion() { OMNILANE_COMPLETED=0; }
+omnilane_mark_completed() { OMNILANE_COMPLETED=1; }
+omnilane_exit_trap() {
+  local rc="$1"
+  shift
+  trap - EXIT
+  if [[ "$rc" -eq 0 && "${OMNILANE_COMPLETED:-0}" -ne 1 ]]; then
+    rc=1
+  fi
+  if [[ $# -gt 0 ]]; then "$@"; fi
+  exit "$rc"
 }
 
 release_cwd_lock() {
