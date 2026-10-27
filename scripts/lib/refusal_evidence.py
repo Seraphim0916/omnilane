@@ -60,7 +60,12 @@ def store(home: Path, refusal: dict, lane: str, headline: str) -> Path:
               "lane": lane, "headline": headline, "refusal": refusal}
     path = directory / f"{now.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}.json"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+    try:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        raise
+    with handle as stream:
         # Escape lone surrogate code units without changing parsed field values.
         stream.write(json.dumps(record, ensure_ascii=False, indent=2).encode(
             "utf-8", "backslashreplace").decode("utf-8") + "\n")

@@ -112,7 +112,12 @@ def _read(path):
         return None
     except OSError:
         raise OriginError("cannot open origin policy") from None
-    with os.fdopen(fd, "rb") as stream:
+    try:
+        handle = os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+    with handle as stream:
         info = os.fstat(stream.fileno())
         if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
             raise OriginError("origin policy must be an owned regular 0600 file")
