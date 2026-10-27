@@ -61,6 +61,7 @@ case "$MODE" in
     MODE_ARGS=(
       --settings '{"sandbox":{"enabled":false}}'
       --permission-mode bypassPermissions --dangerously-skip-permissions
+      --disallowedTools 'Agent,Task'
     )
     ;;
   *)
@@ -180,7 +181,7 @@ if [[ -n "$THREAD_MODE" ]]; then
 else
   ARGS+=(--output-format text)
 fi
-ARGS+=(-p "$(cat "$PROMPT_FILE")")
+ARGS+=(-p -- "$(cat "$PROMPT_FILE")")
 
 set +e
 (

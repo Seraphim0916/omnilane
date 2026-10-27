@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from offline_env import fixture_environment_with_isolated_tools
+
 import json
 import os
 from pathlib import Path
@@ -11,31 +13,44 @@ import subprocess
 import tempfile
 import unittest
 
-from offline_env import fixture_environment_with_isolated_tools
-
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "[omnilane worker rules]"
 
-FAKE_CODEX = """#!/usr/bin/env bash
-set -euo pipefail
-FAKE_STDIN="$(cat; printf x)"
-export FAKE_STDIN="${FAKE_STDIN%x}"
-python3 - "$FAKE_CODEX_RECORD" "$@" <<'PY'
-import json, os, pathlib, sys
-pathlib.Path(sys.argv[1]).write_text(json.dumps({
-    "argv": sys.argv[2:],
+FAKE_CODEX = """#!/usr/bin/env python3
+import json, os, pathlib, stat, subprocess, sys
+argv = sys.argv[1:]
+# Model inherit=core, then apply the actual runner's forced shell settings.
+shell_env = {k: os.environ[k] for k in ("PATH", "HOME") if k in os.environ}
+for i, arg in enumerate(argv[:-1]):
+    prefix = "shell_environment_policy.set."
+    if arg == "-c" and argv[i + 1].startswith(prefix):
+        key, value = argv[i + 1][len(prefix):].split("=", 1)
+        shell_env[key] = json.loads(value)
+nested = subprocess.run(
+    ["/bin/bash", os.environ["OMNILANE_REPO"] + "/scripts/dispatch.sh", "fast", "nested test"],
+    env=shell_env, text=True, capture_output=True) if shell_env.get("OMNILANE_DEPTH") else None
+tmp = pathlib.Path(os.environ["TMPDIR"]) if os.environ.get("TMPDIR") else None
+pathlib.Path(os.environ["FAKE_CODEX_RECORD"]).write_text(json.dumps({
+    "argv": argv,
     "TMPDIR": os.environ.get("TMPDIR"),
     "TMPPREFIX": os.environ.get("TMPPREFIX"),
-    "stdin": os.environ["FAKE_STDIN"],
+    "tmp_mode": stat.S_IMODE(tmp.stat().st_mode) if tmp else None,
+    "nested_rc": nested.returncode if nested else None,
+    "nested_stderr": nested.stderr if nested else "",
+    "stdin": sys.stdin.read() if "app-server" not in argv else "",
 }))
-PY
-out=""
-while [[ $# -gt 0 ]]; do
-  if [[ "$1" == "-o" ]]; then shift; out="$1"; fi
-  shift
-done
-printf 'fixture\\n' > "$out"
-printf '{"type":"thread.started","thread_id":"fixture"}\\n'
+if "app-server" in argv:
+    sys.exit(3)
+if os.environ.get("FAKE_CODEX_BREAK_CLEANUP"):
+    import shutil
+    shutil.rmtree(tmp)
+    tmp.symlink_to(os.environ["HOME"])
+if os.environ.get("FAKE_CODEX_INTERRUPT"):
+    import signal
+    os.kill(int(os.environ["FAKE_CODEX_INTERRUPT"]), signal.SIGTERM)
+pathlib.Path(argv[argv.index("-o") + 1]).write_text("fixture\\n")
+print('{"type":"thread.started","thread_id":"fixture"}')
+sys.exit(int(os.environ.get("FAKE_CODEX_RC", "0")))
 """
 
 
@@ -75,6 +90,8 @@ class CodexWorkerContracts(unittest.TestCase):
                     "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
             env.pop(key, None)
         env.update(extra)
+        if env.get("TMPDIR") == "":
+            env.pop("TMPDIR")
         result = subprocess.run(
             ["/bin/bash", str(ROOT / "scripts/runners/run-codex.sh"), mode, str(self.workdir),
              "gpt-6-astra", "medium", str(prompt), str(self.tmp / f"{mode}.out")],
@@ -96,25 +113,69 @@ class CodexWorkerContracts(unittest.TestCase):
                 argv = data["argv"]
                 self.assertIn("--disable", argv)
                 self.assertEqual(argv[argv.index("--disable") + 1], "multi_agent")
+                self.assertEqual(data["nested_rc"], 86, data["nested_stderr"])
+                self.assertIn("refusing nested dispatch", data["nested_stderr"])
 
     def test_work_gets_temp_dir_inside_workdir(self) -> None:
-        tmp_dir = self.workdir / ".omnilane-tmp"
+        seen = set()
         for mode in ("work", "work"):
             with self.subTest(mode=mode):
                 result, data = self.run_codex(mode, self.prompt(f"{mode}.txt"))
                 self.assertEqual(result.returncode, 0, result.stderr)
+                tmp_dir = Path(data["TMPDIR"])
+                self.assertEqual(tmp_dir.parent, self.workdir / ".omnilane-tmp")
+                self.assertNotIn(tmp_dir, seen)
+                seen.add(tmp_dir)
                 self.assertEqual(data["TMPDIR"], str(tmp_dir) + "/")
                 self.assertEqual(data["TMPPREFIX"], str(tmp_dir / "zsh"))
                 values = config_values(data["argv"])
                 self.assertIn(f'shell_environment_policy.set.TMPDIR="{tmp_dir}/"', values)
                 self.assertIn(f'shell_environment_policy.set.TMPPREFIX="{tmp_dir}/zsh"', values)
-                self.assertTrue(tmp_dir.is_dir())
-                self.assertEqual(stat.S_IMODE(tmp_dir.stat().st_mode), 0o700)
+                self.assertFalse(tmp_dir.exists())
+                self.assertEqual(data["tmp_mode"], 0o700)
         exclude = (self.workdir / ".git/info/exclude").read_text().splitlines()
         self.assertEqual(exclude.count("/.omnilane-tmp/"), 1)
         status = subprocess.run(["git", "-C", str(self.workdir), "status", "--porcelain"],
                                 capture_output=True, text=True, check=True)
         self.assertEqual(status.stdout, "")
+
+    def test_work_temp_is_cleaned_after_failure(self) -> None:
+        result, data = self.run_codex("work", self.prompt(), FAKE_CODEX_RC="7")
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertFalse(Path(data["TMPDIR"]).exists())
+
+    def test_cleanup_failure_preserves_worker_status(self) -> None:
+        for rc in (0, 7):
+            result, data = self.run_codex("work", self.prompt(),
+                                          FAKE_CODEX_BREAK_CLEANUP="1", FAKE_CODEX_RC=str(rc))
+            self.assertEqual(result.returncode, rc, result.stderr)
+            self.assertIn("cleanup failed", result.stderr)
+            Path(data["TMPDIR"].rstrip("/")).unlink()
+
+    def test_no_inherited_tmpdir(self) -> None:
+        for mode in ("advise", "sysops"):
+            result, data = self.run_codex(mode, self.prompt(), TMPDIR="")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIsNone(data["TMPDIR"])
+            self.assertIsNone(data["tmp_mode"])
+
+    def test_work_temp_is_cleaned_after_interruption(self) -> None:
+        # The wrapper exports its own PID, then exec keeps that PID for the runner.
+        wrapper = self.tmp / "interrupt-runner"
+        wrapper.write_text('#!/bin/bash\nexport FAKE_CODEX_INTERRUPT=$$\nexec /bin/bash "$@"\n')
+        wrapper.chmod(0o755)
+        from unittest import mock
+        run = subprocess.run
+
+        def wrapped(argv, **kwargs):
+            if len(argv) > 1 and argv[1].endswith("run-codex.sh"):
+                argv = [str(wrapper)] + argv[1:]
+            return run(argv, **kwargs)
+
+        with mock.patch.object(subprocess, "run", wrapped):
+            result, data = self.run_codex("work", self.prompt())
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertFalse(Path(data["TMPDIR"]).exists())
 
     def test_sysops_keeps_inherited_tmpdir(self) -> None:
         result, data = self.run_codex("sysops", self.prompt())
@@ -219,7 +280,7 @@ class CodexWorkerContracts(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(outside.read_text(), "keep\n")
         self.assertTrue(exclude.is_symlink())
-        self.assertEqual(data["TMPDIR"], str(self.workdir / ".omnilane-tmp") + "/")
+        self.assertEqual(Path(data["TMPDIR"]).parent, self.workdir / ".omnilane-tmp")
 
     def test_symlinked_temp_dir_leaves_target_mode(self) -> None:
         target = self.tmp / "outside-dir"
@@ -256,15 +317,11 @@ class CodexWorkerContracts(unittest.TestCase):
         os.mkfifo(inbox)
         record = self.tmp / "live.record.json"
         fake = self.tmp / "codex-live-fake"
-        fake.write_text("""#!/usr/bin/env python3
-import json, os, sys
-json.dump({"argv": sys.argv[1:], "TMPDIR": os.environ.get("TMPDIR")}, open(os.environ["FAKE_LIVE_RECORD"], "w"))
-sys.exit(3)
-""")
+        fake.write_text(FAKE_CODEX)
         fake.chmod(0o755)
         env = fixture_environment_with_isolated_tools(self)
         env.update(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", CODEX_BIN=str(fake), OMNILANE_REPO=str(ROOT),
-                   OMNILANE_TIMEOUT="20", OMNILANE_INBOX=str(inbox), FAKE_LIVE_RECORD=str(record),
+                   OMNILANE_TIMEOUT="20", OMNILANE_INBOX=str(inbox), FAKE_CODEX_RECORD=str(record),
                    OMNILANE_CODEX_PROVIDER_BASE_URL="http://127.0.0.1:8791/backend-api/codex",
                    OMNILANE_CODEX_HTTP_HEADERS='{"x-headroom-bypass"="true"}')
         for key in ("OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
@@ -274,16 +331,19 @@ sys.exit(3)
              "gpt-6-astra", "medium", str(self.prompt()), str(self.tmp / "live.out")],
             env=env, text=True, capture_output=True, check=False, timeout=60)
         data = json.loads(record.read_text())
+        self.assertEqual(data["nested_rc"], 86, data["nested_stderr"])
         argv = data["argv"]
         self.assertEqual(argv[-1], "app-server")
         self.assertEqual(argv[argv.index("--disable") + 1], "multi_agent")
         values = config_values(argv)
-        tmp_dir = self.workdir / ".omnilane-tmp"
+        tmp_dir = Path(data["TMPDIR"])
         self.assertIn('model_provider="omnilane_codex"', values)
         self.assertTrue(any(v.startswith("model_providers.omnilane_codex=") and
                             'http_headers={"x-headroom-bypass"="true"}' in v for v in values))
         self.assertIn(f'shell_environment_policy.set.TMPPREFIX="{tmp_dir}/zsh"', values)
         self.assertEqual(data["TMPDIR"], str(tmp_dir) + "/")
+        self.assertIn('shell_environment_policy.set.OMNILANE_DEPTH="1"', values)
+        self.assertFalse(tmp_dir.exists())
 
 
     def test_codex_prompt_starts_with_worker_rules(self) -> None:
@@ -301,6 +361,58 @@ class EveryRunnerPrependsWorkerRules(unittest.TestCase):
         "gemini": ("run-gemini.sh", "AGY_BIN"),
         "grok": ("run-grok.sh", "GROK_BIN"),
     }
+
+    def test_claude_modes_enforce_no_native_agents(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="omnilane-claude-tools-") as td:
+            tmp = Path(td)
+            fake = tmp / "claude"
+            fake.write_text('''#!/usr/bin/env python3
+import json, os, subprocess, sys
+nested = subprocess.run(["/bin/bash", os.environ["OMNILANE_REPO"] + "/scripts/dispatch.sh",
+                         "fast", "nested test"], capture_output=True, text=True)
+with open(os.environ["FAKE_CLAUDE_RECORD"], "w") as handle:
+    json.dump({"argv": sys.argv[1:], "nested_rc": nested.returncode}, handle)
+print("fixture")
+''')
+            fake.chmod(0o755)
+            for mode in ("advise", "work", "sysops"):
+                with self.subTest(mode=mode):
+                    record = tmp / "argv"
+                    prompt = tmp / "prompt"
+                    prompt.write_text("task\n")
+                    env = fixture_environment_with_isolated_tools(self)
+                    env.update(CLAUDE_BIN=str(fake), FAKE_CLAUDE_RECORD=str(record),
+                               OMNILANE_REPO=str(ROOT), OMNILANE_TIMEOUT="5")
+                    for key in ("OMNILANE_INBOX", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
+                        env.pop(key, None)
+                    result = subprocess.run(
+                        ["/bin/bash", str(ROOT / "scripts/runners/run-claude.sh"), mode,
+                         str(tmp), "model", "-", str(prompt), str(tmp / "out")],
+                        env=env, text=True, capture_output=True, timeout=60)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    data = json.loads(record.read_text())
+                    argv = data["argv"]
+                    self.assertEqual(data["nested_rc"], 86)
+                    expected = ["--disable-slash-commands", "--model", "model"]
+                    if mode == "sysops":
+                        expected += ["--settings", '{"sandbox":{"enabled":false}}',
+                                     "--permission-mode", "bypassPermissions",
+                                     "--dangerously-skip-permissions", "--disallowedTools", "Agent,Task"]
+                    else:
+                        settings = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                            "allowUnsandboxedCommands": False, "autoAllowBashIfSandboxed": True,
+                            "excludedCommands": [], "filesystem": {"disabled": False,
+                            "allowRead": [], "allowWrite": []}, "network": {"allowedDomains": []}}}
+                        expected += ["--safe-mode", "--restricted", "--setting-sources", "",
+                            "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+                            "--settings", json.dumps(settings, separators=(",", ":")),
+                            "--permission-prompts", "none", "--permission-mode",
+                            "plan" if mode == "advise" else "acceptEdits", "--tools",
+                            "Bash,Read,Glob,Grep,WebSearch,WebFetch" if mode == "advise" else
+                            "Bash,Read,Glob,Grep,Edit,Write,NotebookEdit"]
+                    expected += ["--output-format", "text", "-p", "--",
+                                 Path(str(prompt) + ".worker").read_text().rstrip("\n")]
+                    self.assertEqual(argv, expected)
 
     def test_prompt_file_gets_rules_once(self) -> None:
         with tempfile.TemporaryDirectory(prefix="omnilane-rules-") as td:
@@ -356,6 +468,105 @@ class ExcludeWriteContracts(unittest.TestCase):
         self.repo = self.tmp / "repo"
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
         self.setup = load_setup()
+
+    def make_job(self):
+        import contextlib
+        import io
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.setup.tmpdir(str(self.repo))
+        return Path(output.getvalue().strip())
+
+    def test_readonly_cleanup_and_missing_are_safe(self) -> None:
+        job = self.make_job()
+        nested = job / "readonly"
+        nested.mkdir()
+        item = nested / "file"
+        item.write_text("content")
+        item.chmod(0o400)
+        nested.chmod(0o500)
+        before = os.getcwd()
+        self.setup.cleanup(str(job))
+        self.assertEqual(os.getcwd(), before)
+        self.assertFalse(job.exists())
+        self.setup.cleanup(str(job))
+
+    def test_cleanup_refuses_unsafe_paths_and_links(self) -> None:
+        job = self.make_job()
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        (outside / "keep").write_text("keep")
+        job.rmdir()
+        job.symlink_to(outside)
+        for path in (str(job), str(job) + "/", str(job.parent / ".." / job.name),
+                     ".omnilane-tmp/" + job.name, str(self.repo)):
+            with self.subTest(path=path), self.assertRaises(SystemExit) as error:
+                self.setup.cleanup(path)
+            self.assertEqual(error.exception.code, 125)
+        self.assertEqual((outside / "keep").read_text(), "keep")
+
+    def test_tmpdir_retries_parent_removed_after_open(self) -> None:
+        from unittest import mock
+        import threading
+        opened = threading.Event()
+        removed = threading.Event()
+        real_mkdir = os.mkdir
+        failures = []
+
+        def remove_parent():
+            try:
+                if not opened.wait(5):
+                    raise AssertionError("parent not opened")
+                (self.repo / ".omnilane-tmp").rmdir()
+            except BaseException as error:
+                failures.append(error)
+            finally:
+                removed.set()
+
+        def racing_mkdir(path, *args, **kwargs):
+            if str(path).startswith("job-") and not opened.is_set():
+                opened.set()
+                self.assertTrue(removed.wait(5))
+            return real_mkdir(path, *args, **kwargs)
+
+        thread = threading.Thread(target=remove_parent)
+        thread.start()
+        try:
+            with mock.patch.object(self.setup.os, "mkdir", racing_mkdir):
+                job = self.make_job()
+        finally:
+            thread.join(6)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(failures, [])
+        self.assertTrue(job.is_dir())
+        self.setup.cleanup(str(job))
+
+    def test_two_processes_create_and_cleanup_shared_parent(self) -> None:
+        import sys
+        code = ("import importlib.util,sys,contextlib,io; "
+                "s=importlib.util.spec_from_file_location('setup',sys.argv[1]); "
+                "m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
+                "for i in range(25):\n"
+                " out=io.StringIO()\n"
+                " with contextlib.redirect_stdout(out): m.tmpdir(sys.argv[2])\n"
+                " m.cleanup(out.getvalue().strip())\n")
+        argv = [sys.executable, "-B", "-c", code,
+                str(ROOT / "scripts/lib/codex_worker_setup.py"), str(self.repo)]
+        processes = [subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      text=True) for _ in range(2)]
+        results = []
+        try:
+            for process in processes:
+                stdout, stderr = process.communicate(timeout=30)
+                results.append((process.returncode, stdout + stderr))
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
+        for rc, output in results:
+            self.assertEqual(rc, 0, output)
+        self.assertFalse((self.repo / ".omnilane-tmp").exists())
 
     def test_write_failure_only_warns(self) -> None:
         import contextlib

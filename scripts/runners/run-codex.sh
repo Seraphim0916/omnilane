@@ -43,7 +43,7 @@ ARGS+=(-c 'approval_policy="never"')
 # Controls both launch paths need: `codex exec` gets them through ARGS, the
 # live app-server through --codex-arg. A worker that spawns its own sub-agents
 # escapes the one-dispatch budget.
-SHARED_ARGS=(--disable multi_agent)
+SHARED_ARGS=(--disable multi_agent -c 'shell_environment_policy.set.OMNILANE_DEPTH="1"')
 
 # Optional, off unless both are set: the built-in `openai` provider id cannot
 # be overridden, so extra request headers need a provider of our own that keeps
@@ -95,6 +95,18 @@ PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 # read-only sandbox: a directory would not make it writable, so leave the
 # workdir untouched there.
 TMP_ENV=()
+CODEX_TMP=""
+cleanup_codex_tmp() {
+  local rc=$?
+  if [[ -n "$CODEX_TMP" ]]; then
+    python3 -I "$CODEX_SETUP" cleanup "$CODEX_TMP" || echo 'omnilane: Codex temp cleanup failed' >&2
+  fi
+  return "$rc"
+}
+trap cleanup_codex_tmp EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 if [[ "$MODE" == "work" ]]; then
   WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
     echo "omnilane: Codex workdir is not accessible" >&2
