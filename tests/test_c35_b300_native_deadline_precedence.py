@@ -23,6 +23,10 @@ class FrozenDatetime(datetime.datetime):
 
 
 class NativeDeadlinePrecedenceTests(unittest.TestCase):
+    def ago(self, seconds):
+        return (FrozenDatetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def observe(self, state, metadata, reads, expected="pending"):
         before = copy.deepcopy(state)
         metadata_before = copy.deepcopy(metadata)
@@ -42,16 +46,38 @@ class NativeDeadlinePrecedenceTests(unittest.TestCase):
         self.assertEqual(metadata, metadata_before)
 
     def test_missing_created_preserves_state_timeout(self):
-        self.observe({"state": "pending", "timeout": 600},
-                     {"started": "2026-10-26T12:04:00Z", "timeout": 1}, 1)
+        for timeout, elapsed, expected in (
+                (native.DEFAULT_TIMEOUT + 60, native.DEFAULT_TIMEOUT + native.DEADLINE_GRACE + 1, "pending"),
+                (1, native.DEADLINE_GRACE + 2, "expired")):
+            with self.subTest(timeout=timeout):
+                metadata_timeout = 1 if expected == "pending" else native.DEFAULT_TIMEOUT + 60
+                self.observe({"state": "pending", "timeout": timeout},
+                             {"started": self.ago(elapsed), "timeout": metadata_timeout}, 1, expected)
 
     def test_missing_timeout_preserves_state_created(self):
-        self.observe({"state": "pending", "created": "2026-10-26T12:09:00Z"},
-                     {"started": "2026-10-26T11:00:00Z", "timeout": 60}, 1)
+        timeout = native.DEFAULT_TIMEOUT
+        for elapsed, metadata_elapsed, expected in (
+                (timeout + native.DEADLINE_GRACE - 1, timeout + native.DEADLINE_GRACE + 1, "pending"),
+                (timeout + native.DEADLINE_GRACE + 1, 0, "expired")):
+            with self.subTest(expected=expected):
+                self.observe({"state": "pending", "created": self.ago(elapsed)},
+                             {"started": self.ago(metadata_elapsed), "timeout": timeout}, 1, expected)
+
+    def test_metadata_timeout_beats_default_in_both_directions(self):
+        for timeout, elapsed, expected in (
+                (1, native.DEADLINE_GRACE + 2, "expired"),
+                (native.DEFAULT_TIMEOUT + 60, native.DEFAULT_TIMEOUT + native.DEADLINE_GRACE + 1, "pending")):
+            with self.subTest(timeout=timeout):
+                self.observe({"state": "pending", "created": self.ago(elapsed)},
+                             {"started": self.ago(elapsed), "timeout": timeout}, 1, expected)
 
     def test_complete_state_never_reads_conflicting_metadata(self):
-        self.observe({"state": "pending", "created": "2026-10-26T12:09:00Z", "timeout": 60},
-                     {"started": "2026-10-26T11:00:00Z", "timeout": 1}, 0)
+        for timeout, elapsed, expected in (
+                (native.DEFAULT_TIMEOUT + 60, native.DEFAULT_TIMEOUT + native.DEADLINE_GRACE + 1, "pending"),
+                (1, native.DEADLINE_GRACE + 2, "expired")):
+            with self.subTest(timeout=timeout):
+                self.observe({"state": "pending", "created": self.ago(elapsed), "timeout": timeout},
+                             {"started": self.ago(0), "timeout": native.DEFAULT_TIMEOUT + 60}, 0, expected)
 
     def test_default_timeout_used_only_when_both_sources_omit_it(self):
         now = FrozenDatetime.now(datetime.timezone.utc)

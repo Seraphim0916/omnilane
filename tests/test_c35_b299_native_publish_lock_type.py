@@ -27,7 +27,7 @@ class NativePublishLockTypeTests(unittest.TestCase):
 
                 def fdopen(*args, **kwargs):
                     stream = real_fdopen(*args, **kwargs)
-                    if args[1] == "r+":
+                    if (args[1] if len(args) > 1 else kwargs.get("mode", "r")) == "r+":
                         streams.append(stream)
                     return stream
 
@@ -60,6 +60,40 @@ class NativePublishLockTypeTests(unittest.TestCase):
                 if mode == stat.S_IFREG:
                     self.assertEqual(native.read_json(job / "native.json"), {"task": "fixture"})
                     self.assertEqual((job / "task.txt").read_text(), "fixture")
+
+    def test_real_nonregular_lock_open_cleans_staging(self):
+        for kind in ("directory", "fifo"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                lock = root / ".native-publish.lock"
+                staging = root / ".native-stage-job-fixture"
+                if kind == "directory":
+                    lock.mkdir()
+                else:
+                    native.os.mkfifo(lock)
+                real_open = native.os.open
+                opened = []
+
+                def open_lock(path, flags, *args, **kwargs):
+                    if path == lock:
+                        opened.append(path)
+                        self.assertTrue((staging / "native.json").is_file())
+                        # Fail before a potentially blocking FIFO open.
+                        self.assertTrue(flags & native.os.O_NONBLOCK)
+                    return real_open(path, flags, *args, **kwargs)
+
+                with patch.object(native.secrets, "token_hex", return_value="fixture"), \
+                        patch.object(native.os, "open", side_effect=open_lock), \
+                        patch.object(native.fcntl, "flock") as flock, \
+                        patch.object(native.os, "rename") as rename, \
+                        patch.object(native, "cleanup_staging_dir", wraps=native.cleanup_staging_dir) as cleanup:
+                    with self.assertRaises((OSError, ValueError)):
+                        native.publish_job(root, "job", {"task": "fixture"}, {})
+                    cleanup.assert_called_once_with(staging)
+                    flock.assert_not_called()
+                    rename.assert_not_called()
+                self.assertEqual(opened, [lock])
+                self.assertEqual(list(root.iterdir()), [lock])
 
 
 if __name__ == "__main__":
