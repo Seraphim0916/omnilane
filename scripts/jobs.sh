@@ -540,8 +540,7 @@ case "${1:-}" in
     [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
     select_job "$2"
     require_live_job
-    if [[ -e "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ]]; then
-      read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
+    if read_exit_code "$JOB_DIR/exit"; then
       echo "already closed (exit $RECORDED_EXIT)"
       exit "$RECORDED_EXIT"
     fi
@@ -572,8 +571,22 @@ case "${1:-}" in
     if ! perl -MTime::HiRes=time,sleep -e '
       my ($exit, $limit) = @ARGV;
       my $end = time + $limit;
-      until (-e $exit || -l $exit) { exit 1 if time >= $end; sleep 0.1 }
+      while (1) {
+        exit 1 if -l $exit || (-e $exit && !-f $exit);
+        if (open my $fh, "<", $exit) {
+          my $value = "";
+          read $fh, $value, 5;
+          close $fh;
+          exit 0 if $value =~ /\A(?:0|[1-9][0-9]{0,2})\n?\z/ && $value <= 255;
+        }
+        exit 1 if time >= $end;
+        sleep 0.1;
+      }
     ' "$JOB_DIR/exit" 11; then
+      if [[ -s "$JOB_DIR/exit" || -L "$JOB_DIR/exit" ||
+            ( -e "$JOB_DIR/exit" && ! -f "$JOB_DIR/exit" ) ]]; then
+        die 1 "invalid recorded exit status"
+      fi
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
         die 1 "live inbox holder is unavailable"
@@ -1185,11 +1198,18 @@ case "${1:-}" in
       fi
       exit_path="$JOB_DIR/exit"
       if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-        read_exit_code "$exit_path" || {
-          die 1 "invalid recorded exit status"
-        }
-        echo "done exit=$RECORDED_EXIT"
-        exit "$RECORDED_EXIT"
+        if read_exit_code "$exit_path"; then
+          echo "done exit=$RECORDED_EXIT"
+          exit "$RECORDED_EXIT"
+        fi
+        [[ -f "$exit_path" && ! -L "$exit_path" ]] || die 1 "invalid recorded exit status"
+        if [[ $((SECONDS - wait_started)) -ge "$wait_timeout" ]]; then
+          [[ ! -s "$exit_path" ]] || die 1 "invalid recorded exit status"
+          printf 'wait timeout after %ss\n' "$wait_timeout" >&2
+          exit 124
+        fi
+        sleep 0.1
+        continue
       fi
 
       pid=""; pid_state="missing"
