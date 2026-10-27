@@ -69,6 +69,21 @@ trap cleanup_test_root EXIT
 
 pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
+# kill -0 also succeeds for a zombie. A zombie cannot execute; the host init
+# process owns reaping it, and some inits reap orphans only seconds later.
+process_running() {
+  local stat state
+  kill -0 "$1" 2>/dev/null || return 1
+  if [[ -e "/proc/$1/stat" ]]; then
+    stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
+    if [[ "$stat" == *') '* ]]; then
+      state="${stat##*) }"
+      state="${state%% *}"
+      [[ "$state" == Z ]] && return 1
+    fi
+  fi
+  return 0
+}
 
 mode_notice_contract() {
   local home="$1" vendor="$2" expected_count="$3" path count=0
@@ -1430,8 +1445,8 @@ test_job_timeout_supervisor_kills_process_group() {
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1570,8 +1585,8 @@ test_job_timeout_supervisor_forwards_term() {
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1750,8 +1765,8 @@ EOF
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1787,8 +1802,8 @@ EOF
   rc=$?
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.2
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
   job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
@@ -1893,8 +1908,8 @@ EOF
   rc=$?
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.2
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
   job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
@@ -2016,9 +2031,9 @@ EOF
   ticks=0
   while [[ "$ticks" -lt 100 ]]; do
     controller_alive=no; gate_alive=no; child_alive=no
-    [[ -n "$controller_pid" ]] && kill -0 "$controller_pid" 2>/dev/null && controller_alive=yes
-    [[ -n "$gate_pid" ]] && kill -0 "$gate_pid" 2>/dev/null && gate_alive=yes
-    [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+    [[ -n "$controller_pid" ]] && process_running "$controller_pid" && controller_alive=yes
+    [[ -n "$gate_pid" ]] && process_running "$gate_pid" && gate_alive=yes
+    [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
     [[ "$controller_alive" == no && "$gate_alive" == no && "$child_alive" == no ]] && break
     sleep 0.05
     ticks=$((ticks + 1))
@@ -4176,9 +4191,9 @@ EOF
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "cancel exited $rc: $out"; return
   fi
-  if kill -0 "$pid" 2>/dev/null; then
+  if process_running "$pid"; then
     sleep 1
-    kill -0 "$pid" 2>/dev/null && { fail "$name" "worker still alive after cancel"; kill -KILL "-$pid" 2>/dev/null; return; }
+    process_running "$pid" && { fail "$name" "worker still alive after cancel"; kill -KILL "-$pid" 2>/dev/null; return; }
   fi
 
   local final
