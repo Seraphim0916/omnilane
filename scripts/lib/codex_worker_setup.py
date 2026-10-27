@@ -9,7 +9,6 @@
 
 import os
 import re
-import shutil
 import stat
 import subprocess
 import sys
@@ -104,38 +103,52 @@ def tmpdir(workdir):
     except OSError as error:
         fail(125, "Codex workdir cannot be opened: %s" % error)
     try:
-        for attempt in range(32):
-            fd = None
+        fd = None
+        try:
             try:
-                os.makedirs(os.path.join(workdir, TMP_NAME), mode=0o700, exist_ok=True)
-                fd = os.open(TMP_NAME, flags, dir_fd=parent)
-                info = os.fstat(fd)
-                if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-                    fail(125, "unsafe Codex work temp path")
-                os.fchmod(fd, 0o700)
-                job = "job-" + uuid.uuid4().hex
-                os.mkdir(job, 0o700, dir_fd=fd)
-                break
-            except FileNotFoundError:
-                # Another cleanup can unlink the empty parent even after open.
-                if attempt == 31:
-                    fail(125, "Codex work temp parent kept disappearing")
+                os.mkdir(TMP_NAME, 0o700, dir_fd=parent)
             except FileExistsError:
-                # makedirs checks isdir after EEXIST; cleanup may remove it
-                # between those operations, leaving the original EEXIST.
-                base = os.path.join(workdir, TMP_NAME)
-                if (os.path.islink(base) or
-                        (os.path.lexists(base) and not os.path.isdir(base)) or attempt == 31):
-                    fail(125, "unsafe Codex work temp path")
-            except OSError as error:
-                fail(125, "unsafe Codex work temp path: %s" % error)
-            finally:
-                if fd is not None:
-                    os.close(fd)
+                pass  # Validate the existing entry with a no-follow open.
+            fd = os.open(TMP_NAME, flags, dir_fd=parent)
+            info = os.fstat(fd)
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                fail(125, "unsafe Codex work temp path")
+            os.fchmod(fd, 0o700)
+            job = "job-" + uuid.uuid4().hex
+            os.mkdir(job, 0o700, dir_fd=fd)
+        except OSError as error:
+            fail(125, "unsafe Codex work temp path: %s" % error)
+        finally:
+            if fd is not None:
+                os.close(fd)
     finally:
         os.close(parent)
     add_exclude(workdir)
     print(os.path.join(workdir, TMP_NAME, job))
+
+
+def _remove_directory(parent_fd, name, flags):
+    # Every name is a single component relative to a pinned directory. Never
+    # chmod a file or symlink: unlink only needs write access to its parent.
+    try:
+        fd = os.open(name, flags, dir_fd=parent_fd)
+    except PermissionError:
+        os.chmod(name, 0o700, dir_fd=parent_fd, follow_symlinks=False)
+        fd = os.open(name, flags, dir_fd=parent_fd)
+    try:
+        os.fchmod(fd, 0o700)
+        for entry in os.listdir(fd):
+            try:
+                info = os.stat(entry, dir_fd=fd, follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    _remove_directory(fd, entry, flags)
+                else:
+                    os.unlink(entry, dir_fd=fd)
+            except FileNotFoundError:
+                pass
+        os.rmdir(name, dir_fd=parent_fd)
+    finally:
+        os.close(fd)
 
 
 def cleanup(path):
@@ -151,47 +164,22 @@ def cleanup(path):
         parent = os.open(os.path.dirname(base), flags)
     except FileNotFoundError:
         return
-    cwd = os.open(".", flags)
     try:
         try:
             fd = os.open(TMP_NAME, flags, dir_fd=parent)
         except FileNotFoundError:
             return
         try:
-            # Pin the parent before recursion; a renamed/replaced path must
-            # never redirect cleanup into another directory.
-            os.fchdir(fd)
-            if os.path.islink(job):
-                fail(125, "unsafe Codex cleanup path")
-
-            def retry_readonly(function, name, exc_info):
-                if isinstance(exc_info[1], FileNotFoundError):
-                    return
-                if not isinstance(exc_info[1], PermissionError):
-                    raise exc_info[1]
-                # Never chmod through a link, including links inside the job.
-                for target in (os.path.dirname(name) or ".", name):
-                    if os.path.islink(target):
-                        fail(125, "unsafe Codex cleanup path")
-                    os.chmod(target, 0o700, follow_symlinks=False)
-                if function in (os.open, os.scandir, os.listdir):
-                    shutil.rmtree(name, onerror=retry_readonly)
-                else:
-                    function(name)
-
             try:
-                shutil.rmtree(job, onerror=retry_readonly)
+                _remove_directory(fd, job, flags)
             except FileNotFoundError:
                 pass
+            except OSError as error:
+                fail(125, "unsafe Codex cleanup path: %s" % error)
         finally:
-            os.fchdir(cwd)
             os.close(fd)
-        try:
-            os.rmdir(TMP_NAME, dir_fd=parent)
-        except OSError:
-            pass  # Other jobs may still own directories in the shared base.
+        # Keep the shared base: another creator may already hold it open.
     finally:
-        os.close(cwd)
         os.close(parent)
 
 

@@ -505,7 +505,7 @@ class ExcludeWriteContracts(unittest.TestCase):
             self.assertEqual(error.exception.code, 125)
         self.assertEqual((outside / "keep").read_text(), "keep")
 
-    def test_tmpdir_retries_parent_removed_after_open(self) -> None:
+    def test_cleanup_keeps_parent_opened_by_another_creator(self) -> None:
         from unittest import mock
         import threading
         opened = threading.Event()
@@ -517,7 +517,17 @@ class ExcludeWriteContracts(unittest.TestCase):
             try:
                 if not opened.wait(5):
                     raise AssertionError("parent not opened")
-                (self.repo / ".omnilane-tmp").rmdir()
+                # A separate cleanup process runs exactly between opening
+                # the shared base and mkdir(job). Old cleanup removes it.
+                import sys
+                missing = self.repo / ".omnilane-tmp" / ("job-" + "0" * 32)
+                result = subprocess.run(
+                    [sys.executable, "-B", str(ROOT / "scripts/lib/codex_worker_setup.py"),
+                     "cleanup", str(missing)], capture_output=True, text=True, timeout=5)
+                if result.returncode:
+                    raise AssertionError(result.stderr)
+                if not missing.parent.is_dir():
+                    raise AssertionError("cleanup removed a creator's open parent")
             except BaseException as error:
                 failures.append(error)
             finally:
@@ -546,7 +556,7 @@ class ExcludeWriteContracts(unittest.TestCase):
         code = ("import importlib.util,sys,contextlib,io; "
                 "s=importlib.util.spec_from_file_location('setup',sys.argv[1]); "
                 "m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
-                "for i in range(25):\n"
+                "for i in range(100):\n"
                 " out=io.StringIO()\n"
                 " with contextlib.redirect_stdout(out): m.tmpdir(sys.argv[2])\n"
                 " m.cleanup(out.getvalue().strip())\n")
@@ -557,7 +567,7 @@ class ExcludeWriteContracts(unittest.TestCase):
         results = []
         try:
             for process in processes:
-                stdout, stderr = process.communicate(timeout=30)
+                stdout, stderr = process.communicate(timeout=60)
                 results.append((process.returncode, stdout + stderr))
         finally:
             for process in processes:
@@ -566,7 +576,51 @@ class ExcludeWriteContracts(unittest.TestCase):
                     process.communicate()
         for rc, output in results:
             self.assertEqual(rc, 0, output)
-        self.assertFalse((self.repo / ".omnilane-tmp").exists())
+        self.assertEqual(list((self.repo / ".omnilane-tmp").iterdir()), [])
+
+    def test_readonly_directory_with_external_symlinks(self) -> None:
+        job = self.make_job()
+        outside = self.tmp / "outside"
+        outside.mkdir(mode=0o500)
+        target = self.tmp / "target"
+        target.write_text("untouched")
+        target.chmod(0o400)
+        nested = job / "readonly"
+        nested.mkdir()
+        (nested / "directory-link").symlink_to(outside)
+        (nested / "file-link").symlink_to(target)
+        modes = [stat.S_IMODE(p.stat().st_mode) for p in (outside, target)]
+        nested.chmod(0o500)
+        self.setup.cleanup(str(job))
+        self.assertFalse(job.exists())
+        self.assertEqual([stat.S_IMODE(p.stat().st_mode) for p in (outside, target)], modes)
+        self.assertEqual(target.read_text(), "untouched")
+
+    def test_cleanup_refuses_concurrently_swapped_directory(self) -> None:
+        from unittest import mock
+        job = self.make_job()
+        nested = job / "nested"
+        nested.mkdir(mode=0o500)
+        outside = self.tmp / "outside"
+        outside.mkdir(mode=0o500)
+        before = stat.S_IMODE(outside.stat().st_mode)
+        real_open = os.open
+        swapped = []
+
+        def swap_before_open(name, flags, *args, **kwargs):
+            if name == "nested" and not swapped:
+                nested.rename(job / "original")
+                nested.symlink_to(outside)
+                swapped.append(True)
+            return real_open(name, flags, *args, **kwargs)
+
+        with mock.patch.object(self.setup.os, "open", swap_before_open):
+            with self.assertRaises(SystemExit) as error:
+                self.setup.cleanup(str(job))
+        self.assertEqual(error.exception.code, 125)
+        self.assertEqual(swapped, [True])
+        self.assertEqual(stat.S_IMODE(outside.stat().st_mode), before)
+        self.setup.cleanup(str(job))
 
     def test_write_failure_only_warns(self) -> None:
         import contextlib
