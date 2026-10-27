@@ -61,12 +61,16 @@ def read_snapshot(directory):
         fd = os.open("codex.json", flags, dir_fd=parent)
     finally:
         os.close(parent)
-    with os.fdopen(fd, "rb") as stream:
-        info = os.fstat(stream.fileno())
-        # Preserve the 65,536-character contract while bounding UTF-8 bytes.
-        if not stat.S_ISREG(info.st_mode) or info.st_size > 262144:
-            raise ValueError("unsafe or oversized snapshot")
-        raw = stream.read(262145)
+    try:
+        # Keep raw-fd ownership even if stream construction partially succeeds.
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            info = os.fstat(stream.fileno())
+            # Preserve the 65,536-character contract while bounding UTF-8 bytes.
+            if not stat.S_ISREG(info.st_mode) or info.st_size > 262144:
+                raise ValueError("unsafe or oversized snapshot")
+            raw = stream.read(262145)
+    finally:
+        os.close(fd)
     if len(raw) > 262144:
         raise ValueError("oversized snapshot")
     raw = raw.decode("utf-8")

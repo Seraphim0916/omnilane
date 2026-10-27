@@ -32,9 +32,13 @@ def directory(parent, name, create=False):
         except FileExistsError:
             pass
     fd = os.open(name, FLAGS | os.O_DIRECTORY, dir_fd=parent)
-    if os.fstat(fd).st_uid != os.geteuid():
-        os.close(fd)
-        raise ValueError("goal journal directory has a different owner")
+    try:
+        if os.fstat(fd).st_uid != os.geteuid():
+            raise ValueError("goal journal directory has a different owner")
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise
     return fd
 
 

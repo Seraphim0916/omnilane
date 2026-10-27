@@ -47,7 +47,8 @@ def summary(refusal: dict, path: Path | None) -> str:
              f'reason="{reason}"', f'quote="{quote}"']
     if path is not None:
         parts.append(f"evidence={one_line(path)}")
-    return "omnilane refusal: " + " ".join(parts)
+    return ("omnilane refusal: " + " ".join(parts)).encode(
+        "utf-8", "backslashreplace").decode("utf-8")
 
 
 def store(home: Path, refusal: dict, lane: str, headline: str) -> Path:
@@ -59,7 +60,9 @@ def store(home: Path, refusal: dict, lane: str, headline: str) -> Path:
     path = directory / f"{now.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(4)}.json"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+        # Escape lone surrogate code units without changing parsed field values.
+        stream.write(json.dumps(record, ensure_ascii=False, indent=2).encode(
+            "utf-8", "backslashreplace").decode("utf-8") + "\n")
     return path
 
 
