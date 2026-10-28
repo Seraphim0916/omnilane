@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+- Approved on 2026-10-28 by the operator: registry snapshot `aa-v4.3.2-2026-10-28-v1` registers the Claude models that Antigravity (`agy`, vendor `gemini`) hosts: `gemini/claude-opus-5-5-high` (54), `-medium` (51), `-low` (42), `gemini/claude-sonnet-5-5-high` (47), `-medium` (41), `-low` (36). Each reuses the AA v4.3.2 row of the native Claude config with the same model and effort; agy offers no xhigh or max, and agy's `gpt-oss-120b-medium` has no AA row, so neither is registered. 130 -> 136 scored, Gemini 9 -> 15. Every existing score and `routing.yaml` are unchanged; the new rows are reachable with `--vendor gemini --model claude-opus-5-5-medium` once `omnilane resign` has probed them. Every host must run `omnilane resign` after upgrading because the snapshot id changes. Details: `docs/reports/aa-rebaseline-2026-10-28.md`.
+
 ## [0.58.0] - 2026-10-27
 
 ### Changed

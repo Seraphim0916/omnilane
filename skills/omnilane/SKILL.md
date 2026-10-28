@@ -542,7 +542,11 @@ lane table; do not assume an older model is equivalent.
 
 ### Model aliases
 
-Current approved snapshot `aa-v4.3.2-2026-10-27-v1` (2026-10-27): 130 scored rows, 9 unknown;
+Current approved snapshot `aa-v4.3.2-2026-10-28-v1` (2026-10-28): 136 scored rows, 9 unknown;
+adds agy-hosted Claude (vendor `gemini`): `claude-opus-5-5-{high,medium,low}` and `claude-sonnet-5-5-{high,medium,low}`,
+scored with the same AA row as the native Claude config, listed in no lane, and needing host proof like every other row.
+
+Previous snapshot `aa-v4.3.2-2026-10-27-v1` (2026-10-27): 130 scored rows, 9 unknown;
 adds GPT-6.1 Terra at max/xhigh/high/medium/low/non-reasoning, which needs host proof like every other row.
 
 Previous snapshot `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19): 124 scored rows, 9 unknown;

@@ -64,6 +64,8 @@ for cid, rid, ev in [
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
     ("gemini/gemini-3-8-flash-medium", "gemini-3.8-flash-medium", "agy-gemini-3_8-flash-medium"),
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),
+    *[(f"gemini/{model}-{effort}", f"{model}-{effort}", f"agy-{model}-{effort}")
+      for model in ("claude-opus-5-5", "claude-sonnet-5-5") for effort in ("high", "medium", "low")],
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 

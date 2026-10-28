@@ -118,6 +118,12 @@ NEW_ROWS = [
        f"gpt-6-1-terra{suffix}", f"codex/gpt-5-6-terra{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low", None)
       for suffix in ["" if effort == "max" else f"-{effort or 'non-reasoning'}"]],
+    # agy (vendor gemini) also hosts Claude. Same AA row as the native Claude config of
+    # that model and effort; the selector carries the effort (claude-opus-5-5-medium).
+    # agy offers no xhigh/max, and gpt-oss-120b-medium has no AA row, so neither is here.
+    *[(f"gemini/{model}-{effort}", "gemini", model, effort, "adaptive", f"{model}-{effort}",
+       "gemini/gemini-3-8-flash" + ("" if effort == "high" else f"-{effort}"))
+      for model in ("claude-opus-5-5", "claude-sonnet-5-5") for effort in ("high", "medium", "low")],
 ]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",

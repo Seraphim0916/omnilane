@@ -1,8 +1,10 @@
 # Model capabilities — AA routing snapshots
 
-The current approved snapshot is **2026-10-27**, snapshot `aa-v4.3.2-2026-10-27-v1` (GPT-6.1 Terra added).
-The controller approved it on 2026-10-27, acting on the operator's request that day to add the new model;
-host transport proof is still required. The previous snapshot `aa-v4.3.2-2026-10-18-v1` was approved on 2026-10-19.
+The current approved snapshot is **2026-10-28**, snapshot `aa-v4.3.2-2026-10-28-v1` (agy-hosted Claude added:
+`gemini/claude-opus-5-5-{high,medium,low}` and `gemini/claude-sonnet-5-5-{high,medium,low}`, same AA rows as native Claude).
+The operator approved it on 2026-10-28; no lane order changed and host transport proof is still required.
+The previous snapshot `aa-v4.3.2-2026-10-27-v1` (GPT-6.1 Terra added) was approved on 2026-10-27;
+the one before, `aa-v4.3.2-2026-10-18-v1`, on 2026-10-19.
 Earlier sections are historical;
 scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
