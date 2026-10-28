@@ -139,7 +139,8 @@ def identity(args, job, workdir, claims=None, permit_adoption=False):
 
 
 def assert_binding(state, args):
-    check(state.get('schema_version') == 1, 'unsupported registry schema')
+    check(type(state.get('schema_version')) is int and state['schema_version'] == 1,
+          'unsupported registry schema')
     check(state.get('controller_thread_id') == args.thread_id
           and state.get('controller_host_id') == args.host_id
           and state.get('run_id') == args.run_id, 'controller binding mismatch')
