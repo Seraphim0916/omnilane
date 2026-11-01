@@ -35,6 +35,18 @@ case "$PROBE_SCENARIO" in
   never-ignoring-term)
     trap '' TERM
     while :; do sleep 0.05; done ;;
+  helper-freezes-after-ready)
+    # The helper has said ready and holds both ends, then stops answering.
+    worker=$PPID
+    group=$(ps -o pgid= -p "$worker" | tr -d ' ')
+    until pgrep -g "$group" -f O_NONBLOCK > /dev/null; do sleep 0.01; done
+    kill -STOP "$worker"
+    exec 9< "$OMNILANE_INBOX"
+    sleep 0.1
+    kill -STOP "$(pgrep -g "$group" -f O_NONBLOCK)"
+    kill -CONT "$worker"
+    IFS= read -r line <&9 && printf '%s\n' "$line" >> "$PROBE_ROOT/received"
+    exit 0 ;;
   exit-early) exit 7 ;;
   exit-zero) exit 0 ;;
   reader-leaves-before-worker-opens)
@@ -63,6 +75,11 @@ case "$PROBE_SCENARIO" in
 esac
 exit 9
 '''
+
+
+def restore_hup():
+    # nohup leaves SIGHUP ignored, and a child cannot undo an inherited ignore.
+    signal.signal(signal.SIGHUP, signal.SIG_DFL)
 
 
 class FifoOpenTests(unittest.TestCase):
@@ -113,7 +130,8 @@ class FifoOpenTests(unittest.TestCase):
             self.process = subprocess.Popen(
                 [shell, str(self.runtime / "scripts/lib/job-worker.sh"), vendor, "work",
                  str(self.root), model, effort, str(self.prompt), str(self.job / "out.txt")],
-                env=run_env, stdout=stdout, stderr=stderr, start_new_session=True)
+                env=run_env, stdout=stdout, stderr=stderr, start_new_session=True,
+                preexec_fn=restore_hup)
         deadline = time.monotonic() + 8
         while not (self.root / "started").exists():
             if time.monotonic() > deadline or self.process.poll() is not None:
@@ -274,6 +292,77 @@ class FifoOpenTests(unittest.TestCase):
                 self.start(shell, "never", OMNILANE_TIMEOUT="10000000")
                 self.assertIn(" 10000000 ", self.await_helper()[1])
 
+    def test_frozen_helper_before_open_ends_at_the_worker_own_deadline(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "never", OMNILANE_RUNNER_OPEN_TIMEOUT="1")
+                helper, _ = self.await_helper()
+                os.kill(helper, signal.SIGSTOP)
+                self.assertNotEqual(self.finish(14), 0)
+                self.assertIn("inbox helper stopped responding", self.stderr_path.read_text())
+
+    def test_frozen_helper_before_open_does_not_delay_close(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "never")
+                helper, _ = self.await_helper()
+                os.kill(helper, signal.SIGSTOP)
+                time.sleep(0.2)
+                began = time.monotonic()
+                self.process.send_signal(signal.SIGUSR1)
+                self.finish(CLOSE_DEADLINE)
+                self.assertLess(time.monotonic() - began, 4)
+
+    def test_brief_helper_stall_is_not_mistaken_for_its_exit(self):
+        # Bash 3.2 answers a read timeout and EOF with the same status.
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "late")
+                helper, _ = self.await_helper()
+                os.kill(helper, signal.SIGSTOP)
+                time.sleep(2.5)
+                self.assertIsNone(self.process.poll(), self.stderr_path.read_text())
+                os.kill(helper, signal.SIGCONT)
+                (self.root / "release").touch()
+                self.assertEqual(self.finish(10), 0, self.stderr_path.read_text())
+                self.assertEqual(len(self.received()), 1)
+                self.assert_clean_end()
+
+    def test_killed_helper_is_reported_as_what_happened(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "never")
+                helper, _ = self.await_helper()
+                os.kill(helper, signal.SIGKILL)
+                self.assertNotEqual(self.finish(CLOSE_DEADLINE), 0)
+                stderr = self.stderr_path.read_text()
+                self.assertIn("inbox helper exited", stderr)
+                self.assertNotIn("did not open its inbox within", stderr)
+                self.assert_clean_end()
+
+    def test_helper_frozen_after_open_never_gets_the_prompt_written(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "helper-freezes-after-ready")
+                self.assertNotEqual(self.finish(5 + CLOSE_DEADLINE), 0)
+                stderr = self.stderr_path.read_text()
+                self.assertIn("inbox helper did not exit", stderr)
+                self.assertEqual(self.received(), [])
+
+    def test_marker_path_is_refused_when_already_present(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                job = Path(tempfile.mkdtemp(dir=self.root, prefix="job-"))
+                outside = self.root / "outside-marker"
+                (job / "runner-inbox.fifo.opened").symlink_to(outside)
+                result = subprocess.run(
+                    [shell, str(self.runtime / "scripts/lib/job-worker.sh"), "claude", "work",
+                     str(self.root), "claude-opus-5", "high", str(self.prompt), str(job / "out.txt")],
+                    env=dict(self.env, PROBE_SCENARIO="immediate"), capture_output=True, timeout=20)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(outside.exists())
+                self.assertFalse((self.root / "started").exists())
+
     def test_helper_does_not_outlive_a_killed_worker(self):
         for shell in SHELLS:
             for name in ("SIGTERM", "SIGHUP", "SIGKILL"):
@@ -429,6 +518,151 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             self.assertIn("closed", result.stdout)
         self.assertLess(took, 12.5, result)
         self.assert_finished_cleanly()
+
+
+FAKE_CLI = r'''#!/bin/bash
+# Answers the live-surface probe, then hangs before the inbox with a grandchild.
+case "$*" in *app-server*|*agent*stdio*) ;; *) echo "fake 1.0"; exit 0 ;; esac
+count_file="$PROBE_ROOT/cli-runs"
+runs=$(cat "$count_file" 2>/dev/null || echo 0)
+echo $((runs + 1)) > "$count_file"
+if [[ "$runs" -eq 0 ]]; then
+  IFS= read -r _
+  printf '{"id":1,"result":{}}\n'
+  exec cat > /dev/null
+fi
+if [[ "${FAKE_IGNORE_TERM:-0}" == 1 ]]; then trap '' TERM; fi
+sleep 300 &
+echo $! > "$PROBE_ROOT/grandchild"
+: > "$PROBE_ROOT/started"
+while :; do wait; sleep 0.05; done
+'''
+
+
+class RealRunnerCleanupTests(unittest.TestCase):
+    """A close before the inbox opens must let the real runner's EXIT cleanup run."""
+
+    JOB_ID = "20261101-160000-12345-1"
+
+    def run_job(self, vendor, ignore_term=False, mode="work", model="fake", effort="medium"):
+        temporary = tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        env, violations = isolated_environment(root / "isolated", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(violations.exists(), "offline guard triggered"))
+        runtime = root / "runtime"
+        shutil.copytree(ROOT / "scripts/lib", runtime / "scripts/lib")
+        shutil.copytree(ROOT / "scripts/runners", runtime / "scripts/runners")
+        shutil.copytree(ROOT / "config", runtime / "config")
+        job = root / "home/jobs" / self.JOB_ID
+        job.mkdir(parents=True)
+        (job / "meta.json").write_text(
+            f'{{"lane":"triage","vendor":"{vendor}","session_mode":"live"}}')
+        workdir = root / "work"
+        workdir.mkdir()
+        cli = root / "fake-cli"
+        cli.write_text(FAKE_CLI)
+        cli.chmod(0o755)
+        (Path(env["HOME"]) / ".gemini").mkdir(parents=True, exist_ok=True)
+        prompt = root / "prompt.txt"
+        prompt.write_text("offline runner cleanup fixture\n")
+        env.update(PROBE_ROOT=str(root), OMNILANE_HOME=str(root / "home"),
+                   OMNILANE_SESSION_MODE="live", OMNILANE_LIVE_REQUIRED="1",
+                   OMNILANE_IDLE_TIMEOUT="0", OMNILANE_TIMEOUT="60", OMNILANE_JOB_SUPERVISED="1",
+                   CODEX_BIN=str(cli), AGY_BIN=str(cli), GROK_BIN=str(cli),
+                   FAKE_IGNORE_TERM="1" if ignore_term else "0")
+        script = r"""
+printf '%s\n' "$$" > "$JOB_DIR/pid"
+perl "$WORKER_ROOT/scripts/lib/job-timeout.pl" --no-deadline /bin/bash \
+  "$WORKER_ROOT/scripts/lib/job-worker.sh" "$VENDOR" "$MODE" "$WORK" "$MODEL" "$EFFORT" \
+  "$PROMPT" "$JOB_DIR/out.txt" > "$JOB_DIR/stdout" 2> "$JOB_DIR/stderr"
+printf '%s\n' "$?" > "$JOB_DIR/exit"
+"""
+        driver = subprocess.Popen(
+            ["/bin/bash", "-c", script],
+            env=dict(env, JOB_DIR=str(job), WORKER_ROOT=str(runtime), VENDOR=vendor, MODE=mode,
+                     WORK=str(workdir), MODEL=model, EFFORT=effort, PROMPT=str(prompt)),
+            start_new_session=True)
+
+        def kill_everything():
+            listing = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,command="],
+                                     capture_output=True, text=True, check=True).stdout
+            for row in listing.splitlines():
+                pid, command = row.split(None, 1)
+                if str(root) in command:
+                    try:
+                        os.kill(int(pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            driver.wait(timeout=5)
+        self.addCleanup(kill_everything)
+        return root, job, workdir, env, driver
+
+    def close_when_started(self, root, job, env, driver, ready):
+        deadline = time.monotonic() + 15
+        while not (ready() and (job / "inbox.holder.pid").exists()):
+            if driver.poll() is not None or time.monotonic() > deadline:
+                self.fail("job never reached the open: " + (job / "stderr").read_text())
+            time.sleep(0.01)
+        time.sleep(0.1)
+        began = time.monotonic()
+        result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", self.JOB_ID],
+                                env=env, capture_output=True, text=True, timeout=20)
+        took = time.monotonic() - began
+        self.assertEqual(result.returncode, 1, result)
+        self.assertIn("exit=1", result.stdout, result)
+        driver.wait(timeout=12)
+        return result, took
+
+    def assert_nothing_left(self, root):
+        deadline = time.monotonic() + 3
+        while True:
+            listing = subprocess.run(["ps", "-A", "-ww", "-o", "command="],
+                                     capture_output=True, text=True, check=True).stdout
+            left = [row for row in listing.splitlines() if str(root) in row]
+            if not left:
+                break
+            self.assertLess(time.monotonic(), deadline, left)
+            time.sleep(0.05)
+        path = root / "grandchild"
+        if path.exists():
+            with self.assertRaises(ProcessLookupError):
+                os.kill(int(path.read_text()), 0)
+
+    def test_codex_temp_directory_is_removed(self):
+        for ignore_term in (False, True):
+            with self.subTest(ignore_term=ignore_term):
+                root, job, workdir, env, driver = self.run_job("codex", ignore_term)
+                result, took = self.close_when_started(
+                    root, job, env, driver, (root / "started").exists)
+                self.assertLess(took, 4, result)
+                self.assert_nothing_left(root)
+                self.assertEqual(list((workdir / ".omnilane-tmp").iterdir())
+                                 if (workdir / ".omnilane-tmp").exists() else [], [])
+
+    def test_gemini_workspace_policy_is_cleaned_up(self):
+        root, job, workdir, env, driver = self.run_job("gemini")
+
+        def owned_files():
+            return [name for _, _, names in os.walk(workdir) for name in names
+                    if name in ("agent.md", ".omnilane-owned.json")]
+        seen_while_running = []
+
+        def prepared():
+            seen_while_running[:] = owned_files()
+            return bool(seen_while_running)
+        result, took = self.close_when_started(root, job, env, driver, prepared)
+        self.assertLess(took, 4, result)
+        self.assert_nothing_left(root)
+        self.assertEqual(sorted(seen_while_running), [".omnilane-owned.json", "agent.md"])
+        self.assertEqual(owned_files(), [], (job / "stderr").read_text())
+
+    def test_grok_sysops_leaves_no_process(self):
+        # Only sysops has a live Grok path, and it has no EXIT cleanup to protect.
+        root, job, workdir, env, driver = self.run_job("grok", mode="sysops", model="grok-4.7", effort="-")
+        result, took = self.close_when_started(root, job, env, driver, (root / "started").exists)
+        self.assertLess(took, 4, result)
+        self.assert_nothing_left(root)
 
 
 if __name__ == "__main__":

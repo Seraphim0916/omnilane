@@ -161,8 +161,8 @@ cleanup_live_mailbox() {
 
 prepare_live_mailbox() {
   local path old_umask rc=0
-  for path in "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$HOLDER_PID_FILE" \
-    "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
+  for path in "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$RUNNER_INBOX_FIFO.opened" \
+    "$HOLDER_PID_FILE" "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
     [[ ! -e "$path" && ! -L "$path" ]] || return 1
   done
   old_umask="$(umask)"
@@ -420,9 +420,12 @@ runner_pid=$!
 # the helper's reader must be gone before the prompt is written, or a reader that
 # already left would not fail the write. Bash 3.2 cannot wait for a process
 # substitution and its $! is not the helper, so a marker file tells the helper to
-# leave and its EOF is the receipt.
+# leave and its EOF is the receipt. A helper that stops answering must not hold the
+# worker, so every read has a timeout. Bash 3.2 returns 1 for both a timeout and EOF,
+# but a timeout takes at least a second: a failed read within the same second is EOF.
 open_runner_writer() {
-  local helper_ready=0 line read_rc open_tries=0
+  local helper_ready=0 line read_rc read_began open_tries=0 helper_gone_by
+  local open_gives_up=$((SECONDS + RUNNER_OPEN_TIMEOUT + 5))
   local release_marker="$RUNNER_INBOX_FIFO.opened"
   exec 8< <(perl -MFcntl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
     $| = 1;
@@ -436,7 +439,7 @@ open_runner_writer() {
         } else {
           undef $writer;
           exit 2 unless $!{ENXIO};
-          exit 1 if clock_gettime(CLOCK_MONOTONIC) >= $deadline;
+          if (clock_gettime(CLOCK_MONOTONIC) >= $deadline) { print "deadline\n"; exit 1 }
         }
       }
       exit 0 if -e $marker;
@@ -445,9 +448,13 @@ open_runner_writer() {
     }
   ' "$RUNNER_INBOX_FIFO" "$RUNNER_OPEN_TIMEOUT" "$release_marker" 6<&- 7>&-)
   while [[ "$close_requested" -eq 0 && "$runner_writer_opened" -eq 0 ]]; do
-    if IFS= read -r line <&8; then
+    read_began=$SECONDS
+    if IFS= read -r -t 1 line <&8; then
       if [[ "$line" == "ready" ]]; then helper_ready=1; fi
-      if [[ "$helper_ready" -eq 1 ]]; then
+      if [[ "$line" == "deadline" ]]; then
+        emit_mode_notice "omnilane: $VENDOR runner did not open its inbox within ${RUNNER_OPEN_TIMEOUT}s" || true
+        close_requested=1
+      elif [[ "$helper_ready" -eq 1 ]]; then
         if exec 3> "$RUNNER_INBOX_FIFO"; then
           runner_writer_open=1
           runner_writer_opened=1
@@ -455,21 +462,44 @@ open_runner_writer() {
           open_tries=$((open_tries + 1))
           if [[ "$open_tries" -ge 3 ]]; then close_requested=1; fi
         fi
-      elif ! kill -0 "$runner_pid" 2>/dev/null; then
-        natural_runner_exit=1
-        close_requested=1
+        continue
       fi
     else
       read_rc=$?
-      if [[ "$close_requested" -eq 0 && "$read_rc" -le 128 ]]; then
-        emit_mode_notice "omnilane: $VENDOR runner did not open its inbox within ${RUNNER_OPEN_TIMEOUT}s" || true
+      if [[ "$close_requested" -eq 0 && "$read_rc" -le 128 && "$SECONDS" -eq "$read_began" ]]; then
+        emit_mode_notice "omnilane: $VENDOR inbox helper exited before the runner opened its inbox" || true
+        close_requested=1
+      fi
+    fi
+    if [[ "$close_requested" -eq 0 ]]; then
+      if ! kill -0 "$runner_pid" 2>/dev/null; then
+        natural_runner_exit=1
+        close_requested=1
+      elif [[ "$SECONDS" -ge "$open_gives_up" ]]; then
+        emit_mode_notice "omnilane: $VENDOR inbox helper stopped responding; the prompt was not delivered" || true
         close_requested=1
       fi
     fi
   done
   if [[ "$runner_writer_opened" -eq 1 ]]; then
     (umask 077; : > "$release_marker")
-    while IFS= read -r line <&8 || [[ $? -gt 128 ]]; do :; done
+    helper_gone_by=$((SECONDS + 5))
+    while :; do
+      read_began=$SECONDS
+      if ! IFS= read -r -t 1 line <&8; then
+        read_rc=$?
+        if [[ "$read_rc" -le 128 && "$SECONDS" -eq "$read_began" ]]; then break; fi
+      fi
+      if [[ "$SECONDS" -ge "$helper_gone_by" ]]; then
+        # It still holds the read end, so writing now would look like a delivery.
+        emit_mode_notice "omnilane: $VENDOR inbox helper did not exit; the prompt was not delivered" || true
+        exec 3>&-
+        runner_writer_open=0
+        runner_writer_opened=0
+        close_requested=1
+        break
+      fi
+    done
     rm "$release_marker" 2>/dev/null || true
   fi
   exec 8<&-
@@ -660,7 +690,8 @@ if [[ "$close_requested" -eq 1 ]]; then
   # when close starts. A close that signals late, once the holder PID appears,
   # keeps the same 11s, so it can return 124 while this shutdown is still in
   # budget; its message says so. A close during the writer open has no pump,
-  # drain or grace, which more than pays for its two reader releases.
+  # drain or grace, which more than pays for its two reader releases, and it can
+  # only start once the helper reads above have timed out, at most 1s later.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # Close is already committed. Repeated close requests must not interrupt wait.
   trap '' USR1
@@ -696,7 +727,12 @@ if [[ "$close_requested" -eq 1 ]]; then
   if ! wait_runner_for "$close_grace"; then
     runner_forced=1
     kill -TERM "$runner_pid" 2>/dev/null || true
-    if ! wait_runner_for "$CLOSE_TERM_GRACE"; then
+    # A runner's TERM trap only runs once its foreground child ends, and only the
+    # supervisor's group TERM reaches that child. KILLing the runner here would skip
+    # its EXIT cleanup, so a supervised runner that never got a message is left to
+    # the group; one that did keeps the deadline above.
+    if ! wait_runner_for "$CLOSE_TERM_GRACE" &&
+       [[ "$runner_writer_opened" -eq 1 || "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then
       kill -KILL "$runner_pid" 2>/dev/null || true
       wait_runner_for "$CLOSE_KILL_GRACE" || close_drain_failed=1
     fi
@@ -707,7 +743,11 @@ fi
 if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then
   runner_rc=1
   close_drain_failed=1
-  emit_mode_notice "omnilane: runner did not stop within close deadline" || true
+  if [[ "$runner_writer_opened" -eq 0 && "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+    emit_mode_notice "omnilane: runner had not stopped when the worker closed; the job supervisor stops it" || true
+  else
+    emit_mode_notice "omnilane: runner did not stop within close deadline" || true
+  fi
 else
   wait "$runner_pid" 2>/dev/null
   runner_rc=$?
