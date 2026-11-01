@@ -32,6 +32,9 @@ consume() {
 : > "$PROBE_ROOT/started"
 case "$PROBE_SCENARIO" in
   never) while :; do sleep 0.05; done ;;
+  never-ignoring-term)
+    trap '' TERM
+    while :; do sleep 0.05; done ;;
   exit-early) exit 7 ;;
   exit-zero) exit 0 ;;
   reader-leaves-before-worker-opens)
@@ -308,6 +311,124 @@ class FifoOpenTests(unittest.TestCase):
                 self.process.send_signal(signal.SIGUSR1)
                 self.finish(CLOSE_DEADLINE)
                 self.assert_clean_end()
+
+
+class RealCloseOfAnUnopenedInboxTests(unittest.TestCase):
+    """Real jobs.sh close, job-worker.sh and supervisor; only the runner is fake."""
+
+    JOB_ID = "20261101-150000-12345-1"
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="omnilane-fifo-close-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.env, violations = isolated_environment(self.root / "isolated", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(violations.exists(), "offline guard triggered"))
+        self.runtime = self.root / "runtime"
+        shutil.copytree(ROOT / "scripts/lib", self.runtime / "scripts/lib")
+        shutil.copytree(ROOT / "config", self.runtime / "config")
+        runner = self.runtime / "scripts/runners/run-claude.sh"
+        runner.parent.mkdir()
+        runner.write_text(RUNNER)
+        runner.chmod(0o755)
+        self.job = self.root / "home/jobs" / self.JOB_ID
+        self.job.mkdir(parents=True)
+        (self.job / "meta.json").write_text('{"lane":"triage","vendor":"claude","session_mode":"live"}')
+        prompt = self.root / "prompt.txt"
+        prompt.write_text("offline fifo close fixture\n")
+        self.env.update(PROBE_ROOT=str(self.root), OMNILANE_HOME=str(self.root / "home"),
+                        OMNILANE_SESSION_MODE="live", OMNILANE_LIVE_REQUIRED="1",
+                        OMNILANE_IDLE_TIMEOUT="0", OMNILANE_TIMEOUT="60",
+                        WORKER_PROMPT=str(prompt), WORKER_ROOT=str(self.runtime),
+                        WORKER_DIR=str(self.root), JOB_DIR=str(self.job))
+        self.driver = None
+        self.addCleanup(self.kill_job)
+
+    def kill_job(self):
+        if self.driver is None:
+            return
+        listing = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,command="],
+                                 capture_output=True, text=True, check=True).stdout
+        for row in listing.splitlines():
+            pid, command = row.split(None, 1)
+            if str(self.root) in command:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        self.driver.wait(timeout=5)
+
+    def start_job(self, shell, scenario, delay=0):
+        # What dispatch.sh does for a background job: pid file, supervisor, exit receipt.
+        script = r"""
+printf '%s\n' "$$" > "$JOB_DIR/pid"
+sleep "$1"
+perl "$WORKER_ROOT/scripts/lib/job-timeout.pl" --no-deadline "$2" \
+  "$WORKER_ROOT/scripts/lib/job-worker.sh" claude work "$WORKER_DIR" claude-opus-5 high \
+  "$WORKER_PROMPT" "$JOB_DIR/out.txt" > "$JOB_DIR/stdout" 2> "$JOB_DIR/stderr"
+printf '%s\n' "$?" > "$JOB_DIR/exit"
+"""
+        self.driver = subprocess.Popen(["/bin/bash", "-c", script, "driver", str(delay), shell],
+                                       env=dict(self.env, PROBE_SCENARIO=scenario),
+                                       start_new_session=True)
+        deadline = time.monotonic() + 8
+        while not (self.job / "pid").exists():
+            self.assertLess(time.monotonic(), deadline, "driver never started")
+            time.sleep(0.01)
+
+    def await_runner_started(self):
+        deadline = time.monotonic() + 8
+        while not ((self.root / "started").exists() and (self.job / "inbox.holder.pid").exists()):
+            self.assertLess(time.monotonic(), deadline, "runner never started")
+            time.sleep(0.01)
+        time.sleep(0.1)
+
+    def close(self):
+        began = time.monotonic()
+        result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", self.JOB_ID],
+                                env=self.env, capture_output=True, text=True, timeout=20)
+        return result, time.monotonic() - began
+
+    def assert_finished_cleanly(self):
+        self.driver.wait(timeout=12)
+        self.assertEqual((self.job / "exit").read_text().strip(), "1")
+        stderr = (self.job / "stderr").read_text()
+        self.assertNotIn("Interrupted system call", stderr)
+        self.assertFalse((self.job / "inbox.holder.pid").exists(), stderr)
+        self.assertFalse((self.job / "runner-inbox.fifo").exists(), stderr)
+        self.assertFalse((self.job / "runner-inbox.fifo.opened").exists(), stderr)
+
+    def test_close_of_a_runner_that_never_opens_returns_quickly(self):
+        for shell in SHELLS:
+            for scenario in ("never", "never-ignoring-term"):
+                with self.subTest(shell=shell, scenario=scenario):
+                    self.reset_job()
+                    self.start_job(shell, scenario)
+                    self.await_runner_started()
+                    result, took = self.close()
+                    self.assertEqual(result.returncode, 1, result)
+                    self.assertIn(f"closed {self.JOB_ID} (result_events=0 exit=1)", result.stdout)
+                    self.assertLess(took, 3, result)
+                    self.assert_finished_cleanly()
+
+    def reset_job(self):
+        self.kill_job()
+        self.driver = None
+        for name in ("pid", "exit", "stderr", "stdout", "out.txt", "events.jsonl", "out.txt.events.jsonl",
+                     "inbox.holder.pid", "inbox.ready", "inbox.fifo", "runner-inbox.fifo"):
+            (self.job / name).unlink(missing_ok=True)
+        (self.root / "started").unlink(missing_ok=True)
+
+    def test_a_late_signal_may_miss_the_receipt_but_the_job_still_ends(self):
+        # jobs close keeps its 11s for a holder PID that appears late. Whether the
+        # receipt lands in the remainder is a race, so either answer is correct.
+        self.start_job("/bin/bash", "never", delay=10.7)
+        result, took = self.close()
+        self.assertIn(result.returncode, (1, 124), result)
+        if result.returncode == 1:
+            self.assertIn("closed", result.stdout)
+        self.assertLess(took, 12.5, result)
+        self.assert_finished_cleanly()
 
 
 if __name__ == "__main__":
