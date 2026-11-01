@@ -919,7 +919,7 @@ supervisor = (root / 'scripts/lib/job-timeout.pl').read_text(encoding='utf-8')
 supervisor_grace = float(re.search(r'my \$TERM_GRACE_SECONDS = ([0-9.]+);', supervisor).group(1))
 jobs = (root / 'scripts/jobs.sh').read_text(encoding='utf-8')
 # jobs close waits on a sub-second Perl clock; the argument after the exit path is the wait in seconds.
-close_waits = re.findall(r"""^\s*' "\$JOB_DIR/exit" ([0-9]+(?:\.[0-9]+)?) "\$holder_path" "\$late_signal"\)""",
+close_waits = re.findall(r"""^\s*' "\$JOB_DIR/exit" ([0-9]+(?:\.[0-9]+)?) "\$holder_path" "\$late_signal" "\$PS_QUERY_LIMIT"\)""",
                          jobs, re.MULTILINE)
 if len(close_waits) != 1:
     raise AssertionError(f"could not resolve the one jobs close wait: {close_waits}")
