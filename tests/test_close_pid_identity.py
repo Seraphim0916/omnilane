@@ -572,6 +572,75 @@ class WriterTests(IdentityTestCase):
         self.assertIn("did not start", (self.job / "out.txt.stderr.log").read_text())
 
 
+class RunShHintTests(unittest.TestCase):
+    """tests/run.sh reports what dispatch would decide, and its result stays the tests' own."""
+
+    HINT = "this environment cannot start jobs"
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="omnilane-run-hint-")
+        self.addCleanup(temporary.cleanup)
+        self.root = pathlib.Path(temporary.name).resolve()
+        self.bins = self.root / "bin"
+        self.bins.mkdir()
+        (self.root / "tests").mkdir()
+        (self.root / "scripts").symlink_to(ROOT / "scripts")
+        self.env, violations = offline_env.isolated_environment(self.root / "isolated", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(violations.exists()))
+        self.env.update(PYTHONDONTWRITEBYTECODE="1", PATH=str(self.bins) + os.pathsep + self.env["PATH"])
+
+    def run_sh(self, failures):
+        # The real head and tail of run.sh, with the cases between them replaced by a known count.
+        lines = (ROOT / "tests/run.sh").read_text().splitlines(keepends=True)
+        end = next(i for i, line in enumerate(lines) if self.HINT in line) + 2
+        script = self.root / "tests/run.sh"
+        script.write_text("".join(lines[:end]) + f"FAIL={failures}\n" + "".join(lines[-2:]))
+        # Past the re-exec: the launcher rebuilds PATH, which would drop the blocked ps.
+        return subprocess.run(["bash", str(script), "--omnilane-offline-child"], env=self.env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+
+    def dispatch(self):
+        home = self.root / "home"
+        home.mkdir(exist_ok=True)
+        gate = self.bins / "fake-exec"
+        gate.write_text('#!/usr/bin/env bash\nprintf "ran\\n" > "$5"\n')
+        gate.chmod(0o755)
+        (home / "routing.local.yaml").write_text(f'fixture: exec "{gate}" -\n')
+        return subprocess.run(["bash", str(ROOT / "bin/omnilane"), "dispatch", "--workdir", str(self.root), "fixture", "offline"],
+                              env=dict(self.env, OMNILANE_HOME=str(home)), capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+
+    def block_ps(self):
+        real = shutil.which("ps", path=os.environ["PATH"])
+        (self.bins / "ps").write_text(f'#!/usr/bin/env bash\nif [[ "$*" == *lstart=* ]]; then exit 126; fi\nexec {real} "$@"\n')
+        (self.bins / "ps").chmod(0o755)
+
+    def test_silent_where_jobs_can_start(self):
+        for failures, code in ((0, 0), (3, 1)):
+            with self.subTest(failures=failures):
+                result = self.run_sh(failures)
+                self.assertNotIn(self.HINT, result.stdout + result.stderr)
+                self.assertEqual(result.returncode, code)
+                self.assertIn(f"0 passed, {failures} failed", result.stdout)
+        self.assertEqual(self.dispatch().returncode, 0)
+
+    def test_reported_where_jobs_cannot_start_and_the_result_is_unchanged(self):
+        self.block_ps()
+        for failures, code in ((0, 0), (3, 1)):
+            with self.subTest(failures=failures):
+                result = self.run_sh(failures)
+                self.assertEqual(result.stdout.count(self.HINT), 1, result.stdout + result.stderr)
+                self.assertEqual(result.returncode, code)
+                self.assertIn(f"0 passed, {failures} failed", result.stdout)
+        refused = self.dispatch()
+        self.assertEqual(refused.returncode, 1, refused.stderr)
+        self.assertIn("no job was started", refused.stderr)
+
+    def test_the_hint_makes_no_judgement(self):
+        self.block_ps()
+        output = self.run_sh(0).stdout.lower()
+        for word in ("ignore", "expected", "safe", "harmless"):
+            self.assertNotIn(word, output)
+
+
 class DispatchFailureTests(unittest.TestCase):
     """A job that cannot record its start time fails with a reason and a whole record."""
 

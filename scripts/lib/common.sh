@@ -260,6 +260,9 @@ process_start_time() { # pid -> stable ps(1) start timestamp
 # zone. process_start_time keeps the caller's zone: session records rely on it.
 pid_file_start_time() { TZ=UTC process_start_time "$1"; }
 
+# dispatch refuses on this answer, and tests/run.sh reports it, so the two cannot disagree.
+can_record_start_time() { pid_file_start_time "$$" >/dev/null; }
+
 recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2 ps unusable, 3 invalid start file, 4 no start file (older job), 5 PID file removed meanwhile
   local path="$1" pid="$2" start_path="${1}.start" size recorded live
   local LC_ALL=C

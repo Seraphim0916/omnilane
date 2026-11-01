@@ -7,7 +7,8 @@ semantic version tags.
 ## [Unreleased]
 
 ### Changed
-- Behaviour change: where a sandbox blocks `ps` (macOS `sandbox-exec` and `codex sandbox` both do), `dispatch`, `jobs close`, `jobs cancel`, `jobs wait` and `jobs rm` now refuse instead of acting, and name how to rerun: from a normal terminal, or by approving the unsandboxed run. `dispatch` starts no job there, even with `--caller-context`. A refusal of this kind means "cannot confirm", not "the process is dead". `jobs status` keeps answering, with a warning on stderr.
+- Behaviour change: where a sandbox blocks `ps` (macOS `sandbox-exec` and `codex sandbox` both do), `dispatch`, `jobs close`, `jobs cancel`, `jobs wait` and `jobs rm` now refuse instead of acting, and name how to rerun: from a normal terminal, or by approving the unsandboxed run. `dispatch` starts no job there, even with `--caller-context`. A refusal of this kind means "cannot confirm", not "the process is dead". `jobs status` keeps answering, with a warning on stderr, and answers `running` there even for a worker that has died, because it cannot tell.
+- `tests/run.sh` prints one line where jobs cannot start, using the same check as `dispatch`. Counts and the exit status do not change: tests that start a job fail in such a sandbox, so run the full suite outside it.
 - `jobs status`, `jobs wait` and `jobs cancel` treat a live PID whose start time differs from the recorded one as another process: they answer `dead (worker gone, no exit recorded)` or `not running`, and that process is left running. A note on stderr says so, with the command to compare the two.
 
 ### Added
