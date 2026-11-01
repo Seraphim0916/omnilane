@@ -114,7 +114,7 @@ FAKE_HIRES = textwrap.dedent("""
 def start_time(pid):
     env = dict(os.environ, TZ="UTC", LC_ALL="C")
     return subprocess.run(["/bin/ps", "-o", "lstart=", "-p", str(pid)], env=env, capture_output=True,
-                          text=True, timeout=5, check=True).stdout.strip()
+                          text=True, timeout=5, check=True, stdin=subprocess.DEVNULL).stdout.strip()
 
 
 class CloseBeforeHolderPidTests(unittest.TestCase):
@@ -146,7 +146,7 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         (self.job / "inbox.holder.pid.start").write_text(start_time(pid) + "\n")
 
     def sleeper(self):
-        process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], stdin=subprocess.DEVNULL)
         self.addCleanup(process.wait, 5)
         self.addCleanup(process.kill)
         return process

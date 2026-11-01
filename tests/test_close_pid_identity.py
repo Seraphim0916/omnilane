@@ -40,7 +40,7 @@ class IdentityTestCase(unittest.TestCase):
         self.holder_start = self.job / "inbox.holder.pid.start"
 
     def victim(self, code="import time; time.sleep(60)"):
-        process = subprocess.Popen([sys.executable, "-c", code], start_new_session=True)
+        process = subprocess.Popen([sys.executable, "-c", code], start_new_session=True, stdin=subprocess.DEVNULL)
         self.addCleanup(process.wait, 5)
         self.addCleanup(self.kill_quietly, process)
         # A reaped victim is gone; an unreaped one would stay a zombie that kill -0 still finds.
@@ -62,7 +62,7 @@ class IdentityTestCase(unittest.TestCase):
 
     def jobs(self, *args, env=None, timeout=30):
         return subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), *args, JOB_ID], env=env or self.env,
-                              capture_output=True, text=True, timeout=timeout)
+                              capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
 
     def blocked_ps_env(self):
         shims = self.home / "shims"
@@ -153,7 +153,7 @@ class CloseAtStartTests(IdentityTestCase):
         self.assert_alive(victim)
 
     def test_blocked_ps_does_not_call_a_dead_pid_gone(self):
-        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
         dead.wait(timeout=5)
         self.holder_start.write_text(OTHER_START + "\n")
         self.holder_file.write_text(f"{dead.pid}\n")
@@ -235,7 +235,7 @@ class CloseLatePidTests(IdentityTestCase):
     def test_real_clock_late_pid_is_not_signalled(self):
         victim = self.victim()
         closer = subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID], env=self.env,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
         time.sleep(1.5)
         self.holder_start.write_text(OTHER_START + "\n")
         tmp = self.job / "inbox.holder.pid.tmp"
@@ -291,7 +291,7 @@ class TimeZoneTests(IdentityTestCase):
         """Run the real writer in a process that then stays alive as itself."""
         script = (f'source "{ROOT}/scripts/lib/common.sh"; write_current_pid_file "{self.holder_file}" || exit 9; '
                   'exec sleep 60')
-        process = subprocess.Popen(["/bin/bash", "-c", script], env=dict(self.env, TZ=zone), start_new_session=True)
+        process = subprocess.Popen(["/bin/bash", "-c", script], env=dict(self.env, TZ=zone), start_new_session=True, stdin=subprocess.DEVNULL)
         self.addCleanup(process.wait, 5)
         self.addCleanup(self.kill_quietly, process)
         threading.Thread(target=process.wait, daemon=True).start()
@@ -320,13 +320,13 @@ class TimeZoneTests(IdentityTestCase):
 
 class CancelTests(IdentityTestCase):
     GROUP = ("import subprocess, sys, time\n"
-             "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+             "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], stdin=subprocess.DEVNULL)\n"
              "print(child.pid, flush=True)\n"
              "time.sleep(60)\n")
 
     def group_victim(self):
         process = subprocess.Popen([sys.executable, "-c", self.GROUP], start_new_session=True,
-                                   stdout=subprocess.PIPE, text=True)
+                                   stdout=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
         child = int(process.stdout.readline())
         self.addCleanup(process.stdout.close)
         self.addCleanup(process.wait, 5)
@@ -343,7 +343,7 @@ class CancelTests(IdentityTestCase):
 
     @staticmethod
     def child_alive(pid):
-        result = subprocess.run(["/bin/ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=5)
+        result = subprocess.run(["/bin/ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=5, stdin=subprocess.DEVNULL)
         return result.returncode == 0 and not result.stdout.strip().startswith("Z")
 
     def test_control_matching_start_time_terminates_the_group(self):
@@ -379,7 +379,7 @@ class CancelTests(IdentityTestCase):
         self.assertTrue(self.child_alive(child))
 
     def test_older_job_with_a_dead_pid_is_not_running(self):
-        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
         dead.wait(timeout=5)
         (self.job / "pid").write_text(f"{dead.pid}\n")
         result = self.jobs("cancel")
@@ -470,7 +470,7 @@ class ProbeTests(IdentityTestCase):
         waited = self.jobs("wait")
         self.assertEqual((waited.returncode, waited.stdout.strip()), (125, "dead (worker gone, no exit recorded)"))
         removed = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "rm", JOB_ID], env=dict(self.env, HOME=str(self.home)),
-                                 capture_output=True, text=True, timeout=30)
+                                 capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
         self.assertEqual(removed.returncode, 0, removed.stderr)
         self.assert_alive(victim)
 
@@ -529,7 +529,7 @@ class ProbeTests(IdentityTestCase):
 class WriterTests(IdentityTestCase):
     def write(self, path, env=None):
         script = f'source "{ROOT}/scripts/lib/common.sh"; write_current_pid_file "{path}"'
-        return subprocess.run(["/bin/bash", "-c", script], env=env or self.env, capture_output=True, text=True, timeout=10)
+        return subprocess.run(["/bin/bash", "-c", script], env=env or self.env, capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
 
     def test_start_file_is_published_before_the_pid(self):
         shims = self.home / "shims"
@@ -589,7 +589,7 @@ class DispatchFailureTests(unittest.TestCase):
 
     def cli(self, *args):
         return subprocess.run(["bash", str(ROOT / "bin/omnilane"), *args], env=self.env,
-                              capture_output=True, text=True, timeout=30)
+                              capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
 
     def jobs_dirs(self):
         jobs = self.home / "jobs"
@@ -637,7 +637,7 @@ class DispatchFailureTests(unittest.TestCase):
         self.assertFalse(self.ran.exists())
         env = dict(self.env)
         shown = subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "result", job.name], env=env,
-                               capture_output=True, text=True, timeout=20)
+                               capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
         self.assertEqual(shown.returncode, 1)
         self.assertIn("did not start", shown.stderr)
 
