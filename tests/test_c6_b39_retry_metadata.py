@@ -41,7 +41,8 @@ class RetryMetadataTests(unittest.TestCase):
                     del case[missing]
                 path.write_text(json.dumps(case))
                 result = subprocess.run([sys.executable, '-B', str(LIB / 'aa_retry.py'),
-                                         '--metadata', directory], capture_output=True, text=True)
+                                         '--metadata', directory], capture_output=True, text=True,
+                                        stdin=subprocess.DEVNULL, timeout=60)
                 with self.subTest(missing=missing):
                     self.assertEqual(result.returncode, 3 if missing else 0)
                     if missing:

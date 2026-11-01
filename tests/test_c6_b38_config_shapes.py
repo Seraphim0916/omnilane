@@ -35,7 +35,8 @@ class ConfigShapeTests(unittest.TestCase):
                  'sys.path.insert(0, sys.argv[1]); sys.argv = sys.argv[2:]; '
                  'runpy.run_path(sys.argv[0], run_name="__main__")',
                  str(script.parent), str(script), '--install', '--harness', 'codex'],
-                env=environment, capture_output=True, text=True)
+                env=environment, capture_output=True, text=True,
+                stdin=subprocess.DEVNULL, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             target = base / 'output/native-context/host/codex.json'
             self.assertEqual(json.loads(target.read_text())['current_model'], 'gpt-6-astra')
@@ -66,7 +67,8 @@ class ConfigShapeTests(unittest.TestCase):
                     environment.pop(name, None)
                 result = subprocess.run(
                     ['bash', str(root / 'bin/omnilane'), 'native-context', '--install',
-                     '--harness', harness], env=environment, capture_output=True, text=True)
+                     '--harness', harness], env=environment, capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, timeout=60)
                 self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
                 self.assertIn('not written', result.stdout + result.stderr)
                 self.assertNotIn('Traceback', result.stderr)
