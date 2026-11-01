@@ -5,6 +5,7 @@ that gets out ends it. Nothing intercepts kill: the victim surviving is the proo
 Each refusal has a control where the same victim, correctly identified, is hit.
 """
 import offline_env  # noqa: F401
+import json
 import os
 import pathlib
 import shutil
@@ -153,14 +154,21 @@ class CloseAtStartTests(IdentityTestCase):
         self.assertNotIn("gone", result.stderr)
         self.assert_alive(victim)
 
-    def test_blocked_ps_does_not_call_a_dead_pid_gone(self):
+    def test_blocked_ps_still_calls_a_dead_pid_gone(self):
         dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
         dead.wait(timeout=5)
         self.holder_start.write_text(OTHER_START + "\n")
         self.holder_file.write_text(f"{dead.pid}\n")
         result = self.jobs("close", env=self.blocked_ps_env())
+        self.assertEqual((result.returncode, result.stderr), (1, "live inbox holder is gone\n"))
+
+    def test_a_refused_probe_does_not_call_a_dead_pid_gone(self):
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
+        dead.wait(timeout=5)
+        self.holder_start.write_text(OTHER_START + "\n")
+        self.holder_file.write_text(f"{dead.pid}\n")
+        result = self.jobs("close", env=self.refused_probe_env())
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
-        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assertNotIn("gone", result.stderr)
 
     def test_older_job_is_not_called_gone_when_the_probe_is_refused(self):
@@ -271,7 +279,7 @@ class CloseLatePidTests(IdentityTestCase):
         lib = self.home / "fake-perl" / "Time"
         lib.mkdir(parents=True)
         hires = FAKE_HIRES.replace('return CORE::kill($_[0], @_[1 .. $#_]) unless $ENV{FAKE_KILL_LOG};',
-                                   'return 0 if $_[0] eq "0"; return CORE::kill($_[0], @_[1 .. $#_]);')
+                                   'if ($_[0] eq "0") { $! = 1; return 0; } return CORE::kill($_[0], @_[1 .. $#_]);')
         self.assertNotEqual(hires, FAKE_HIRES)
         (lib / "HiRes.pm").write_text(hires)
         env = dict(self.blocked_ps_env(), PERL5LIB=str(self.home / "fake-perl"), FAKE_DEADLINE="11",
@@ -283,6 +291,17 @@ class CloseLatePidTests(IdentityTestCase):
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
         self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assert_alive(victim)
+
+    def test_blocked_ps_still_treats_a_dead_late_pid_as_gone(self):
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
+        dead.wait(timeout=5)
+        for start in (OTHER_START, None):
+            with self.subTest(start=start):
+                result = self.fake_close(self.late_holder(dead.pid, start), env=self.blocked_ps_env())
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn("rerun jobs close outside the sandbox", result.stderr)
+                self.holder_file.unlink(missing_ok=True)
+                self.holder_start.unlink(missing_ok=True)
 
     def test_invalid_start_file_fails_at_once(self):
         victim = self.victim()
@@ -534,6 +553,104 @@ class ProbeTests(IdentityTestCase):
         self.assertTrue((self.job / "pid").exists())
         self.assert_alive(victim)
 
+    def dead_pid(self, start=OTHER_START):
+        dead = subprocess.Popen([sys.executable, "-c", "pass"], stdin=subprocess.DEVNULL)
+        dead.wait(timeout=5)
+        if start:
+            (self.job / "pid.start").write_text(start + "\n")
+        (self.job / "pid").write_text(f"{dead.pid}\n")
+        return dead.pid
+
+    def status_json(self, env=None):
+        return json.loads(self.jobs("--json", "status", env=env).stdout)["job"]
+
+    def test_a_live_pid_behind_a_blocked_ps_is_unknown(self):
+        self.reused()
+        env = self.blocked_ps_env()
+        status = self.jobs("status", env=env)
+        self.assertEqual((status.returncode, status.stdout), (0, "unknown (ps blocked)\n"))
+        job = self.status_json(env)
+        self.assertEqual((job["state"], job["reason"], job["exit_code"]), ("unknown", "ps blocked", None))
+
+    def jobs_bare(self, *args, env=None):
+        return subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), *args], env=env or self.env,
+                              capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+
+    def test_list_status_running_shows_unknown_marked_as_such(self):
+        self.reused()
+        env = self.blocked_ps_env()
+        listed = self.jobs_bare("list", "--status", "running", env=env)
+        self.assertRegex(listed.stdout, rf"{JOB_ID}  unknown  ")
+        rows = json.loads(self.jobs_bare("--json", "list", "--status", "running", env=env).stdout)["jobs"]
+        self.assertEqual([(row["id"], row["state"]) for row in rows], [(JOB_ID, "unknown")])
+        self.assertNotIn(JOB_ID, self.jobs_bare("list", "--status", "dead", env=env).stdout)
+
+    def test_list_status_outside_a_sandbox_reads_as_before(self):
+        self.reused()
+        self.assertNotIn(JOB_ID, self.jobs_bare("list", "--status", "running").stdout)
+        self.assertRegex(self.jobs_bare("list", "--status", "dead").stdout, rf"{JOB_ID}  dead  ")
+        victim = self.victim()
+        (self.job / "pid.start").write_text(start_time(victim.pid) + "\n")
+        (self.job / "pid").write_text(f"{victim.pid}\n")
+        self.assertRegex(self.jobs_bare("list", "--status", "running").stdout, rf"{JOB_ID}  running  ")
+        rows = json.loads(self.jobs_bare("--json", "list", "--status", "running").stdout)["jobs"]
+        self.assertEqual([(row["id"], row["state"]) for row in rows], [(JOB_ID, "running")])
+
+    def test_prune_leaves_unknown_alone(self):
+        self.reused()
+        env = dict(self.blocked_ps_env(), OMNILANE_TRASH_DIR=str(self.home / "trash"))
+        pruned = self.jobs_bare("prune", "--keep", "0", "--apply", env=env)
+        self.assertEqual(pruned.returncode, 0, pruned.stderr)
+        self.assertTrue(self.job.is_dir())
+        self.assertFalse((self.home / "trash").exists() and any((self.home / "trash").iterdir()))
+
+    def test_unknown_is_no_end_state(self):
+        self.reused()
+        env = self.blocked_ps_env()
+        result = self.jobs("result", env=env)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("job state is unknown (ps blocked)", result.stderr)
+        self.assertFalse((self.job / "exit").exists())
+        recommend = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "--json", "recommend"], env=env,
+                                   capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+        self.assertEqual(json.loads(recommend.stdout)["completed"], 0, recommend.stderr)
+        self.assertTrue((self.job / "pid").exists())
+
+    def test_a_dead_pid_behind_a_refused_probe_is_unknown(self):
+        self.dead_pid()
+        env = self.refused_probe_env()
+        self.assertEqual(self.jobs("status", env=env).stdout, "unknown (ps blocked)\n")
+        self.assertEqual(self.status_json(env)["state"], "unknown")
+
+    def test_a_dead_pid_needs_no_ps_to_be_dead(self):
+        for start in (OTHER_START, None):
+            with self.subTest(start=start):
+                (self.job / "pid.start").unlink(missing_ok=True)
+                self.dead_pid(start)
+                env = self.blocked_ps_env()
+                status = self.jobs("status", env=env)
+                self.assertEqual((status.stdout, status.stderr), ("dead (worker gone, no exit recorded)\n", ""))
+                self.assertEqual(self.status_json(env)["state"], "dead")
+                waited = self.jobs("wait", env=env)
+                self.assertEqual(waited.returncode, 125, waited.stderr)
+                self.assertEqual(self.jobs("cancel", env=env).stdout, "not running (no live worker to cancel)\n")
+
+    def test_the_same_dead_job_outside_a_sandbox_reads_as_before(self):
+        self.dead_pid()
+        status = self.jobs("status")
+        self.assertEqual((status.stdout, status.stderr), ("dead (worker gone, no exit recorded)\n", ""))
+        job = self.status_json()
+        self.assertEqual((job["state"], job["reason"]), ("dead", "worker gone, no exit recorded"))
+
+    def test_a_recorded_exit_wins_behind_a_blocked_ps(self):
+        victim = self.reused()
+        (self.job / "exit").write_text("0\n")
+        for env in (self.blocked_ps_env(), self.refused_probe_env()):
+            status = self.jobs("status", env=env)
+            self.assertEqual((status.stdout, status.stderr), ("done exit=0\n", ""))
+            self.assertEqual(self.status_json(env)["state"], "done")
+        self.assert_alive(victim)
+
     def test_blocked_ps_at_close_with_only_a_writer_is_not_gone(self):
         self.reused()
         result = self.jobs("close", env=self.blocked_ps_env())
@@ -575,7 +692,7 @@ class WriterTests(IdentityTestCase):
 class RunShHintTests(unittest.TestCase):
     """tests/run.sh reports what dispatch would decide, and its result stays the tests' own."""
 
-    HINT = "this environment cannot start jobs"
+    HINT = "ps cannot read process start times here, so tests that start a job or check a job's process fail"
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="omnilane-run-hint-")

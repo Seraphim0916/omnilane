@@ -199,7 +199,10 @@ read_cli_job_state() {
           JOB_STATE="dead"
           JOB_STATE_REASON="worker gone, no exit recorded"
           note_pid_mismatch "$directory/pid" "$RECORDED_PID" ;;
-        2) echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status "${directory##*/}")" >&2 ;;
+        2)
+          JOB_STATE="unknown"
+          JOB_STATE_REASON="ps blocked"
+          echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status "${directory##*/}")" >&2 ;;
         3)
           JOB_STATE="dead"
           JOB_STATE_REASON="invalid pid metadata" ;;
@@ -682,8 +685,9 @@ case "${1:-}" in
             unless (-e $start_path || -l $start_path) {
               last HOLDER unless -e $holder || -l $holder;
               if (kill(0, $pid)) { print "older $pid\n"; exit 3; }
+              my $gone = $!{ESRCH};
               # A sandbox can refuse the probe too; it blocks ps there as well.
-              unless (defined start_of($$)) { print "blocked $pid\n"; exit 4; }
+              unless ($gone || defined start_of($$)) { print "blocked $pid\n"; exit 4; }
               $poll_holder = 0;
               last HOLDER;
             }
@@ -698,8 +702,8 @@ case "${1:-}" in
             $recorded = $1;
             my $live = start_of($pid);
             if (!defined $live) {
-              # Only a blocked ps fails on this process, which exists.
-              unless (defined start_of($$)) { print "blocked $pid\n"; exit 4; }
+              # Only a blocked ps fails on this process, which exists. ESRCH needs no ps.
+              unless (defined start_of($$) || (!kill(0, $pid) && $!{ESRCH})) { print "blocked $pid\n"; exit 4; }
             } elsif ($live eq $recorded) {
               exit 1 if time >= $end;
               if (kill("USR1", $pid)) { print "signaled\n"; }
@@ -1049,6 +1053,7 @@ case "${1:-}" in
           dead) dead=$((dead + 1)); continue ;;
           expired) expired=$((expired + 1)); continue ;;
           invalid) invalid_exit=$((invalid_exit + 1)); continue ;;
+          unknown) continue ;;
         esac
         completed=$((completed + 1))
         outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$JOB_STATE_EXIT")
@@ -1245,6 +1250,8 @@ case "${1:-}" in
         case "$json_state" in
           done) [[ "$filter_status" == "done" ]] || continue ;;
           running|dead) [[ "$filter_status" == "$json_state" ]] || continue ;;
+          # It may well be running: hiding it here would read as "not running".
+          unknown) [[ "$filter_status" == "running" ]] || continue ;;
           pending|cancelled|expired) [[ "$filter_status" == "$json_state" ]] || continue ;;
           *) continue ;;
         esac
@@ -1292,7 +1299,7 @@ case "${1:-}" in
             "$(json_escape "$2")"
         fi
       elif [[ -n "$JOB_STATE_REASON" ]]; then
-        printf 'dead (%s)\n' "$JOB_STATE_REASON"
+        printf '%s (%s)\n' "$JOB_STATE" "$JOB_STATE_REASON"
       else
         echo "running"
       fi
@@ -1486,6 +1493,7 @@ case "${1:-}" in
     case "$JOB_STATE" in
       running) die 1 "still running" ;;
       dead) die 1 "job is dead ($JOB_STATE_REASON); no recorded result available" ;;
+      unknown) die 1 "job state is unknown ($JOB_STATE_REASON); no recorded result available" ;;
       invalid) die 1 "$JOB_STATE_REASON" ;;
     esac
     rc="$JOB_STATE_EXIT"

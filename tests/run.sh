@@ -76,7 +76,7 @@ fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
 
 # Reports the environment only: the counts and the exit status stay the tests' own.
 if ! bash -c 'source "$1/scripts/lib/common.sh"; can_record_start_time' _ "$ROOT"; then
-  printf 'omnilane tests: this environment cannot start jobs (ps cannot read process start times), so tests that start a job fail here. Run the full suite outside the sandbox.\n'
+  printf "omnilane tests: ps cannot read process start times here, so tests that start a job or check a job's process fail. Run the full suite outside the sandbox.\n"
 fi
 
 mode_notice_contract() {
