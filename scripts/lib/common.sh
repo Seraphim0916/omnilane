@@ -268,12 +268,16 @@ PS_START_LIMIT=30
 PS_TIMED_OUT=142
 pid_file_start_time() { # pid [seconds]
   local pid="$1" limit="${2:-$PS_QUERY_LIMIT}" value
-  # Without perl there is no limit, as before this limit existed: the foreground path needs no perl.
-  command -v perl >/dev/null 2>&1 || { TZ=UTC process_start_time "$pid"; return; }
   [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
   # alarm survives exec, and so would an inherited SIG_IGN, so the handler is reset first.
   value="$(TZ=UTC LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
-    "$limit" ps -o lstart= -p "$pid" 2>/dev/null)" || return $?
+    "$limit" ps -o lstart= -p "$pid" 2>/dev/null)" || {
+    local rc=$?
+    # Without a perl that runs there is no limit, as before this limit existed: the foreground path needs no perl.
+    [[ "$rc" -eq 127 ]] || return "$rc"
+    TZ=UTC process_start_time "$pid"
+    return
+  }
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"
   [[ -n "$value" ]] || return 1

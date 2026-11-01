@@ -1039,6 +1039,13 @@ class HungPsTests(IdentityTestCase):
         self.assertEqual(result.stdout.splitlines()[0], (self.job / "published.pid.start").read_text().strip())
         self.assertTrue(path.exists())
 
+    def test_a_perl_that_cannot_run_still_lets_ps_answer(self):
+        bash_env = self.home / "bash-env"
+        bash_env.write_text("perl() { return 127; }\n")
+        result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"', env=dict(self.env, BASH_ENV=str(bash_env)))
+        self.assertEqual(len(result.stdout.splitlines()), 2, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines()[1], "rc=0")
+
     def test_a_missing_or_blocked_ps_fails_the_same_way_as_before(self):
         only_perl = self.home / "only-perl"
         only_perl.mkdir()
