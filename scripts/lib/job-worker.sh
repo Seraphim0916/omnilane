@@ -89,6 +89,11 @@ prompt_cleanup_run() {
 # shellcheck disable=SC2329
 cleanup_job_worker() {
   local rc=$?
+  # Observed on Bash 3.2: a repeated signal here exits with EXIT already cleared and
+  # skips the cleanup below. Children inherit the ignored signals, so none can be
+  # stopped by one here: rm, wc, tr and cat just finish, python is bounded by the perl
+  # limit, and without perl nothing bounds it (prompt_cleanup_run warns about that).
+  trap '' TERM HUP INT
   trap - EXIT
   if [[ "$rc" -eq 0 && "$job_worker_completed" -ne 1 ]]; then rc=1; fi
   if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox || true; fi
@@ -152,9 +157,12 @@ finally:
   exit "$rc"
 }
 trap cleanup_job_worker EXIT
-trap 'exit 143' TERM
-trap 'exit 129' HUP
-trap 'exit 130' INT
+# job-timeout.pl signals both the worker and its group, so TERM often arrives twice.
+# Observed on Bash 3.2: a read -t interrupted by one of these leaves its timeout armed,
+# and when that fires during EXIT the shell spins at full CPU. No read -t runs after this.
+trap "trap '' ALRM TERM HUP INT; exit 143" TERM
+trap "trap '' ALRM TERM HUP INT; exit 129" HUP
+trap "trap '' ALRM TERM HUP INT; exit 130" INT
 # Refuse all pre-existing legacy sibling paths without overwriting or deleting
 # them. New copies live only in this invocation's exclusive 0700 directory.
 for copy_path in "${TASK_PROMPT_FILE}.worker" "${TASK_PROMPT_FILE}.runner" "${TASK_PROMPT_FILE}.runner.worker"; do

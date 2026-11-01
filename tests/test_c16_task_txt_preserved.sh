@@ -443,6 +443,75 @@ def no_perl_case():
     assert not private_dirs(job), result.stderr
     assert b"omnilane: no perl; prompt copy cleanup runs without a time limit" in result.stderr, result.stderr
 check("without perl prompt cleanup still runs and says it is unbounded", no_perl_case)
+idle_fake = base / "idle-live-cli"
+idle_fake.write_text("#!/usr/bin/env python3\nimport os, pathlib, sys, time\npathlib.Path(os.environ[\"RUNNER_PID\"]).write_text(str(os.getpid()))\nsys.stdin.readline()\ntime.sleep(60)\n")
+idle_fake.chmod(0o755)
+def signal_in_mailbox_wait_case(name, signum, to_group, expected_rc):
+    # Without a supervisor nothing else ends a worker that fails to exit. The cleanup
+    # outlasts the mailbox read timeout, and the wait below keeps a spin from holding the suite.
+    job = new_job("mailbox-signal-" + name, 4096)
+    env = cleanup_env(job, HANG_PID=str(job / "hang.pid"), RUNNER_PID=str(job / "runner.pid"))
+    env.update(OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(idle_fake))
+    with open(job / "worker.log", "wb") as log:
+        process = subprocess.Popen(command("claude", job), env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    runner = None
+    try:
+        deadline = time.monotonic() + 20
+        while not (job / "runner.pid").exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert (job / "runner.pid").exists(), "runner never started"
+        runner = int((job / "runner.pid").read_text())
+        time.sleep(.3)
+        (os.killpg if to_group else os.kill)(process.pid, signum)
+        try:
+            rc = process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            raise AssertionError("worker still running 8s after the signal")
+        log = (job / "worker.log").read_bytes()
+        assert rc == expected_rc, (rc, log[-400:])
+        assert b"omnilane: prompt copy cleanup exceeded 1s; left " in log, log[-400:]
+    finally:
+        try: os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError): pass
+        if runner is not None:
+            try: os.kill(runner, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError): pass
+        if process.poll() is None: process.wait(timeout=10)
+for name, signum, to_group, expected_rc in (("term-group", signal.SIGTERM, True, 143), ("term-worker", signal.SIGTERM, False, 143), ("hup-group", signal.SIGHUP, True, 129), ("int-group", signal.SIGINT, True, 130)):
+    check("%s during the mailbox wait exits with %s while cleanup is slow" % (name, expected_rc), signal_in_mailbox_wait_case, name, signum, to_group, expected_rc)
+# A repeated signal normally lands by chance under load. The worker sends it to itself at
+# the two points that matter, so a missing ignore fails every time.
+def repeated_signal_after_signal_exit_case(name, signum, expected_rc):
+    job = new_job("repeat-after-signal-" + name, 4096)
+    path = variant("job-worker-repeat-in-handler-%s.sh" % name, ("  local rc=$?\n  # Observed on Bash 3.2", "  local rc=$?\n  kill -%s $$\n  # Observed on Bash 3.2" % name))
+    env = environment(job, RUNNER_PID=str(job / "runner.pid"))
+    env.update(OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(idle_fake))
+    with open(job / "worker.log", "wb") as log:
+        process = subprocess.Popen(command("claude", job, path), env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    try:
+        deadline = time.monotonic() + 20
+        while not (job / "runner.pid").exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert (job / "runner.pid").exists(), "runner never started"
+        time.sleep(.3)
+        os.killpg(process.pid, signum)
+        rc = process.wait(timeout=8)
+        assert rc == expected_rc, rc
+        assert not private_dirs(job), [p.name for p in job.iterdir()]
+        assert not list(job.glob("inbox.*")), [p.name for p in job.iterdir()]
+    finally:
+        try: os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError): pass
+        if process.poll() is None: process.wait(timeout=10)
+def signal_after_normal_exit_case(name):
+    job = new_job("signal-after-exit-" + name, 4096)
+    path = variant("job-worker-signal-in-handler-%s.sh" % name, ("  trap - EXIT\n  if [[ \"$rc\" -eq 0 &&", "  trap - EXIT\n  kill -%s $$\n  if [[ \"$rc\" -eq 0 &&" % name))
+    result = subprocess.run(command("claude", job, path), env=environment(job, CLAUDE_BIN=str(base / "fake-claude"), FAKE_CLI_EXIT="23"), stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+    assert result.returncode == 23, (result.returncode, result.stderr[-300:])
+    assert not private_dirs(job), [p.name for p in job.iterdir()]
+for name, signum, expected_rc in (("TERM", signal.SIGTERM, 143), ("HUP", signal.SIGHUP, 129), ("INT", signal.SIGINT, 130)):
+    check("%s repeated while a signal exit starts its cleanup keeps exit %s and cleans up" % (name, expected_rc), repeated_signal_after_signal_exit_case, name, signum, expected_rc)
+    check("%s during the cleanup of a failed job keeps its exit status and cleans up" % name, signal_after_normal_exit_case, name)
 assert not failures, "direct-API and cleanup-limit regressions: " + "; ".join(failures)
 ' "$TEST_ROOT" "$ROOT"
 # Exercise the actual worker and both test scripts with Bash 3.2 nounset
