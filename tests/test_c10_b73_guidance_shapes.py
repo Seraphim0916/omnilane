@@ -15,7 +15,7 @@ class GuidanceShapesTests(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-B", str(ROOT / "scripts/lib/aa_lanes.py"),
              "--registry", str(ROOT / "config/aa-model-policy.json")],
-            input=raw, text=True, capture_output=True, check=False,
+            input=raw, text=True, capture_output=True, check=False, timeout=30,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
