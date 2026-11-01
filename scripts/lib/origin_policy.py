@@ -246,9 +246,12 @@ def _save(path, data):
         if _read(path) != raw:
             raise OriginError("origin policy changed during write")
         os.replace(name, path)
-    finally:
-        if os.path.exists(name):
+    except BaseException:
+        with contextlib.suppress(OSError):
             os.unlink(name)
+        raise
+    if os.path.exists(name):
+        os.unlink(name)
 
 
 def record(vendor, channel, recorded=None, recorded_path=None, path=None):
