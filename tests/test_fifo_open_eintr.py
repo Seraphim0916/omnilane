@@ -618,27 +618,7 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
                      WORK=str(workdir), MODEL=model, EFFORT=effort, PROMPT=str(prompt)),
             start_new_session=True)
 
-        def kill_everything():
-            # Group first: killing the supervisor alone would orphan a sleep or cat
-            # whose command line does not name this test's directory.
-            groups = self.job_groups(root) | {driver.pid}
-            for pid, pgid, command in self.live_processes():
-                if str(root) in command:
-                    groups.add(pgid)
-            groups.discard(os.getpgrp())
-            for group in groups:
-                try:
-                    os.killpg(group, signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    pass
-            for pid in self.recorded_pids(root):
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            driver.wait(timeout=5)
-            self.await_nothing_left(root, groups)
-        self.addCleanup(kill_everything)
+        self.addCleanup(self.kill_tracked, root, driver)
         return root, job, workdir, env, driver
 
     def close_when_started(self, root, job, env, driver, ready):
@@ -647,7 +627,7 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             if driver.poll() is not None or time.monotonic() > deadline:
                 self.fail("job never reached the open: " + (job / "stderr").read_text())
             time.sleep(0.01)
-        self.job_groups(root).add(os.getpgid(int((job / "inbox.holder.pid").read_text())))
+        self.register_job_group(root, job)
         time.sleep(0.1)
         began = time.monotonic()
         result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", self.JOB_ID],
@@ -661,7 +641,7 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
     @staticmethod
     def live_processes():
         listing = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,pgid=,stat=,command="],
-                                 capture_output=True, text=True, check=True).stdout
+                                 capture_output=True, text=True, check=True, timeout=10).stdout
         processes = []
         for row in listing.splitlines():
             pid, pgid, stat, command = (row.split(None, 3) + [""])[:4]
@@ -669,16 +649,54 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
                 processes.append((int(pid), int(pgid), command))
         return processes
 
-    def job_groups(self, root):
-        return self.__dict__.setdefault("_job_groups", {}).setdefault(str(root), set())
-
     @staticmethod
-    def recorded_pids(root):
+    def is_ours(root, command):
+        # A recorded PID or group may since belong to something else on this machine.
+        return str(root) in command or command == "sleep 300"
+
+    def tracking(self, root):
+        return self.__dict__.setdefault("_tracking", {}).setdefault(
+            str(root), {"groups": set(), "gone": False})
+
+    def recorded_pids(self, root):
+        if self.tracking(root)["gone"]:
+            return set()
         return {int(path.read_text()) for path in (root / "grandchild", root / "held-sleep")
                 if path.exists()}
 
-    def await_nothing_left(self, root, groups):
-        pids = self.recorded_pids(root)
+    def register_job_group(self, root, job):
+        holder = int((job / "inbox.holder.pid").read_text())
+        for pid, pgid, command in self.live_processes():
+            if pid == holder and self.is_ours(root, command):
+                self.tracking(root)["groups"].add(pgid)
+
+    def kill_tracked(self, root, driver):
+        """Signal only what still proves to be this test's, then wait for it to go."""
+        processes = self.live_processes()
+        groups = self.tracking(root)["groups"] | {driver.pid}
+        ours = [row for row in processes if self.is_ours(root, row[2])]
+        verified_groups = {pgid for _, pgid, _ in ours if pgid in groups}
+        # Killing the supervisor alone would orphan its children, so take its groups too.
+        verified_groups |= {pgid for _, pgid, command in ours if str(root) in command}
+        verified_groups.discard(os.getpgrp())
+        recorded = self.recorded_pids(root)
+        verified_pids = {pid for pid, _, _ in ours if pid in recorded}
+        for group in verified_groups:
+            try:
+                os.killpg(group, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        for pid in verified_pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if driver.poll() is None:
+            driver.kill()
+        driver.wait(timeout=5)
+        self.await_gone(root, verified_groups, verified_pids)
+
+    def await_gone(self, root, groups, pids):
         deadline = time.monotonic() + 3
         while True:
             left = [row for row in self.live_processes()
@@ -689,7 +707,61 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             time.sleep(0.05)
 
     def assert_nothing_left(self, root):
-        self.await_nothing_left(root, self.job_groups(root))
+        tracked = self.tracking(root)
+        self.await_gone(root, tracked["groups"], self.recorded_pids(root))
+        # Confirmed gone: from here on these numbers can only name someone else.
+        tracked["groups"].clear()
+        tracked["gone"] = True
+
+    def harmless_process(self, *command):
+        process = subprocess.Popen(list(command), start_new_session=True)
+
+        def stop():
+            process.kill()
+            process.wait(timeout=5)
+        self.addCleanup(stop)
+        return process
+
+    def finished_driver(self):
+        driver = subprocess.Popen(["/bin/bash", "-c", "exit 0"])
+        driver.wait(timeout=5)
+        return driver
+
+    def test_cleanup_leaves_a_recorded_pid_that_is_now_something_else(self):
+        with tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-") as temporary:
+            root = Path(temporary)
+            other = self.harmless_process("sleep", "299")
+            (root / "grandchild").write_text(str(other.pid))
+            (root / "held-sleep").write_text(str(other.pid))
+            self.tracking(root)["groups"].add(other.pid)
+            self.kill_tracked(root, self.finished_driver())
+            self.assertIsNone(other.poll())
+
+    def test_cleanup_kills_a_recorded_pid_that_is_still_ours(self):
+        with tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-") as temporary:
+            root = Path(temporary)
+            ours = self.harmless_process("sleep", "300")
+            (root / "held-sleep").write_text(str(ours.pid))
+            self.kill_tracked(root, self.finished_driver())
+            self.assertEqual(ours.wait(timeout=5), -signal.SIGKILL)
+
+    def test_cleanup_forgets_what_a_check_confirmed_gone(self):
+        with tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-") as temporary:
+            root = Path(temporary)
+            self.assert_nothing_left(root)
+            # Same command as ours, so only the forgetting can protect it.
+            reused = self.harmless_process("sleep", "300")
+            (root / "held-sleep").write_text(str(reused.pid))
+            self.kill_tracked(root, self.finished_driver())
+            self.assertIsNone(reused.poll())
+
+    def test_stale_holder_pid_registers_no_group(self):
+        with tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-") as temporary:
+            root = Path(temporary)
+            other = self.harmless_process("sleep", "299")
+            (root / "inbox.holder.pid").write_text(str(other.pid))
+            self.register_job_group(root, root)
+            self.assertEqual(self.tracking(root)["groups"], set())
 
     def test_codex_temp_directory_is_removed(self):
         for ignore_term in (False, True):
