@@ -41,12 +41,24 @@ HOLDER = textwrap.dedent("""
 # first on PERL5LIB replaces time and sleep, so the 11s deadline passes at once
 # and file events land at exact virtual times. FAKE_EVENTS is
 # "seconds:path:content;..." relative to the first time() call; an event at
-# "deadline" fires during the sleep that crosses FAKE_DEADLINE.
+# "deadline" fires during the sleep that crosses FAKE_DEADLINE. With
+# FAKE_KILL_LOG set, every PID looks alive to Perl (a reused PID) and USR1 is
+# logged instead of sent.
 FAKE_HIRES = textwrap.dedent("""
     package Time::HiRes;
     use strict;
     my $now;
     BEGIN {
+        *CORE::GLOBAL::kill = sub {
+            return CORE::kill($_[0], @_[1 .. $#_]) unless $ENV{FAKE_KILL_LOG};
+            my ($signal, @pids) = @_;
+            if ($signal eq "USR1") {
+                open(my $log, ">>", $ENV{FAKE_KILL_LOG}) or die $!;
+                print $log "$signal @pids\\n";
+                close $log;
+            }
+            return scalar @pids;
+        };
         *CORE::GLOBAL::readline = sub (*) {
             my $value = CORE::readline($_[0]);
             if ($ENV{FAKE_READ_ACTION}) {
@@ -187,11 +199,12 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertEqual(out, "already closed (exit 0)\n")
 
 
-    def fake_close(self, events, read_action=""):
+    def fake_close(self, events, read_action="", kill_log=""):
         lib = self.home / "fake-perl" / "Time"
         lib.mkdir(parents=True)
         (lib / "HiRes.pm").write_text(FAKE_HIRES)
         env = dict(self.env, PERL5LIB=str(self.home / "fake-perl"), FAKE_DEADLINE="11",
+                   FAKE_KILL_LOG=str(kill_log),
                    FAKE_READ_ACTION=read_action, FAKE_READ_MARKER=str(self.home / "read-marker"),
                    FAKE_HOLDER=str(self.job / "inbox.holder.pid"),
                    FAKE_EVENTS=";".join(f"{at}:{path}:{content}" for at, path, content in events))
@@ -245,6 +258,25 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertFalse((self.job / "inbox.holder.pid").exists())
         self.assertEqual((result.returncode, result.stdout, result.stderr),
                          (0, "already closed (exit 0)\n", ""))
+
+    def test_dead_holder_pid_reused_later_is_not_signaled(self):
+        # jobs.sh sees the recorded PID dead; from then on Perl sees every PID
+        # alive, as it would once the OS hands the PID to an unrelated process.
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait(timeout=5)
+        (self.job / "inbox.holder.pid").write_text(f"{dead.pid}\n")
+        kill_log = self.home / "kill-log"
+        result = self.fake_close([], kill_log=kill_log)
+        self.assertFalse(kill_log.exists(), "close signalled a PID it had already seen dead")
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, "", "live inbox holder is gone\n"))
+
+    def test_fake_kill_log_sees_a_late_holder_signal(self):
+        # Guards the reuse test above: the same fake kill does log a USR1 sent
+        # to a PID published after close started.
+        kill_log = self.home / "kill-log"
+        self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")], kill_log=kill_log)
+        self.assertEqual(kill_log.read_text(), "USR1 999999\n")
 
 
 if __name__ == "__main__":

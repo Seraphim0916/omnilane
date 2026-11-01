@@ -575,8 +575,11 @@ case "${1:-}" in
     # file that appears with invalid contents fails at once (exit 2), like one
     # present from the start. The deadline is checked before every poll and
     # the last sleep stops at it, so nothing is signalled after it.
+    # Only a missing PID file is polled. A PID recorded for a dead process stays
+    # dead for this job: the worker refuses to start over an existing PID file,
+    # so polling it could only signal an unrelated process that reused the PID.
     late_signal=""
-    [[ "$holder_signaled" -eq 1 ]] || late_signal=1
+    [[ "$holder_rc" -ne 1 ]] || late_signal=1
     wait_rc=0
     wait_out="$(perl -MTime::HiRes=time,sleep -e '
       my ($exit, $limit, $holder, $poll_holder) = @ARGV;
