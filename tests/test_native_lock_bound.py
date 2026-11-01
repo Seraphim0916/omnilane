@@ -4,6 +4,7 @@ import fcntl
 import json
 import os
 from pathlib import Path
+import select
 import signal
 import subprocess
 import sys
@@ -25,6 +26,30 @@ HOLD_LOCK = ("import fcntl, sys, time\n"
              "fcntl.flock(lock, fcntl.LOCK_EX)\n"
              "print('held', flush=True)\n"
              "time.sleep(120)\n")
+# Runs native.py as is and reports each lock step, so a test can tell a writer that is
+# waiting for the lock from one that has not got that far. argv: events go pause native args...
+TRACED_WRITER = """
+import fcntl, os, runpy, sys, time
+events, go, pause, native = int(sys.argv[1]), int(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+def note(word):
+    os.write(events, word + b"\\n")
+note(b"ready")
+if go >= 0:
+    os.read(go, 1)
+real_flock, real_replace = fcntl.flock, os.replace
+def flock(stream, operation):
+    note(b"flock")
+    real_flock(stream, operation)
+    note(b"locked")
+def replace(source, target):
+    time.sleep(pause)
+    note(b"replace")
+    real_replace(source, target)
+fcntl.flock, os.replace = flock, replace
+sys.path.insert(0, os.path.dirname(native))
+sys.argv = [native] + sys.argv[5:]
+runpy.run_path(native, run_name="__main__")
+"""
 
 
 class NativeLockBoundTests(unittest.TestCase):
@@ -74,9 +99,9 @@ class NativeLockBoundTests(unittest.TestCase):
         return subprocess.run(["bash", str(ROOT / "bin/omnilane"), "jobs", *args], env=self.env,
                               stdin=subprocess.DEVNULL, text=True, capture_output=True, timeout=BOUND)
 
-    def start(self, argv, stdout=subprocess.DEVNULL):
+    def start(self, argv, stdout=subprocess.DEVNULL, pass_fds=()):
         process = subprocess.Popen(argv, env=self.env, stdin=subprocess.DEVNULL, stdout=stdout,
-                                   stderr=subprocess.DEVNULL, start_new_session=True)
+                                   stderr=subprocess.DEVNULL, start_new_session=True, pass_fds=pass_fds)
         self.addCleanup(self.stop, process)
         return process
 
@@ -91,8 +116,20 @@ class NativeLockBoundTests(unittest.TestCase):
         self.addCleanup(os.close, read_end)
         return read_end, write_end
 
-    def wait_until(self, condition, message):
-        deadline = time.monotonic() + BOUND
+    def next_line(self, read_end, deadline):
+        """One line from a child, or b"" at end of file; a child that stops fails the test."""
+        line = b""
+        while not line.endswith(b"\n"):
+            ready, _, _ = select.select([read_end], [], [], max(0, deadline - time.monotonic()))
+            self.assertTrue(ready, f"child stopped reporting after {line!r}")
+            chunk = os.read(read_end, 1)
+            if not chunk:
+                break
+            line += chunk
+        return line
+
+    def wait_until(self, condition, message, deadline=None):
+        deadline = time.monotonic() + BOUND if deadline is None else deadline
         while not condition():
             self.assertLess(time.monotonic(), deadline, message)
             time.sleep(0.02)
@@ -106,9 +143,11 @@ class NativeLockBoundTests(unittest.TestCase):
         def pending_bytes():
             return int.from_bytes(fcntl.ioctl(read_end, termios.FIONREAD, b"\0\0\0\0"), sys.byteorder)
 
-        self.wait_until(lambda: pending_bytes() > 0, "result never reached its pipe")
+        deadline = time.monotonic() + BOUND
+        self.wait_until(lambda: pending_bytes() > 0, "result never reached its pipe", deadline)
         seen = -1
         while seen != pending_bytes():
+            self.assertLess(time.monotonic(), deadline, "result kept writing into its pipe")
             seen = pending_bytes()
             time.sleep(0.2)
         self.assertIsNone(process.poll(), "result finished, so the pipe never held it up")
@@ -124,8 +163,13 @@ class NativeLockBoundTests(unittest.TestCase):
         read_end, write_end = self.pipe()
         process = self.start([sys.executable, "-c", HOLD_LOCK, str(directory / "native.lock")], stdout=write_end)
         os.close(write_end)
-        self.assertEqual(os.read(read_end, 5), b"held\n")
+        self.assertEqual(self.next_line(read_end, time.monotonic() + BOUND), b"held\n")
         return process
+
+    def traced_writer(self, events, *args, go=-1, pause=0):
+        argv = [sys.executable, "-u", "-c", TRACED_WRITER, str(events), str(go), str(pause), str(NATIVE),
+                "job", "--home", str(self.home), *map(str, args)]
+        return self.start(argv, pass_fds=(events,) if go < 0 else (events, go))
 
     def test_list_and_readers_return_while_a_result_is_stuck_in_a_pipe(self):
         stuck_id, _ = self.completed_with_large_result()
@@ -147,32 +191,35 @@ class NativeLockBoundTests(unittest.TestCase):
         self.assertIn("already terminal", refused.stderr)
 
     def test_a_writer_releases_the_lock_before_it_prints(self):
-        job_id, directory = self.job()
-        read_end, write_end = self.pipe()
-        # A chunk at a time first, because a large write is what makes macOS grow a pipe.
-        os.set_blocking(write_end, False)
-        for size in (65536, 4096, 512, 1):
-            try:
-                while True:
-                    os.write(write_end, b"x" * size)
-            except BlockingIOError:
-                pass
-        os.set_blocking(write_end, True)
-        process = self.start(self.native_argv("cancel", job_id), stdout=write_end)
-        os.close(write_end)
-        path = directory / "native.json"
-        self.wait_until(lambda: json.loads(path.read_text())["state"] == "cancelled", "cancel never recorded")
-        time.sleep(0.2)
-        self.assertIsNone(process.poll(), "cancel finished, so its output never blocked")
-        with open(directory / "native.lock", "r+") as lock:
-            deadline = time.monotonic() + BOUND
-            while True:
-                try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    self.assertLess(time.monotonic(), deadline, "cancel kept the lock while printing")
-                    time.sleep(0.02)
+        for action in ("cancel", "complete-native"):
+            with self.subTest(action=action):
+                job_id, directory = self.job()
+                args = [action, job_id] + ([self.completion_file(job_id)] if action == "complete-native" else [])
+                read_end, write_end = self.pipe()
+                # A chunk at a time first, because a large write is what makes macOS grow a pipe.
+                os.set_blocking(write_end, False)
+                for size in (65536, 4096, 512, 1):
+                    try:
+                        while True:
+                            os.write(write_end, b"x" * size)
+                    except BlockingIOError:
+                        pass
+                os.set_blocking(write_end, True)
+                process = self.start(self.native_argv(*args), stdout=write_end)
+                os.close(write_end)
+                path = directory / "native.json"
+                self.wait_until(lambda: json.loads(path.read_text())["state"] != "pending", "never recorded")
+                time.sleep(0.2)
+                self.assertIsNone(process.poll(), f"{action} finished, so its output never blocked")
+                with open(directory / "native.lock", "r+") as lock:
+                    deadline = time.monotonic() + BOUND
+                    while True:
+                        try:
+                            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            self.assertLess(time.monotonic(), deadline, f"{action} kept the lock while printing")
+                            time.sleep(0.02)
 
     def test_readers_pass_a_stopped_holder_and_a_writer_waits_for_it(self):
         job_id, directory = self.job()
@@ -181,16 +228,25 @@ class NativeLockBoundTests(unittest.TestCase):
         self.assertEqual(self.run_native("list-state", job_id).stdout, "pending\n")
         listed = self.cli("--json", "list")
         self.assertEqual([row["state"] for row in json.loads(listed.stdout)["jobs"]], ["pending"])
-        writer = self.start(self.native_argv("cancel", job_id))
-        with self.assertRaises(subprocess.TimeoutExpired):
-            writer.wait(timeout=1)
+        read_end, write_end = self.pipe()
+        writer = self.traced_writer(write_end, "cancel", job_id)
+        os.close(write_end)
+        deadline = time.monotonic() + BOUND
+        self.assertEqual(self.next_line(read_end, deadline), b"ready\n")
+        self.assertEqual(self.next_line(read_end, deadline), b"flock\n")
+        ready, _, _ = select.select([read_end], [], [], 0.3)
+        self.assertEqual(ready, [], "writer went on without waiting for the holder")
+        self.assertIsNone(writer.poll())
         self.assertEqual(json.loads((directory / "native.json").read_text())["state"], "pending")
         os.killpg(holder.pid, signal.SIGKILL)
         holder.wait(timeout=BOUND)
+        deadline = time.monotonic() + BOUND
+        self.assertEqual([self.next_line(read_end, deadline) for _ in range(3)], [b"locked\n", b"replace\n", b""])
         self.assertEqual(writer.wait(timeout=BOUND), 0)
         self.assertEqual(json.loads((directory / "native.json").read_text())["state"], "cancelled")
 
     def test_a_killed_holder_leaves_the_job_usable(self):
+        # Guards behaviour that predates the bounded readers: it also passes without them.
         job_id, directory = self.job()
         holder = self.hold_lock(directory)
         os.killpg(holder.pid, signal.SIGKILL)
@@ -200,19 +256,24 @@ class NativeLockBoundTests(unittest.TestCase):
         self.assertEqual(self.run_native("read-state", job_id).stdout, "done\t0\t\n")
 
     def test_competing_writers_leave_one_whole_record(self):
-        for _ in range(5):
+        # Guards the writer lock, which predates the bounded readers: this also passes
+        # without them. All writers leave the gate together and each pauses between
+        # reading the record and replacing it, so without the lock several would succeed.
+        for _ in range(3):
             job_id, directory = self.job()
-            holder = self.hold_lock(directory)
+            events_read, events_write = self.pipe()
+            go_read, go_write = self.pipe()
             writers = {}
-            for agent in ("agent-a", "agent-b"):
+            for agent in ("agent-a", "agent-b", "agent-c", "agent-d"):
                 path = self.completion_file(job_id, agent_id=agent)
-                writers[agent] = self.start(self.native_argv("complete-native", job_id, path))
-            time.sleep(0.2)
-            self.assertEqual([w.poll() for w in writers.values()], [None, None])
-            os.killpg(holder.pid, signal.SIGKILL)
-            holder.wait(timeout=BOUND)
+                writers[agent] = self.traced_writer(events_write, "complete-native", job_id, path,
+                                                    go=go_read, pause=0.3)
+            os.close(events_write)
+            deadline = time.monotonic() + BOUND
+            self.assertEqual([self.next_line(events_read, deadline) for _ in writers], [b"ready\n"] * len(writers))
+            os.close(go_write)
             codes = {agent: writer.wait(timeout=BOUND) for agent, writer in writers.items()}
-            self.assertEqual(sorted(codes.values()), [0, 2])
+            self.assertEqual(sorted(codes.values()), [0, 2, 2, 2])
             winner = next(agent for agent, code in codes.items() if code == 0)
             state = json.loads((directory / "native.json").read_text())
             self.assertEqual((state["state"], state["agent_id"], state["completion"]["agent_id"]),

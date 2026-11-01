@@ -362,10 +362,10 @@ caller attestation, not independent backend authentication or proof that the
 model honored the task; the parent still verifies evidence. Do not submit
 tokens, cookies, credential/session/cache values or raw logs in any public field.
 
-Only `list`, `status`, `result`, `cancel`, `complete-native` integrate native
-jobs. Native `send`, `watch`, `close`, `wait`, `retry`, `tail`, and `rm` reject;
-inspect status while the host owns execution. Native records do not have CLI
-exit markers and are not included in completed-CLI stats/recommend/prune.
+Native jobs work with `list`, `status`, `result`, `wait`, `cancel`,
+`complete-native`, `stats` and `recommend`. Native `send`, `watch`, `close`,
+`retry`, `tail`, and `rm` reject; inspect status while the host owns execution.
+`prune` skips native jobs.
 Do not use CLI-only UI/audit/goal-loop summaries as native acceptance evidence.
 
 ## Explicit existing-agent reuse（明示重用）
