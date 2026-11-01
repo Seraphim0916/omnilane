@@ -54,7 +54,8 @@ class WindowTests(unittest.TestCase):
             meta.write_text('{"started":"2099-01-01T00:00:00Z"}')
             result = subprocess.run(["bash", str(ROOT / "bin/omnilane"), "stats", "self-exec", "--json"],
                                     env=dict(os.environ, OMNILANE_HOME=directory),
-                                    capture_output=True, text=True, timeout=20)
+                                    capture_output=True, text=True,
+                                    stdin=subprocess.DEVNULL, timeout=20)
             self.assertEqual(result.returncode, 0, result.stderr)
             report = json.loads(result.stdout)
             self.assertEqual((report["self_exec"], report["dispatched"]), (0, 0))

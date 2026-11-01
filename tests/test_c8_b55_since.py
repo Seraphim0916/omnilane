@@ -24,7 +24,8 @@ class SinceTests(unittest.TestCase):
             with self.subTest(length=len(text)):
                 result = subprocess.run(
                     ["bash", str(ROOT / "bin/omnilane"), "stats", "self-exec",
-                     "--since", text, "--json"], capture_output=True, text=True, timeout=20)
+                     "--since", text, "--json"], capture_output=True, text=True,
+                    stdin=subprocess.DEVNULL, timeout=20)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("omnilane: --since", result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
