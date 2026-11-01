@@ -141,6 +141,8 @@ CLOSE_KILL_GRACE=0.1
 RUNNER_OPEN_TIMEOUT=600
 [[ "${OMNILANE_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_TIMEOUT"
 [[ "${OMNILANE_RUNNER_OPEN_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_RUNNER_OPEN_TIMEOUT"
+# open_gives_up adds to this in shell arithmetic, which wraps at 64 bits.
+[[ "${#RUNNER_OPEN_TIMEOUT}" -le 15 ]] || RUNNER_OPEN_TIMEOUT=999999999999999
 runner_writer_open=0
 runner_writer_opened=0
 inbox_open=0
@@ -486,7 +488,9 @@ open_runner_writer() {
     helper_gone_by=$((SECONDS + 5))
     while :; do
       read_began=$SECONDS
-      if ! IFS= read -r -t 1 line <&8; then
+      if IFS= read -r -t 1 line <&8; then
+        :
+      else
         read_rc=$?
         if [[ "$read_rc" -le 128 && "$SECONDS" -eq "$read_began" ]]; then break; fi
       fi
@@ -690,8 +694,8 @@ if [[ "$close_requested" -eq 1 ]]; then
   # when close starts. A close that signals late, once the holder PID appears,
   # keeps the same 11s, so it can return 124 while this shutdown is still in
   # budget; its message says so. A close during the writer open has no pump,
-  # drain or grace, which more than pays for its two reader releases, and it can
-  # only start once the helper reads above have timed out, at most 1s later.
+  # drain or grace, which more than pays for its two reader releases. A frozen
+  # helper delays the start by at most 1s before the writer opens and about 5s after.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # Close is already committed. Repeated close requests must not interrupt wait.
   trap '' USR1

@@ -286,6 +286,18 @@ class FifoOpenTests(unittest.TestCase):
                 self.assertIn("did not open its inbox within 1s", self.stderr_path.read_text())
                 self.assert_clean_end()
 
+    def test_a_timeout_too_long_for_shell_arithmetic_does_not_end_the_open(self):
+        for shell in SHELLS:
+            for value in ("9223372036854775807", "9" * 400):
+                with self.subTest(shell=shell, digits=len(value)):
+                    self.start(shell, "late", OMNILANE_TIMEOUT=value)
+                    self.await_helper()
+                    time.sleep(5)
+                    self.assertIsNone(self.process.poll(), self.stderr_path.read_text())
+                    (self.root / "release").touch()
+                    self.assertEqual(self.finish(10), 0, self.stderr_path.read_text())
+                    self.assertEqual(len(self.received()), 1)
+
     def test_a_very_long_timeout_still_reaches_the_helper(self):
         for shell in SHELLS:
             with self.subTest(shell=shell):
