@@ -156,8 +156,14 @@ recorded_pid_state() {
   esac
 }
 
-ps_unusable_message() { # pid, jobs subcommand
-  printf 'cannot confirm that PID %s is still this job'"'"'s process because ps is unavailable here, so no signal was sent and it was not judged dead. A sandbox usually causes this; rerun jobs %s outside the sandbox.' "$1" "$2"
+ps_unusable_message() { # pid, jobs subcommand, job id
+  printf 'cannot confirm that PID %s is still this job'"'"'s process because ps is blocked here. This does not mean the process is dead, and no signal was sent. A sandbox usually causes this; rerun jobs %s outside the sandbox (from a normal terminal, or by approving the unsandboxed run): omnilane jobs %s %s' "$1" "$2" "$2" "$3"
+}
+
+# Only a live PID with a start file of its own differs from a process that is gone.
+note_pid_mismatch() { # pid file, pid
+  [[ -e "$1.start" ]] && kill -0 "$2" 2>/dev/null || return 0
+  printf 'omnilane: PID %s is running, but its start time differs from the one recorded for this job, so it is treated as another process and was left alone. If you expected this job to be alive, compare: ps -o lstart=,command= -p %s with %s.start\n' "$2" "$2" "$1" >&2
 }
 
 older_job_message() { # job id, pid, signal flag
@@ -191,8 +197,9 @@ read_cli_job_state() {
       case "$pid_state" in
         1)
           JOB_STATE="dead"
-          JOB_STATE_REASON="worker gone, no exit recorded" ;;
-        2) echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status)" >&2 ;;
+          JOB_STATE_REASON="worker gone, no exit recorded"
+          note_pid_mismatch "$directory/pid" "$RECORDED_PID" ;;
+        2) echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status "${directory##*/}")" >&2 ;;
         3)
           JOB_STATE="dead"
           JOB_STATE_REASON="invalid pid metadata" ;;
@@ -597,12 +604,12 @@ case "${1:-}" in
           elif kill -0 "$RECORDED_PID" 2>/dev/null; then
             die 1 "could not signal live inbox holder"
           fi ;;
-        2) die 1 "$(ps_unusable_message "$RECORDED_PID" close)" ;;
+        2) die 1 "$(ps_unusable_message "$RECORDED_PID" close "$2")" ;;
         3) die 1 "live inbox holder is unavailable" ;;
         4)
           older_state=0
           older_pid_state "$RECORDED_PID" || older_state=$?
-          [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close)"
+          [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close "$2")"
           [[ "$older_state" -ne 0 ]] || die 1 "$(older_job_message "$2" "$RECORDED_PID" -USR1)" ;;
         5) holder_rc=1 ;;
       esac
@@ -613,7 +620,7 @@ case "${1:-}" in
     if [[ "$holder_signaled" -eq 0 ]] && read_job_pid "$JOB_DIR/pid"; then
       writer_state=0
       recorded_pid_state "$JOB_DIR/pid" "$RECORDED_PID" || writer_state=$?
-      [[ "$writer_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close)"
+      [[ "$writer_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close "$2")"
       if [[ "$writer_state" -ne 0 && ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; then
         [[ "$holder_rc" -ne 0 ]] || die 1 "live inbox holder is gone"
         die 1 "live inbox holder is unavailable"
@@ -712,7 +719,7 @@ case "${1:-}" in
     fi
     [[ "$wait_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
     [[ "$wait_rc" -ne 3 ]] || die 1 "$(older_job_message "$2" "${wait_out##* }" -USR1)"
-    [[ "$wait_rc" -ne 4 ]] || die 1 "$(ps_unusable_message "${wait_out##* }" close)"
+    [[ "$wait_rc" -ne 4 ]] || die 1 "$(ps_unusable_message "${wait_out##* }" close "$2")"
     if [[ "$wait_rc" -ne 0 ]]; then
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
@@ -1357,7 +1364,7 @@ case "${1:-}" in
       elif [[ "$pid_state" == "valid" ]]; then
         wait_pid_state=0
         recorded_pid_state "$JOB_DIR/pid" "$pid" || wait_pid_state=$?
-        [[ "$wait_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" wait)"
+        [[ "$wait_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" wait "${JOB_DIR##*/}")"
         if [[ "$wait_pid_state" -ne 0 ]]; then
           if [[ -e "$exit_path" || -L "$exit_path" ]]; then
             continue
@@ -1365,6 +1372,7 @@ case "${1:-}" in
           if [[ "$wait_pid_state" -eq 3 ]]; then
             echo "dead (invalid pid metadata)"
           else
+            note_pid_mismatch "$JOB_DIR/pid" "$pid"
             echo "dead (worker gone, no exit recorded)"
           fi
           exit 125
@@ -1402,16 +1410,17 @@ case "${1:-}" in
     recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
     case "$cancel_identity" in
       0) ;;
-      2) die 1 "$(ps_unusable_message "$pid" cancel)" ;;
+      2) die 1 "$(ps_unusable_message "$pid" cancel "$2")" ;;
       3) die 1 "job $2 has an invalid start time file, so PID $pid cannot be confirmed as its worker and no signal was sent" ;;
       4)
         older_state=0
         older_pid_state "$pid" || older_state=$?
-        [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel)"
+        [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
         [[ "$older_state" -ne 0 ]] || die 1 "$(older_job_message "$2" "$pid" -TERM)"
         echo "not running (no live worker to cancel)"
         exit 0 ;;
       *)
+        note_pid_mismatch "$JOB_DIR/pid" "$pid"
         echo "not running (no live worker to cancel)"
         exit 0 ;;
     esac
@@ -1446,7 +1455,7 @@ case "${1:-}" in
       cancel_identity=0
       recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
       [[ "$cancel_identity" -ne 0 ]] || die 1 "cancel could not terminate worker pid $pid"
-      [[ "$cancel_identity" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel)"
+      [[ "$cancel_identity" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
       (umask 077; printf '137\n' > "$exit_path")
       echo "cancelled (exit 137)"
     fi
@@ -1462,7 +1471,7 @@ case "${1:-}" in
       if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]] && read_job_pid "$JOB_DIR/pid"; then
         rm_pid_state=0
         recorded_pid_state "$JOB_DIR/pid" "$RECORDED_PID" || rm_pid_state=$?
-        [[ "$rm_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" rm)"
+        [[ "$rm_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" rm "$2")"
         [[ "$rm_pid_state" -ne 0 ]] || die 1 "job is running (pid $RECORDED_PID); cancel it first"
       fi
     fi

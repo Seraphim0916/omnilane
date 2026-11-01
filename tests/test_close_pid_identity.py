@@ -149,6 +149,7 @@ class CloseAtStartTests(IdentityTestCase):
         result = self.jobs("close", env=self.blocked_ps_env())
         self.assertEqual(result.returncode, 1)
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assertNotIn("gone", result.stderr)
         self.assert_alive(victim)
 
@@ -159,6 +160,7 @@ class CloseAtStartTests(IdentityTestCase):
         self.holder_file.write_text(f"{dead.pid}\n")
         result = self.jobs("close", env=self.blocked_ps_env())
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assertNotIn("gone", result.stderr)
 
     def test_older_job_is_not_called_gone_when_the_probe_is_refused(self):
@@ -167,6 +169,7 @@ class CloseAtStartTests(IdentityTestCase):
         result = self.jobs("close", env=self.refused_probe_env())
         self.assertEqual(result.returncode, 1)
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assert_alive(victim)
 
     def test_invalid_start_files_are_refused(self):
@@ -260,6 +263,7 @@ class CloseLatePidTests(IdentityTestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(victim.pid), result.stderr)
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assert_alive(victim)
 
     def test_older_job_is_not_called_gone_when_the_probe_is_refused(self):
@@ -277,6 +281,7 @@ class CloseLatePidTests(IdentityTestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(victim.pid), result.stderr)
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
         self.assert_alive(victim)
 
     def test_invalid_start_file_fails_at_once(self):
@@ -364,6 +369,7 @@ class CancelTests(IdentityTestCase):
         (self.job / "pid").write_text(f"{process.pid}\n")
         result = self.jobs("cancel")
         self.assertEqual((result.returncode, result.stdout), (0, "not running (no live worker to cancel)\n"))
+        self.assertIn(f"PID {process.pid} is running, but its start time differs", result.stderr)
         self.assert_alive(process)
         self.assertTrue(self.child_alive(child))
         self.assertFalse((self.job / "exit").exists())
@@ -392,6 +398,7 @@ class CancelTests(IdentityTestCase):
         result = self.jobs("cancel", env=self.blocked_ps_env())
         self.assertEqual(result.returncode, 1)
         self.assertIn("rerun jobs cancel outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs cancel {JOB_ID}", result.stderr)
         self.assert_alive(process)
         self.assertTrue(self.child_alive(child))
 
@@ -401,6 +408,7 @@ class CancelTests(IdentityTestCase):
         result = self.jobs("cancel", env=self.refused_probe_env())
         self.assertEqual(result.returncode, 1)
         self.assertIn("rerun jobs cancel outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs cancel {JOB_ID}", result.stderr)
         self.assert_alive(process)
         self.assertTrue(self.child_alive(child))
         self.assertFalse((self.job / "exit").exists())
@@ -467,8 +475,10 @@ class ProbeTests(IdentityTestCase):
         victim = self.reused()
         status = self.jobs("status")
         self.assertIn("dead (worker gone, no exit recorded)", status.stdout, status.stderr)
+        self.assertIn(f"PID {victim.pid} is running, but its start time differs", status.stderr)
         waited = self.jobs("wait")
         self.assertEqual((waited.returncode, waited.stdout.strip()), (125, "dead (worker gone, no exit recorded)"))
+        self.assertIn(f"PID {victim.pid} is running, but its start time differs", waited.stderr)
         removed = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "rm", JOB_ID], env=dict(self.env, HOME=str(self.home)),
                                  capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
         self.assertEqual(removed.returncode, 0, removed.stderr)
@@ -499,6 +509,8 @@ class ProbeTests(IdentityTestCase):
         status = self.jobs("status", env=env)
         self.assertNotIn("dead", status.stdout)
         self.assertIn("rerun jobs status outside the sandbox", status.stderr)
+        self.assertIn(f"omnilane jobs status {JOB_ID}", status.stderr)
+        self.assertIn("This does not mean the process is dead", status.stderr)
         removed = self.jobs("rm", env=env)
         self.assertEqual(removed.returncode, 1)
         self.assertTrue((self.job / "pid").exists())
@@ -510,12 +522,15 @@ class ProbeTests(IdentityTestCase):
         status = self.jobs("status", env=env)
         self.assertNotIn("dead", status.stdout)
         self.assertIn("rerun jobs status outside the sandbox", status.stderr)
+        self.assertIn(f"omnilane jobs status {JOB_ID}", status.stderr)
         waited = self.jobs("wait", env=env)
         self.assertEqual(waited.returncode, 1)
         self.assertIn("rerun jobs wait outside the sandbox", waited.stderr)
+        self.assertIn(f"omnilane jobs wait {JOB_ID}", waited.stderr)
         removed = self.jobs("rm", env=env)
         self.assertEqual(removed.returncode, 1)
         self.assertIn("rerun jobs rm outside the sandbox", removed.stderr)
+        self.assertIn(f"omnilane jobs rm {JOB_ID}", removed.stderr)
         self.assertTrue((self.job / "pid").exists())
         self.assert_alive(victim)
 
@@ -524,6 +539,7 @@ class ProbeTests(IdentityTestCase):
         result = self.jobs("close", env=self.blocked_ps_env())
         self.assertEqual(result.returncode, 1)
         self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertIn(f"omnilane jobs close {JOB_ID}", result.stderr)
 
 
 class WriterTests(IdentityTestCase):
@@ -611,7 +627,7 @@ class DispatchFailureTests(unittest.TestCase):
                 result = self.dispatch(*flags)
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("no job was started", result.stderr)
-                self.assertIn("rerun outside the sandbox", result.stderr)
+                self.assertIn("rerun outside the sandbox (from a normal terminal", result.stderr)
                 self.assertEqual(self.jobs_dirs(), [])
         self.assertFalse(self.ran.exists())
 

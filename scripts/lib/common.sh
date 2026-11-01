@@ -225,7 +225,7 @@ write_current_pid_file() {
       printf '%s\n' "$start" > "$start_tmp" || rc=$?
     else
       rc=1
-      reason="omnilane: could not read the start time of PID $pid with ps, so this job did not start: it could never be signalled safely. A sandbox usually causes this; rerun outside the sandbox."
+      reason="omnilane: could not read the start time of PID $pid with ps, so this job did not start: it could never be signalled safely. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)."
       echo "$reason" >&2
       # `jobs result` reads this file; a background worker's stderr goes elsewhere.
       printf '%s\n' "$reason" >> "${path%/*}/out.txt.stderr.log" 2>/dev/null || true

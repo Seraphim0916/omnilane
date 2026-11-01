@@ -1322,7 +1322,7 @@ fi
 # dispatch reports its ID before the worker writes one, so refuse here while the
 # caller can still see the reason and no job directory exists.
 pid_file_start_time "$$" >/dev/null || {
-  echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox." >&2
+  echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)." >&2
   exit 1
 }
 mkdir -p "$OMNILANE_HOME"

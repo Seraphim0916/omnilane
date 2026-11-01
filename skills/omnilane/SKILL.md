@@ -154,6 +154,10 @@ do not commit, run the new tests and the directly related test files, and
 report exactly which ran. You then run the full suite outside the sandbox and
 make the commit yourself. Do not widen the sandbox to the shared `.git`.
 
+**`dispatch` and `jobs close|cancel|wait|rm` need `ps`, so they refuse inside
+such a sandbox**, even with `--caller-context`. That refusal means "cannot
+confirm", not "the process is dead". Rerun them outside the sandbox.
+
 `work` confines file and command changes to `--workdir` and disables the
 worker's tool networking (not the model connection); `advise` is read-only with
 the vendor's native web tools. Neither turns into `sysops` by itself. macOS Grok
