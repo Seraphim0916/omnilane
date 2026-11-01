@@ -533,8 +533,19 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
 
 
 FAKE_CLI = r'''#!/bin/bash
-# Answers the live-surface probe, then hangs before the inbox with a grandchild.
-case "$*" in *app-server*|*agent*stdio*) ;; *) echo "fake 1.0"; exit 0 ;; esac
+# Codex and Grok: answers the live-surface probe, then hangs before the inbox with
+# a grandchild. Gemini: run-gemini.sh has already opened the inbox as this stdin, and
+# the CLI runs until its EOF.
+case "$*" in
+  *--input-format*)
+    sleep 300 &
+    echo $! > "$PROBE_ROOT/grandchild"
+    : > "$PROBE_ROOT/started"
+    cat > /dev/null
+    exit 0 ;;
+  *app-server*|*agent*stdio*) ;;
+  *) echo "fake 1.0"; exit 0 ;;
+esac
 count_file="$PROBE_ROOT/cli-runs"
 runs=$(cat "$count_file" 2>/dev/null || echo 0)
 echo $((runs + 1)) > "$count_file"
@@ -556,7 +567,8 @@ class RealRunnerCleanupTests(unittest.TestCase):
 
     JOB_ID = "20261101-160000-12345-1"
 
-    def run_job(self, vendor, ignore_term=False, mode="work", model="fake", effort="medium"):
+    def run_job(self, vendor, ignore_term=False, mode="work", model="fake", effort="medium",
+                hold_before_inbox=False):
         temporary = tempfile.TemporaryDirectory(prefix="omnilane-fifo-clean-")
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -566,6 +578,14 @@ class RealRunnerCleanupTests(unittest.TestCase):
         shutil.copytree(ROOT / "scripts/lib", runtime / "scripts/lib")
         shutil.copytree(ROOT / "scripts/runners", runtime / "scripts/runners")
         shutil.copytree(ROOT / "config", runtime / "config")
+        if hold_before_inbox:
+            # run-gemini.sh opens the inbox moments after its cleanup trap is set;
+            # hold it in that window so a close lands there every time.
+            runner = runtime / f"scripts/runners/run-{vendor}.sh"
+            mark = 'LIVE_INBOX="${OMNILANE_INBOX:-}"\n'
+            source = runner.read_text()
+            self.assertEqual(source.count(mark), 1)
+            runner.write_text(source.replace(mark, ': > "$PROBE_ROOT/started"\nsleep 300\n' + mark))
         job = root / "home/jobs" / self.JOB_ID
         job.mkdir(parents=True)
         (job / "meta.json").write_text(
@@ -652,8 +672,8 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
                 self.assertEqual(list((workdir / ".omnilane-tmp").iterdir())
                                  if (workdir / ".omnilane-tmp").exists() else [], [])
 
-    def test_gemini_workspace_policy_is_cleaned_up(self):
-        root, job, workdir, env, driver = self.run_job("gemini")
+    def assert_gemini_cleanup(self, **options):
+        root, job, workdir, env, driver = self.run_job("gemini", **options)
 
         def owned_files():
             return [name for _, _, names in os.walk(workdir) for name in names
@@ -662,12 +682,18 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
 
         def prepared():
             seen_while_running[:] = owned_files()
-            return bool(seen_while_running)
+            return (root / "started").exists() and bool(seen_while_running)
         result, took = self.close_when_started(root, job, env, driver, prepared)
         self.assertLess(took, 4, result)
         self.assert_nothing_left(root)
         self.assertEqual(sorted(seen_while_running), [".omnilane-owned.json", "agent.md"])
         self.assertEqual(owned_files(), [], (job / "stderr").read_text())
+
+    def test_gemini_workspace_policy_is_cleaned_up_on_close(self):
+        self.assert_gemini_cleanup()
+
+    def test_gemini_workspace_policy_is_cleaned_up_before_the_inbox_opens(self):
+        self.assert_gemini_cleanup(hold_before_inbox=True)
 
     def test_grok_sysops_leaves_no_process(self):
         # Only sysops has a live Grok path, and it has no EXIT cleanup to protect.
