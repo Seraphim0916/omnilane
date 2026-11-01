@@ -17,7 +17,9 @@ class DualMigrationTests(unittest.TestCase):
                  ("invalid_signature", {"valid": False}, ["adhoc"]),
                  ("invalid_signer", {"signer": "bad"}, ["adhoc"]),
                  ("missing_identifier", {"identifier": ""}, ["adhoc"]),
-                 ("wrong_kind", {"kind": "unsigned"}, ["adhoc"])]
+                 ("wrong_kind", {"kind": "unsigned"}, ["adhoc"]),
+                 ("operator_trust_mismatch", {"operator_trust": "other"}, ["developer-id"]),
+                 ("neither_valid", {"valid": False, "operator_trust": "other"}, [])]
         path = "/fixture/bin/tool"
         for name, overrides, expected in cases:
             with self.subTest(case=name):
