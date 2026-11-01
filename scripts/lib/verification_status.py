@@ -50,6 +50,21 @@ def transport_guidance(vendor, config_id=None, candidates=(), environment_failur
                               + "登入失敗不需要加 --approve。")
 
 
+def team_wide_notice(vendor, team):
+    """An approval with no product identifier passes any program from that team and location."""
+    return (f"{vendor}: An approval for team {team} with no product identifier covers every program "
+            "that team signs at this location, not only this CLI. To bind it to the product, run "
+            f"omnilane resign --trust-origin {vendor} without --team while a verified factory sample "
+            f"is installed. / {vendor}：團隊 {team} 的核准沒有綁定產品識別名稱，會涵蓋該團隊在這個位置簽署的"
+            "所有程式，不只這個 CLI。要綁定到產品，請在安裝有效原廠樣本時，不加 --team 再執行一次 "
+            f"omnilane resign --trust-origin {vendor}。")
+
+
+def team_wide_notices(vendor, channels):
+    return [team_wide_notice(vendor, channel["team_id"]) for channel in channels
+            if channel.get("kind") == "developer-id" and channel.get("identifier_family") == ""]
+
+
 def origin_guidance(vendor, reason, current=None):
     """Source failures never suggest login or treat approval as signature repair."""
     vendor = vendor if vendor in VENDORS else "VENDOR"

@@ -1,5 +1,6 @@
 """Operator commands, source gate and transport proofs with fake vendor tools."""
 import offline_env  # noqa: F401
+import builtins
 import copy
 import hashlib
 import io
@@ -144,6 +145,76 @@ class IntegrationTests(unittest.TestCase):
         self.signers["claude"] = "TEST000001"
         self.update("claude")
         self.assertEqual(self.command("omnilane resign --vendor claude"), 0)
+
+    def trust_seen_before_prompt(self, command, answer):
+        """What was already on screen when the operator was asked to type TRUST."""
+        seen, prompts = [], []
+
+        def ask(prompt):
+            prompts.append(prompt)
+            seen.extend(str(call.args[0]) for call in builtins.print.call_args_list if call.args)
+            return answer
+        with patch.object(sys.stdin, "isatty", return_value=True), patch("builtins.input", side_effect=ask):
+            try:
+                code = self.run_resign(_argv=shlex.split(command)[2:])
+            except SystemExit as error:
+                code = error.code
+        self.assertEqual(len(prompts), 1)
+        return code, seen, prompts[0]
+
+    def doctor_output(self):
+        import runpy
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["overlay_health.py", str(ROOT)]), patch("sys.stdout", output):
+            with self.assertRaises(SystemExit):
+                runpy.run_path(str(ROOT / "scripts/lib/overlay_health.py"), run_name="__main__")
+        return output.getvalue()
+
+    def assert_team_wide_notice(self, text):
+        for part in ("covers every program", "team TEST000001", "without --team", "verified factory sample",
+                     "omnilane resign --trust-origin claude", "所有程式", "不加 --team"):
+            self.assertIn(part, text)
+
+    def test_a_team_wide_approval_says_so_before_asking_for_trust(self):
+        self.signers["claude"] = "adhoc"
+        command = "omnilane resign --trust-origin claude --team TEST000001"
+        # The notice comes before the question, whatever the answer turns out to be.
+        code, seen, prompt = self.trust_seen_before_prompt(command, "no")
+        self.assertEqual(code, 20)
+        self.assert_team_wide_notice("\n".join(seen))
+        self.assertFalse(op.policy_path().exists())
+        code, seen, prompt = self.trust_seen_before_prompt(command, "TRUST claude TEST000001")
+        self.assertEqual(code, 0)
+        self.assert_team_wide_notice("\n".join(seen))
+        self.assertEqual(prompt, "Trust this source on this host? Type TRUST claude TEST000001: ")
+        self.assertEqual(op.load()["vendors"]["claude"]["channels"][0]["identifier_family"], "")
+
+    def test_a_factory_sample_prompt_is_unchanged(self):
+        self.signers["claude"] = "TEST000001"
+        code, seen, prompt = self.trust_seen_before_prompt("omnilane resign --trust-origin claude", "TRUST claude TEST000001")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(seen), 1, seen)
+        self.assertRegex(seen[0], r"^omnilane: claude: kind=developer-id, team=TEST000001, identifier=\S+, "
+                                  r"path=\S+, Apple-chain=verified$")
+        self.assertEqual(prompt, "Trust this source on this host? Type TRUST claude TEST000001: ")
+        self.assertNotEqual(op.load()["vendors"]["claude"]["channels"][0]["identifier_family"], "")
+
+    def test_check_and_doctor_explain_a_team_wide_channel(self):
+        self.signers["claude"] = "adhoc"
+        self.assertEqual(self.command("omnilane resign --trust-origin claude --team TEST000001",
+                                      answer="TRUST claude TEST000001"), 0)
+        self.command("omnilane resign --check")
+        self.assert_team_wide_notice("\n".join(self.printed))
+        self.assert_team_wide_notice(self.doctor_output())
+
+    def test_check_and_doctor_add_nothing_for_a_bound_channel(self):
+        self.signers["claude"] = "TEST000001"
+        self.assertEqual(self.command("omnilane resign --trust-origin claude", answer="TRUST claude TEST000001"), 0)
+        self.command("omnilane resign --check")
+        for text in ("\n".join(self.printed), self.doctor_output()):
+            self.assertIn("identifier_family", text)
+            self.assertNotIn("covers every program", text)
+            self.assertNotIn("所有程式", text)
 
     def test_case39_trust_does_not_authorize_dispatch_before_probe(self):
         self.bins["claude"].write_text("updated executable")

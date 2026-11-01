@@ -139,13 +139,15 @@ def main() -> None:
         import resign
         report = resign.detect(overlay, resign.current_anchors())
         resign.origin_status(report)
-        from verification_status import origin_guidance
+        from verification_status import origin_guidance, team_wide_notices
         for vendor, entry in report.items():
             if not entry["cli"]:
                 extra += f"; {vendor} not installed; skipped / 沒有安裝，略過"
                 continue
             extra += (f"; {vendor} origin kind={entry['codesign'].get('kind')}, "
                       f"channels={json.dumps(entry['origin_channels'])}")
+            for notice in team_wide_notices(vendor, entry["origin_channels"]):
+                extra += "; " + notice
             if entry["cli_changed"] and not entry["origin_allowed"]:
                 guidance = origin_guidance(vendor, entry["origin_reason"], entry["codesign"])
                 extra += "; " + guidance["message"] + " / " + guidance["message_zh_tw"]
