@@ -133,7 +133,7 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。
+自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。adhoc サンプルには正規の識別子がないため、`--team` はその場所にあるチーム全体を承認します。置き換えるまでは、このチームが署名してそこに置いたどのプログラムも、この CLI に限らず出所チェックを通過して再検証の対象になります。`omnilane resign --check` と `omnilane doctor` には `"identifier_family": ""` と表示されます。製品に結び付けるには、正規の署名サンプルをインストールした状態で、`--team` なしで `omnilane resign --trust-origin claude` をもう一度実行します。チーム単位の承認が置き換えられます。
 
 ```bash
 omnilane resign --trust-adhoc claude   # 自分で claude を adhoc 署名している場合のみ

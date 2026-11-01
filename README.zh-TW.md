@@ -128,7 +128,7 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-若你會自行修補並自簽，執行 `omnilane resign --trust-adhoc claude`，信任同位置之後的自簽更新。另在**每台主機各自**安裝有效原廠樣本時，執行 `omnilane resign --trust-origin claude`；目前若是自簽，改用 `omnilane resign --trust-origin claude --team TEAMID`，將 `TEAMID` 換成你獨立查明的十碼團隊代號。此指令限終端機，必須輸入畫面指定的明確確認，沒有略過確認的旗標，也沒有預設團隊。原廠更新與後來的自簽更新各自需要補測。同位置信任不能證明替換檔是誰產生的。
+若你會自行修補並自簽，執行 `omnilane resign --trust-adhoc claude`，信任同位置之後的自簽更新。另在**每台主機各自**安裝有效原廠樣本時，執行 `omnilane resign --trust-origin claude`；目前若是自簽，改用 `omnilane resign --trust-origin claude --team TEAMID`，將 `TEAMID` 換成你獨立查明的十碼團隊代號。此指令限終端機，必須輸入畫面指定的明確確認，沒有略過確認的旗標，也沒有預設團隊。原廠更新與後來的自簽更新各自需要補測。同位置信任不能證明替換檔是誰產生的。自簽樣本看不到原廠識別名稱，所以加 `--team` 等於核准該團隊在這個位置的所有程式：在換掉之前，該團隊簽署並放在這裡的任何程式都能通過來源檢查並進入補測，不只這個 CLI。`omnilane resign --check` 和 `omnilane doctor` 會顯示為 `"identifier_family": ""`。要綁定到這個產品，請在安裝有效原廠樣本時，不加 `--team` 再執行一次 `omnilane resign --trust-origin claude`，它會取代團隊層級的那筆核准。
 
 ```bash
 omnilane resign --trust-adhoc claude   # 只有你自己會把 claude 簽成 adhoc 時才需要

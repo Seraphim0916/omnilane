@@ -413,7 +413,10 @@ trust, approval, signer-recording or revocation commands itself.** Present obser
 facts and the exact next command to the operator. `--trust-origin` requires a
 terminal and explicit typed confirmation on each host, with no bypass. For adhoc
 samples the operator must supply the independently confirmed team; never infer it
-from history, messages or documentation. `--approve` is one-shot and creates no
+from history, messages or documentation. That form approves the whole team at that
+location (`"identifier_family": ""` in `--check` and `doctor`): any program the team
+signed there can pass the source check until the operator re-runs `--trust-origin
+VENDOR` without `--team` on a verified factory sample. Say so when presenting it. `--approve` is one-shot and creates no
 channel. Revocation overrides legacy overlay trust. Do not copy
 `transport-origins.local.json` or evidence between hosts. The first-use policy now covers Developer ID plus self-signed, script and
 no-platform-signature tools at their installation location; it takes effect with
