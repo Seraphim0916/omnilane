@@ -186,7 +186,7 @@ for scenario in ("production-hooks", "ledger-tamper", "cleanup-window-swap", "cr
         print("FAIL R165 %s: %s" % (scenario, error), flush=True)
     finally:
         try: os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
+        except (ProcessLookupError, PermissionError): pass
         process.wait()
         stderr.close()
 assert not regressions, "R165 regressions: " + ", ".join(regressions)
@@ -253,7 +253,7 @@ for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-
             print("PASS live lifecycle %s exit=%s; copies removed" % (scenario, rc), flush=True)
     finally:
         try: os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError: pass
+        except (ProcessLookupError, PermissionError): pass
         process.wait()
         stderr.close()
 assert not swap_failures, "foreign-file cleanup regressions: " + ", ".join(swap_failures)
