@@ -223,24 +223,24 @@ class ReaderReleaseTests(unittest.TestCase):
         self.finish()
 
     def test_no_writer_publishes_no_inbox_and_sends_no_prompt(self):
-        for shell in SHELLS:
+        for index, shell in enumerate(SHELLS):
             with self.subTest(shell=shell):
-                self.close_with_reader_blocked_at_the_first_release(shell, "no-writer-" + Path(shell).parent.name)
+                self.close_with_reader_blocked_at_the_first_release(shell, f"no-writer-{index}")
                 self.assertFalse((self.root / "ready-published").exists(),
                                  "inbox.ready was published with no runner writer")
                 self.assertFalse((self.root / "received").exists(), "a reader got a prompt")
                 self.assertFalse((self.job / "inbox.ready").exists())
 
     def test_first_release_frees_a_reader_before_the_grace_starts(self):
-        for shell in SHELLS:
+        for index, shell in enumerate(SHELLS):
             with self.subTest(shell=shell):
-                self.close_with_reader_blocked_at_the_first_release(shell, "first-" + Path(shell).parent.name)
+                self.close_with_reader_blocked_at_the_first_release(shell, f"first-{index}")
                 self.assertFalse((self.root / "runner-term").exists(), "a freed runner still got TERM")
 
     def test_second_release_frees_a_reader_that_arrives_after_the_first(self):
-        for shell in SHELLS:
+        for index, shell in enumerate(SHELLS):
             with self.subTest(shell=shell):
-                self.start(shell, "second-" + Path(shell).parent.name)
+                self.start(shell, f"second-{index}")
                 self.await_helper()
                 self.process.send_signal(signal.SIGUSR1)
                 self.await_path(self.clock / "timer-1-started", "the close grace never started")
@@ -257,10 +257,10 @@ class ReaderReleaseTests(unittest.TestCase):
     def test_signal_after_the_release_marker_removes_the_marker(self):
         # The worker waits about 5s for a helper that does not leave, and then removes
         # the marker itself. A slow machine can miss that wait, so that run says nothing.
-        for shell in SHELLS:
+        for index, shell in enumerate(SHELLS):
             with self.subTest(shell=shell):
                 for attempt in range(5):
-                    self.start(shell, f"marker-{Path(shell).parent.name}-{attempt}", "hold-helper", enter_open=True)
+                    self.start(shell, f"marker-{index}-{attempt}", "hold-helper", enter_open=True)
                     marker = self.job / "runner-inbox.fifo.opened"
                     self.await_path(marker, "the release marker never appeared")
                     self.process.send_signal(signal.SIGTERM)
