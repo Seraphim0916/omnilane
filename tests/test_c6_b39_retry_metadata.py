@@ -46,12 +46,31 @@ class RetryMetadataTests(unittest.TestCase):
                 with self.subTest(missing=missing):
                     self.assertEqual(result.returncode, 3 if missing else 0)
                     if missing:
-                        self.assertIn('metadata', result.stderr)
-                        self.assertIn(missing, result.stderr)
-                        self.assertNotIn('current caller is missing', result.stderr)
+                        self.assertEqual(result.stderr,
+                                         f'omnilane: invalid retry metadata: missing required field {missing}\n')
                         self.assertEqual(result.stdout, '')
                     else:
                         self.assertEqual(result.stdout.splitlines()[5], 'null')
+
+    def test_cli_diagnostic_states_the_prefix_once(self):
+        def diagnostic(directory):
+            result = subprocess.run([sys.executable, '-B', str(LIB / 'aa_retry.py'),
+                                     '--metadata', directory], capture_output=True, text=True,
+                                    stdin=subprocess.DEVNULL, timeout=60)
+            self.assertEqual(result.returncode, 3)
+            self.assertEqual(result.stdout, '')
+            return result.stderr
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.subTest(case='no metadata file'):
+                stderr = diagnostic(directory)
+                self.assertTrue(stderr.startswith('omnilane: invalid retry metadata: '), stderr)
+                self.assertEqual(stderr.count('invalid retry metadata'), 1, stderr)
+            value = self.metadata()
+            value['workdir'] = 'two\nlines'
+            (Path(directory) / 'meta.json').write_text(json.dumps(value))
+            with self.subTest(case='control character in a value'):
+                self.assertEqual(diagnostic(directory), 'omnilane: invalid retry metadata value\n')
 
 
 if __name__ == '__main__':

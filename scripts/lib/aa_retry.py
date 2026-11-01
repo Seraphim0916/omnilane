@@ -84,7 +84,9 @@ if __name__ == "__main__":
         print("\n".join(metadata_fields(sys.argv[2]) if sys.argv[1] == "--metadata" else retry_args(sys.argv[1])))
     except (aa_policy.PolicyError, OSError, KeyError, TypeError) as error:
         if sys.argv[1] == "--metadata":
-            print(f"omnilane: invalid retry metadata: {error}", file=sys.stderr)
+            detail = str(error)
+            print("omnilane: " + (detail if detail.startswith("invalid retry") else "invalid retry metadata: " + detail),
+                  file=sys.stderr)
         else:
             print("omnilane: retry requires intact AA lineage; current caller is missing or original authorizer/registry is changed", file=sys.stderr)
         sys.exit(3)
