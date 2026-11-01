@@ -585,7 +585,9 @@ class RealRunnerCleanupTests(unittest.TestCase):
             mark = 'LIVE_INBOX="${OMNILANE_INBOX:-}"\n'
             source = runner.read_text()
             self.assertEqual(source.count(mark), 1)
-            runner.write_text(source.replace(mark, ': > "$PROBE_ROOT/started"\nsleep 300\n' + mark))
+            # exec keeps it a foreground child of the runner, under a PID we can check.
+            hold = """/bin/bash -c 'echo $$ > "$PROBE_ROOT/held-sleep"; : > "$PROBE_ROOT/started"; exec sleep 300'\n"""
+            runner.write_text(source.replace(mark, hold + mark))
         job = root / "home/jobs" / self.JOB_ID
         job.mkdir(parents=True)
         (job / "meta.json").write_text(
@@ -617,16 +619,25 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             start_new_session=True)
 
         def kill_everything():
-            listing = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,command="],
-                                     capture_output=True, text=True, check=True).stdout
-            for row in listing.splitlines():
-                pid, command = row.split(None, 1)
+            # Group first: killing the supervisor alone would orphan a sleep or cat
+            # whose command line does not name this test's directory.
+            groups = self.job_groups(root) | {driver.pid}
+            for pid, pgid, command in self.live_processes():
                 if str(root) in command:
-                    try:
-                        os.kill(int(pid), signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
+                    groups.add(pgid)
+            groups.discard(os.getpgrp())
+            for group in groups:
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            for pid in self.recorded_pids(root):
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
             driver.wait(timeout=5)
+            self.await_nothing_left(root, groups)
         self.addCleanup(kill_everything)
         return root, job, workdir, env, driver
 
@@ -636,6 +647,7 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             if driver.poll() is not None or time.monotonic() > deadline:
                 self.fail("job never reached the open: " + (job / "stderr").read_text())
             time.sleep(0.01)
+        self.job_groups(root).add(os.getpgid(int((job / "inbox.holder.pid").read_text())))
         time.sleep(0.1)
         began = time.monotonic()
         result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", self.JOB_ID],
@@ -646,20 +658,38 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
         driver.wait(timeout=12)
         return result, took
 
-    def assert_nothing_left(self, root):
+    @staticmethod
+    def live_processes():
+        listing = subprocess.run(["ps", "-A", "-ww", "-o", "pid=,pgid=,stat=,command="],
+                                 capture_output=True, text=True, check=True).stdout
+        processes = []
+        for row in listing.splitlines():
+            pid, pgid, stat, command = (row.split(None, 3) + [""])[:4]
+            if not stat.startswith("Z"):
+                processes.append((int(pid), int(pgid), command))
+        return processes
+
+    def job_groups(self, root):
+        return self.__dict__.setdefault("_job_groups", {}).setdefault(str(root), set())
+
+    @staticmethod
+    def recorded_pids(root):
+        return {int(path.read_text()) for path in (root / "grandchild", root / "held-sleep")
+                if path.exists()}
+
+    def await_nothing_left(self, root, groups):
+        pids = self.recorded_pids(root)
         deadline = time.monotonic() + 3
         while True:
-            listing = subprocess.run(["ps", "-A", "-ww", "-o", "command="],
-                                     capture_output=True, text=True, check=True).stdout
-            left = [row for row in listing.splitlines() if str(root) in row]
+            left = [row for row in self.live_processes()
+                    if str(root) in row[2] or row[0] in pids or row[1] in groups]
             if not left:
-                break
+                return
             self.assertLess(time.monotonic(), deadline, left)
             time.sleep(0.05)
-        path = root / "grandchild"
-        if path.exists():
-            with self.assertRaises(ProcessLookupError):
-                os.kill(int(path.read_text()), 0)
+
+    def assert_nothing_left(self, root):
+        self.await_nothing_left(root, self.job_groups(root))
 
     def test_codex_temp_directory_is_removed(self):
         for ignore_term in (False, True):
@@ -685,6 +715,8 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             return (root / "started").exists() and bool(seen_while_running)
         result, took = self.close_when_started(root, job, env, driver, prepared)
         self.assertLess(took, 4, result)
+        if options.get("hold_before_inbox"):
+            self.assertTrue((root / "held-sleep").exists())
         self.assert_nothing_left(root)
         self.assertEqual(sorted(seen_while_running), [".omnilane-owned.json", "agent.md"])
         self.assertEqual(owned_files(), [], (job / "stderr").read_text())
