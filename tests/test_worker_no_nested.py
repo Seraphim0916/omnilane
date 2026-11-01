@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from offline_env import fixture_environment_with_isolated_tools
+from offline_env import fixture_environment_with_isolated_tools, isolated_environment
 
 import json
 import os
@@ -11,10 +11,75 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = "[omnilane worker rules]"
+# Spelled out, not read from common.sh: a reworded rule has to fail here.
+WORKER_RULES = (
+    "You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, "
+    "and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, "
+    "spawn_subagent) to hand any part of it to another agent. Do not bypass an explicit permission "
+    "or safety denial. A substitute that stays within the limit, a tool a hook directs you to, and "
+    "unaffected authorized work may continue. If you cannot continue within the limits, report the "
+    "exact error."
+)
+WORKER_HEADER = f"{MARKER}\n{WORKER_RULES}\n\n"
+
+FAKE_SINGLE_SHOT_CLI = """#!/usr/bin/env python3
+import json, os, sys
+argv = sys.argv[1:]
+if "app-server" in argv:
+    sys.exit(3)
+prompt_file = None
+if "--prompt-file" in argv:
+    with open(argv[argv.index("--prompt-file") + 1]) as handle:
+        prompt_file = handle.read()
+with open(os.environ["FAKE_CLI_RECORD"], "a") as handle:
+    handle.write(json.dumps({"argv": argv, "stdin": sys.stdin.read(), "prompt_file": prompt_file}) + "\\n")
+if "-o" in argv:
+    with open(argv[argv.index("-o") + 1], "w") as handle:
+        handle.write("fixture\\n")
+print("fixture")
+"""
+
+FAKE_LIVE_CLI = """#!/usr/bin/env python3
+import json, os, sys
+
+def emit(value):
+    print(json.dumps(value), flush=True)
+
+def record(text):
+    with open(os.environ["FAKE_CLI_RECORD"], "a") as handle:
+        handle.write(json.dumps(text) + "\\n")
+
+vendor = os.path.basename(sys.argv[0])
+if vendor == "agy":
+    emit({"event": "init", "conversation_id": "fixture"})
+for raw in sys.stdin:
+    request = json.loads(raw)
+    if vendor == "codex":
+        method, request_id = request.get("method"), request.get("id")
+        if method == "initialize":
+            emit({"id": request_id, "result": {"userAgent": "fake", "codexHome": "/fake"}})
+        elif method == "thread/start":
+            emit({"id": request_id, "result": {"thread": {
+                "id": "thread", "sessionId": "session", "model": request["params"]["model"],
+                "status": {"type": "idle"}}}})
+        elif method == "turn/start":
+            record(request["params"]["input"][0]["text"])
+            emit({"id": request_id, "result": {"turn": {"id": "turn", "status": "inProgress"}}})
+            emit({"method": "turn/completed", "params": {
+                "threadId": "thread", "turn": {"id": "turn", "status": "completed", "error": None}}})
+    elif vendor == "agy":
+        record(request["message"]["content"][0]["text"])
+        emit({"event": "result", "result": {"status": "SUCCESS", "response": "ok",
+                                            "conversation_id": "fixture"}})
+    else:
+        record(request["message"]["content"][0]["text"])
+        emit({"type": "result", "is_error": False, "result": "ok"})
+"""
 
 FAKE_CODEX = """#!/usr/bin/env python3
 import json, os, pathlib, stat, subprocess, sys
@@ -418,39 +483,95 @@ print("fixture")
         with tempfile.TemporaryDirectory(prefix="omnilane-rules-") as td:
             tmp = Path(td)
             fake = tmp / "fake-cli"
-            fake.write_text("#!/bin/sh\nexit 0\n")
+            fake.write_text(FAKE_SINGLE_SHOT_CLI)
             fake.chmod(0o755)
             workdir = tmp / "wd"
             workdir.mkdir()
+            home = tmp / "home"
+            (home / ".gemini").mkdir(parents=True)
+            received = {
+                "codex": lambda call: call["stdin"],
+                "claude": lambda call: call["argv"][-1],
+                "gemini": lambda call: call["argv"][call["argv"].index("--print") + 1],
+                "grok": lambda call: call["prompt_file"],
+            }
             for vendor, (runner, bin_var) in self.RUNNERS.items():
                 with self.subTest(vendor=vendor):
                     prompt = tmp / f"{vendor}.txt"
                     prompt.write_text("task body\n")
+                    record = tmp / f"{vendor}.record"
                     env = fixture_environment_with_isolated_tools(self)
                     env.update(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1", OMNILANE_REPO=str(ROOT),
-                               OMNILANE_TIMEOUT="5")
+                               OMNILANE_TIMEOUT="5", HOME=str(home), OMNILANE_HOME=str(home / ".omnilane"),
+                               FAKE_CLI_RECORD=str(record))
                     env[bin_var] = str(fake)
                     for key in ("OMNILANE_INBOX", "OMNILANE_THREAD_MODE", "OMNILANE_THREAD_ID"):
                         env.pop(key, None)
                     for _ in range(2):
-                        subprocess.run(
+                        result = subprocess.run(
                             ["/bin/bash", str(ROOT / "scripts/runners" / runner), "advise", str(workdir),
                              "model", "-", str(prompt), str(tmp / f"{vendor}.out")],
-                            env=env, text=True, capture_output=True, check=False,
+                            env=env, text=True, capture_output=True, stdin=subprocess.DEVNULL, timeout=60,
                         )
+                        self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(prompt.read_text(), "task body\n")
+                    calls = [json.loads(line) for line in record.read_text().splitlines()]
+                    self.assertEqual(len(calls), 2)
+                    for call in calls:
+                        self.assertEqual(received[vendor](call).rstrip("\n"), WORKER_HEADER + "task body")
+                    self.assertNotIn("'", WORKER_RULES)
                     sent = Path(str(prompt) + ".worker")
-                    text = sent.read_text()
-                    self.assertTrue(text.startswith(MARKER + "\n"), text[:200])
-                    self.assertEqual(text.count(MARKER), 1)
-                    self.assertIn("dispatch.sh", text)
-                    self.assertIn("omnilane route", text)
-                    self.assertIn("sub-agent", text)
-                    self.assertIn("stop and report the exact error", text)
-                    self.assertIn("do not work around it", text)
-                    self.assertNotIn("'", text)
-                    self.assertTrue(text.endswith("task body\n"))
                     self.assertEqual(stat.S_IMODE(sent.stat().st_mode) & 0o077, 0)
+
+
+class LiveFirstMessageCarriesWorkerRules(unittest.TestCase):
+    VENDORS = {
+        "claude": ("CLAUDE_BIN", "claude", "triage: claude claude-default high\n", ()),
+        "codex": ("CODEX_BIN", "codex", "triage: codex gpt-5.6-luna medium\n",
+                  ("--model", "gpt-5.6-luna", "--effort", "medium")),
+        "gemini": ("AGY_BIN", "agy", 'triage: gemini "Gemini Fake" -\n', ("--mode", "sysops")),
+    }
+
+    def first_message(self, vendor: str) -> str:
+        bin_var, name, routing, flags = self.VENDORS[vendor]
+        temporary = tempfile.TemporaryDirectory(prefix="omnilane-live-rules-")
+        self.addCleanup(temporary.cleanup)
+        base = Path(temporary.name).resolve()
+        env, violations = isolated_environment(base / "isolated", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(violations.exists()))
+        home, bins, work = base / "omnilane", base / "bin", base / "work"
+        for directory in (home, bins, work):
+            directory.mkdir()
+        (Path(env["HOME"]) / ".gemini").mkdir(parents=True, exist_ok=True)
+        fake = bins / name
+        fake.write_text(FAKE_LIVE_CLI)
+        fake.chmod(0o755)
+        (home / "routing.local.yaml").write_text(routing)
+        record = base / "record"
+        for key in list(env):
+            if key.startswith("OMNILANE_"):
+                env.pop(key)
+        env.update(OMNILANE_HOME=str(home), OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1",
+                   FAKE_CLI_RECORD=str(record), PYTHONDONTWRITEBYTECODE="1")
+        env[bin_var] = str(fake)
+        started = subprocess.run(
+            ["bash", str(ROOT / "scripts/dispatch.sh"), "--background", "--live", "--idle-timeout", "0",
+             "--workdir", str(work), "--vendor", vendor, *flags, "triage", "task body"],
+            env=env, text=True, capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(started.returncode, 0, started.stderr)
+        job = started.stdout.strip()
+        self.addCleanup(subprocess.run, ["bash", str(ROOT / "scripts/jobs.sh"), "close", job],
+                        env=env, capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and not (record.exists() and record.read_text().endswith("\n")):
+            time.sleep(0.05)
+        self.assertTrue(record.exists(), f"{vendor} never received the first message")
+        return json.loads(record.read_text().splitlines()[0])
+
+    def test_first_message_is_rules_then_task(self) -> None:
+        for vendor in self.VENDORS:
+            with self.subTest(vendor=vendor):
+                self.assertEqual(self.first_message(vendor).rstrip("\n"), WORKER_HEADER + "task body")
 
 
 def load_setup():
