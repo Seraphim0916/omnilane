@@ -233,7 +233,13 @@ def _save(path, data):
             os.fsync(stream.fileno())
     fd, name = tempfile.mkstemp(prefix=path.name + ".tmp-", dir=str(path.parent))
     try:
-        with os.fdopen(fd, "wb") as stream:
+        try:
+            stream = os.fdopen(fd, "wb")
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+            raise
+        with stream:
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
