@@ -673,7 +673,9 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
     def kill_tracked(self, root, driver):
         """Signal only what still proves to be this test's, then wait for it to go."""
         processes = self.live_processes()
-        groups = self.tracking(root)["groups"] | {driver.pid}
+        groups = set(self.tracking(root)["groups"])
+        if not self.tracking(root)["gone"]:
+            groups.add(driver.pid)
         ours = [row for row in processes if self.is_ours(root, row[2])]
         verified_groups = {pgid for _, pgid, _ in ours if pgid in groups}
         # Killing the supervisor alone would orphan its children, so take its groups too.
@@ -753,6 +755,14 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
             reused = self.harmless_process("sleep", "300")
             (root / "held-sleep").write_text(str(reused.pid))
             self.kill_tracked(root, self.finished_driver())
+            self.assertIsNone(reused.poll())
+
+            # The old driver's number is a group number too, and reused.pid leads one.
+            class ReusedDriver:
+                pid = reused.pid
+                poll = staticmethod(lambda: 0)
+                wait = staticmethod(lambda timeout=None: 0)
+            self.kill_tracked(root, ReusedDriver)
             self.assertIsNone(reused.poll())
 
     def test_stale_holder_pid_registers_no_group(self):
