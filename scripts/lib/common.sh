@@ -214,16 +214,36 @@ current_pid() { # Call with direct redirection; command substitution records its
 }
 
 write_current_pid_file() {
-  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" start_tmp="${1}.start.tmp.$$-$RANDOM"
+  local old_umask rc=0 pid="" start="" reason
   old_umask="$(umask)"
   umask 077
   current_pid > "$tmp" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then pid="$(cat "$tmp")" || rc=$?; fi
+  if [[ "$rc" -eq 0 ]]; then
+    if start="$(pid_file_start_time "$pid")"; then
+      printf '%s\n' "$start" > "$start_tmp" || rc=$?
+    else
+      rc=1
+      reason="omnilane: could not read the start time of PID $pid with ps, so this job did not start: it could never be signalled safely. A sandbox usually causes this; rerun outside the sandbox."
+      echo "$reason" >&2
+      # `jobs result` reads this file; a background worker's stderr goes elsewhere.
+      printf '%s\n' "$reason" >> "${path%/*}/out.txt.stderr.log" 2>/dev/null || true
+    fi
+  fi
   umask "$old_umask"
+  if [[ "$rc" -eq 0 ]]; then mv "$start_tmp" "${path}.start" || rc=$?; fi
   if [[ "$rc" -ne 0 ]]; then
-    rm "$tmp" 2>/dev/null || true
+    rm "$tmp" "$start_tmp" 2>/dev/null || true
     return "$rc"
   fi
-  mv "$tmp" "$path"
+  # The PID file is the publish point. Published the other way round, a reader
+  # would take a new job for an older one that recorded no start time.
+  mv "$tmp" "$path" || {
+    rc=$?
+    rm "$tmp" "${path}.start" 2>/dev/null || true
+    return "$rc"
+  }
 }
 
 process_start_time() { # pid -> stable ps(1) start timestamp
@@ -234,6 +254,41 @@ process_start_time() { # pid -> stable ps(1) start timestamp
   value="${value%"${value##*[![:space:]]}"}"
   [[ -n "$value" ]] || return 1
   printf '%s\n' "$value"
+}
+
+# Start times are compared as strings, so writer and reader must agree on the
+# zone. process_start_time keeps the caller's zone: session records rely on it.
+pid_file_start_time() { TZ=UTC process_start_time "$1"; }
+
+recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2 ps unusable, 3 invalid start file, 4 no start file (older job), 5 PID file removed meanwhile
+  local path="$1" pid="$2" start_path="${1}.start" size recorded live
+  local LC_ALL=C
+  if [[ ! -e "$start_path" && ! -L "$start_path" ]]; then
+    [[ -e "$path" || -L "$path" ]] && return 4
+    return 5
+  fi
+  [[ -f "$start_path" && ! -L "$start_path" ]] || return 3
+  size="$(wc -c 2>/dev/null < "$start_path" | tr -d '[:space:]')" || size=""
+  if ! recorded="$(cat "$start_path" 2>/dev/null)" || [[ -z "$size" ]]; then
+    [[ -e "$path" || -L "$path" ]] || return 5
+    return 3
+  fi
+  [[ "$size" -le 129 && "$recorded" =~ ^[\ -~]{1,128}$ ]] || return 3
+  if ! live="$(pid_file_start_time "$pid")"; then
+    # ps reports a missing process and a blocked ps the same way. Asking about
+    # this shell tells them apart: it exists, so only a blocked ps can fail.
+    pid_file_start_time "$$" >/dev/null && return 1
+    return 2
+  fi
+  [[ "$live" == "$recorded" ]] || return 1
+}
+
+older_pid_state() { # pid with no recorded start time -> 0 alive, 1 dead, 2 cannot tell
+  kill -0 "$1" 2>/dev/null && return 0
+  # A sandbox can refuse kill -0 as well. It blocks ps there too, and only then
+  # is a failed probe not evidence that the process is gone.
+  pid_file_start_time "$$" >/dev/null && return 1
+  return 2
 }
 
 process_parent_pid() {

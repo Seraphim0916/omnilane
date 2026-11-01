@@ -144,8 +144,29 @@ read_job_pid() {
   RECORDED_PID="$value"
 }
 
+# For probes that send no signal: an older job keeps its kill -0 answer.
+# 0 alive, 1 dead, 2 ps unusable, 3 invalid start file.
+recorded_pid_state() {
+  local rc=0
+  recorded_pid_identity "$1" "$2" || rc=$?
+  case "$rc" in
+    4) older_pid_state "$2" ;;
+    5) return 1 ;;
+    *) return "$rc" ;;
+  esac
+}
+
+ps_unusable_message() { # pid, jobs subcommand
+  printf 'cannot confirm that PID %s is still this job'"'"'s process because ps is unavailable here, so no signal was sent and it was not judged dead. A sandbox usually causes this; rerun jobs %s outside the sandbox.' "$1" "$2"
+}
+
+older_job_message() { # job id, pid, signal flag
+  printf 'job %s was started by an older omnilane that recorded no process start time, so PID %s cannot be confirmed as its worker and no signal was sent. Check it with: ps -o lstart=,command= -p %s. If it is this job'"'"'s worker, stop it by hand with: kill %s %s. If it is not, leave that process alone: the worker is gone, and you can move %s to the trash.' \
+    "$1" "$2" "$2" "$3" "$2" "$JOB_DIR"
+}
+
 read_cli_job_state() {
-  local directory="$1"
+  local directory="$1" pid_state=0
   JOB_STATE="running"
   JOB_STATE_EXIT="null"
   JOB_STATE_REASON=""
@@ -165,9 +186,17 @@ read_cli_job_state() {
     if ! read_job_pid "$directory/pid"; then
       JOB_STATE="dead"
       JOB_STATE_REASON="invalid pid metadata"
-    elif ! kill -0 "$RECORDED_PID" 2>/dev/null; then
-      JOB_STATE="dead"
-      JOB_STATE_REASON="worker gone, no exit recorded"
+    else
+      recorded_pid_state "$directory/pid" "$RECORDED_PID" || pid_state=$?
+      case "$pid_state" in
+        1)
+          JOB_STATE="dead"
+          JOB_STATE_REASON="worker gone, no exit recorded" ;;
+        2) echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status)" >&2 ;;
+        3)
+          JOB_STATE="dead"
+          JOB_STATE_REASON="invalid pid metadata" ;;
+      esac
     fi
   fi
   return 0
@@ -558,21 +587,37 @@ case "${1:-}" in
     # exit status only after finalizing. A close landing in that window waits
     # for the receipt rather than reporting a missing or vanished holder.
     holder_signaled=0
-    if [[ "$holder_rc" -eq 0 ]] && kill -0 "$RECORDED_PID" 2>/dev/null; then
-      if kill -USR1 "$RECORDED_PID" 2>/dev/null; then
-        holder_signaled=1
-      elif kill -0 "$RECORDED_PID" 2>/dev/null; then
-        die 1 "could not signal live inbox holder"
-      fi
+    if [[ "$holder_rc" -eq 0 ]]; then
+      holder_identity=0
+      recorded_pid_identity "$holder_path" "$RECORDED_PID" || holder_identity=$?
+      case "$holder_identity" in
+        0)
+          if kill -USR1 "$RECORDED_PID" 2>/dev/null; then
+            holder_signaled=1
+          elif kill -0 "$RECORDED_PID" 2>/dev/null; then
+            die 1 "could not signal live inbox holder"
+          fi ;;
+        2) die 1 "$(ps_unusable_message "$RECORDED_PID" close)" ;;
+        3) die 1 "live inbox holder is unavailable" ;;
+        4)
+          older_state=0
+          older_pid_state "$RECORDED_PID" || older_state=$?
+          [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close)"
+          [[ "$older_state" -ne 0 ]] || die 1 "$(older_job_message "$2" "$RECORDED_PID" -USR1)" ;;
+        5) holder_rc=1 ;;
+      esac
     fi
     # The process in $JOB_DIR/pid writes the exit receipt, so once it is dead no
     # receipt is coming. Look for the receipt only after seeing it dead: it may
     # have written one just before it exited.
-    if [[ "$holder_signaled" -eq 0 ]] && read_job_pid "$JOB_DIR/pid" &&
-       ! kill -0 "$RECORDED_PID" 2>/dev/null &&
-       [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; then
-      [[ "$holder_rc" -ne 0 ]] || die 1 "live inbox holder is gone"
-      die 1 "live inbox holder is unavailable"
+    if [[ "$holder_signaled" -eq 0 ]] && read_job_pid "$JOB_DIR/pid"; then
+      writer_state=0
+      recorded_pid_state "$JOB_DIR/pid" "$RECORDED_PID" || writer_state=$?
+      [[ "$writer_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" close)"
+      if [[ "$writer_state" -ne 0 && ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; then
+        [[ "$holder_rc" -ne 0 ]] || die 1 "live inbox holder is gone"
+        die 1 "live inbox holder is unavailable"
+      fi
     fi
     # Include the supervisor's final 1s process-group cleanup after live close.
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
@@ -584,6 +629,8 @@ case "${1:-}" in
     # file that appears with invalid contents fails at once (exit 2), like one
     # present from the start. The deadline is checked before every poll and
     # the last sleep stops at it, so nothing is signalled after it.
+    # The start time gets the same checks as recorded_pid_identity: a live PID
+    # with no start file exits 3, and a ps that cannot run at all exits 4.
     # Only a missing PID file is polled, and a PID is probed once. A PID recorded
     # for a dead process stays dead for this job: the worker refuses to start
     # over an existing PID file, so probing it again could only signal an
@@ -593,6 +640,19 @@ case "${1:-}" in
     wait_rc=0
     wait_out="$(perl -MTime::HiRes=time,sleep -e '
       my ($exit, $limit, $holder, $poll_holder) = @ARGV;
+      my $start_path = "$holder.start";
+      sub start_of {
+        my ($pid) = @_;
+        local $/;
+        local $ENV{TZ} = "UTC";
+        local $ENV{LC_ALL} = "C";
+        open(my $ps, "-|", "ps -o lstart= -p $pid 2>/dev/null") or return undef;
+        my $value = <$ps>;
+        close($ps) or return undef;
+        return undef unless defined $value;
+        $value =~ s/\A\s+|\s+\z//g;
+        return length($value) ? $value : undef;
+      }
       my $end = time + $limit;
       $| = 1;
       until (-e $exit || -l $exit) {
@@ -612,7 +672,28 @@ case "${1:-}" in
             last HOLDER unless -e $holder || -l $holder;
             exit 2 unless defined $value && $value =~ /\A([1-9][0-9]{0,9})\n?\z/;
             my $pid = $1;
-            if (kill(0, $pid)) {
+            unless (-e $start_path || -l $start_path) {
+              last HOLDER unless -e $holder || -l $holder;
+              if (kill(0, $pid)) { print "older $pid\n"; exit 3; }
+              # A sandbox can refuse the probe too; it blocks ps there as well.
+              unless (defined start_of($$)) { print "blocked $pid\n"; exit 4; }
+              $poll_holder = 0;
+              last HOLDER;
+            }
+            exit 2 if -l $start_path || !-f _ || (-s _) > 129;
+            open(my $sf, "<", $start_path) or do {
+              last HOLDER unless -e $holder || -l $holder;
+              exit 2;
+            };
+            my $recorded = <$sf>;
+            close $sf;
+            exit 2 unless defined $recorded && $recorded =~ /\A([ -~]{1,128})\n?\z/;
+            $recorded = $1;
+            my $live = start_of($pid);
+            if (!defined $live) {
+              # Only a blocked ps fails on this process, which exists.
+              unless (defined start_of($$)) { print "blocked $pid\n"; exit 4; }
+            } elsif ($live eq $recorded) {
               exit 1 if time >= $end;
               if (kill("USR1", $pid)) { print "signaled\n"; }
             }
@@ -630,6 +711,8 @@ case "${1:-}" in
       late_signaled=1
     fi
     [[ "$wait_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
+    [[ "$wait_rc" -ne 3 ]] || die 1 "$(older_job_message "$2" "${wait_out##* }" -USR1)"
+    [[ "$wait_rc" -ne 4 ]] || die 1 "$(ps_unusable_message "${wait_out##* }" close)"
     if [[ "$wait_rc" -ne 0 ]]; then
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
@@ -1271,12 +1354,21 @@ case "${1:-}" in
         fi
         echo "dead (invalid pid metadata)"
         exit 125
-      elif [[ "$pid_state" == "valid" ]] && ! kill -0 "$pid" 2>/dev/null; then
-        if [[ -e "$exit_path" || -L "$exit_path" ]]; then
-          continue
+      elif [[ "$pid_state" == "valid" ]]; then
+        wait_pid_state=0
+        recorded_pid_state "$JOB_DIR/pid" "$pid" || wait_pid_state=$?
+        [[ "$wait_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" wait)"
+        if [[ "$wait_pid_state" -ne 0 ]]; then
+          if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+            continue
+          fi
+          if [[ "$wait_pid_state" -eq 3 ]]; then
+            echo "dead (invalid pid metadata)"
+          else
+            echo "dead (worker gone, no exit recorded)"
+          fi
+          exit 125
         fi
-        echo "dead (worker gone, no exit recorded)"
-        exit 125
       fi
 
       wait_elapsed=$((SECONDS - wait_started))
@@ -1302,10 +1394,27 @@ case "${1:-}" in
     if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
       if read_job_pid "$JOB_DIR/pid"; then pid="$RECORDED_PID"; pid_state="valid"; else pid_state="invalid"; fi
     fi
-    if [[ "$pid_state" != "valid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    if [[ "$pid_state" != "valid" ]]; then
       echo "not running (no live worker to cancel)"
       exit 0
     fi
+    cancel_identity=0
+    recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
+    case "$cancel_identity" in
+      0) ;;
+      2) die 1 "$(ps_unusable_message "$pid" cancel)" ;;
+      3) die 1 "job $2 has an invalid start time file, so PID $pid cannot be confirmed as its worker and no signal was sent" ;;
+      4)
+        older_state=0
+        older_pid_state "$pid" || older_state=$?
+        [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel)"
+        [[ "$older_state" -ne 0 ]] || die 1 "$(older_job_message "$2" "$pid" -TERM)"
+        echo "not running (no live worker to cancel)"
+        exit 0 ;;
+      *)
+        echo "not running (no live worker to cancel)"
+        exit 0 ;;
+    esac
     # Background workers run as their own process-group leader (dispatch `set -m`),
     # and that leader traps SIGTERM to record a best-effort exit code. Signal the
     # whole group so the vendor CLI child dies too and the worker writes its exit.
@@ -1317,10 +1426,11 @@ case "${1:-}" in
     while [[ "$cancel_waited" -lt 5 ]]; do
       # finish_job records exit before publishing its completion inbox record.
       # Give the worker the full grace period to finish that cleanup as well.
-      if ! kill -0 "$pid" 2>/dev/null; then break; fi
+      recorded_pid_identity "$JOB_DIR/pid" "$pid" || break
       sleep 1; cancel_waited=$((cancel_waited + 1))
     done
-    if kill -0 "$pid" 2>/dev/null; then
+    # Checked again before SIGKILL: the worker may be gone and its PID reused.
+    if recorded_pid_identity "$JOB_DIR/pid" "$pid"; then
       # The TERM trap did not fire in time; SIGKILL cannot be trapped, so no exit
       # gets recorded — force the group down and record the terminal state below.
       kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
@@ -1332,9 +1442,11 @@ case "${1:-}" in
       else
         echo "cancelled (invalid exit metadata)"
       fi
-    elif kill -0 "$pid" 2>/dev/null; then
-      die 1 "cancel could not terminate worker pid $pid"
     else
+      cancel_identity=0
+      recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
+      [[ "$cancel_identity" -ne 0 ]] || die 1 "cancel could not terminate worker pid $pid"
+      [[ "$cancel_identity" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel)"
       (umask 077; printf '137\n' > "$exit_path")
       echo "cancelled (exit 137)"
     fi
@@ -1347,9 +1459,11 @@ case "${1:-}" in
     # out from under a running worker would strand it writing into a deleted path.
     # A recorded exit (finished) or a dead pid (crashed worker) is safe to remove.
     if [[ ! -e "$exit_path" && ! -L "$exit_path" ]]; then
-      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]] &&
-         read_job_pid "$JOB_DIR/pid" && kill -0 "$RECORDED_PID" 2>/dev/null; then
-        die 1 "job is running (pid $RECORDED_PID); cancel it first"
+      if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]] && read_job_pid "$JOB_DIR/pid"; then
+        rm_pid_state=0
+        recorded_pid_state "$JOB_DIR/pid" "$RECORDED_PID" || rm_pid_state=$?
+        [[ "$rm_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" rm)"
+        [[ "$rm_pid_state" -ne 0 ]] || die 1 "job is running (pid $RECORDED_PID); cancel it first"
       fi
     fi
     # select_job already proved $JOB_DIR is a real child dir, never a symlink.

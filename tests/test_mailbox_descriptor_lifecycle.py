@@ -177,7 +177,7 @@ class MailboxDescriptorLifecycleTests(unittest.TestCase):
         while self.group_alive() and time.monotonic() < deadline:
             time.sleep(0.02)
         survivors = [name for name, item in snapshots.items() if self.alive(item["pid"])]
-        residue = [name for name in ("inbox.ready", "inbox.holder.pid", "inbox.fifo", "runner-inbox.fifo")
+        residue = [name for name in ("inbox.ready", "inbox.holder.pid", "inbox.holder.pid.start", "inbox.fifo", "runner-inbox.fifo")
                    if os.path.lexists(self.job / name)]
         leaks = {name: {fd: identity for fd, identity in item["fds"].items()
                         if identity in mailbox.values()} for name, item in snapshots.items()}

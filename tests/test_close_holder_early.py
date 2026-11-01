@@ -111,6 +111,12 @@ FAKE_HIRES = textwrap.dedent("""
 """)
 
 
+def start_time(pid):
+    env = dict(os.environ, TZ="UTC", LC_ALL="C")
+    return subprocess.run(["/bin/ps", "-o", "lstart=", "-p", str(pid)], env=env, capture_output=True,
+                          text=True, timeout=5, check=True).stdout.strip()
+
+
 class CloseBeforeHolderPidTests(unittest.TestCase):
     def setUp(self):
         scratch = ROOT / ".test-scratch"
@@ -136,7 +142,17 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
             self.assertLess(time.monotonic(), end, "fixture holder did not start")
             time.sleep(0.02)
 
+    def write_holder_start(self, pid):
+        (self.job / "inbox.holder.pid.start").write_text(start_time(pid) + "\n")
+
+    def sleeper(self):
+        process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(process.wait, 5)
+        self.addCleanup(process.kill)
+        return process
+
     def publish_pid(self):
+        self.write_holder_start(self.holder.pid)
         tmp = self.job / "inbox.holder.pid.tmp"
         tmp.write_text(f"{self.holder.pid}\n")
         os.replace(tmp, self.job / "inbox.holder.pid")
@@ -238,12 +254,14 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
     def test_fake_clock_still_signals_a_holder_before_the_deadline(self):
         # Guards the fake clock itself: a PID published at 10.5s is signalled.
         self.start_holder()
+        self.write_holder_start(self.holder.pid)
         result = self.fake_close([("10.5", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")])
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
         self.assertIn(f"closed {JOB_ID}", result.stdout)
 
     def test_read_crossing_deadline_expires_unsignaled_with_status_one(self):
         self.start_holder()
+        self.write_holder_start(self.holder.pid)
         result = self.fake_close([("10.5", self.job / "inbox.holder.pid", f"{self.holder.pid}\n")],
                                  read_action="deadline")
         self.assertTrue((self.home / "read-marker").exists())
@@ -277,8 +295,10 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         # Guards the reuse test above: the same fake kill does log a USR1 sent
         # to a PID published after close started.
         kill_log = self.home / "kill-log"
-        self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")], kill_log=kill_log)
-        self.assertEqual(kill_log.read_text(), "USR1 999999\n")
+        sleeper = self.sleeper()
+        self.write_holder_start(sleeper.pid)
+        self.fake_close([("1", self.job / "inbox.holder.pid", f"{sleeper.pid}\n")], kill_log=kill_log)
+        self.assertEqual(kill_log.read_text(), f"USR1 {sleeper.pid}\n")
 
     def test_late_holder_pid_seen_dead_is_not_probed_again(self):
         # The PID file appears at 1s. The first probe says dead; every later one
@@ -382,7 +402,9 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
                          (0, "already closed (exit 0)\n", ""))
 
     def test_late_signal_past_the_deadline_says_the_worker_is_still_shutting_down(self):
-        result = self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")],
+        sleeper = self.sleeper()
+        self.write_holder_start(sleeper.pid)
+        result = self.fake_close([("1", self.job / "inbox.holder.pid", f"{sleeper.pid}\n")],
                                  kill_log=self.home / "kill-log")
         self.assertEqual((result.returncode, result.stdout, result.stderr),
                          (124, "", "close signal sent late (the holder PID appeared after close started); "

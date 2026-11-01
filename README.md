@@ -925,6 +925,16 @@ working notes, including per-benchmark caveats, live in
   a Git worktree, so the automatic fuse above bounds that case and cleans the
   supervised process group. Omnilane neither initializes nor requires a repository.
 
+## ⬆️ Upgrade note: jobs started by an older version
+
+`jobs close` and `jobs cancel` now signal a worker only after `ps` confirms that its start time matches the one recorded in `pid.start` or `inbox.holder.pid.start`. A job started by an older version has no such file, so its PID cannot be confirmed:
+
+- While that PID is in use, `jobs close` and `jobs cancel` send no signal and exit 1, naming the PID. Check it with `ps -o lstart=,command= -p PID`. If it is the job's worker, stop it by hand (`kill -USR1 PID` for `close`, `kill -TERM PID` for `cancel`). If it is not, leave that process alone: the worker is gone, and you can move the job directory to the trash.
+- A dead PID behaves as before, and `status`, `wait` and `rm` keep their `kill -0` answer for such a job.
+- Jobs started after the upgrade are not affected.
+
+These commands and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so run them outside the sandbox.
+
 ## 📜 Release history
 
 ## What's new in v0.58.0

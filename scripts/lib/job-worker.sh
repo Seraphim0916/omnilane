@@ -153,6 +153,9 @@ runner_pid=""
 # Invoked by the EXIT trap below.
 # shellcheck disable=SC2329
 cleanup_live_mailbox() {
+  # PID first: a reader that sees a PID with no start time takes it for an older job.
+  rm "$HOLDER_PID_FILE" 2>/dev/null || true
+  rm "$HOLDER_PID_FILE.start" 2>/dev/null || true
   if [[ -n "${forward_spool:-}" ]]; then rm "$forward_spool" 2>/dev/null || true; fi
   if [[ "$forward_spool_open" -eq 1 ]]; then exec 6<&-; exec 7>&-; forward_spool_open=0; fi
   if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
@@ -164,7 +167,7 @@ cleanup_live_mailbox() {
 prepare_live_mailbox() {
   local path old_umask rc=0
   for path in "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$RUNNER_INBOX_FIFO.opened" \
-    "$HOLDER_PID_FILE" "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
+    "$HOLDER_PID_FILE" "$HOLDER_PID_FILE.start" "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
     [[ ! -e "$path" && ! -L "$path" ]] || return 1
   done
   old_umask="$(umask)"

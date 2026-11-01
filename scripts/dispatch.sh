@@ -1318,6 +1318,13 @@ if [[ "$EXECUTOR_REASON" == "no-native-context" && -n "$AA_CALLER_CONTEXT" && -r
     echo "omnilane: the target is this harness's own vendor, yet it goes out through an external CLI because no capability file was given. To use your own sub-agent tool: omnilane native-context --workdir \"$WORKDIR\", then pass --native-context FILE (or --inherit for a worker on your own model and effort)" >&2
   fi
 fi
+# Without a recorded start time a job can never be signalled safely. A background
+# dispatch reports its ID before the worker writes one, so refuse here while the
+# caller can still see the reason and no job directory exists.
+pid_file_start_time "$$" >/dev/null || {
+  echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox." >&2
+  exit 1
+}
 mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
@@ -1614,7 +1621,13 @@ finish_job() {
 
 run_job() {
   local rc=0 entry_shell_options="$-"
-  write_current_pid_file "$JOB_DIR/pid"
+  if ! write_current_pid_file "$JOB_DIR/pid"; then
+    # Record the failure: a job with no PID and no exit reads as still starting.
+    set -e
+    finish_job 1
+    [[ "$entry_shell_options" == *e* ]] || set +e
+    return "$FINISHED_RC"
+  fi
   set +e
   if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
     # Supervise every background tree so cancel reaches its descendants even
