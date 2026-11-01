@@ -17,7 +17,8 @@ UNSIGNED = "unsigned"
 # location may be re-probed unattended. Nothing else is waived.
 TRUST_ADHOC = "adhoc-in-install-location"
 # 1.0.25 -> 1.0.30 inside a path is an update; a different directory is not.
-VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?P<annotation>(?:[-+][0-9A-Za-z.]+)*)")
+VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)*")
+ANNOTATED_VERSION = re.compile(r"\d+(?:\.\d+)+[-+]")
 
 
 MACH_O = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
@@ -103,7 +104,7 @@ def identifier_family(identifier: str) -> str:
 
 
 def identifier_kept_whole(identifier: str) -> bool:
-    return any(match["annotation"] for match in VERSION_SEGMENT.finditer(identifier))
+    return bool(ANNOTATED_VERSION.search(identifier))
 
 
 def family(path: Path | str) -> str:

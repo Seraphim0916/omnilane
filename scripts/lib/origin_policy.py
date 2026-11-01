@@ -220,14 +220,23 @@ def _lock(path):
 
 def _write_descriptor(fd, content):
     # closefd=False: fdopen can close fd itself before raising, and then closing it
-    # here could hit whatever reused the number. This function alone owns fd.
+    # here could hit whatever reused the number. This function alone owns fd, and the
+    # first failure is the one reported, so a later close cannot hide why a write failed.
+    failure = None
     try:
         with os.fdopen(fd, "wb", closefd=False) as stream:
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
-    finally:
-        os.close(fd)
+            try:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            except BaseException as error:
+                failure = error
+                raise
+    except BaseException as error:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise (error if failure is None else failure)
+    os.close(fd)
 
 
 def _save(path, data):

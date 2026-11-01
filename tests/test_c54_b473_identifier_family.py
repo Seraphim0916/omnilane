@@ -31,7 +31,9 @@ class IdentifierFamilyTests(unittest.TestCase):
     def test_normalizing_again_changes_nothing(self):
         for identifier, expected in self.CASES:
             with self.subTest(identifier=identifier):
-                self.assertEqual(provenance.identifier_family(expected), expected)
+                normalized = provenance.identifier_family(identifier)
+                self.assertEqual(normalized, expected)
+                self.assertEqual(provenance.identifier_family(normalized), normalized)
 
     def test_identifiers_differing_only_by_version_share_a_family(self):
         self.assertEqual(provenance.identifier_family("vendor.1.2.3.bridge.4.5"),

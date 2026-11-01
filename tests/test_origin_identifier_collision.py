@@ -20,6 +20,10 @@ APPROVED = {"claude": "com.anthropic.claude-code", "codex": "codex",
             "gemini": "cli", "grok": "xai-grok-pager"}
 
 
+# An annotation need not start with a letter or digit.
+DOUBLED = ("vendor.1.2.3--beta", "vendor.1.2.4--beta", "vendor.1.2.3+-build", "vendor.1.2.4+-build")
+
+
 def signed(identifier):
     return dict(kind="developer-id", signer=TEAM, identifier=identifier, valid=True)
 
@@ -46,19 +50,33 @@ class GateCollisionTests(unittest.TestCase):
             for identifier in ("vendor.1.2.3+decade1", "vendor.1.2.3+cafe123", "vendor.1.2.3-dev",
                                "vendor.1.2.3+build", "vendor.1.2.3-bridge", "vendor.1.2.3-beta-bridge",
                                "vendor.1.2.3-beta.1.bridge", "vendor.1.2.3+bridge", "vendor.1.2.3+bridge.4.5",
-                               "vendor.1.2.4-beta", "vendor.2.0.0-rc.1", "vendor.2.0.0+build.7", "vendor.2.0.0-1"):
+                               "vendor.1.2.4-beta", "vendor.2.0.0-rc.1", "vendor.2.0.0+build.7", "vendor.2.0.0-1",
+                               *DOUBLED):
                 with self.subTest(grant=grant, identifier=identifier):
                     self.approve(grant)
                     self.assertEqual(self.gate(identifier), (False, "identifier-changed"))
 
-    def test_an_annotated_grant_does_not_cover_the_plain_version(self):
+    def test_a_doubled_annotation_does_not_cover_its_next_version(self):
+        self.approve("vendor.1.2.3--beta")
+        self.assertEqual(self.gate("vendor.1.2.3--beta"), (True, "origin-approved"))
+        self.assertEqual(self.gate("vendor.1.2.4--beta"), (False, "identifier-changed"))
+
+    def test_a_stored_version_family_passes_plain_versions_but_not_annotated_ones(self):
+        # A known limit, not a fix: the stored "vendor.<version>" cannot say which identifier
+        # it came from, so one granted to vendor.1.2.3-beta before this rule still passes these.
+        channel = op._channel("developer-id", CLI, signed("vendor.1.2.3"))
+        op.record("codex", channel, path=self.policy)
+        self.assertEqual(self.gate("vendor.1.2.4"), (True, "origin-approved"))
+        self.assertEqual(self.gate("vendor.1.2.3-beta"), (False, "identifier-changed"))
+
+    def test_a_new_annotated_grant_does_not_cover_the_plain_version(self):
         self.approve("vendor.1.2.3")
         self.assertEqual(self.gate("vendor.1.2.3-beta"), (False, "identifier-changed"))
         self.approve("vendor.1.2.3-beta")
         self.assertEqual(self.gate("vendor.1.2.3"), (False, "identifier-changed"))
         self.assertEqual(self.gate("vendor.1.2.3-beta"), (True, "origin-approved"))
 
-    def test_a_grant_stored_before_this_rule_does_not_cover_the_suffix(self):
+    def test_an_old_plain_family_does_not_cover_annotated_identifiers(self):
         channel = op._channel("developer-id", CLI, signed("vendor.1.2.3"))
         self.assertEqual(channel["identifier_family"], "vendor.<version>")
         op.record("codex", channel, path=self.policy)
@@ -88,10 +106,12 @@ class GateCollisionTests(unittest.TestCase):
 class FamilyTests(unittest.TestCase):
     def test_an_ambiguous_identifier_is_kept_whole_and_stays_stable(self):
         for identifier in ("vendor.1.2.3-beta.bridge.4.5", "a.1.2-x.b.3.4", "vendor-1.2.3-bridge", "vendor.1.2.3-beta",
-                           "vendor.1.2.3-rc.1", "vendor.1.2.3+build.7", "vendor.1.2.3+decade1", "vendor-1.2.3-4"):
+                           "vendor.1.2.3-rc.1", "vendor.1.2.3+build.7", "vendor.1.2.3+decade1", "vendor-1.2.3-4",
+                           "vendor.1.2.3-", "vendor.1.2.3+", *DOUBLED):
             with self.subTest(identifier=identifier):
                 self.assertEqual(provenance.identifier_family(identifier), identifier)
                 self.assertEqual(provenance.identifier_family(provenance.identifier_family(identifier)), identifier)
+                self.assertTrue(provenance.identifier_kept_whole(identifier))
 
     def test_install_locations_keep_their_version_rule(self):
         # Stored install families must not change, or every approved channel would stop matching.
@@ -106,7 +126,7 @@ class GuidanceTests(unittest.TestCase):
         return verification_status.origin_guidance("codex", "identifier-changed", signed(identifier))
 
     def test_a_refused_annotated_identifier_explains_how_to_approve_it(self):
-        for identifier in ("vendor.1.2.3-hotfix", "vendor.1.2.3-beta", "vendor.1.2.3+build.7"):
+        for identifier in ("vendor.1.2.3-hotfix", "vendor.1.2.3-beta", "vendor.1.2.3+build.7", *DOUBLED):
             with self.subTest(identifier=identifier):
                 guidance = self.guidance(identifier)
                 self.assertEqual(guidance["next_command"], "omnilane resign --trust-origin codex")
@@ -125,14 +145,16 @@ class GuidanceTests(unittest.TestCase):
 
 
 class FailingStream:
-    def __init__(self, stream, failure, error):
-        self.stream, self.failure, self.error = stream, failure, error
+    def __init__(self, stream, failure, error, close_error=None):
+        self.stream, self.failure, self.error, self.close_error = stream, failure, error, close_error
 
     def __enter__(self):
         return self
 
     def __exit__(self, *args):
-        return self.stream.__exit__(*args)
+        self.stream.__exit__(*args)
+        if self.close_error:
+            raise self.close_error
 
     def write(self, data):
         if self.failure == "write":
@@ -146,6 +168,91 @@ class FailingStream:
 
     def fileno(self):
         return self.stream.fileno()
+
+
+class DoubleFailureTests(unittest.TestCase):
+    """The first failure is the one reported, on both the backup and the write descriptor."""
+
+    def run_save(self, target, *, body=None, stream_close=None, fdopen_error=None, close_error=None):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "policy.json"
+            data = op.load(path)
+            op._save(path, data)
+            before = path.read_bytes()
+            real_fdopen, real_close, opened, closes = os.fdopen, os.close, [], []
+
+            def fdopen(fd, mode="r", *args, **kwargs):
+                if mode != "wb":
+                    return real_fdopen(fd, mode, *args, **kwargs)
+                opened.append(fd)
+                if len(opened) != target:
+                    return real_fdopen(fd, mode, *args, **kwargs)
+                if fdopen_error:
+                    raise fdopen_error
+                return FailingStream(real_fdopen(fd, mode, *args, **kwargs), body and body[0],
+                                     body and body[1], stream_close)
+
+            def close(fd):
+                closes.append(fd)
+                real_close(fd)
+                if close_error and len(opened) == target:
+                    raise close_error
+            sync = body[1] if body and body[0] == "fsync" else None
+
+            def fsync(fd):
+                if sync and len(opened) == target:
+                    raise sync
+            with patch.object(op.os, "fdopen", side_effect=fdopen), patch.object(op.os, "close", side_effect=close), \
+                    patch.object(op.os, "fsync", side_effect=fsync):
+                with self.assertRaises(OSError) as caught:
+                    op._save(path, data)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(Path(directory).glob("policy.json.tmp-*")), [])
+            self.assertEqual(closes, opened)
+            with self.assertRaises(OSError) as closed:
+                os.fstat(opened[target - 1])
+            self.assertEqual(closed.exception.errno, errno.EBADF)
+            return caught.exception
+
+    def each_target(self):
+        for target, name in ((1, "backup"), (2, "write")):
+            with self.subTest(target=name):
+                yield target
+
+    def test_a_body_failure_survives_a_descriptor_close_failure(self):
+        for target in self.each_target():
+            for failure in ("write", "flush", "fsync"):
+                with self.subTest(failure=failure):
+                    error = OSError("BODY_FAIL")
+                    self.assertIs(self.run_save(target, body=(failure, error), close_error=OSError("CLOSE_FAIL")), error)
+
+    def test_an_fdopen_failure_survives_a_descriptor_close_failure(self):
+        for target in self.each_target():
+            error = OSError("FDOPEN_FAIL")
+            self.assertIs(self.run_save(target, fdopen_error=error, close_error=OSError("CLOSE_FAIL")), error)
+
+    def test_a_close_failure_alone_is_reported_once_the_body_succeeded(self):
+        for target in self.each_target():
+            error = OSError("CLOSE_FAIL")
+            self.assertIs(self.run_save(target, close_error=error), error)
+
+    def test_a_stream_close_failure_is_reported_and_the_descriptor_still_closes(self):
+        for target in self.each_target():
+            error = OSError("STREAM_CLOSE_FAIL")
+            self.assertIs(self.run_save(target, stream_close=error), error)
+
+    def test_a_body_failure_survives_a_stream_close_failure(self):
+        for target in self.each_target():
+            for failure in ("write", "flush", "fsync"):
+                with self.subTest(failure=failure):
+                    error = OSError("BODY_FAIL")
+                    self.assertIs(self.run_save(target, body=(failure, error), stream_close=OSError("STREAM_CLOSE_FAIL")), error)
+
+    def test_a_body_failure_survives_both_close_failures(self):
+        for target in self.each_target():
+            error = OSError("BODY_FAIL")
+            self.assertIs(self.run_save(target, body=("write", error), stream_close=OSError("STREAM_CLOSE_FAIL"),
+                                        close_error=OSError("CLOSE_FAIL")), error)
 
 
 class BackupDescriptorTests(unittest.TestCase):
