@@ -278,6 +278,29 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")], kill_log=kill_log)
         self.assertEqual(kill_log.read_text(), "USR1 999999\n")
 
+    def test_late_signal_past_the_deadline_says_the_worker_is_still_shutting_down(self):
+        result = self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")],
+                                 kill_log=self.home / "kill-log")
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (124, "", "close signal sent late (the holder PID appeared after close started); "
+                                   "the worker is still shutting down, run jobs close again for its exit status\n"))
+
+    def test_signal_at_start_past_the_deadline_keeps_its_message(self):
+        ready = self.home / "holder-ready"
+        self.holder = subprocess.Popen([sys.executable, "-c",
+                                        "import pathlib, signal, sys, time\n"
+                                        "signal.signal(signal.SIGUSR1, signal.SIG_IGN)\n"
+                                        "pathlib.Path(sys.argv[1]).write_text('1')\n"
+                                        "time.sleep(30)\n", str(ready)])
+        end = time.monotonic() + 5
+        while not ready.exists():
+            self.assertLess(time.monotonic(), end, "fixture holder did not start")
+            time.sleep(0.02)
+        self.publish_pid()
+        result = self.fake_close([])
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (124, "", "close signal sent, but the live worker did not terminate within 11s\n"))
+
 
 if __name__ == "__main__":
     unittest.main()

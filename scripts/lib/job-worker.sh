@@ -575,7 +575,10 @@ if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
   # With the input pump's 1s read + 0.05s write and supervisor's 1s cleanup,
   # plus up to 0.02s clock shutdown per phase, 9.91s precedes jobs close's
-  # 11s deadline (timed on a sub-second clock).
+  # 11s deadline (timed on a sub-second clock). That holds for a signal sent
+  # when close starts. A close that signals late, once the holder PID appears,
+  # keeps the same 11s, so it can return 124 while this shutdown is still in
+  # budget; its message says so.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # Close is already committed. Repeated close requests must not interrupt wait.
   trap '' USR1

@@ -613,13 +613,22 @@ case "${1:-}" in
         sleep($left < 0.1 ? $left : 0.1);
       }
     ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal")" || wait_rc=$?
-    [[ "$wait_out" != *signaled* ]] || holder_signaled=1
+    late_signaled=0
+    if [[ "$wait_out" == *signaled* ]]; then
+      holder_signaled=1
+      late_signaled=1
+    fi
     [[ "$wait_rc" -ne 2 ]] || die 1 "live inbox holder is unavailable"
     if [[ "$wait_rc" -ne 0 ]]; then
       [[ "$holder_signaled" -eq 1 ]] || {
         if [[ "$holder_rc" -eq 0 ]]; then die 1 "live inbox holder is gone"; fi
         die 1 "live inbox holder is unavailable"
       }
+      # A late signal leaves the worker less than its budget. The 11s limit is
+      # documented, so it is not restarted; the status stays 124.
+      if [[ "$late_signaled" -eq 1 ]]; then
+        die 124 "close signal sent late (the holder PID appeared after close started); the worker is still shutting down, run jobs close again for its exit status"
+      fi
       die 124 "close signal sent, but the live worker did not terminate within 11s"
     fi
     read_exit_code "$JOB_DIR/exit" || die 1 "invalid recorded exit status"
