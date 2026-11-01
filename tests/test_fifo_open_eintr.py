@@ -33,6 +33,22 @@ consume() {
 case "$PROBE_SCENARIO" in
   never) while :; do sleep 0.05; done ;;
   exit-early) exit 7 ;;
+  exit-zero) exit 0 ;;
+  reader-leaves-before-worker-opens)
+    # Freeze the worker so the helper declares ready and this reader is gone
+    # before the worker can act on it. The helper must exist first: it is the
+    # only thing that can let this open return.
+    worker=$PPID
+    group=$(ps -o pgid= -p "$worker" | tr -d ' ')
+    until pgrep -g "$group" -f O_NONBLOCK > /dev/null; do sleep 0.01; done
+    kill -STOP "$worker"
+    exec 9< "$OMNILANE_INBOX"
+    sleep 0.1
+    exec 9<&-
+    : > "$PROBE_ROOT/reader-left"
+    kill -CONT "$worker"
+    sleep 0.5
+    exit 0 ;;
   immediate) consume; report "$@"; exit 0 ;;
   late)
     until [[ -e "$PROBE_ROOT/release" ]]; do sleep 0.02; done
@@ -108,13 +124,32 @@ class FifoOpenTests(unittest.TestCase):
         except subprocess.TimeoutExpired:
             self.fail(f"worker did not finish within {timeout}s: " + self.stderr_path.read_text())
 
+    def helper_argv(self):
+        """The inbox helper's command line, or None once it is gone."""
+        listing = subprocess.run(["ps", "-A", "-ww", "-o", "pgid=,pid=,command="],
+                                 capture_output=True, text=True, check=True).stdout
+        for row in listing.splitlines():
+            pgid, pid, command = row.split(None, 2)
+            if int(pgid) == self.process.pid and command.startswith("perl") and "O_NONBLOCK" in command:
+                return int(pid), command
+        return None
+
+    def await_helper(self):
+        deadline = time.monotonic() + 5
+        while (helper := self.helper_argv()) is None:
+            self.assertLess(time.monotonic(), deadline, "helper never started")
+            time.sleep(0.01)
+        return helper
+
     def assert_clean_end(self):
         stderr = self.stderr_path.read_text()
         self.assertGreaterEqual(self.process.returncode, 0, "worker died of a signal: " + stderr)
         self.assertNotIn("Interrupted system call", stderr)
         self.assertNotIn("Traceback", stderr)
+        self.assertNotRegex(stderr, "Terminated.*perl")
         self.assertFalse((self.job / "inbox.ready").exists(), stderr)
         self.assertFalse((self.job / "runner-inbox.fifo").exists(), stderr)
+        self.assertFalse((self.job / "runner-inbox.fifo.opened").exists(), stderr)
         deadline = time.monotonic() + 3
         while time.monotonic() < deadline:
             try:
@@ -181,6 +216,73 @@ class FifoOpenTests(unittest.TestCase):
                     self.process.send_signal(signal.SIGUSR1)
                     self.finish(CLOSE_DEADLINE)
                     self.assert_clean_end()
+                    received = self.received()
+                    self.assertLessEqual(len(received), 1, received)
+                    for line in received:
+                        if line != "<EOF>":
+                            self.assertIn("offline fifo open fixture", line)
+
+    def test_usr1_after_delivery_keeps_the_single_delivered_prompt(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "until-eof")
+                deadline = time.monotonic() + 8
+                while not self.received():
+                    self.assertLess(time.monotonic(), deadline, "prompt never delivered")
+                    time.sleep(0.01)
+                self.process.send_signal(signal.SIGUSR1)
+                self.finish(CLOSE_DEADLINE)
+                self.assert_clean_end()
+                self.assertEqual(len(self.received()), 1)
+                self.assertIn("offline fifo open fixture", self.received()[0])
+
+    def test_reader_leaving_before_the_worker_opens_neither_hangs_nor_succeeds(self):
+        for shell in SHELLS:
+            for attempt in range(3):
+                with self.subTest(shell=shell, attempt=attempt):
+                    (self.root / "reader-left").unlink(missing_ok=True)
+                    self.start(shell, "reader-leaves-before-worker-opens")
+                    rc = self.finish(CLOSE_DEADLINE)
+                    self.assertTrue((self.root / "reader-left").exists(), "sync point not reached")
+                    self.assertNotEqual(rc, 0, self.stderr_path.read_text())
+                    self.assertEqual(self.received(), [])
+                    self.assert_clean_end()
+
+    def test_runner_exit_zero_before_opening_is_a_failure(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "exit-zero")
+                rc = self.finish(6)
+                self.assertEqual(rc, 1, self.stderr_path.read_text())
+                self.assertIn("prompt was not delivered", self.stderr_path.read_text())
+                self.assert_clean_end()
+
+    def test_open_deadline_defaults_to_the_call_timeout(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "never", OMNILANE_TIMEOUT="1")
+                self.assertNotEqual(self.finish(1 + CLOSE_DEADLINE), 0)
+                self.assertIn("did not open its inbox within 1s", self.stderr_path.read_text())
+                self.assert_clean_end()
+
+    def test_a_very_long_timeout_still_reaches_the_helper(self):
+        for shell in SHELLS:
+            with self.subTest(shell=shell):
+                self.start(shell, "never", OMNILANE_TIMEOUT="10000000")
+                self.assertIn(" 10000000 ", self.await_helper()[1])
+
+    def test_helper_does_not_outlive_a_killed_worker(self):
+        for shell in SHELLS:
+            for name in ("SIGTERM", "SIGHUP", "SIGKILL"):
+                with self.subTest(shell=shell, signal=name):
+                    self.start(shell, "never")
+                    helper, _ = self.await_helper()
+                    self.process.send_signal(getattr(signal, name))
+                    self.finish(5)
+                    deadline = time.monotonic() + 2
+                    while self.helper_argv() is not None:
+                        self.assertLess(time.monotonic(), deadline, f"helper {helper} survived {name}")
+                        time.sleep(0.01)
 
     def test_runner_that_never_opens_hits_the_deadline(self):
         for shell in SHELLS:

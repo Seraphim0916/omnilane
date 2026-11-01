@@ -139,8 +139,8 @@ CLOSE_TERM_GRACE=0.1
 CLOSE_KILL_GRACE=0.1
 # A slow runner start is only cut short by the budget that would end it anyway.
 RUNNER_OPEN_TIMEOUT=600
-[[ "${OMNILANE_TIMEOUT:-}" =~ ^[1-9][0-9]{0,5}$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_TIMEOUT"
-[[ "${OMNILANE_RUNNER_OPEN_TIMEOUT:-}" =~ ^[1-9][0-9]{0,5}$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_RUNNER_OPEN_TIMEOUT"
+[[ "${OMNILANE_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_TIMEOUT"
+[[ "${OMNILANE_RUNNER_OPEN_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_RUNNER_OPEN_TIMEOUT"
 runner_writer_open=0
 runner_writer_opened=0
 inbox_open=0
@@ -156,7 +156,7 @@ cleanup_live_mailbox() {
   if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
   if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
   if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
-  rm "$READY_FILE" "$HOLDER_PID_FILE" "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" 2>/dev/null || true
+  rm "$READY_FILE" "$HOLDER_PID_FILE" "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$RUNNER_INBOX_FIFO.opened" 2>/dev/null || true
 }
 
 prepare_live_mailbox() {
@@ -416,33 +416,37 @@ runner_pid=$!
 # both FIFO ends, so our open cannot block and a reader already in read() sees no
 # EOF, and says "ready". The parent only runs builtins on the helper's 20ms ticks,
 # so close, runner exit and the deadline (helper EOF) all converge. The helper dies
-# of SIGPIPE on its first tick after the parent closes FD 8.
+# of SIGPIPE on its first tick after the parent closes FD 8. Once we hold the writer
+# the helper's reader must be gone before the prompt is written, or a reader that
+# already left would not fail the write. Bash 3.2 cannot wait for a process
+# substitution and its $! is not the helper, so a marker file tells the helper to
+# leave and its EOF is the receipt.
 open_runner_writer() {
-  local helper_pid line read_rc open_tries=0 helper_ready=0
+  local helper_ready=0 line read_rc open_tries=0
+  local release_marker="$RUNNER_INBOX_FIFO.opened"
   exec 8< <(perl -MFcntl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
     $| = 1;
-    my ($path, $limit) = @ARGV;
+    my ($path, $limit, $marker) = @ARGV;
     my $deadline = clock_gettime(CLOCK_MONOTONIC) + $limit;
     my ($writer, $reader);
     while (1) {
       if (!$writer) {
         if (sysopen($writer, $path, O_WRONLY | O_NONBLOCK)) {
           sysopen($reader, $path, O_RDONLY | O_NONBLOCK) or exit 2;
-          print "ready\n";
         } else {
           undef $writer;
           exit 2 unless $!{ENXIO};
           exit 1 if clock_gettime(CLOCK_MONOTONIC) >= $deadline;
         }
       }
-      print ".\n";
+      exit 0 if -e $marker;
+      print $writer ? "ready\n" : ".\n";
       sleep(0.02);
     }
-  ' "$RUNNER_INBOX_FIFO" "$RUNNER_OPEN_TIMEOUT" 6<&- 7>&-)
-  helper_pid=$!
+  ' "$RUNNER_INBOX_FIFO" "$RUNNER_OPEN_TIMEOUT" "$release_marker" 6<&- 7>&-)
   while [[ "$close_requested" -eq 0 && "$runner_writer_opened" -eq 0 ]]; do
     if IFS= read -r line <&8; then
-      [[ "$line" == "ready" ]] && helper_ready=1
+      if [[ "$line" == "ready" ]]; then helper_ready=1; fi
       if [[ "$helper_ready" -eq 1 ]]; then
         if exec 3> "$RUNNER_INBOX_FIFO"; then
           runner_writer_open=1
@@ -463,8 +467,12 @@ open_runner_writer() {
       fi
     fi
   done
+  if [[ "$runner_writer_opened" -eq 1 ]]; then
+    (umask 077; : > "$release_marker")
+    while IFS= read -r line <&8 || [[ $? -gt 128 ]]; do :; done
+    rm "$release_marker" 2>/dev/null || true
+  fi
   exec 8<&-
-  wait "$helper_pid" 2>/dev/null || true
   if [[ "$runner_writer_opened" -eq 0 ]]; then release_runner_reader; fi
 }
 
@@ -720,6 +728,10 @@ elif [[ "$natural_runner_exit" -eq 1 ]]; then
   # into success because an earlier turn happened to emit a result event.
   rc="$runner_rc"
   if [[ "$rc" -eq 0 && "$close_drain_failed" -ne 0 ]]; then rc=1; fi
+  if [[ "$rc" -eq 0 && "$runner_writer_opened" -eq 0 ]]; then
+    rc=1
+    emit_mode_notice "omnilane: $VENDOR runner exited before opening its inbox; the prompt was not delivered" || true
+  fi
 elif [[ "$close_requested" -eq 1 ]]; then
   # A vendor-emitted result always stands. A transcript the normalizer recovered
   # stands only for an idle-cap close whose runner still exited on its own: that
