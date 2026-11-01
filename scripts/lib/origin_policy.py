@@ -234,12 +234,12 @@ def _save(path, data):
     fd, name = tempfile.mkstemp(prefix=path.name + ".tmp-", dir=str(path.parent))
     try:
         try:
-            stream = os.fdopen(fd, "wb")
+            opened = os.fdopen(fd, "wb")
         except BaseException:
             with contextlib.suppress(OSError):
                 os.close(fd)
             raise
-        with stream:
+        with opened as stream:
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
