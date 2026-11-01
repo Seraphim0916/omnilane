@@ -229,7 +229,7 @@ def advisor_disabled(vendor: str):
 
 
 def engine_view(vendor: str, record: dict) -> dict:
-    """What the pinned engine may read of a failed codex probe: codex's final error alone.
+    """What the pinned engine may read of a failed codex probe: codex's final error, if any.
 
     A codex run also connects every MCP server its plugins declare, and those log
     their own 401s to stderr. The engine reads stderr, and verdict_reason's
@@ -238,7 +238,12 @@ def engine_view(vendor: str, record: dict) -> dict:
     """
     if vendor != "codex" or record.get("verdict") == "pass":
         return record
-    reason = str(record.get("verdict_reason") or "").split("; stderr-review:", 1)[0]
+    reason, _, review = str(record.get("verdict_reason") or "").partition("; stderr-review: ")
+    if "; codex-event:" not in reason:
+        # With no final event stderr is all there is; codex can print a login error there and exit.
+        kept = [line for line in review.split(" | ") if line and "mcp" not in line.lower()]
+        if kept:
+            reason += "; " + " | ".join(kept)
     view = {key: value for key, value in record.items() if key not in ("stdout", "stderr")}
     view["verdict_reason"] = reason
     return view

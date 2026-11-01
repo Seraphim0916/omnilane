@@ -16,6 +16,8 @@ import transport_compat
 
 MCP_401 = ('2026-11-01T04:38:51.174791Z ERROR rmcp::transport::worker: worker quit with fatal: '
            'Transport channel closed, when UnexpectedServerResponse("HTTP 401: Authentication Failed")\n')
+# Short enough to survive probe.py's 120-character stderr review with its 401 intact.
+MCP_401_SHORT = "ERROR rmcp: HTTP 401: Authentication Failed\n"
 TOKEN = probe_sweep.TOKENS["codex"]
 OK = json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": TOKEN}})
 
@@ -73,6 +75,48 @@ class CodexVerdictTests(Harness):
         self.assertEqual(report["failed"], [self.first["config_id"]])
         self.assertEqual(len(self.calls), len(probe_sweep.plan("codex")))
         self.assertTrue((self.root / "evidence" / f"{self.first['name']}.json").is_file())
+
+    def test_an_mcp_401_inside_the_stderr_review_is_not_a_login_verdict(self):
+        report = self.sweep(self.first_fails(failed(UNSUPPORTED), stderr=MCP_401_SHORT))
+        self.assertEqual(report["outcome"], "done")
+        self.assertEqual(report["failed"], [self.first["config_id"]])
+        descriptor = json.loads((self.root / "evidence" / f"{self.first['name']}.json").read_text())
+        self.assertIn("401", descriptor["verdict_reason"])
+
+    def test_a_login_error_only_on_stderr_is_still_not_logged_in(self):
+        report = self.sweep(lambda name: ("", "Error: Not logged in. Run codex login\n", 1))
+        self.assertEqual(report["outcome"], "unprobeable")
+        self.assertIn("log in", report["detail"])
+        self.assertEqual(self.calls, [self.first["name"]])
+
+    def test_an_mcp_401_with_no_final_event_is_not_a_login_verdict(self):
+        report = self.sweep(self.first_fails("", stderr=MCP_401_SHORT))
+        self.assertEqual(report["outcome"], "done")
+        self.assertEqual(report["failed"], [self.first["config_id"]])
+
+    def test_a_transient_final_error_is_retried_once(self):
+        for status in ("503", "429"):
+            with self.subTest(status=status):
+                self.calls.clear()
+
+                def outputs(name, message=f"exceeded retry limit, last status: {status}"):
+                    if name == self.first["name"] and self.calls.count(name) == 1:
+                        return failed(message), "", 1
+                    return OK, "", 0
+                # Without retry_now run_sweep's cooldown answers the retry from the first failure.
+                report = self.sweep(outputs, retry_now=True)
+                self.assertEqual((report["outcome"], report["failed"]), ("done", []))
+                self.assertEqual(self.calls.count(self.first["name"]), 2)
+
+    def test_a_final_event_is_read_up_to_its_200_character_limit(self):
+        # probe.codex_failure keeps 200 characters, so a status past them goes unseen.
+        inside = "x" * 150 + " 401 unauthorized"
+        self.assertEqual(self.sweep(self.first_fails(failed(inside), stderr=""))["outcome"], "unprobeable")
+        self.calls.clear()
+        past = "x" * 210 + " 401 unauthorized"
+        report = self.sweep(self.first_fails(failed(past), stderr=""))
+        self.assertEqual(report["outcome"], "done")
+        self.assertEqual(report["failed"], [self.first["config_id"]])
 
     def test_an_mcp_401_does_not_cost_a_retry_or_a_login_verdict_on_a_pass(self):
         report = self.sweep(lambda name: (OK, MCP_401, 0))
