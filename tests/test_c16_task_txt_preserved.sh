@@ -301,6 +301,76 @@ for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
         assert not list(job.glob("task.txt.copies.*"))
         print("PASS pre-existing %s %s preserved" % (name, kind), flush=True)
 ' "$TEST_ROOT" "$ROOT"
+# Direct-API vendors reach the shared runner through a wrapper that execs it, and
+# EXIT cleanup must not be able to hold the job's exit receipt. Run the production
+# worker on the fixture's libraries; the fakes are a curl and a python3 on PATH.
+python3 -B -c '
+import json, os, pathlib, shutil, signal, subprocess, sys, time
+base, root = map(pathlib.Path, sys.argv[1:])
+runtime = base / "runtime"
+worker = root / "scripts/lib/job-worker.sh"
+payload = b"0123456789abcdef" * 20000
+failures = []
+def new_job(name, size):
+    job = base / name
+    job.mkdir()
+    (job / "task.txt").write_bytes(payload[:size])
+    return job
+def environment(job, **extra):
+    return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="single-shot", OMNILANE_JOB_WORKER_REPO=str(runtime), CAPTURE=str(job / "received"), **extra)
+def command(vendor, job, path=worker):
+    return ["/bin/bash", str(path), vendor, "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
+def private_dirs(job):
+    return sorted(job.glob("task.txt.copies.*"))
+def check(name, case, *args):
+    try:
+        case(*args)
+        print("PASS " + name, flush=True)
+    except (AssertionError, OSError, subprocess.SubprocessError) as error:
+        failures.append(name)
+        print("FAIL %s: %s" % (name, error), flush=True)
+
+fake_bin = base / "direct-api-bin"
+fake_bin.mkdir()
+(base / "direct-api-response.json").write_text(json.dumps({"choices": [{"message": {"content": "fixture result"}}]}))
+(fake_bin / "curl").write_text("#!/bin/bash\nfor arg in \"$@\"; do case \"$arg\" in @*.request.json) /bin/cp \"${arg#@}\" \"$CAPTURE\" ;; esac; done\n/bin/cat \"" + str(base / "direct-api-response.json") + "\"\n")
+(fake_bin / "curl").chmod(0o755)
+def direct_api_case(vendor, size):
+    cap = 140000
+    job = new_job("direct-api-%s-%s" % (vendor, size), size)
+    env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], **{vendor.upper() + "_API_KEY": "fixture-key"})
+    result = subprocess.run(command(vendor, job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    data = payload[:size]
+    assert (job / "task.txt").read_bytes() == data
+    assert (job / "out.txt").read_text() == "fixture result"
+    assert not private_dirs(job), [sorted(p.name for p in d.iterdir()) for d in private_dirs(job)]
+    sent = json.loads((job / "received").read_text())["messages"][0]["content"].encode()
+    original = subprocess.check_output(["wc", "-c"], input=data).decode().rstrip("\n")
+    expected = data if size <= cap else data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original).encode() + data[-(cap // 4):]
+    assert sent == expected, "direct API truncation mismatch"
+for vendor in ("openrouter", "deepseek", "zai", "mistral", "groq", "cerebras"):
+    check("direct API %s over the cap removes its copies" % vendor, direct_api_case, vendor, 200000)
+for size in (4096, 140000, 140001):
+    check("direct API groq %s bytes removes its copies" % size, direct_api_case, "groq", size)
+def wrapper_with_extra_line_case():
+    # Identity checks must keep what an untracked runner replaced; only a pure wrapper is rerouted.
+    source = (runtime / "scripts/runners/run-groq.sh").read_text()
+    custom = runtime / "scripts/runners/run-groqplus.sh"
+    custom.write_text(source.replace("export OMNILANE_OAI_VENDOR=groq\n", "export OMNILANE_OAI_VENDOR=groq\necho wrapper-extra-line >&2\n"))
+    custom.chmod(0o755)
+    job = new_job("direct-api-extra-line", 200000)
+    env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], GROQ_API_KEY="fixture-key")
+    result = subprocess.run(command("groqplus", job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    assert b"wrapper-extra-line" in result.stderr, result.stderr
+    assert b"omnilane: left foreign file task.txt.runner" in result.stderr, result.stderr
+    private = private_dirs(job)
+    assert len(private) == 1 and (private[0] / "task.txt.runner").exists(), private
+check("wrapper with an extra line keeps the plain exec and reports its copy", wrapper_with_extra_line_case)
+
+assert not failures, "direct-API and cleanup-limit regressions: " + "; ".join(failures)
+' "$TEST_ROOT" "$ROOT"
 # Exercise the actual worker and both test scripts with Bash 3.2 nounset
 # failures. Prefix fixtures retain each scripts own EXIT handler, but skip
 # expensive test bodies; no production fault-injection switch is needed.

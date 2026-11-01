@@ -214,13 +214,22 @@ truncate_payload() {
 # A one-shot DEBUG hook avoids wrapping source (which corrupts BASH_SOURCE
 # on Bash 3.2). It is removed before any runner work or trap setup occurs.
 run_job_runner() {
+  local runner="$RUNNER" exec_compat='exec "$(dirname "${BASH_SOURCE[0]}")/run-openai-compat.sh" "$@"'
   # Custom runners without the shared prompt helpers run unchanged.
   IFS= read -r runner_header < "$RUNNER"
   case "$runner_header" in
     '#!'*bash*) ;;
     *) exec "$RUNNER" "$@" ;;
   esac
-  if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$RUNNER"; then
+  # A direct-API wrapper only names its vendor before exec, which would drop the
+  # tracked helpers. Load the shared runner here, but only if the wrapper does
+  # nothing else; any other content keeps the plain exec and its copies are reported.
+  if grep -Fxq "$exec_compat" "$RUNNER" &&
+    [[ -z "$(grep -Fxv -e "$exec_compat" -e 'set -euo pipefail' -e "export OMNILANE_OAI_VENDOR=$VENDOR" "$RUNNER" | grep -Ev '^(#.*)?$' || true)" ]]; then
+    export OMNILANE_OAI_VENDOR="$VENDOR"
+    runner="${RUNNER%/*}/run-openai-compat.sh"
+  fi
+  if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$runner"; then
     exec "$RUNNER" "$@"
   fi
   export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_IDENTITIES
@@ -235,7 +244,7 @@ run_job_runner() {
       set +T
     fi'\'' DEBUG
     builtin source "$runner" "$@"
-  ' bash "$(declare -f owned_prompt_operation worker_prompt_file truncate_payload untracked_truncate_payload)" "$RUNNER" "$@"
+  ' bash "$(declare -f owned_prompt_operation worker_prompt_file truncate_payload untracked_truncate_payload)" "$runner" "$@"
 }
 RUNNER_PROMPT_FILE="$PROMPT_COPY_DIR/task.txt.runner"
 owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt.runner || exit 1
