@@ -72,8 +72,8 @@ class OriginPublishOrderTests(unittest.TestCase):
                 created.append(result)
                 return result
 
-            def open_stream(fd, mode):
-                stream = fdopen(fd, mode)
+            def open_stream(fd, mode, **kwargs):
+                stream = fdopen(fd, mode, **kwargs)
                 if mode != "wb" or not created or fd != created[0][0]:
                     return stream
                 wrapped = PublishStream(stream, events, failure)

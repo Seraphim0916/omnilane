@@ -30,6 +30,7 @@ class OriginWriteRaceTests(unittest.TestCase):
                         patch.object(origin.os, "open", return_value=16), \
                         patch.object(origin.os, "fdopen", return_value=manager), \
                         patch.object(origin.os, "fsync"), \
+                        patch.object(origin.os, "close") as close, \
                         patch.object(origin.tempfile, "mkstemp", return_value=(17, temporary)), \
                         patch.object(origin.os, "replace") as replace, \
                         patch.object(origin.os.path, "exists", return_value=before != after), \
@@ -48,6 +49,7 @@ class OriginWriteRaceTests(unittest.TestCase):
                     payload = (json.dumps(data, indent=2) + "\n").encode()
                     self.assertEqual(stream.write.call_args_list,
                                      ([call(before)] if before is not None else []) + [call(payload)])
+                    close.assert_called_once_with(17)
 
 
 if __name__ == "__main__":

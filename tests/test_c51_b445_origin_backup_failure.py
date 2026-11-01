@@ -52,8 +52,8 @@ class OriginBackupFailureTests(unittest.TestCase):
                 streams = []
                 fdopen = origin.os.fdopen
 
-                def open_stream(fd, mode):
-                    stream = fdopen(fd, mode)
+                def open_stream(fd, mode, **kwargs):
+                    stream = fdopen(fd, mode, **kwargs)
                     if mode != "wb":
                         return stream
                     wrapped = BackupStream(stream, failure)

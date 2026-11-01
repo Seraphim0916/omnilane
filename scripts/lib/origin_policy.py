@@ -218,6 +218,18 @@ def _lock(path):
         os.close(fd)
 
 
+def _write_descriptor(fd, content):
+    # closefd=False: fdopen can close fd itself before raising, and then closing it
+    # here could hit whatever reused the number. This function alone owns fd.
+    try:
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+    finally:
+        os.close(fd)
+
+
 def _save(path, data):
     validate(data)
     payload = (json.dumps(data, indent=2) + "\n").encode()
@@ -233,16 +245,7 @@ def _save(path, data):
             os.fsync(stream.fileno())
     fd, name = tempfile.mkstemp(prefix=path.name + ".tmp-", dir=str(path.parent))
     try:
-        try:
-            opened = os.fdopen(fd, "wb")
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.close(fd)
-            raise
-        with opened as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_descriptor(fd, payload)
         if _read(path) != raw:
             raise OriginError("origin policy changed during write")
         os.replace(name, path)
