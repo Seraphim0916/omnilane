@@ -1002,7 +1002,8 @@ if close_wait > 11.0:
 if not 1.05 + sum(timeouts.values()) + outer_budget + supervisor_grace < close_wait - 1:
     raise AssertionError("worker close plus supervisor cleanup must precede jobs close's quantized deadline")
 cleanup_limit = float(re.search(r'^PROMPT_CLEANUP_LIMIT=([0-9.]+)$', worker, re.MULTILINE).group(1))
-if not outer_budget + cleanup_limit < close_wait:
+# 0.06 is the 0.02s clock shutdown of each of the three close phases.
+if not 1.05 + sum(timeouts.values()) + outer_budget + supervisor_grace + 0.06 + cleanup_limit < close_wait:
     raise AssertionError("prompt copy cleanup must fit between the worker close budget and jobs close")
 PY
   then
