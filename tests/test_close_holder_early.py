@@ -358,6 +358,29 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout, result.stderr),
                          (0, "already closed (exit 0)\n", ""))
 
+    def test_receipt_written_as_its_writer_is_probed_is_not_missed(self):
+        # The receipt lands while close probes the writer, which is then dead.
+        # kill is a bash builtin, so PATH cannot intercept it; a function from
+        # BASH_ENV can. Close has to look for the receipt after the probe.
+        writer_pid = self.dead_pid()
+        bash_env = self.home / "bash-env"
+        bash_env.write_text(textwrap.dedent("""\
+            kill() {
+              if [[ "$1" == "-0" && "$2" == "$CLOSE_TEST_WRITER_PID" ]]; then
+                printf '0\\n' > "$CLOSE_TEST_RECEIPT.tmp"
+                /bin/mv "$CLOSE_TEST_RECEIPT.tmp" "$CLOSE_TEST_RECEIPT"
+              fi
+              builtin kill "$@"
+            }
+        """))
+        (self.job / "inbox.holder.pid").write_text(f"{self.dead_pid()}\n")
+        (self.job / "pid").write_text(f"{writer_pid}\n")
+        env = dict(self.env, BASH_ENV=str(bash_env), CLOSE_TEST_WRITER_PID=str(writer_pid),
+                   CLOSE_TEST_RECEIPT=str(self.job / "exit"))
+        result, _ = self.timed_close(env)
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (0, "already closed (exit 0)\n", ""))
+
     def test_late_signal_past_the_deadline_says_the_worker_is_still_shutting_down(self):
         result = self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")],
                                  kill_log=self.home / "kill-log")
