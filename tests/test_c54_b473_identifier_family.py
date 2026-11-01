@@ -1,4 +1,4 @@
-"""Signing identifier normalization blanks versions, keeps other text and is stable."""
+"""Signing identifier normalization blanks plain versions, keeps other text and is stable."""
 import offline_env  # noqa: F401
 from pathlib import Path
 import sys
@@ -11,9 +11,9 @@ import cli_provenance as provenance
 class IdentifierFamilyTests(unittest.TestCase):
     CASES = (
         ("vendor.1.2.3.bridge.4.5", "vendor.<version>.bridge.<version>"),
-        ("vendor.1.2.3-beta.1", "vendor.<version>"),
-        ("vendor.1.2.3+build.7", "vendor.<version>"),
-        ("vendor.1.2.3-rc.1+build.7", "vendor.<version>"),
+        ("vendor.1.2.3-beta.1", "vendor.1.2.3-beta.1"),
+        ("vendor.1.2.3+build.7", "vendor.1.2.3+build.7"),
+        ("vendor.1.2.3-rc.1+build.7", "vendor.1.2.3-rc.1+build.7"),
         ("vendor-1.2.3", "vendor-<version>"),
         ("vendor.bridge", "vendor.bridge"),
         ("vendor.2.bridge", "vendor.2.bridge"),
@@ -35,7 +35,7 @@ class IdentifierFamilyTests(unittest.TestCase):
 
     def test_identifiers_differing_only_by_version_share_a_family(self):
         self.assertEqual(provenance.identifier_family("vendor.1.2.3.bridge.4.5"),
-                         provenance.identifier_family("vendor.9.0.bridge.10.11.12-rc.1"))
+                         provenance.identifier_family("vendor.9.0.bridge.10.11.12"))
 
 
 if __name__ == "__main__":

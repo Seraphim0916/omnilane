@@ -17,7 +17,7 @@ UNSIGNED = "unsigned"
 # location may be re-probed unattended. Nothing else is waived.
 TRUST_ADHOC = "adhoc-in-install-location"
 # 1.0.25 -> 1.0.30 inside a path is an update; a different directory is not.
-VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)*")
+VERSION_SEGMENT = re.compile(r"\d+(?:\.\d+)+(?P<annotation>(?:[-+][0-9A-Za-z.]+)*)")
 
 
 MACH_O = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
@@ -93,8 +93,17 @@ def facts(path: Path | str, runner=subprocess.run) -> dict:
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
         return result
 def identifier_family(identifier: str) -> str:
-    """Normalize a codesign identifier, separately from filesystem locations."""
-    return VERSION_SEGMENT.sub("<version>", identifier)
+    """Normalize a codesign identifier, separately from filesystem locations.
+
+    Only a plain version is blanked. An annotation could always name another program:
+    "1.2.3-beta.bridge.4.5" or "1.2.3+decade1" prove nothing about the product, so such
+    an identifier stays whole and needs its own approval.
+    """
+    return identifier if identifier_kept_whole(identifier) else VERSION_SEGMENT.sub("<version>", identifier)
+
+
+def identifier_kept_whole(identifier: str) -> bool:
+    return any(match["annotation"] for match in VERSION_SEGMENT.finditer(identifier))
 
 
 def family(path: Path | str) -> str:

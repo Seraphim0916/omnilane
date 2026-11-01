@@ -238,11 +238,7 @@ def _save(path, data):
     raw = _read(path)
     if raw is not None:
         backup = Path(str(path) + ".before-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
-        fd = os.open(str(backup), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_descriptor(os.open(str(backup), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), raw)
     fd, name = tempfile.mkstemp(prefix=path.name + ".tmp-", dir=str(path.parent))
     try:
         _write_descriptor(fd, payload)

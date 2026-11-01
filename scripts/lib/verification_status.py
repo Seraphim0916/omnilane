@@ -87,6 +87,11 @@ def origin_guidance(vendor, reason, current=None):
     detail = json.dumps(observed, ensure_ascii=True)
     message = f"{vendor}: {en}. This attempt did not execute the CLI. Observed: {detail}. "
     message_zh = f"{vendor}：{zh}。這次沒有執行該執行檔。觀察值：{detail}。"
+    if reason == "identifier-changed" and isinstance(current.get("identifier"), str):
+        import cli_provenance
+        if cli_provenance.identifier_kept_whole(current["identifier"]):
+            message += "Its version annotation could also name a different program, so each new identifier needs its own approval. "
+            message_zh += "它的版本附註也可能是另一支程式的名稱，所以每個新的識別名稱都要各自核准。"
     if command:
         message += f"After reviewing the source, run: {command}. Then run omnilane resign --vendor {vendor}."
         message_zh += f"查明來源後執行：{command}；再執行 omnilane resign --vendor {vendor}。"

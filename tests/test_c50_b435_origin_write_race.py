@@ -49,7 +49,8 @@ class OriginWriteRaceTests(unittest.TestCase):
                     payload = (json.dumps(data, indent=2) + "\n").encode()
                     self.assertEqual(stream.write.call_args_list,
                                      ([call(before)] if before is not None else []) + [call(payload)])
-                    close.assert_called_once_with(17)
+                    self.assertEqual(close.call_args_list,
+                                     ([call(16)] if before is not None else []) + [call(17)])
 
 
 if __name__ == "__main__":
