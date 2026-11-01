@@ -253,9 +253,9 @@ RECORD="$record" EXPECTED_ID="$job_id" EXPECTED_WORKDIR="$workdir" perl -MJSON::
   die "tail lost suffix\n" unless $r->{tail} =~ /THE-END\n\z/;
 ' || fail "record JSON, privacy, or byte cap is wrong"
 
-first="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+first="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ "$first" == *"$job_id"* && "$first" == *"triage"* && "$first" == *"exec"* && "$first" == *"FAILED"* && "$first" == *"exit=7"* && "$first" == *"THE-END"* ]] || fail "first delivery is incomplete: $first"
-second="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+second="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ -z "$second" ]] || fail "record was delivered twice: $second"
 [[ -f "$home/inbox/consumed/$job_id.json" ]] || fail "claimed record was not moved to consumed"
 
@@ -263,21 +263,21 @@ unrelated="$TEST_ROOT/unrelated"
 mkdir -p "$unrelated"
 unrelated_id="20260828-000001-1-1"
 record_json "$home/inbox/$unrelated_id.json" "$unrelated_id" "$unrelated"
-targeted="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+targeted="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ -z "$targeted" && -f "$home/inbox/$unrelated_id.json" ]] || fail "unrelated record was claimed"
 
 prefix="$TEST_ROOT/project-other"
 mkdir -p "$prefix"
 prefix_id="20260828-000002-1-1"
 record_json "$home/inbox/$prefix_id.json" "$prefix_id" "$prefix"
-prefix_out="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+prefix_out="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ -z "$prefix_out" && -f "$home/inbox/$prefix_id.json" ]] || fail "path-prefix collision was claimed"
 
 subdir="$workdir/subdir"
 mkdir -p "$subdir"
 subdir_id="20260828-000003-1-1"
 record_json "$home/inbox/$subdir_id.json" "$subdir_id" "$subdir"
-subdir_out="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+subdir_out="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ "$subdir_out" == *"$subdir_id"* ]] || fail "subdirectory record was not delivered"
 
 bounded_home="$TEST_ROOT/bounded"
@@ -287,7 +287,7 @@ for n in $(seq 1 12); do
   id="$(printf '20260828-0100%02d-1-1' "$n")"
   record_json "$bounded_home/inbox/$id.json" "$id" "$workdir"
 done
-bounded="$(OMNILANE_HOME="$bounded_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+bounded="$(OMNILANE_HOME="$bounded_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 blocks="$(printf '%s\n' "$bounded" | grep -c '^Omnilane completion:')"
 [[ "$blocks" == "10" ]] || fail "consumer printed $blocks records instead of 10"
 [[ "$bounded" == *"2 matching completion records withheld"* ]] || fail "withheld count missing: $bounded"
@@ -300,7 +300,7 @@ for n in $(seq 1 205); do
 done
 retention_id="20260828-020000-1-1"
 record_json "$bounded_home/inbox/$retention_id.json" "$retention_id" "$workdir"
-OMNILANE_HOME="$bounded_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" >/dev/null
+OMNILANE_HOME="$bounded_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null >/dev/null
 [[ "$(find "$bounded_home/inbox/consumed" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" == "200" ]] || fail "consumed retention is not 200"
 [[ ! -e "$bounded_home/inbox/consumed/20260827-0000001-1-1.json" ]] || fail "oldest consumed record was retained"
 [[ -e "$bounded_home/inbox/consumed/20260827-0000205-1-1.json" && -e "$bounded_home/inbox/consumed/$retention_id.json" ]] || fail "recent consumed records were pruned"
@@ -358,7 +358,7 @@ WORKDIR_VALUE="$workdir" perl -MJSON::PP -e '
   close $fh or die $!;
 ' "$hostile_home/inbox/$hostile_id.json"
 chmod 600 "$hostile_home/inbox/$hostile_id.json"
-hostile="$(OMNILANE_HOME="$hostile_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+hostile="$(OMNILANE_HOME="$hostile_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ "$(printf '%s\n' "$hostile" | grep -c '^Omnilane completion:')" == "1" ]] ||
   fail "hostile tail forged a completion header: $hostile"
 printf '%s' "$hostile" | LC_ALL=C grep -q $'\x1b\|\x07\|\r' &&
@@ -369,10 +369,10 @@ printf '%s' "$hostile" | grep -q $' \| \|‮' &&
 empty_home="$TEST_ROOT/empty"
 mkdir -p "$empty_home/inbox"
 chmod 700 "$empty_home/inbox"
-empty="$(OMNILANE_HOME="$empty_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+empty="$(OMNILANE_HOME="$empty_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ -z "$empty" ]] || fail "empty inbox printed output"
 
-missing="$(OMNILANE_HOME="$TEST_ROOT/missing" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh")"
+missing="$(OMNILANE_HOME="$TEST_ROOT/missing" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null)"
 [[ -z "$missing" ]] || fail "missing inbox printed output"
 
 session_record_json() {
@@ -612,7 +612,7 @@ test_reader_repairs_invalid_utf8() {
   chmod 600 "$record"
 
   output="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
-    "$ROOT/hooks/report-completions.sh")"
+    "$ROOT/hooks/report-completions.sh" </dev/null)"
   [[ "$output" == *"Omnilane completion: job=$job_id"* ]] \
     || fail "invalid UTF-8 record was not delivered: $output"
   [[ -f "$home/inbox/consumed/$job_id.json" ]] \
@@ -631,7 +631,7 @@ test_reader_consumes_unparseable_record() {
   chmod 600 "$record"
 
   output="$(OMNILANE_HOME="$home" CLAUDE_PROJECT_DIR="$workdir" \
-    "$ROOT/hooks/report-completions.sh")"
+    "$ROOT/hooks/report-completions.sh" </dev/null)"
   expected="Omnilane completion: FAILED job=$job_id lane=unknown vendor=unknown exit=1"
   [[ "$output" == *"$expected"* && "$output" == *"record was unreadable"* ]] \
     || fail "unparseable record did not produce fallback notice: $output"

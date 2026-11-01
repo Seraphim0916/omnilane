@@ -9,6 +9,10 @@ fi
 shift
 set -u
 
+# No case reads the inherited stdin, and a child that does (the completion hook
+# reads its payload until EOF) would wait forever on an open pipe.
+exec </dev/null
+
 # Tests own their dispatch environment. Inherited recursion guards or watchdog
 # overrides must not turn a healthy suite into a host-dependent false failure.
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
