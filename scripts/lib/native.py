@@ -570,7 +570,11 @@ def job_command(args):
     lock_fd = os.open(job / "native.lock", os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(lock_fd, "r+") as lock:
         check(stat.S_ISREG(os.fstat(lock.fileno()).st_mode), "invalid native lock")
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        # Only a transition takes the lock. atomic_json replaces native.json in one
+        # step, so a reader always gets a whole record, and a holder that has stopped
+        # cannot hang jobs list or wait.
+        if args.action in ("complete-native", "cancel"):
+            fcntl.flock(lock, fcntl.LOCK_EX)
         state = read_json(job / "native.json")
         check(isinstance(state, dict) and state.get("job_id") == args.job_id
               and state.get("executor") == "native"
@@ -588,42 +592,43 @@ def job_command(args):
                 # any agent already spawned and must stop it with its own tool.
                 state.update(state="cancelled", exit_code=143, finished=stamp())
             atomic_json(job / "native.json", state)
-        public_state, reason = observed_job_state(job, state)
-        if args.action == "read-state":
-            # A single locked observation for the shell's list/stats/recommend/wait.
-            print(f"{public_state}\t{json.dumps(state.get('exit_code'))}\t{reason}")
-            return 0
-        if args.action == "list-state":
-            print(public_state)
-            return 0
-        if args.action == "result":
-            check(public_state != "expired", f"native job expired ({reason}); no recorded result; ingest caller result first")
-            check(public_state != "pending", "native job pending; ingest caller result first")
-        summary = {"id": args.job_id, "state": public_state, "native_state": state["state"],
-                   "executor": "native", "executor_reason": state["executor_reason"],
-                   "exit_code": state.get("exit_code"), "agent_id": state["agent_id"],
-                   "vendor": state["vendor"], "model": state["model"], "effort": state["effort"],
-                   "harness": state["harness"]}
-        if reason:
-            summary["reason"] = reason
-        summary.update(agent_strategy=state.get("agent_strategy", "new"),
-                       existing_agent_id=state.get("existing_agent_id"),
-                       preserve_existing_context=state.get("preserve_existing_context", False))
-        if state.get("inherit"):
-            summary.update(inherit=True,
-                           caller_identity_verified=state.get("caller_identity_verified", True),
-                           satisfies_lane_target=False)
-        if args.action == "result":
-            summary["completion"] = state.get("completion")
-        if args.json:
-            print(json_text({"schema_version": 1, "command": args.action, "ok": True, "job": summary}), end="")
-        elif args.action == "result":
-            print(state.get("completion", {}).get("result", "cancelled by caller"))
-        elif public_state == "expired":
-            print(f"expired ({reason})")
-        else:
-            print(json_text(summary), end="")
-        return state.get("exit_code", 0) if args.action == "result" else 0
+    # Everything below can block on a reader that stopped reading, so it stays outside the lock.
+    public_state, reason = observed_job_state(job, state)
+    if args.action == "read-state":
+        # A single observation for the shell's list/stats/recommend/wait.
+        print(f"{public_state}\t{json.dumps(state.get('exit_code'))}\t{reason}")
+        return 0
+    if args.action == "list-state":
+        print(public_state)
+        return 0
+    if args.action == "result":
+        check(public_state != "expired", f"native job expired ({reason}); no recorded result; ingest caller result first")
+        check(public_state != "pending", "native job pending; ingest caller result first")
+    summary = {"id": args.job_id, "state": public_state, "native_state": state["state"],
+               "executor": "native", "executor_reason": state["executor_reason"],
+               "exit_code": state.get("exit_code"), "agent_id": state["agent_id"],
+               "vendor": state["vendor"], "model": state["model"], "effort": state["effort"],
+               "harness": state["harness"]}
+    if reason:
+        summary["reason"] = reason
+    summary.update(agent_strategy=state.get("agent_strategy", "new"),
+                   existing_agent_id=state.get("existing_agent_id"),
+                   preserve_existing_context=state.get("preserve_existing_context", False))
+    if state.get("inherit"):
+        summary.update(inherit=True,
+                       caller_identity_verified=state.get("caller_identity_verified", True),
+                       satisfies_lane_target=False)
+    if args.action == "result":
+        summary["completion"] = state.get("completion")
+    if args.json:
+        print(json_text({"schema_version": 1, "command": args.action, "ok": True, "job": summary}), end="")
+    elif args.action == "result":
+        print(state.get("completion", {}).get("result", "cancelled by caller"))
+    elif public_state == "expired":
+        print(f"expired ({reason})")
+    else:
+        print(json_text(summary), end="")
+    return state.get("exit_code", 0) if args.action == "result" else 0
 
 
 def main():

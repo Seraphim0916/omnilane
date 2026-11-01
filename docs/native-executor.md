@@ -354,7 +354,9 @@ Data lives under `$OMNILANE_HOME/jobs/ID/`: `task.txt`, `meta.json`,
 final ID under a private publication lock. Listing only accepts final ID names,
 so it never observes construction or an interrupted hidden stage. Normal
 failures clean only the creator's own stage; collisions leave the existing
-final directory untouched. The context itself and raw provider logs are not
+final directory untouched. `native.lock` serializes `complete-native` and
+`cancel` only: each replaces `native.json` in one step, so readers need no lock,
+and no command writes output while holding it. The context itself and raw provider logs are not
 stored. Completion is a
 caller attestation, not independent backend authentication or proof that the
 model honored the task; the parent still verifies evidence. Do not submit
