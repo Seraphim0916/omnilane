@@ -85,6 +85,7 @@ source = source.replace(anchor, anchor + "\n" + indent + "import subprocess\n" +
 anchor = "        info = os.fstat(fd)"
 assert source.count(anchor) == 1
 source = source.replace(anchor, "        import subprocess\n" + create_hook + anchor)
+source = source.replace("PROMPT_CLEANUP_LIMIT=1\n", "PROMPT_CLEANUP_LIMIT=30\n")
 worker.write_text(source)
 fake = base / "live-claude"
 fake.write_text("#!/usr/bin/env python3\nimport json,os,sys\nfor line in sys.stdin:\n print(json.dumps(dict(type=\"result\",is_error=os.environ.get(\"LIVE_FAIL\")==\"1\",result=\"fixture result\")),flush=True)\n if os.environ.get(\"LIVE_FAIL\")==\"1\": sys.exit(23)\n")
@@ -369,6 +370,79 @@ def wrapper_with_extra_line_case():
     assert len(private) == 1 and (private[0] / "task.txt.runner").exists(), private
 check("wrapper with an extra line keeps the plain exec and reports its copy", wrapper_with_extra_line_case)
 
+python_bin = base / "cleanup-python-bin"
+python_bin.mkdir()
+(base / "hang.py").write_text("import os, pathlib, signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\npathlib.Path(os.environ[\"HANG_PID\"]).write_text(str(os.getpid()))\ntime.sleep(3600)\n")
+(python_bin / "python3").write_text("#!/bin/bash\ncase \"$*\" in\n  *.cleanup-*)\n    if [[ -n \"${HANG_PID:-}\" ]]; then exec \"$REAL_PYTHON\" -I \"" + str(base / "hang.py") + "\"; fi\n    : > \"$SLOW_MARKER\"\n    /bin/sleep .3 ;;\nesac\nexec \"$REAL_PYTHON\" \"$@\"\n")
+(python_bin / "python3").chmod(0o755)
+def cleanup_env(job, **extra):
+    return environment(job, PATH=str(python_bin) + os.pathsep + os.environ["PATH"], REAL_PYTHON=shutil.which("python3"), CLAUDE_BIN=str(base / "fake-claude"), **extra)
+def variant(name, *replacements):
+    # Disposable copy: a slow fake must not race the limit it is not testing.
+    source = worker.read_text()
+    for old, new in replacements:
+        assert source.count(old) == 1, old
+        source = source.replace(old, new)
+    path = runtime / "scripts/lib" / name
+    path.write_text(source)
+    return path
+def hung_cleanup_case(expected_rc):
+    job = new_job("cleanup-hang-%s" % expected_rc, 4096)
+    pid_file = job / "hang.pid"
+    env = cleanup_env(job, HANG_PID=str(pid_file), FAKE_CLI_EXIT=str(expected_rc))
+    process = subprocess.Popen(command("claude", job), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        # Pipes also catch any process left holding the worker stdout or stderr.
+        _, stderr = process.communicate(timeout=20)
+    except subprocess.TimeoutExpired:
+        os.killpg(process.pid, signal.SIGKILL)
+        process.communicate(timeout=10)
+        raise AssertionError("hung prompt cleanup held the worker past 20s")
+    stage = time.time() - pid_file.stat().st_mtime
+    assert process.returncode == expected_rc, (process.returncode, stderr)
+    assert stage < 5, "cleanup stage took %.2fs" % stage
+    hung_pid = int(pid_file.read_text())
+    try:
+        os.kill(hung_pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        os.kill(hung_pid, signal.SIGKILL)
+        raise AssertionError("hung cleanup process survived the worker")
+    private = private_dirs(job)
+    assert len(private) == 1, private
+    assert (private[0] / "task.txt.runner").exists()
+    assert ("omnilane: prompt copy cleanup exceeded 1s; left " + str(private[0])).encode() in stderr, stderr
+    assert (job / "task.txt").read_bytes() == payload[:4096]
+for expected_rc in (0, 23):
+    check("hung prompt cleanup is bounded, keeps exit %s and reports its copies" % expected_rc, hung_cleanup_case, expected_rc)
+def signal_during_cleanup_case():
+    job = new_job("cleanup-signal", 4096)
+    marker = job / "slow-marker"
+    path = variant("job-worker-long-limit.sh", ("PROMPT_CLEANUP_LIMIT=1\n", "PROMPT_CLEANUP_LIMIT=30\n"))
+    env = cleanup_env(job, SLOW_MARKER=str(marker))
+    process = subprocess.Popen(command("claude", job, path), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    try:
+        deadline = time.monotonic() + 20
+        while not marker.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert marker.exists(), "cleanup never reached"
+        os.killpg(process.pid, signal.SIGTERM)
+        _, stderr = process.communicate(timeout=20)
+    finally:
+        try: os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError): pass
+        if process.poll() is None: process.communicate(timeout=10)
+    assert not private_dirs(job), stderr
+check("TERM during prompt cleanup does not abort it", signal_during_cleanup_case)
+def no_perl_case():
+    job = new_job("cleanup-no-perl", 4096)
+    path = variant("job-worker-no-perl.sh", ("if command -v perl >/dev/null 2>&1; then\n    prompt_cleanup_bounded", "if false; then\n    prompt_cleanup_bounded"))
+    result = subprocess.run(command("claude", job, path), env=environment(job, CLAUDE_BIN=str(base / "fake-claude")), stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    assert not private_dirs(job), result.stderr
+    assert b"omnilane: no perl; prompt copy cleanup runs without a time limit" in result.stderr, result.stderr
+check("without perl prompt cleanup still runs and says it is unbounded", no_perl_case)
 assert not failures, "direct-API and cleanup-limit regressions: " + "; ".join(failures)
 ' "$TEST_ROOT" "$ROOT"
 # Exercise the actual worker and both test scripts with Bash 3.2 nounset

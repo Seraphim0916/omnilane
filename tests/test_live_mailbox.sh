@@ -1001,6 +1001,9 @@ if close_wait > 11.0:
     raise AssertionError("jobs close must keep its documented 11-second upper bound")
 if not 1.05 + sum(timeouts.values()) + outer_budget + supervisor_grace < close_wait - 1:
     raise AssertionError("worker close plus supervisor cleanup must precede jobs close's quantized deadline")
+cleanup_limit = float(re.search(r'^PROMPT_CLEANUP_LIMIT=([0-9.]+)$', worker, re.MULTILINE).group(1))
+if not outer_budget + cleanup_limit < close_wait:
+    raise AssertionError("prompt copy cleanup must fit between the worker close budget and jobs close")
 PY
   then
     fail "Codex full close budget does not expire before worker escalation"

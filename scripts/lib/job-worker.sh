@@ -40,6 +40,50 @@ PROMPT_COPY_ID=""
 PROMPT_IDENTITIES=""
 live_mailbox_cleanup_ready=0
 job_worker_completed=0
+# Keeps EXIT inside the 1.09s between the 9.91s worker close budget and the 11s
+# jobs close wait. A timed-out cleanup leaves its copies in place and says where.
+PROMPT_CLEANUP_LIMIT=1
+# shellcheck disable=SC2329
+prompt_cleanup_bounded() {
+  perl -e '
+use POSIX qw(WNOHANG);
+use Time::HiRes qw(clock_gettime CLOCK_MONOTONIC sleep);
+my ($limit, $directory) = splice(@ARGV, 0, 2);
+# The child inherits these, so a signal cannot abort a cleanup that is bounded anyway.
+$SIG{$_} = "IGNORE" for qw(HUP INT TERM);
+$SIG{CHLD} = "DEFAULT";
+my $deadline = clock_gettime(CLOCK_MONOTONIC) + $limit;
+my $pid = fork();
+if (!defined $pid) {
+  print STDERR "omnilane: prompt copy cleanup could not start; left $directory\n";
+  exit 1;
+}
+if (!$pid) {
+  exec { $ARGV[0] } @ARGV;
+  exit 127;
+}
+while (clock_gettime(CLOCK_MONOTONIC) < $deadline - 0.05) {
+  exit($? >> 8) if waitpid($pid, WNOHANG) == $pid;
+  sleep 0.02;
+}
+kill "KILL", $pid;
+while (clock_gettime(CLOCK_MONOTONIC) < $deadline) {
+  last if waitpid($pid, WNOHANG) == $pid;
+  sleep 0.005;
+}
+print STDERR "omnilane: prompt copy cleanup exceeded ${limit}s; left $directory\n";
+exit 124;
+' "$PROMPT_CLEANUP_LIMIT" "$PROMPT_COPY_DIR" "$@" </dev/null
+}
+# shellcheck disable=SC2329
+prompt_cleanup_run() {
+  if command -v perl >/dev/null 2>&1; then
+    prompt_cleanup_bounded "$@"
+  else
+    echo "omnilane: no perl; prompt copy cleanup runs without a time limit" >&2
+    "$@"
+  fi
+}
 # One exit handler owns prompt copies, mailbox resources, and the cwd lock.
 # Install after lock acquisition, which sets its own EXIT trap.
 # shellcheck disable=SC2329
@@ -51,7 +95,7 @@ cleanup_job_worker() {
   # Both the directory and each creation must still have their original
   # identity. Names alone never confer ownership, even in a private directory.
   if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
-    python3 -c '
+    prompt_cleanup_run python3 -c '
 import os, stat, sys, tempfile, uuid
 path, identity, receipts = sys.argv[1:]
 try:
