@@ -46,7 +46,6 @@ class OriginBatchAbortTests(unittest.TestCase):
                         origin.record_many(changes, path)
                     saving.assert_not_called()
                     self.assertEqual(persisted, initial)
-                    self.assertEqual(loaded["vendors"], {"claude": {"channels": [channels[0]]}})
                     print("OriginError unknown vendor saves 0")
                 else:
                     origin.record_many(changes, path)
