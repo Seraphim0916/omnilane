@@ -137,7 +137,12 @@ CLOSE_DRAIN_TIMEOUT=0.1
 CLOSE_RUNNER_GRACE=7.5
 CLOSE_TERM_GRACE=0.1
 CLOSE_KILL_GRACE=0.1
+# A slow runner start is only cut short by the budget that would end it anyway.
+RUNNER_OPEN_TIMEOUT=600
+[[ "${OMNILANE_TIMEOUT:-}" =~ ^[1-9][0-9]{0,5}$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_TIMEOUT"
+[[ "${OMNILANE_RUNNER_OPEN_TIMEOUT:-}" =~ ^[1-9][0-9]{0,5}$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_RUNNER_OPEN_TIMEOUT"
 runner_writer_open=0
+runner_writer_opened=0
 inbox_open=0
 events_reader_open=0
 forward_spool_open=0
@@ -404,22 +409,89 @@ aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || exit $?
 "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
 runner_pid=$!
 
-# Open the runner writer only after its FIFO reader starts.
-exec 3> "$RUNNER_INBOX_FIFO"
-runner_writer_open=1
+# Open the runner writer only after its FIFO reader starts. A plain blocking
+# open cannot do this safely: USR1 makes Bash 3.2 fail it with EINTR, while newer
+# Bash runs the trap and blocks again, and a reader that never comes blocks both
+# forever. A helper polls without blocking instead. When a reader exists it holds
+# both FIFO ends, so our open cannot block and a reader already in read() sees no
+# EOF, and says "ready". The parent only runs builtins on the helper's 20ms ticks,
+# so close, runner exit and the deadline (helper EOF) all converge. The helper dies
+# of SIGPIPE on its first tick after the parent closes FD 8.
+open_runner_writer() {
+  local helper_pid line read_rc open_tries=0 helper_ready=0
+  exec 8< <(perl -MFcntl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
+    $| = 1;
+    my ($path, $limit) = @ARGV;
+    my $deadline = clock_gettime(CLOCK_MONOTONIC) + $limit;
+    my ($writer, $reader);
+    while (1) {
+      if (!$writer) {
+        if (sysopen($writer, $path, O_WRONLY | O_NONBLOCK)) {
+          sysopen($reader, $path, O_RDONLY | O_NONBLOCK) or exit 2;
+          print "ready\n";
+        } else {
+          undef $writer;
+          exit 2 unless $!{ENXIO};
+          exit 1 if clock_gettime(CLOCK_MONOTONIC) >= $deadline;
+        }
+      }
+      print ".\n";
+      sleep(0.02);
+    }
+  ' "$RUNNER_INBOX_FIFO" "$RUNNER_OPEN_TIMEOUT" 6<&- 7>&-)
+  helper_pid=$!
+  while [[ "$close_requested" -eq 0 && "$runner_writer_opened" -eq 0 ]]; do
+    if IFS= read -r line <&8; then
+      [[ "$line" == "ready" ]] && helper_ready=1
+      if [[ "$helper_ready" -eq 1 ]]; then
+        if exec 3> "$RUNNER_INBOX_FIFO"; then
+          runner_writer_open=1
+          runner_writer_opened=1
+        else
+          open_tries=$((open_tries + 1))
+          if [[ "$open_tries" -ge 3 ]]; then close_requested=1; fi
+        fi
+      elif ! kill -0 "$runner_pid" 2>/dev/null; then
+        natural_runner_exit=1
+        close_requested=1
+      fi
+    else
+      read_rc=$?
+      if [[ "$close_requested" -eq 0 && "$read_rc" -le 128 ]]; then
+        emit_mode_notice "omnilane: $VENDOR runner did not open its inbox within ${RUNNER_OPEN_TIMEOUT}s" || true
+        close_requested=1
+      fi
+    fi
+  done
+  exec 8<&-
+  wait "$helper_pid" 2>/dev/null || true
+  if [[ "$runner_writer_opened" -eq 0 ]]; then release_runner_reader; fi
+}
+
+# A reader blocked in open(2) with no writer would outlive its killed parent.
+# Letting one writer appear briefly gives it EOF instead.
+release_runner_reader() {
+  perl -MFcntl -MTime::HiRes=sleep -e '
+    sysopen(my $writer, $ARGV[0], O_WRONLY | O_NONBLOCK) and sleep(0.05);
+  ' "$RUNNER_INBOX_FIFO" 6<&- 7>&- 2>/dev/null || true
+}
+
+open_runner_writer
 exec 4<> "$INBOX_FIFO"
 inbox_open=1
 exec 5< "$EVENTS_FILE"
 events_reader_open=1
 sent_turns=1
 last_turn_events_bytes=0
-if [[ "$VENDOR" == "gemini" ]]; then
-  if ! cat "$INITIAL_MESSAGE_FILE" >&3; then close_requested=1; fi
-else
-  initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
-  if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+if [[ "$runner_writer_opened" -eq 1 ]]; then
+  if [[ "$VENDOR" == "gemini" ]]; then
+    if ! cat "$INITIAL_MESSAGE_FILE" >&3; then close_requested=1; fi
+  else
+    initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
+    if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+  fi
+  (umask 077; : > "$READY_FILE")
 fi
-(umask 077; : > "$READY_FILE")
 
 last_activity=$SECONDS
 last_result_event=""
@@ -432,7 +504,8 @@ while kill -0 "$runner_pid" 2>/dev/null || [[ "$VENDOR" == "codex" || "$close_re
   fi
   if [[ "$close_requested" -ne 0 ]]; then
     rm "$READY_FILE" 2>/dev/null || true
-    if [[ "$VENDOR" == "codex" ]]; then
+    # Without a writer no send was ever accepted: inbox.ready was never published.
+    if [[ "$VENDOR" == "codex" && "$runner_writer_opened" -eq 1 ]]; then
       # Bash 3.2 has no fractional read timeout. Bound the *whole* drain,
       # including backpressure, rather than granting each line another second.
       # Retain unforwarded bytes and report failure instead of silently dropping
@@ -578,7 +651,8 @@ if [[ "$close_requested" -eq 1 ]]; then
   # 11s deadline (timed on a sub-second clock). That holds for a signal sent
   # when close starts. A close that signals late, once the holder PID appears,
   # keeps the same 11s, so it can return 124 while this shutdown is still in
-  # budget; its message says so.
+  # budget; its message says so. A close during the writer open has no pump,
+  # drain or grace, which more than pays for its two reader releases.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # Close is already committed. Repeated close requests must not interrupt wait.
   trap '' USR1
@@ -608,7 +682,10 @@ if [[ "$close_requested" -eq 1 ]]; then
     wait "$timer_pid" 2>/dev/null || true
     ! kill -0 "$runner_pid" 2>/dev/null
   }
-  if ! wait_runner_for "$CLOSE_RUNNER_GRACE"; then
+  # A runner that never got a writer holds no message, so no turn can be lost.
+  close_grace="$CLOSE_RUNNER_GRACE"
+  if [[ "$runner_writer_opened" -eq 0 ]]; then close_grace="$CLOSE_TERM_GRACE"; fi
+  if ! wait_runner_for "$close_grace"; then
     runner_forced=1
     kill -TERM "$runner_pid" 2>/dev/null || true
     if ! wait_runner_for "$CLOSE_TERM_GRACE"; then
@@ -616,6 +693,8 @@ if [[ "$close_requested" -eq 1 ]]; then
       wait_runner_for "$CLOSE_KILL_GRACE" || close_drain_failed=1
     fi
   fi
+  # The runner may have reached open(2) after the first release.
+  if [[ "$runner_writer_opened" -eq 0 ]]; then release_runner_reader; fi
 fi
 if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then
   runner_rc=1
