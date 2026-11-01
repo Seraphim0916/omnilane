@@ -565,6 +565,15 @@ case "${1:-}" in
         die 1 "could not signal live inbox holder"
       fi
     fi
+    # The process in $JOB_DIR/pid writes the exit receipt, so once it is dead no
+    # receipt is coming. Look for the receipt only after seeing it dead: it may
+    # have written one just before it exited.
+    if [[ "$holder_signaled" -eq 0 ]] && read_job_pid "$JOB_DIR/pid" &&
+       ! kill -0 "$RECORDED_PID" 2>/dev/null &&
+       [[ ! -e "$JOB_DIR/exit" && ! -L "$JOB_DIR/exit" ]]; then
+      [[ "$holder_rc" -ne 0 ]] || die 1 "live inbox holder is gone"
+      die 1 "live inbox holder is unavailable"
+    fi
     # Include the supervisor's final 1s process-group cleanup after live close.
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
     # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
@@ -575,9 +584,10 @@ case "${1:-}" in
     # file that appears with invalid contents fails at once (exit 2), like one
     # present from the start. The deadline is checked before every poll and
     # the last sleep stops at it, so nothing is signalled after it.
-    # Only a missing PID file is polled. A PID recorded for a dead process stays
-    # dead for this job: the worker refuses to start over an existing PID file,
-    # so polling it could only signal an unrelated process that reused the PID.
+    # Only a missing PID file is polled, and a PID is probed once. A PID recorded
+    # for a dead process stays dead for this job: the worker refuses to start
+    # over an existing PID file, so probing it again could only signal an
+    # unrelated process that reused the PID.
     late_signal=""
     [[ "$holder_rc" -ne 1 ]] || late_signal=1
     wait_rc=0
@@ -604,8 +614,9 @@ case "${1:-}" in
             my $pid = $1;
             if (kill(0, $pid)) {
               exit 1 if time >= $end;
-              if (kill("USR1", $pid)) { print "signaled\n"; $poll_holder = 0 }
+              if (kill("USR1", $pid)) { print "signaled\n"; }
             }
+            $poll_holder = 0;
           }
         }
         $left = $end - time;

@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
 
@@ -43,7 +44,7 @@ HOLDER = textwrap.dedent("""
 # "seconds:path:content;..." relative to the first time() call; an event at
 # "deadline" fires during the sleep that crosses FAKE_DEADLINE. With
 # FAKE_KILL_LOG set, every PID looks alive to Perl (a reused PID) and USR1 is
-# logged instead of sent.
+# logged instead of sent; FAKE_KILL_FIRST_DEAD makes the first probe say dead.
 FAKE_HIRES = textwrap.dedent("""
     package Time::HiRes;
     use strict;
@@ -52,6 +53,7 @@ FAKE_HIRES = textwrap.dedent("""
         *CORE::GLOBAL::kill = sub {
             return CORE::kill($_[0], @_[1 .. $#_]) unless $ENV{FAKE_KILL_LOG};
             my ($signal, @pids) = @_;
+            return 0 if $signal eq "0" && $ENV{FAKE_KILL_FIRST_DEAD} && !$Time::HiRes::probed++;
             if ($signal eq "USR1") {
                 open(my $log, ">>", $ENV{FAKE_KILL_LOG}) or die $!;
                 print $log "$signal @pids\\n";
@@ -199,12 +201,12 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertEqual(out, "already closed (exit 0)\n")
 
 
-    def fake_close(self, events, read_action="", kill_log=""):
+    def fake_close(self, events, read_action="", kill_log="", kill_first_dead=""):
         lib = self.home / "fake-perl" / "Time"
         lib.mkdir(parents=True)
         (lib / "HiRes.pm").write_text(FAKE_HIRES)
         env = dict(self.env, PERL5LIB=str(self.home / "fake-perl"), FAKE_DEADLINE="11",
-                   FAKE_KILL_LOG=str(kill_log),
+                   FAKE_KILL_LOG=str(kill_log), FAKE_KILL_FIRST_DEAD=kill_first_dead,
                    FAKE_READ_ACTION=read_action, FAKE_READ_MARKER=str(self.home / "read-marker"),
                    FAKE_HOLDER=str(self.job / "inbox.holder.pid"),
                    FAKE_EVENTS=";".join(f"{at}:{path}:{content}" for at, path, content in events))
@@ -277,6 +279,84 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         kill_log = self.home / "kill-log"
         self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")], kill_log=kill_log)
         self.assertEqual(kill_log.read_text(), "USR1 999999\n")
+
+    def test_late_holder_pid_seen_dead_is_not_probed_again(self):
+        # The PID file appears at 1s. The first probe says dead; every later one
+        # says alive, as it would once the PID is reused during the wait.
+        kill_log = self.home / "kill-log"
+        result = self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")],
+                                 kill_log=kill_log, kill_first_dead="1")
+        self.assertFalse(kill_log.exists(), "close signalled a late PID it had already seen dead")
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, "", "live inbox holder is unavailable\n"))
+
+    def dead_pid(self):
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait(timeout=5)
+        return dead.pid
+
+    def timed_close(self, env=None):
+        started = time.monotonic()
+        result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
+                                env=env or self.env, capture_output=True, text=True, timeout=20)
+        return result, time.monotonic() - started
+
+    def test_dead_holder_and_dead_receipt_writer_fails_at_once(self):
+        (self.job / "inbox.holder.pid").write_text(f"{self.dead_pid()}\n")
+        (self.job / "pid").write_text(f"{self.dead_pid()}\n")
+        result, elapsed = self.timed_close()
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, "", "live inbox holder is gone\n"))
+        self.assertLess(elapsed, 5, "close waited for a receipt nobody can write")
+
+    def test_missing_holder_and_dead_receipt_writer_fails_at_once(self):
+        (self.job / "pid").write_text(f"{self.dead_pid()}\n")
+        result, elapsed = self.timed_close()
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (1, "", "live inbox holder is unavailable\n"))
+        self.assertLess(elapsed, 5, "close waited for a receipt nobody can write")
+
+    def test_dead_holder_with_live_receipt_writer_waits_for_the_receipt(self):
+        writer = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+        self.addCleanup(writer.wait, 5)
+        self.addCleanup(writer.kill)
+        (self.job / "inbox.holder.pid").write_text(f"{self.dead_pid()}\n")
+        (self.job / "pid").write_text(f"{writer.pid}\n")
+        def publish_receipt():
+            tmp = self.job / ".exit.tmp"
+            tmp.write_text("137\n")
+            os.replace(tmp, self.job / "exit")
+        timer = threading.Timer(1.0, publish_receipt)
+        timer.start()
+        self.addCleanup(timer.join)
+        result, elapsed = self.timed_close()
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (137, "already closed (exit 137)\n", ""))
+        self.assertGreaterEqual(elapsed, 0.9)
+
+    def test_receipt_written_as_its_writer_dies_is_not_missed(self):
+        # The receipt lands while close reads the writer's PID, which is already
+        # dead. Close has to look for the receipt after that, not before.
+        shims = self.home / "shims"
+        shims.mkdir()
+        (shims / "cat").write_text(textwrap.dedent("""\
+            #!/bin/bash
+            for arg in "$@"; do
+              if [[ "$arg" == "$CLOSE_TEST_PID_FILE" ]]; then
+                printf '0\\n' > "$CLOSE_TEST_RECEIPT.tmp"
+                /bin/mv "$CLOSE_TEST_RECEIPT.tmp" "$CLOSE_TEST_RECEIPT"
+              fi
+            done
+            exec /bin/cat "$@"
+        """))
+        (shims / "cat").chmod(0o755)
+        (self.job / "inbox.holder.pid").write_text(f"{self.dead_pid()}\n")
+        (self.job / "pid").write_text(f"{self.dead_pid()}\n")
+        env = dict(self.env, PATH=f"{shims}:{os.environ['PATH']}",
+                   CLOSE_TEST_PID_FILE=str(self.job / "pid"), CLOSE_TEST_RECEIPT=str(self.job / "exit"))
+        result, _ = self.timed_close(env)
+        self.assertEqual((result.returncode, result.stdout, result.stderr),
+                         (0, "already closed (exit 0)\n", ""))
 
     def test_late_signal_past_the_deadline_says_the_worker_is_still_shutting_down(self):
         result = self.fake_close([("1", self.job / "inbox.holder.pid", "999999\n")],
