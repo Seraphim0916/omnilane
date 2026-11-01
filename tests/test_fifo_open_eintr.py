@@ -414,6 +414,50 @@ class FifoOpenTests(unittest.TestCase):
                 self.assert_clean_end()
 
 
+# A clock for the receipt wait in jobs.sh close, found first on PERL5LIB. It stops
+# 0.1s before the 11s deadline, starts the worker and waits for its holder PID, so
+# the PID always appears in the last 0.1s however slow the machine is. The USR1 stays
+# real, and its virtual time is logged.
+LATE_HOLDER_CLOCK = r"""
+package Time::HiRes;
+use strict;
+my $now = 0;
+BEGIN {
+    *CORE::GLOBAL::kill = sub {
+        if ($_[0] eq "USR1") {
+            open(my $log, ">", $ENV{FAKE_SIGNAL_LOG}) or die $!;
+            print $log $now / 1000;
+            close $log;
+        }
+        return CORE::kill($_[0], @_[1 .. $#_]);
+    };
+}
+sub time () { return 1000 + $now / 1000 }
+sub sleep {
+    my ($seconds) = @_;
+    my $step = int($seconds * 1000 + 0.5);
+    if ($now < 10900 && $now + $step >= 10900) {
+        open(my $release, ">", $ENV{FAKE_RELEASE}) or die $!;
+        close $release;
+        my $give_up = CORE::time() + 60;
+        until (-e $ENV{FAKE_HOLDER}) {
+            die "fake clock: no holder PID\n" if CORE::time() >= $give_up;
+            CORE::select(undef, undef, undef, 0.002);
+        }
+    }
+    $now += $step;
+    CORE::select(undef, undef, undef, 0.002);
+    return $seconds;
+}
+sub import {
+    my $caller = caller;
+    no strict "refs";
+    for my $name (@_[1 .. $#_]) { *{"${caller}::$name"} = \&{$name} }
+}
+1;
+"""
+
+
 class RealCloseOfAnUnopenedInboxTests(unittest.TestCase):
     """Real jobs.sh close, job-worker.sh and supervisor; only the runner is fake."""
 
@@ -459,17 +503,17 @@ class RealCloseOfAnUnopenedInboxTests(unittest.TestCase):
                     pass
         self.driver.wait(timeout=5)
 
-    def start_job(self, shell, scenario, delay=0):
+    def start_job(self, shell, scenario, release=""):
         # What dispatch.sh does for a background job: pid file, supervisor, exit receipt.
         script = r"""
 printf '%s\n' "$$" > "$JOB_DIR/pid"
-sleep "$1"
+while [[ -n "$1" && ! -e "$1" ]]; do sleep 0.01; done
 perl "$WORKER_ROOT/scripts/lib/job-timeout.pl" --no-deadline "$2" \
   "$WORKER_ROOT/scripts/lib/job-worker.sh" claude work "$WORKER_DIR" claude-opus-5 high \
   "$WORKER_PROMPT" "$JOB_DIR/out.txt" > "$JOB_DIR/stdout" 2> "$JOB_DIR/stderr"
 printf '%s\n' "$?" > "$JOB_DIR/exit"
 """
-        self.driver = subprocess.Popen(["/bin/bash", "-c", script, "driver", str(delay), shell],
+        self.driver = subprocess.Popen(["/bin/bash", "-c", script, "driver", str(release), shell],
                                        env=dict(self.env, PROBE_SCENARIO=scenario),
                                        start_new_session=True)
         deadline = time.monotonic() + 8
@@ -523,12 +567,20 @@ printf '%s\n' "$?" > "$JOB_DIR/exit"
     def test_a_late_signal_may_miss_the_receipt_but_the_job_still_ends(self):
         # jobs close keeps its 11s for a holder PID that appears late. Whether the
         # receipt lands in the remainder is a race, so either answer is correct.
-        self.start_job("/bin/bash", "never", delay=10.7)
-        result, took = self.close()
+        release = self.root / "release"
+        signal_log = self.root / "signal-time"
+        self.start_job("/bin/bash", "never", release)
+        library = self.root / "fake-perl/Time"
+        library.mkdir(parents=True)
+        (library / "HiRes.pm").write_text(LATE_HOLDER_CLOCK)
+        result = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", self.JOB_ID],
+                                env=dict(self.env, PERL5LIB=str(self.root / "fake-perl"), FAKE_RELEASE=str(release),
+                                         FAKE_HOLDER=str(self.job / "inbox.holder.pid"), FAKE_SIGNAL_LOG=str(signal_log)),
+                                capture_output=True, text=True, timeout=90)
         self.assertIn(result.returncode, (1, 124), result)
         if result.returncode == 1:
-            self.assertIn("closed", result.stdout)
-        self.assertLess(took, 12.5, result)
+            self.assertIn("closed", result.stdout, result)
+        self.assertEqual(signal_log.read_text(), "10.9", result)
         self.assert_finished_cleanly()
 
 
