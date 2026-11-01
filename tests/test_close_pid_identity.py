@@ -642,6 +642,84 @@ class ProbeTests(IdentityTestCase):
         job = self.status_json()
         self.assertEqual((job["state"], job["reason"]), ("dead", "worker gone, no exit recorded"))
 
+    def counting_ps_env(self):
+        shims = self.home / "counting"
+        shims.mkdir(exist_ok=True)
+        self.ps_log = self.home / "ps-calls"
+        (shims / "ps").write_text(f'#!/bin/bash\necho "$*" >> "{self.ps_log}"\nexec /bin/ps "$@"\n')
+        (shims / "ps").chmod(0o755)
+        return dict(self.env, PATH=f"{shims}:{os.environ['PATH']}")
+
+    def ps_calls(self):
+        calls = self.ps_log.read_text().splitlines() if self.ps_log.exists() else []
+        self.ps_log.unlink(missing_ok=True)
+        return calls
+
+    def test_a_dead_pid_is_answered_without_running_ps(self):
+        # jobs list reads every job directory, so one ps per dead job adds up.
+        env = self.counting_ps_env()
+        for start in (OTHER_START, None, "週日"):
+            with self.subTest(start=start):
+                (self.job / "pid.start").unlink(missing_ok=True)
+                self.dead_pid(start)
+                status = self.jobs("status", env=env)
+                self.assertEqual((status.stdout, status.stderr), ("dead (worker gone, no exit recorded)\n", ""))
+                self.assertEqual(self.jobs("wait", env=env).returncode, 125)
+                self.assertEqual(self.jobs("cancel", env=env).stdout, "not running (no live worker to cancel)\n")
+                listed = subprocess.run(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "list", "--status", "running"],
+                                        env=env, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+                self.assertEqual(listed.returncode, 0, listed.stderr)
+                self.assertEqual(self.ps_calls(), [])
+
+    def test_a_dead_holder_at_close_is_answered_without_running_ps(self):
+        env = self.counting_ps_env()
+        self.dead_pid(OTHER_START)
+        pid = (self.job / "pid").read_text()
+        self.holder_file.write_text(pid)
+        self.holder_start.write_text(OTHER_START + "\n")
+        result = self.jobs("close", env=env)
+        self.assertEqual((result.returncode, result.stderr), (1, "live inbox holder is gone\n"))
+        self.assertEqual(self.ps_calls(), [])
+
+    def test_a_refused_probe_still_asks_ps(self):
+        # kill -0 refused for a process that may exist (EPERM): only ps can answer.
+        bash_env = self.home / "bash-env"
+        bash_env.write_text('kill() { [[ "$1" == "-0" ]] && return 1; builtin kill "$@"; }\n')
+        env = dict(self.counting_ps_env(), BASH_ENV=str(bash_env))
+        victim = self.victim()
+        (self.job / "pid").write_text(f"{victim.pid}\n")
+        (self.job / "pid.start").write_text(start_time(victim.pid) + "\n")
+        self.assertEqual(self.jobs("status", env=env).stdout.split()[0], "running")
+        self.assertTrue(self.ps_calls())
+        (self.job / "pid.start").write_text(OTHER_START + "\n")
+        self.assertEqual(self.jobs("status", env=env).stdout.split()[0], "dead")
+        self.assertTrue(self.ps_calls())
+        self.assert_alive(victim)
+
+    def test_a_corrupt_start_file_still_refuses_a_process_that_may_exist(self):
+        # Only a gone process skips the start file: reuse protection must not weaken.
+        bash_env = self.home / "bash-env"
+        bash_env.write_text('kill() { [[ "$1" == "-0" ]] && return 1; builtin kill "$@"; }\n')
+        for name, env in (("kill -0 succeeds", self.env), ("kill -0 refused", dict(self.env, BASH_ENV=str(bash_env)))):
+            for corrupt in ("週日", "x" * 200):
+                with self.subTest(name, corrupt=corrupt[:2]):
+                    victim = self.victim()
+                    (self.job / "pid").write_text(f"{victim.pid}\n")
+                    (self.job / "pid.start").write_text(corrupt + "\n")
+                    self.assertEqual(self.jobs("status", env=env).stdout, "dead (invalid pid metadata)\n")
+                    self.assertEqual(self.jobs("wait", env=env).stdout.strip(), "dead (invalid pid metadata)")
+                    cancelled = self.jobs("cancel", env=env)
+                    self.assertEqual(cancelled.returncode, 1)
+                    self.assertIn("invalid start time", cancelled.stderr)
+                    self.holder_file.write_text(f"{victim.pid}\n")
+                    self.holder_start.write_text(corrupt + "\n")
+                    closed = self.jobs("close", env=env)
+                    self.assertEqual((closed.returncode, closed.stderr), (1, "live inbox holder is unavailable\n"))
+                    self.holder_file.unlink()
+                    self.holder_start.unlink()
+                    self.assert_alive(victim)
+                    victim.kill()
+
     def test_a_recorded_exit_wins_behind_a_blocked_ps(self):
         victim = self.reused()
         (self.job / "exit").write_text("0\n")

@@ -277,6 +277,9 @@ recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2
     [[ -e "$path" || -L "$path" ]] && return 4
     return 5
   fi
+  # jobs list comes here once per job directory. A gone process has no identity to
+  # compare, so it needs neither the start file nor ps; a refused probe needs both.
+  pid_is_gone "$pid" && return 1
   [[ -f "$start_path" && ! -L "$start_path" ]] || return 3
   size="$(wc -c 2>/dev/null < "$start_path" | tr -d '[:space:]')" || size=""
   if ! recorded="$(cat "$start_path" 2>/dev/null)" || [[ -z "$size" ]]; then
@@ -296,10 +299,10 @@ recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2
 
 older_pid_state() { # pid with no recorded start time -> 0 alive, 1 dead, 2 cannot tell
   kill -0 "$1" 2>/dev/null && return 0
+  pid_is_gone "$1" && return 1
   # A sandbox can refuse kill -0 as well. It blocks ps there too, and only then
   # is a failed probe not evidence that the process is gone.
   pid_file_start_time "$$" >/dev/null && return 1
-  pid_is_gone "$1" && return 1
   return 2
 }
 
