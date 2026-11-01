@@ -104,6 +104,34 @@ def command(job):
     return ["/bin/bash", str(runtime / "scripts/lib/job-worker.sh"), "claude", "advise", str(job), "fixture", "low", str(job / "task.txt"), str(job / "out.txt")]
 def environment():
     return dict(os.environ, OMNILANE_HOME=str(base / "home"), OMNILANE_SESSION_MODE="live", OMNILANE_IDLE_TIMEOUT="0", OMNILANE_JOB_SUPERVISED="1", CLAUDE_BIN=str(fake))
+# EPERM from killpg does not prove the worker is gone, so only a bounded wait may
+# excuse it. A worker that outlives the wait is reported instead of hanging the suite.
+def stop_worker(process, killpg=os.killpg, timeout=10):
+    try: killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError): pass
+    try: process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise AssertionError("cleanup failed: worker %s still running after killpg" % process.pid)
+def denied_killpg(pid, sig):
+    raise PermissionError(1, "injected EPERM")
+# The alarm stops a teardown that regresses to an unbounded wait.
+signal.alarm(30)
+exited = subprocess.Popen(["/bin/sh", "-c", "exit 0"], stdin=subprocess.DEVNULL, start_new_session=True)
+while exited.poll() is None: time.sleep(.01)
+stop_worker(exited, denied_killpg, 1)
+print("PASS teardown tolerates EPERM once the worker has exited", flush=True)
+alive = subprocess.Popen(["/bin/sleep", "60"], stdin=subprocess.DEVNULL, start_new_session=True)
+try:
+    reported = False
+    try: stop_worker(alive, denied_killpg, .2)
+    except AssertionError as error: reported = "cleanup failed" in str(error)
+    assert reported, "EPERM with a live worker was not reported"
+    assert alive.poll() is None
+finally:
+    os.killpg(alive.pid, signal.SIGKILL)
+    alive.wait(timeout=10)
+signal.alarm(0)
+print("PASS teardown reports EPERM while the worker is alive, without hanging", flush=True)
 # These cases run the worker boundary, including its actual EXIT handler.
 regressions = []
 for scenario in ("production-hooks", "ledger-tamper", "cleanup-window-swap", "create-window-signal"):
@@ -185,10 +213,8 @@ for scenario in ("production-hooks", "ledger-tamper", "cleanup-window-swap", "cr
         regressions.append(scenario)
         print("FAIL R165 %s: %s" % (scenario, error), flush=True)
     finally:
-        try: os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError): pass
-        process.wait()
-        stderr.close()
+        try: stop_worker(process)
+        finally: stderr.close()
 assert not regressions, "R165 regressions: " + ", ".join(regressions)
 swap_failures = []
 for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-directory", "swap-runner", "swap-worker"):
@@ -252,10 +278,8 @@ for scenario in ("close", "failure", "TERM", "HUP", "INT", "timeout", "replaced-
             clean(job)
             print("PASS live lifecycle %s exit=%s; copies removed" % (scenario, rc), flush=True)
     finally:
-        try: os.killpg(process.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError): pass
-        process.wait()
-        stderr.close()
+        try: stop_worker(process)
+        finally: stderr.close()
 assert not swap_failures, "foreign-file cleanup regressions: " + ", ".join(swap_failures)
 for name in ("task.txt.worker", "task.txt.runner", "task.txt.runner.worker"):
     for kind in ("file", "symlink", "directory"):
