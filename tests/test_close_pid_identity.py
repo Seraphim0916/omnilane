@@ -922,5 +922,140 @@ class DispatchFailureTests(unittest.TestCase):
         self.assertIn("did not start", shown.stderr)
 
 
+class HungPsTests(IdentityTestCase):
+    # A ps that never answers must not hold a job or a jobs command for as long as it hangs.
+    WITHIN = 14
+
+    def hung_ps_env(self, script="exec /bin/sleep 30"):
+        shims = self.home / "hung"
+        shims.mkdir(exist_ok=True)
+        (shims / "ps").write_text(f"#!/bin/bash\n{script}\n")
+        (shims / "ps").chmod(0o755)
+        return dict(self.env, PATH=f"{shims}:{os.environ['PATH']}")
+
+    def timed(self, *args, env=None):
+        began = time.monotonic()
+        result = self.jobs(*args, env=env or self.hung_ps_env(), timeout=45)
+        return result, time.monotonic() - began
+
+    def live_job(self):
+        victim = self.victim()
+        (self.job / "pid.start").write_text(start_time(victim.pid) + "\n")
+        (self.job / "pid").write_text(f"{victim.pid}\n")
+        return victim
+
+    def test_status_answers_unknown(self):
+        victim = self.live_job()
+        result, took = self.timed("status")
+        self.assertEqual(result.stdout, "unknown (ps blocked)\n", result.stderr)
+        self.assertLess(took, self.WITHIN)
+        self.assert_alive(victim)
+
+    def test_cancel_refuses_without_signalling(self):
+        victim = self.live_job()
+        result, took = self.timed("cancel")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("rerun jobs cancel outside the sandbox", result.stderr)
+        self.assertLess(took, self.WITHIN)
+        self.assert_alive(victim)
+
+    def test_close_with_a_holder_refuses_without_signalling(self):
+        victim = self.victim()
+        self.holder_start.write_text(start_time(victim.pid) + "\n")
+        self.holder_file.write_text(f"{victim.pid}\n")
+        result, took = self.timed("close")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertLess(took, self.WITHIN)
+        self.assert_alive(victim)
+
+    def test_close_with_a_late_holder_refuses_within_its_deadline(self):
+        victim = self.victim()
+        start = start_time(victim.pid)
+
+        def publish():
+            time.sleep(1)
+            self.holder_start.write_text(start + "\n")
+            self.holder_file.write_text(f"{victim.pid}\n")
+
+        thread = threading.Thread(target=publish)
+        thread.start()
+        self.addCleanup(thread.join)
+        result, took = self.timed("close")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+        self.assertLess(took, self.WITHIN)
+        self.assert_alive(victim)
+
+    def common(self, script, *args, env=None):
+        began = time.monotonic()
+        result = subprocess.run(["/bin/bash", "-c", f'source "$1/scripts/lib/common.sh"; {script}', "probe", str(ROOT), *args],
+                                env=env or self.hung_ps_env(), capture_output=True, text=True, timeout=45,
+                                stdin=subprocess.DEVNULL)
+        return result, time.monotonic() - began
+
+    def test_publishing_a_pid_file_gives_up_and_says_ps_timed_out(self):
+        path = self.job / "published.pid"
+        result, took = self.common('PS_START_LIMIT=2; write_current_pid_file "$2"', str(path))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("ps did not answer within 2s", result.stderr)
+        self.assertLess(took, 8)
+        self.assertEqual(sorted(p.name for p in self.job.glob("published*")), [])
+
+    def test_the_start_path_waits_longer_than_a_query(self):
+        result, _ = self.common('printf "%s %s" "$PS_QUERY_LIMIT" "$PS_START_LIMIT"', env=self.env)
+        self.assertEqual(result.stdout, "5 30")
+
+    def test_dispatch_check_reports_a_timeout(self):
+        result, took = self.common('PS_START_LIMIT=2; can_record_start_time; echo "$?"')
+        self.assertEqual(result.stdout.strip(), "142")
+        self.assertLess(took, 8)
+
+    def test_an_inherited_ignored_alarm_does_not_lift_the_limit(self):
+        result, took = self.common('trap "" ALRM; pid_file_start_time "$$" 2; echo "$?"')
+        self.assertEqual(result.stdout.strip(), "142")
+        self.assertLess(took, 8)
+        victim = self.victim()
+        start = start_time(victim.pid)
+        threading.Timer(1, lambda: (self.holder_start.write_text(start + "\n"),
+                                    self.holder_file.write_text(f"{victim.pid}\n"))).start()
+        began = time.monotonic()
+        closed = subprocess.run(["/bin/bash", "-c", 'trap "" ALRM; exec /bin/bash "$1" close "$2"', "probe",
+                                 str(ROOT / "scripts/jobs.sh"), JOB_ID], env=self.hung_ps_env(), capture_output=True,
+                                text=True, timeout=45, stdin=subprocess.DEVNULL)
+        self.assertEqual(closed.returncode, 1, closed.stderr)
+        self.assertLess(time.monotonic() - began, self.WITHIN)
+        self.assert_alive(victim)
+
+    def test_without_perl_ps_still_answers_with_no_limit(self):
+        bare = self.home / "bare"
+        bare.mkdir()
+        for tool in ("ps", "cat", "mv", "rm", "sh"):
+            (bare / tool).symlink_to(shutil.which(tool))
+        path = self.job / "published.pid"
+        result, _ = self.common('PATH="$3"; pid_file_start_time "$$"; write_current_pid_file "$2"; echo "rc=$?"',
+                                str(path), str(bare), env=self.env)
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertEqual(result.stdout.splitlines()[0], (self.job / "published.pid.start").read_text().strip())
+        self.assertTrue(path.exists())
+
+    def test_a_missing_or_blocked_ps_fails_the_same_way_as_before(self):
+        only_perl = self.home / "only-perl"
+        only_perl.mkdir()
+        (only_perl / "perl").symlink_to(shutil.which("perl"))
+        result, took = self.common('PATH="$2"; pid_file_start_time "$$"; echo "rc=$?"', str(only_perl), env=self.env)
+        self.assertEqual(result.stdout.strip(), "rc=126")
+        self.assertLess(took, 3)
+        blocked = self.hung_ps_env("exit 126")
+        result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"', env=blocked)
+        self.assertEqual(result.stdout.strip(), "rc=126")
+
+    def test_a_slow_ps_within_the_limit_still_answers(self):
+        victim = self.live_job()
+        result, _ = self.timed("status", env=self.hung_ps_env('/bin/sleep 1\nexec /bin/ps "$@"'))
+        self.assertEqual(result.stdout.split()[0], "running", result.stderr)
+        self.assert_alive(victim)
+
+
 if __name__ == "__main__":
     unittest.main()

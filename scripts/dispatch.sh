@@ -1322,6 +1322,7 @@ fi
 # dispatch reports its ID before the worker writes one, so refuse here while the
 # caller can still see the reason and no job directory exists.
 can_record_start_time || {
+  [[ $? -ne "$PS_TIMED_OUT" ]] || { echo "omnilane: ps did not answer within ${PS_START_LIMIT}s, so no job was started." >&2; exit 1; }
   echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)." >&2
   exit 1
 }

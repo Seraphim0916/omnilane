@@ -649,21 +649,32 @@ case "${1:-}" in
     [[ "$holder_rc" -ne 1 ]] || late_signal=1
     wait_rc=0
     wait_out="$(perl -MTime::HiRes=time,sleep -e '
-      my ($exit, $limit, $holder, $poll_holder) = @ARGV;
+      my ($exit, $limit, $holder, $poll_holder, $ps_limit) = @ARGV;
       my $start_path = "$holder.start";
+      my $end = time + $limit;
       sub start_of {
         my ($pid) = @_;
         local $/;
         local $ENV{TZ} = "UTC";
         local $ENV{LC_ALL} = "C";
-        open(my $ps, "-|", "ps -o lstart= -p $pid 2>/dev/null") or return undef;
+        # A hung ps must not carry this wait far past its deadline.
+        my $left = int($end - time + 1);
+        my $cap = $left > $ps_limit ? $ps_limit : $left < 2 ? 2 : $left;
+        my $child = open(my $ps, "-|");
+        return undef unless defined $child;
+        unless ($child) {
+          open(STDERR, ">", "/dev/null");
+          $SIG{ALRM} = "DEFAULT";
+          alarm $cap;
+          exec { "ps" } "ps", "-o", "lstart=", "-p", $pid;
+          exit 126;
+        }
         my $value = <$ps>;
         close($ps) or return undef;
         return undef unless defined $value;
         $value =~ s/\A\s+|\s+\z//g;
         return length($value) ? $value : undef;
       }
-      my $end = time + $limit;
       $| = 1;
       until (-e $exit || -l $exit) {
         my $left = $end - time;
@@ -715,7 +726,7 @@ case "${1:-}" in
         exit 1 if $left <= 0;
         sleep($left < 0.1 ? $left : 0.1);
       }
-    ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal")" || wait_rc=$?
+    ' "$JOB_DIR/exit" 11 "$holder_path" "$late_signal" "$PS_QUERY_LIMIT")" || wait_rc=$?
     late_signaled=0
     if [[ "$wait_out" == *signaled* ]]; then
       holder_signaled=1

@@ -215,17 +215,19 @@ current_pid() { # Call with direct redirection; command substitution records its
 
 write_current_pid_file() {
   local path="$1" tmp="${1}.tmp.$$-$RANDOM" start_tmp="${1}.start.tmp.$$-$RANDOM"
-  local old_umask rc=0 pid="" start="" reason
+  local old_umask rc=0 pid="" start="" reason start_rc
   old_umask="$(umask)"
   umask 077
   current_pid > "$tmp" || rc=$?
   if [[ "$rc" -eq 0 ]]; then pid="$(cat "$tmp")" || rc=$?; fi
   if [[ "$rc" -eq 0 ]]; then
-    if start="$(pid_file_start_time "$pid")"; then
+    if start="$(pid_file_start_time "$pid" "$PS_START_LIMIT")"; then
       printf '%s\n' "$start" > "$start_tmp" || rc=$?
     else
+      start_rc=$?
       rc=1
       reason="omnilane: could not read the start time of PID $pid with ps, so this job did not start: it could never be signalled safely. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)."
+      [[ "$start_rc" -ne "$PS_TIMED_OUT" ]] || reason="omnilane: ps did not answer within ${PS_START_LIMIT}s for the start time of PID $pid, so this job did not start: it could never be signalled safely."
       echo "$reason" >&2
       # `jobs result` reads this file; a background worker's stderr goes elsewhere.
       printf '%s\n' "$reason" >> "${path%/*}/out.txt.stderr.log" 2>/dev/null || true
@@ -258,10 +260,28 @@ process_start_time() { # pid -> stable ps(1) start timestamp
 
 # Start times are compared as strings, so writer and reader must agree on the
 # zone. process_start_time keeps the caller's zone: session records rely on it.
-pid_file_start_time() { TZ=UTC process_start_time "$1"; }
+# ps can hang. A query answers unknown after PS_QUERY_LIMIT seconds. Starting a job
+# waits PS_START_LIMIT, because failing a job on a loaded machine costs more than
+# the wait. A timeout returns PS_TIMED_OUT, which is 128 + SIGALRM.
+PS_QUERY_LIMIT=5
+PS_START_LIMIT=30
+PS_TIMED_OUT=142
+pid_file_start_time() { # pid [seconds]
+  local pid="$1" limit="${2:-$PS_QUERY_LIMIT}" value
+  # Without perl there is no limit, as before this limit existed: the foreground path needs no perl.
+  command -v perl >/dev/null 2>&1 || { TZ=UTC process_start_time "$pid"; return; }
+  [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  # alarm survives exec, and so would an inherited SIG_IGN, so the handler is reset first.
+  value="$(TZ=UTC LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
+    "$limit" ps -o lstart= -p "$pid" 2>/dev/null)" || return $?
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
 
 # dispatch refuses on this answer, and tests/run.sh reports it, so the two cannot disagree.
-can_record_start_time() { pid_file_start_time "$$" >/dev/null; }
+can_record_start_time() { pid_file_start_time "$$" "$PS_START_LIMIT" >/dev/null; }
 
 # kill -0 answers this without ps, even where a sandbox blocks ps. A number beyond the PID range is no process either.
 pid_is_gone() { # pid
