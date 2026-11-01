@@ -1046,6 +1046,21 @@ class HungPsTests(IdentityTestCase):
         self.assertEqual(len(result.stdout.splitlines()), 2, result.stdout + result.stderr)
         self.assertEqual(result.stdout.splitlines()[1], "rc=0")
 
+    def test_a_process_gone_between_the_two_probes_is_gone_behind_a_blocked_ps(self):
+        marker = self.home / "probed"
+        bash_env = self.home / "bash-env"
+        bash_env.write_text(f'''kill() {{
+  [[ "$1" == "-0" ]] || {{ builtin kill "$@"; return; }}
+  if [[ -e "{marker}" ]]; then echo "kill: No such process" >&2; else : > "{marker}"; echo "kill: Operation not permitted" >&2; fi
+  return 1
+}}
+''')
+        self.holder_file.write_text("12345\n")
+        self.holder_start.write_text(OTHER_START + "\n")
+        env = dict(self.hung_ps_env("exit 126"), BASH_ENV=str(bash_env))
+        result, _ = self.common('recorded_pid_identity "$2" 12345; echo "rc=$?"', str(self.holder_file), env=env)
+        self.assertEqual(result.stdout.strip(), "rc=1", result.stderr)
+
     def test_a_missing_or_blocked_ps_fails_the_same_way_as_before(self):
         only_perl = self.home / "only-perl"
         only_perl.mkdir()
