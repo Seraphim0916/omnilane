@@ -1171,7 +1171,7 @@ class HungPsTests(IdentityTestCase):
         only_perl.mkdir()
         (only_perl / "perl").symlink_to(shutil.which("perl"))
         result, took = self.common('PATH="$2"; pid_file_start_time "$$"; echo "rc=$?"', str(only_perl), env=self.env)
-        self.assertEqual(result.stdout.strip(), "rc=126")
+        self.assertEqual(result.stdout.strip(), "rc=127")
         self.assertLess(took, 3)
         blocked = self.hung_ps_env("exit 126")
         result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"', env=blocked)
@@ -1223,16 +1223,35 @@ class HungPsTests(IdentityTestCase):
                 self.holder_file.unlink()
                 self.holder_start.unlink()
 
+    def with_unexecutable_perl(self, ps_script=None):
+        # bash answers 126 for a perl with no execute bit, but only when no other perl
+        # follows on PATH, so PATH is this one directory.
+        directory = self.home / "no-perl"
+        directory.mkdir()
+        (directory / "perl").write_text("#!/bin/sh\nexit 0\n")
+        (directory / "perl").chmod(0o644)
+        if ps_script is None:
+            (directory / "ps").symlink_to(shutil.which("ps"))
+        else:
+            (directory / "ps").write_text(f"#!/bin/bash\n{ps_script}\n")
+            (directory / "ps").chmod(0o755)
+        result, _ = self.common('PATH="$2"; perl -e 1 2>/dev/null; echo "perl=$?"; pid_file_start_time "$$"; echo "rc=$?"',
+                                str(directory), env=self.env)
+        lines = result.stdout.splitlines()
+        self.assertEqual(lines[0], "perl=126", result.stdout + result.stderr)
+        return lines[1:]
+
     def test_a_perl_found_but_not_executable_still_lets_ps_answer(self):
-        # bash answers 126 here, which is also what a ps that cannot be executed answers.
-        shims = self.home / "bad-perl"
-        shims.mkdir()
-        (shims / "perl").write_text("#!/nonexistent/interpreter\n")
-        (shims / "perl").chmod(0o755)
-        result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"',
-                                env=dict(self.env, PATH=f"{shims}:{os.environ['PATH']}"))
-        self.assertEqual(len(result.stdout.splitlines()), 2, result.stdout + result.stderr)
-        self.assertEqual(result.stdout.splitlines()[1], "rc=0")
+        lines = self.with_unexecutable_perl()
+        self.assertEqual(len(lines), 2, lines)
+        self.assertEqual(lines[1], "rc=0")
+
+    def test_the_fallback_answers_like_the_limited_path(self):
+        lines = self.with_unexecutable_perl('printf "  %s|%s  \\n" "$TZ" "$LC_ALL"')
+        self.assertEqual(lines, ["UTC|C", "rc=0"])
+
+    def test_a_ps_failing_in_the_fallback_keeps_its_own_status(self):
+        self.assertEqual(self.with_unexecutable_perl("exit 23"), ["rc=23"])
 
     def test_any_other_failure_of_ps_comes_back_unchanged(self):
         counted = self.home / "ps-calls"

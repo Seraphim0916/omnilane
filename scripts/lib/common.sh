@@ -274,10 +274,9 @@ pid_file_start_time() { # pid [seconds]
     "$limit" ps -o lstart= -p "$pid" 2>/dev/null)" || {
     local rc=$?
     # Without a perl that runs there is no limit, as before this limit existed: the foreground path needs no perl.
-    # 126 can also be a ps that cannot be executed. Then ps fails here too, and the answer stays 126.
+    # 126 can also be a ps that cannot be executed. Then ps fails here too, and whatever status it gives comes back.
     [[ "$rc" -eq 127 || "$rc" -eq 126 ]] || return "$rc"
-    TZ=UTC process_start_time "$pid" || return "$rc"
-    return
+    value="$(TZ=UTC LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null)" || return $?
   }
   value="${value#"${value%%[![:space:]]*}"}"
   value="${value%"${value##*[![:space:]]}"}"

@@ -47,7 +47,8 @@ try:
     elapsed = time.monotonic() - started
     assert result.returncode == 124, (result.returncode, result.stdout, result.stderr)
     assert elapsed >= 10.95, ('jobs close gave up before its 11s deadline', elapsed)
-    assert elapsed < 12.0, ('jobs close overran its 11s deadline', elapsed)
+    # A loaded machine must not fail this. test_close_holder_early.py checks the exact deadline on a virtual clock.
+    assert elapsed < 18.0, ('jobs close overran its 11s deadline', elapsed)
     print(f'PASS jobs close waited {elapsed:.3f}s before 124', flush=True)
 finally:
     if holder is not None and holder.poll() is None:
