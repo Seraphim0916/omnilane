@@ -464,6 +464,67 @@ class CancelTests(IdentityTestCase):
         self.assertEqual((result.returncode, result.stdout), (0, "cancelled (exit 137)\n"), result.stderr)
         self.assert_alive(process)
 
+    def term_ignoring_job(self, on_sleep):
+        ready = self.home / "ready"
+        process = self.victim("import pathlib, signal, time\n"
+                              "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+                              f"pathlib.Path({str(ready)!r}).write_text('1')\n"
+                              "time.sleep(60)\n")
+        end = time.monotonic() + 5
+        while not ready.exists():
+            self.assertLess(time.monotonic(), end)
+            time.sleep(0.02)
+        (self.job / "pid.start").write_text(start_time(process.pid) + "\n")
+        (self.job / "pid").write_text(f"{process.pid}\n")
+        shims = self.home / "shims"
+        shims.mkdir(exist_ok=True)
+        (shims / "sleep").write_text(f'#!/bin/bash\n{on_sleep}\nexec /bin/sleep "$@"\n')
+        (shims / "sleep").chmod(0o755)
+        return process, dict(self.env, PATH=f"{shims}:{os.environ['PATH']}")
+
+    def test_a_start_file_damaged_during_the_grace_period_records_no_exit(self):
+        start_file = self.job / "pid.start"
+        process, env = self.term_ignoring_job(f'printf "週日\\n" > "{start_file}"')
+        result = self.jobs("cancel", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("invalid start time", result.stderr)
+        self.assertIn("TERM was sent", result.stderr)
+        self.assertFalse((self.job / "exit").exists())
+        self.assert_alive(process)
+
+    def test_a_start_file_lost_during_the_grace_period_records_no_exit(self):
+        start_file = self.job / "pid.start"
+        process, env = self.term_ignoring_job(f'/bin/rm -f "{start_file}"')
+        result = self.jobs("cancel", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertFalse((self.job / "exit").exists())
+        self.assert_alive(process)
+
+    def test_a_damaged_start_file_does_not_cut_the_grace_period_short(self):
+        exit_file = self.job / "exit"
+        start_file = self.job / "pid.start"
+        ready = self.home / "ready"
+        process = self.victim("import pathlib, signal, sys, time\n"
+                              "def stop(*_):\n"
+                              "    time.sleep(2)\n"
+                              f"    pathlib.Path({str(exit_file)!r}).write_text('7\\n')\n"
+                              "    sys.exit(7)\n"
+                              "signal.signal(signal.SIGTERM, stop)\n"
+                              f"pathlib.Path({str(ready)!r}).write_text('1')\n"
+                              "time.sleep(60)\n")
+        end = time.monotonic() + 5
+        while not ready.exists():
+            self.assertLess(time.monotonic(), end)
+            time.sleep(0.02)
+        start_file.write_text(start_time(process.pid) + "\n")
+        (self.job / "pid").write_text(f"{process.pid}\n")
+        shims = self.home / "shims"
+        shims.mkdir()
+        (shims / "sleep").write_text(f'#!/bin/bash\nprintf "週日\\n" > "{start_file}"\nexec /bin/sleep "$@"\n')
+        (shims / "sleep").chmod(0o755)
+        result = self.jobs("cancel", env=dict(self.env, PATH=f"{shims}:{os.environ['PATH']}"))
+        self.assertEqual((result.returncode, result.stdout), (0, "cancelled (exit 7)\n"), result.stderr)
+
     def test_control_term_ignoring_worker_gets_sigkill(self):
         ready = self.home / "ready"
         process = self.victim("import pathlib, signal, sys, time\n"
@@ -706,11 +767,16 @@ class ProbeTests(IdentityTestCase):
                     victim = self.victim()
                     (self.job / "pid").write_text(f"{victim.pid}\n")
                     (self.job / "pid.start").write_text(corrupt + "\n")
-                    self.assertEqual(self.jobs("status", env=env).stdout, "dead (invalid pid metadata)\n")
-                    self.assertEqual(self.jobs("wait", env=env).stdout.strip(), "dead (invalid pid metadata)")
-                    cancelled = self.jobs("cancel", env=env)
-                    self.assertEqual(cancelled.returncode, 1)
-                    self.assertIn("invalid start time", cancelled.stderr)
+                    status = self.jobs("status", env=env)
+                    self.assertEqual(status.stdout, "unknown (invalid start time file)\n")
+                    self.assertIn("invalid start time", status.stderr)
+                    for command in ("wait", "cancel", "rm"):
+                        refused = self.jobs(command, env=env)
+                        self.assertEqual(refused.returncode, 1, (command, refused.stdout, refused.stderr))
+                        self.assertIn("invalid start time", refused.stderr)
+                        self.assertIn(f"ps -o lstart=,command= -p {victim.pid}", refused.stderr)
+                    self.assertTrue(self.job.is_dir())
+                    self.assertFalse((self.job / "exit").exists())
                     self.holder_file.write_text(f"{victim.pid}\n")
                     self.holder_start.write_text(corrupt + "\n")
                     closed = self.jobs("close", env=env)
@@ -719,6 +785,33 @@ class ProbeTests(IdentityTestCase):
                     self.holder_start.unlink()
                     self.assert_alive(victim)
                     victim.kill()
+
+    def test_start_file_removed_after_the_first_look_is_not_invalid(self):
+        # The worker removes its PID file and then the start file on the way out.
+        victim = self.victim()
+        path, start = self.holder_file, self.holder_start
+        path.write_text(f"{victim.pid}\n")
+        start.write_text(OTHER_START + "\n")
+        bash_env = self.home / "bash-env"
+        bash_env.write_text(f'kill() {{ /bin/rm -f "{path}" "{start}"; builtin kill "$@"; }}\n')
+        result = subprocess.run(["/bin/bash", "-c", 'source "$1/scripts/lib/common.sh"; recorded_pid_identity "$2" "$3"; echo "rc=$?"',
+                                 "probe", str(ROOT), str(path), str(victim.pid)], env=dict(self.env, BASH_ENV=str(bash_env)),
+                                capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+        self.assertEqual(result.stdout.strip(), "rc=5", result.stderr)
+
+    def test_older_job_on_a_reused_live_pid_stays_running_and_says_how_to_leave(self):
+        # No start file, so nothing shows this PID went to another process. Nothing may be signalled or removed.
+        victim = self.reused()
+        (self.job / "pid.start").unlink()
+        self.assertEqual(self.jobs("status").stdout, "running\n")
+        removed = self.jobs("rm")
+        self.assertEqual((removed.returncode, removed.stderr.strip()), (1, f"job is running (pid {victim.pid}); cancel it first"))
+        self.assertTrue(self.job.is_dir())
+        cancelled = self.jobs("cancel")
+        self.assertEqual(cancelled.returncode, 1)
+        self.assertIn("you can move", cancelled.stderr)
+        self.assertIn(str(self.job), cancelled.stderr)
+        self.assert_alive(victim)
 
     def test_a_recorded_exit_wins_behind_a_blocked_ps(self):
         victim = self.reused()

@@ -935,6 +935,8 @@ working notes, including per-benchmark caveats, live in
 
 These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
 
+A live PID whose start time file is invalid is not treated as finished either: `status` reads `unknown (invalid start time file)`, and `wait`, `cancel`, `close` and `rm` refuse. Check it with `ps -o lstart=,command= -p PID`. If that PID is not the job's worker, the worker is gone and you can move the job directory to the trash by hand.
+
 A live PID whose start time differs from the recorded one is treated as another process: `status` answers `dead (worker gone, no exit recorded)` and `cancel` answers `not running` while that process keeps running. A note on stderr says so, with the command to compare the two.
 
 ## 📜 Release history

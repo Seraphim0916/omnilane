@@ -304,7 +304,10 @@ recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2
   # jobs list comes here once per job directory. A gone process has no identity to
   # compare, so it needs neither the start file nor ps; a refused probe needs both.
   pid_is_gone "$pid" && return 1
-  [[ -f "$start_path" && ! -L "$start_path" ]] || return 3
+  if [[ ! -f "$start_path" || -L "$start_path" ]]; then
+    [[ -e "$path" || -L "$path" ]] || return 5
+    return 3
+  fi
   size="$(wc -c 2>/dev/null < "$start_path" | tr -d '[:space:]')" || size=""
   if ! recorded="$(cat "$start_path" 2>/dev/null)" || [[ -z "$size" ]]; then
     [[ -e "$path" || -L "$path" ]] || return 5

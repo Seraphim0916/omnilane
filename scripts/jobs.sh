@@ -166,6 +166,13 @@ note_pid_mismatch() { # pid file, pid
   printf 'omnilane: PID %s is running, but its start time differs from the one recorded for this job, so it is treated as another process and was left alone. If you expected this job to be alive, compare: ps -o lstart=,command= -p %s with %s.start\n' "$2" "$2" "$1" >&2
 }
 
+# A live PID with a start file that cannot be read may still be this job's worker,
+# so nothing may treat it as finished. Only a person can tell it from a reused PID.
+invalid_start_message() { # job id, job directory, pid, what was done
+  printf 'job %s has an invalid start time file, so PID %s cannot be confirmed as its worker and %s. Check it with: ps -o lstart=,command= -p %s. If it is this job'"'"'s worker, stop it by hand with: kill -TERM %s. If it is not, leave that process alone: the worker is gone, and you can move %s to the trash.' \
+    "$1" "$3" "$4" "$3" "$3" "$2"
+}
+
 older_job_message() { # job id, pid, signal flag
   printf 'job %s was started by an older omnilane that recorded no process start time, so PID %s cannot be confirmed as its worker and no signal was sent. Check it with: ps -o lstart=,command= -p %s. If it is this job'"'"'s worker, stop it by hand with: kill %s %s. If it is not, leave that process alone: the worker is gone, and you can move %s to the trash.' \
     "$1" "$2" "$2" "$3" "$2" "$JOB_DIR"
@@ -204,8 +211,9 @@ read_cli_job_state() {
           JOB_STATE_REASON="ps blocked"
           echo "omnilane: $(ps_unusable_message "$RECORDED_PID" status "${directory##*/}")" >&2 ;;
         3)
-          JOB_STATE="dead"
-          JOB_STATE_REASON="invalid pid metadata" ;;
+          JOB_STATE="unknown"
+          JOB_STATE_REASON="invalid start time file"
+          echo "omnilane: $(invalid_start_message "${directory##*/}" "$directory" "$RECORDED_PID" "this job is not treated as finished")" >&2 ;;
       esac
     fi
   fi
@@ -1387,12 +1395,9 @@ case "${1:-}" in
           if [[ -e "$exit_path" || -L "$exit_path" ]]; then
             continue
           fi
-          if [[ "$wait_pid_state" -eq 3 ]]; then
-            echo "dead (invalid pid metadata)"
-          else
-            note_pid_mismatch "$JOB_DIR/pid" "$pid"
-            echo "dead (worker gone, no exit recorded)"
-          fi
+          [[ "$wait_pid_state" -ne 3 ]] || die 1 "$(invalid_start_message "${JOB_DIR##*/}" "$JOB_DIR" "$pid" "wait stopped without an answer")"
+          note_pid_mismatch "$JOB_DIR/pid" "$pid"
+          echo "dead (worker gone, no exit recorded)"
           exit 125
         fi
       fi
@@ -1429,7 +1434,7 @@ case "${1:-}" in
     case "$cancel_identity" in
       0) ;;
       2) die 1 "$(ps_unusable_message "$pid" cancel "$2")" ;;
-      3) die 1 "job $2 has an invalid start time file, so PID $pid cannot be confirmed as its worker and no signal was sent" ;;
+      3) die 1 "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "no signal was sent")" ;;
       4)
         older_state=0
         older_pid_state "$pid" || older_state=$?
@@ -1453,7 +1458,10 @@ case "${1:-}" in
     while [[ "$cancel_waited" -lt 5 ]]; do
       # finish_job records exit before publishing its completion inbox record.
       # Give the worker the full grace period to finish that cleanup as well.
-      recorded_pid_identity "$JOB_DIR/pid" "$pid" || break
+      # A lost or damaged start file leaves the worker unidentified, not gone.
+      cancel_identity=0
+      recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
+      case "$cancel_identity" in 0|3|4) ;; *) break ;; esac
       sleep 1; cancel_waited=$((cancel_waited + 1))
     done
     # Checked again before SIGKILL: the worker may be gone and its PID reused.
@@ -1470,10 +1478,12 @@ case "${1:-}" in
         echo "cancelled (invalid exit metadata)"
       fi
     else
-      cancel_identity=0
-      recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
-      [[ "$cancel_identity" -ne 0 ]] || die 1 "cancel could not terminate worker pid $pid"
-      [[ "$cancel_identity" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
+      # 137 says the worker is dead, so it is written only once that is known.
+      cancel_state=0
+      recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_state=$?
+      [[ "$cancel_state" -ne 0 ]] || die 1 "cancel could not terminate worker pid $pid"
+      [[ "$cancel_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
+      [[ "$cancel_state" -ne 3 ]] || die 1 "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
       (umask 077; printf '137\n' > "$exit_path")
       echo "cancelled (exit 137)"
     fi
@@ -1490,6 +1500,7 @@ case "${1:-}" in
         rm_pid_state=0
         recorded_pid_state "$JOB_DIR/pid" "$RECORDED_PID" || rm_pid_state=$?
         [[ "$rm_pid_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$RECORDED_PID" rm "$2")"
+        [[ "$rm_pid_state" -ne 3 ]] || die 1 "$(invalid_start_message "$2" "$JOB_DIR" "$RECORDED_PID" "the job was not removed")"
         [[ "$rm_pid_state" -ne 0 ]] || die 1 "job is running (pid $RECORDED_PID); cancel it first"
       fi
     fi
