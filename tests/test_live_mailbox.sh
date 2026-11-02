@@ -19,10 +19,28 @@ mkdir -p "$TEST_BASE"
 TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-tests.XXXXXX")"
 
 test_completed=0
+live_job_home=""
+live_job_id=""
+# A case that registers its job gets it cancelled on every exit path, and the
+# directory goes only after no process names the job's home, or 10s pass.
+stop_live_job() {
+  [[ -n "$live_job_id" && ! -e "$live_job_home/jobs/$live_job_id/exit" ]] || return 0
+  OMNILANE_HOME="$live_job_home" "$ROOT/scripts/jobs.sh" cancel "$live_job_id" >/dev/null 2>&1 || true
+  local tries=0
+  while [[ -n "$(processes_under "$live_job_home")" && "$tries" -lt 100 ]]; do
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  [[ -z "$(processes_under "$live_job_home")" ]] || {
+    printf 'live job %s still running after cancel: %s\n' "$live_job_id" "$(processes_under "$live_job_home")" >&2
+    return 1
+  }
+}
 cleanup() {
   local rc=$?
   trap - EXIT
   if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
+  stop_live_job || rc=1
   /bin/rm -rf -- "$TEST_ROOT"
   rmdir "$TEST_BASE" 2>/dev/null || true
   exit "$rc"
@@ -32,6 +50,12 @@ trap cleanup EXIT
 fail() {
   printf '%s\n' "$1" >&2
   exit 1
+}
+
+# PIDs whose command line contains $1. awk reads it from the environment so that
+# its own command line does not match.
+processes_under() {
+  ps -axo pid=,command= | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }'
 }
 
 wait_for_file() {
@@ -380,16 +404,18 @@ PY
     --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
     triage - < "$task")"
   job_dir="$home/jobs/$job"
+  live_job_home="$home" live_job_id="$job"
+  if [[ -n "${LIVE_LARGE_HOME_FILE:-}" ]]; then printf '%s\n' "$home" > "$LIVE_LARGE_HOME_FILE"; fi
   while ! grep -Fq '"method":"turn/start"' "$input" 2>/dev/null && [[ "$tries" -lt 1800 ]]; do
     sleep 0.1; tries=$((tries + 1))
   done
-  grep -Fq '"method":"turn/start"' "$input" 2>/dev/null || {
-    OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" cancel "$job" >/dev/null 2>&1
-    fail "fake Codex did not receive the first turn"
-  }
+  grep -Fq '"method":"turn/start"' "$input" 2>/dev/null || fail "fake Codex did not receive the first turn"
   wait_for_lines "$job_dir/out.txt" 1 || fail "Codex agentMessage was not written"
   # The fake completes the turn only after a steer; finish it so close exits 0.
-  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "done" >/dev/null
+  local send_job="$job"
+  # codex-live-large-task-cleanup makes this step fail on purpose.
+  if [[ "${LIVE_LARGE_FAIL_SEND:-0}" == 1 ]]; then send_job="no-such-job"; fi
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$send_job" "done" >/dev/null
   wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered reply did not complete the turn"
   close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
     fail "Codex live close failed: $close_out"
@@ -419,6 +445,21 @@ assert "HEAD-MARKER" in sent and "TAIL-MARKER" in sent
 assert len(sent.encode()) <= 102400 + 200, len(sent.encode())
 assert len(sent.encode()) < pathlib.Path(os.environ["TASK"]).stat().st_size
 PY
+}
+
+case_codex_live_large_task_cleanup() {
+  # The large task's job has no idle timeout, so a step that fails must not leave it running.
+  local marker="$TEST_ROOT/large-task-home" rc=0 home left
+  LIVE_LARGE_FAIL_SEND=1 LIVE_LARGE_HOME_FILE="$marker" \
+    bash "$0" --omnilane-offline-child codex-live-large-task >/dev/null 2>&1 || rc=$?
+  [[ "$rc" -ne 0 ]] || fail "the large live task passed although send failed"
+  home="$(cat "$marker" 2>/dev/null)" || fail "the large live task did not record its job"
+  left="$(processes_under "$home")"
+  if [[ -n "$left" ]]; then
+    # shellcheck disable=SC2086
+    kill -KILL $left 2>/dev/null || true
+    fail "a large live task that failed at send left processes: $left"
+  fi
 }
 
 case_codex_live_fallback() {
@@ -1856,6 +1897,8 @@ case "$CASE" in
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
   bash "$0" --omnilane-offline-child codex-live-large-task
   printf 'ok - Codex live large task truncates only the worker copy\n'
+  bash "$0" --omnilane-offline-child codex-live-large-task-cleanup
+  printf 'ok - Codex live large task stops its job when a step fails\n'
     bash "$0" --omnilane-offline-child codex-live-fallback
     printf 'ok - Codex failed handshake degrades to single-shot\n'
     bash "$0" --omnilane-offline-child grok-killed-runner
@@ -1892,6 +1935,7 @@ case "$CASE" in
   jobs-send-json-escape) case_jobs_send_json_escape_round_trip ;;
   codex-live-rpc) case_codex_live_rpc ;;
   codex-live-large-task) case_codex_live_large_task ;;
+  codex-live-large-task-cleanup) case_codex_live_large_task_cleanup ;;
     codex-live-fallback) case_codex_live_fallback ;;
     codex-killed-runner) case_codex_killed_runner_reaps_app_server ;;
     codex-app-server-eof-cleanup) case_codex_app_server_eof_cleanup ;;

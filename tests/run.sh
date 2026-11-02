@@ -4342,6 +4342,7 @@ done
 test_live_mailbox_case call-timeout-warnings "live per-call timeout dispatch warnings"
 test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
 test_live_mailbox_case codex-live-large-task "Codex live large task truncates only the worker copy"
+test_live_mailbox_case codex-live-large-task-cleanup "Codex live large task stops its job when a step fails"
 test_live_mailbox_case codex-close-deadline "Codex worker close deadline preserves queued input and precedes jobs timeout"
 close_floor_out="$(bash "$ROOT/tests/test_jobs_close_deadline_floor.sh" --omnilane-offline-child 2>&1)" &&
   pass "jobs close waits its full 11s deadline whatever the wall-clock second" ||
