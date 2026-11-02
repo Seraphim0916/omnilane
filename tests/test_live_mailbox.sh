@@ -19,30 +19,51 @@ mkdir -p "$TEST_BASE"
 TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-tests.XXXXXX")"
 
 test_completed=0
+# Runs a command with a limit of $1 seconds, as common.sh does for ps: alarm survives
+# exec and so does the SIG_IGN cleanup sets for INT and TERM. A timeout returns 142.
+with_limit() {
+  perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' "$@"
+}
 live_job_home=""
 live_job_id=""
-# A case that registers its job gets it cancelled on every exit path, and the
-# directory goes only after no process names the job's home, or 10s pass.
+# A case that registers its job gets it cancelled on every exit path. The exit
+# file only decides whether to cancel: jobs.sh records the status before its own
+# cleanup, so the wait for every process naming the job's home always runs.
+# Cancel and each ps have their own limit, and the wait ends after 10s.
 stop_live_job() {
-  [[ -n "$live_job_id" && ! -e "$live_job_home/jobs/$live_job_id/exit" ]] || return 0
-  OMNILANE_HOME="$live_job_home" "$ROOT/scripts/jobs.sh" cancel "$live_job_id" >/dev/null 2>&1 || true
-  local tries=0
-  while [[ -n "$(processes_under "$live_job_home")" && "$tries" -lt 100 ]]; do
+  [[ -n "$live_job_id" ]] || return 0
+  local cancel_rc=0 deadline
+  if [[ ! -e "$live_job_home/jobs/$live_job_id/exit" ]]; then
+    with_limit 15 env OMNILANE_HOME="$live_job_home" \
+      "$ROOT/scripts/jobs.sh" cancel "$live_job_id" >/dev/null 2>&1 || cancel_rc=$?
+  fi
+  deadline=$((SECONDS + 10))
+  while :; do
+    processes_under "$live_job_home/" || {
+      printf 'could not list processes to confirm live job %s stopped (cancel rc %s)\n' "$live_job_id" "$cancel_rc" >&2
+      return 1
+    }
+    [[ -n "$LIVE_PIDS" && "$SECONDS" -lt "$deadline" ]] || break
     sleep 0.1
-    tries=$((tries + 1))
   done
-  [[ -z "$(processes_under "$live_job_home")" ]] || {
-    printf 'live job %s still running after cancel: %s\n' "$live_job_id" "$(processes_under "$live_job_home")" >&2
+  [[ -z "$LIVE_PIDS" ]] || {
+    printf 'live job %s still running 10s after cancel (cancel rc %s): %s\n' "$live_job_id" "$cancel_rc" "$LIVE_PIDS" >&2
     return 1
   }
 }
 cleanup() {
   local rc=$?
   trap - EXIT
+  # A signal now would skip stopping the job; every step below has a limit.
+  trap '' INT TERM HUP
   if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
-  stop_live_job || rc=1
-  /bin/rm -rf -- "$TEST_ROOT"
-  rmdir "$TEST_BASE" 2>/dev/null || true
+  if stop_live_job; then
+    /bin/rm -rf -- "$TEST_ROOT"
+    rmdir "$TEST_BASE" 2>/dev/null || true
+  else
+    printf 'kept %s for the job that may still run\n' "$TEST_ROOT" >&2
+    rc=1
+  fi
   exit "$rc"
 }
 trap cleanup EXIT
@@ -52,10 +73,15 @@ fail() {
   exit 1
 }
 
-# PIDs whose command line contains $1. awk reads it from the environment so that
-# its own command line does not match.
+# Sets LIVE_PIDS to the PIDs whose command line contains $1, and fails when ps
+# fails or takes over 5s, so a failed query never reads as "nothing left".
+# awk reads the mark from the environment so that its own command line does not match.
 processes_under() {
-  ps -axo pid=,command= | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }'
+  local listing
+  LIVE_PIDS=""
+  listing="$(with_limit 5 ps -axo pid=,command=)" || return 1
+  [[ -n "$listing" ]] || return 1
+  LIVE_PIDS="$(printf '%s\n' "$listing" | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }')"
 }
 
 wait_for_file() {
@@ -449,15 +475,20 @@ PY
 
 case_codex_live_large_task_cleanup() {
   # The large task's job has no idle timeout, so a step that fails must not leave it running.
-  local marker="$TEST_ROOT/large-task-home" rc=0 home left
+  local marker="$TEST_ROOT/large-task-home" out="$TEST_ROOT/large-task.out" rc=0 home left
   LIVE_LARGE_FAIL_SEND=1 LIVE_LARGE_HOME_FILE="$marker" \
-    bash "$0" --omnilane-offline-child codex-live-large-task >/dev/null 2>&1 || rc=$?
+    bash "$0" --omnilane-offline-child codex-live-large-task >"$out" 2>&1 || rc=$?
   [[ "$rc" -ne 0 ]] || fail "the large live task passed although send failed"
+  grep -Fq 'invalid job id' "$out" || fail "the large live task did not fail at the injected send: $(tail -n 5 "$out")"
   home="$(cat "$marker" 2>/dev/null)" || fail "the large live task did not record its job"
-  left="$(processes_under "$home")"
+  processes_under "$home/" || fail "could not list processes after the large live task"
+  left="$LIVE_PIDS"
   if [[ -n "$left" ]]; then
-    # shellcheck disable=SC2086
-    kill -KILL $left 2>/dev/null || true
+    # Signal only the PIDs that still name this task's private home right now.
+    if processes_under "$home/" && [[ -n "$LIVE_PIDS" ]]; then
+      # shellcheck disable=SC2086
+      kill -KILL $LIVE_PIDS 2>/dev/null || true
+    fi
     fail "a large live task that failed at send left processes: $left"
   fi
 }
