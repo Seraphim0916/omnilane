@@ -1211,6 +1211,24 @@ class HungPsTests(IdentityTestCase):
                 self.holder_file.unlink()
                 self.holder_start.unlink()
 
+    def test_a_perl_found_but_not_executable_still_lets_ps_answer(self):
+        # bash answers 126 here, which is also what a ps that cannot be executed answers.
+        shims = self.home / "bad-perl"
+        shims.mkdir()
+        (shims / "perl").write_text("#!/nonexistent/interpreter\n")
+        (shims / "perl").chmod(0o755)
+        result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"',
+                                env=dict(self.env, PATH=f"{shims}:{os.environ['PATH']}"))
+        self.assertEqual(len(result.stdout.splitlines()), 2, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.splitlines()[1], "rc=0")
+
+    def test_any_other_failure_of_ps_comes_back_unchanged(self):
+        counted = self.home / "ps-calls"
+        env = self.hung_ps_env(f'echo called >> "{counted}"\nexit 23')
+        result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"', env=env)
+        self.assertEqual(result.stdout.strip(), "rc=23")
+        self.assertEqual(counted.read_text().count("called"), 1)
+
     def test_a_slow_ps_within_the_limit_still_answers(self):
         victim = self.live_job()
         result, _ = self.timed("status", env=self.hung_ps_env('/bin/sleep 1\nexec /bin/ps "$@"'))
