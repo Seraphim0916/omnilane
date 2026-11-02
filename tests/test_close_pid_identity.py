@@ -8,6 +8,7 @@ import offline_env  # noqa: F401
 import json
 import os
 import pathlib
+import select
 import shutil
 import signal
 import stat
@@ -195,6 +196,7 @@ class CloseAtStartTests(IdentityTestCase):
                 self.holder_start.unlink()
 
     def test_pid_and_start_removed_during_the_read_is_not_an_older_job(self):
+        self.holder_start.write_text(OTHER_START + "\n")
         shims = self.home / "shims"
         shims.mkdir()
         (shims / "cat").write_text(textwrap.dedent(f"""\
@@ -224,6 +226,12 @@ class CloseAtStartTests(IdentityTestCase):
 class CloseLatePidTests(IdentityTestCase):
     """The PID file appears after close started: the Perl polling path."""
 
+    @staticmethod
+    def stop_closer(closer):
+        if closer.poll() is None:
+            os.killpg(closer.pid, signal.SIGKILL)
+        closer.communicate(timeout=5)
+
     def test_control_matching_start_time_is_signalled(self):
         victim = self.victim()
         result = self.fake_close(self.late_holder(victim.pid, start_time(victim.pid)))
@@ -246,7 +254,9 @@ class CloseLatePidTests(IdentityTestCase):
     def test_real_clock_late_pid_is_not_signalled(self):
         victim = self.victim()
         closer = subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID], env=self.env,
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL,
+                                  start_new_session=True)
+        self.addCleanup(self.stop_closer, closer)
         time.sleep(1.5)
         self.holder_start.write_text(OTHER_START + "\n")
         tmp = self.job / "inbox.holder.pid.tmp"
@@ -351,10 +361,12 @@ class CancelTests(IdentityTestCase):
     def group_victim(self):
         process = subprocess.Popen([sys.executable, "-c", self.GROUP], start_new_session=True,
                                    stdout=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)
-        child = int(process.stdout.readline())
         self.addCleanup(process.stdout.close)
         self.addCleanup(process.wait, 5)
         self.addCleanup(self.kill_group, process)
+        ready, _, _ = select.select([process.stdout], [], [], 15)
+        self.assertTrue(ready, "the victim did not report its child")
+        child = int(process.stdout.readline())
         threading.Thread(target=process.wait, daemon=True).start()
         return process, child
 

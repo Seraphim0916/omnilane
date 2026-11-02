@@ -33,7 +33,7 @@ try:
     # Stands in for a worker that takes the close signal but never finishes.
     holder = subprocess.Popen(['/bin/sh', '-c', 'trap "" USR1; exec sleep 60'], start_new_session=True)
     start = subprocess.run(['/bin/ps', '-o', 'lstart=', '-p', str(holder.pid)], check=True, capture_output=True,
-                           text=True, env=dict(os.environ, TZ='UTC', LC_ALL='C')).stdout.strip()
+                           text=True, timeout=10, env=dict(os.environ, TZ='UTC', LC_ALL='C')).stdout.strip()
     (job / 'inbox.holder.pid.start').write_text(start + '\n')
     (job / 'inbox.holder.pid').write_text(f'{holder.pid}\n')
     env = {k: v for k, v in os.environ.items() if not k.startswith('OMNILANE_AA_')}
