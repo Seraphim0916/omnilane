@@ -933,7 +933,7 @@ working notes, including per-benchmark caveats, live in
 - A dead PID behaves as before, and `status`, `wait` and `rm` keep their `kill -0` answer for such a job.
 - Jobs started after the upgrade are not affected.
 
-These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
+These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Two cases need no `ps` and are still answered there: a job with a recorded exit, and a recorded PID that `kill -0` reports as gone. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
 
 A live PID whose start time file is invalid is not treated as finished either: `status` reads `unknown (invalid start time file)`, and `wait`, `cancel`, `close` and `rm` refuse. Check it with `ps -o lstart=,command= -p PID`. If that PID is not the job's worker, the worker is gone and you can move the job directory to the trash by hand.
 

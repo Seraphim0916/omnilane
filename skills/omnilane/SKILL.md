@@ -156,7 +156,9 @@ make the commit yourself. Do not widen the sandbox to the shared `.git`.
 
 **`dispatch` and `jobs close|cancel|wait|rm` need `ps`, so they refuse inside
 such a sandbox**, even with `--caller-context`. That refusal means "cannot
-confirm", not "the process is dead". Rerun them outside the sandbox. `jobs
+confirm", not "the process is dead". Rerun them outside the sandbox. Two cases
+need no `ps` and are still answered there: a job with a recorded exit, and a
+recorded PID that `kill -0` reports as gone. `jobs
 status` still answers there: `unknown (ps blocked)`, or state `unknown` in
 `--json`, is not an end state. In such a sandbox `tests/run.sh` says on one line
 that `ps` cannot read start times, and the tests that start a job or check a
