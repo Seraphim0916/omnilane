@@ -1072,6 +1072,52 @@ class HungPsTests(IdentityTestCase):
         result, _ = self.common('pid_file_start_time "$$"; echo "rc=$?"', env=blocked)
         self.assertEqual(result.stdout.strip(), "rc=126")
 
+    def target_only_ps_env(self, pid, script):
+        return self.hung_ps_env(f'[[ "$*" != *" -p {pid}" ]] || {{ {script}; }}\nexec /bin/ps "$@"')
+
+    def test_ps_failing_on_the_target_alone_says_nothing_about_it(self):
+        # ps answers for every other process, so asking about this shell would call the job dead.
+        for name, script in (("times out", "exec /bin/sleep 30"), ("refused", "exit 1")):
+            with self.subTest(name):
+                victim = self.live_job()
+                env = self.target_only_ps_env(victim.pid, script)
+                result, took = self.timed("status", env=env)
+                self.assertEqual(result.stdout, "unknown (ps blocked)\n", result.stderr)
+                self.assertLess(took, self.WITHIN)
+                for command in ("wait", "cancel", "rm"):
+                    result, _ = self.timed(command, env=env)
+                    self.assertEqual(result.returncode, 1, (command, result.stdout, result.stderr))
+                    self.assertIn(f"rerun jobs {command} outside the sandbox", result.stderr)
+                    self.assertTrue(self.job.is_dir(), command)
+                    self.assertFalse((self.job / "exit").exists(), command)
+                self.assert_alive(victim)
+                victim.kill()
+
+    def test_close_when_ps_fails_on_the_target_alone(self):
+        for name, late in (("present at start", False), ("appears during the poll", True)):
+            with self.subTest(name):
+                victim = self.victim()
+                start = start_time(victim.pid)
+
+                def publish():
+                    self.holder_start.write_text(start + "\n")
+                    self.holder_file.write_text(f"{victim.pid}\n")
+
+                if late:
+                    timer = threading.Timer(1, publish)
+                    timer.start()
+                    self.addCleanup(timer.join)
+                else:
+                    publish()
+                result, took = self.timed("close", env=self.target_only_ps_env(victim.pid, "exec /bin/sleep 30"))
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("rerun jobs close outside the sandbox", result.stderr)
+                self.assertLess(took, self.WITHIN)
+                self.assert_alive(victim)
+                victim.kill()
+                self.holder_file.unlink()
+                self.holder_start.unlink()
+
     def test_a_slow_ps_within_the_limit_still_answers(self):
         victim = self.live_job()
         result, _ = self.timed("status", env=self.hung_ps_env('/bin/sleep 1\nexec /bin/ps "$@"'))

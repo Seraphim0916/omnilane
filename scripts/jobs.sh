@@ -713,8 +713,8 @@ case "${1:-}" in
             $recorded = $1;
             my $live = start_of($pid);
             if (!defined $live) {
-              # Only a blocked ps fails on this process, which exists. ESRCH needs no ps.
-              unless (defined start_of($$) || (!kill(0, $pid) && $!{ESRCH})) { print "blocked $pid\n"; exit 4; }
+              # ps failing says nothing about the process. Only ESRCH shows that it is gone.
+              unless (!kill(0, $pid) && $!{ESRCH}) { print "blocked $pid\n"; exit 4; }
             } elsif ($live eq $recorded) {
               exit 1 if time >= $end;
               if (kill("USR1", $pid)) { print "signaled\n"; }

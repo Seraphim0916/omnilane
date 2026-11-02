@@ -312,9 +312,8 @@ recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2
   fi
   [[ "$size" -le 129 && "$recorded" =~ ^[\ -~]{1,128}$ ]] || return 3
   if ! live="$(pid_file_start_time "$pid")"; then
-    # ps reports a missing process and a blocked ps the same way. Asking about
-    # this shell tells them apart: it exists, so only a blocked ps can fail.
-    pid_file_start_time "$$" >/dev/null && return 1
+    # ps can fail on this PID and still answer for others, so its failure says
+    # nothing about the process. Only kill -0 can show that it is gone.
     pid_is_gone "$pid" && return 1
     return 2
   fi
