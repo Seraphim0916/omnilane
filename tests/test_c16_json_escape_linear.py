@@ -5,7 +5,9 @@ import offline_env  # Activate suite isolation for direct file execution.
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
+import tempfile
 import time
 import unittest
 
@@ -43,8 +45,21 @@ OLD_JSON_ESCAPE = rb'''json_escape() {
 }'''
 
 
+CASES = [
+    ("empty", b""),
+    ("del", b"\x7f"),
+    ("punctuation", b'\\"/'),
+    ("utf8", "台灣中文😀é日本語𐐷".encode("utf-8")),
+    ("invalid_utf8", b"\xc0\xaf\xed\xa0\x80\xf4\x90\x80\x80\xff\xfe\xc2"),
+    ("all_non_nul_bytes", bytes(range(1, 256))),
+    ("trailing_newlines", b"a\n\n"),
+    ("long_ascii", b"a" * 8192),
+    ("long_mixed", ("台灣😀".encode() + b'\xff\\"/\x01\t\n') * 256),
+] + [("control_%02x" % c, bytes([c])) for c in range(1, 32)]
+
+
 def extract_escape(source):
-    match = re.search(rb"(?ms)^json_escape\(\) \{\n.*?^\}", source)
+    match = re.search(rb"(?ms)^json_escape_loop\(\) \{\n.*?^json_escape\(\) \{\n.*?^\}", source)
     if match is None:
         raise AssertionError("json_escape definition not found")
     return match.group()
@@ -60,33 +75,58 @@ class JsonEscapeLinearTests(unittest.TestCase):
         # Equal functions would make the byte comparison vacuous.
         self.assertNotEqual(self.old, self.new)
 
-    def escape(self, function, payload, locale, timeout=30):
+    def escape(self, function, payload, locale, timeout=30, call=b"json_escape", path=None):
         # A sentinel preserves trailing newlines through command substitution.
         # Bash strings cannot contain NUL; all other bytes travel over stdin.
-        script = function + b'\ns=$(cat; printf x); s=${s%x}; json_escape "$s"'
-        return subprocess.run(
+        # PATH changes only after cat ran, so the function alone sees the stub.
+        script = (function + b'\ns=$(cat; printf x); s=${s%x}; '
+                  b'[ -z "${JE_PATH:-}" ] || PATH=$JE_PATH; ' + call + b' "$s"')
+        env = dict(os.environ, LC_ALL=locale)
+        if path is not None:
+            env["JE_PATH"] = str(path)
+        result = subprocess.run(
             [BASH, "-c", script], input=payload, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, env=dict(os.environ, LC_ALL=locale),
-            check=True, timeout=timeout, cwd=ROOT).stdout
+            stderr=subprocess.PIPE, env=env, check=True, timeout=timeout, cwd=ROOT)
+        self.assertEqual(result.stderr, b"")
+        return result.stdout
 
     def test_byte_compatibility(self):
-        cases = [
-            ("empty", b""),
-            ("del", b"\x7f"),
-            ("punctuation", b'\\"/'),
-            ("utf8", "台灣中文😀é日本語𐐷".encode("utf-8")),
-            ("invalid_utf8", b"\xc0\xaf\xed\xa0\x80\xf4\x90\x80\x80\xff\xfe\xc2"),
-            ("all_non_nul_bytes", bytes(range(1, 256))),
-            ("trailing_newlines", b"a\n\n"),
-            ("long_ascii", b"a" * 8192),
-            ("long_mixed", ("台灣😀".encode() + b'\xff\\"/\x01\t\n') * 256),
-        ]
-        cases += [("control_%02x" % c, bytes([c])) for c in range(1, 32)]
         for locale in ("C", "en_US.UTF-8"):
-            for name, payload in cases:
+            for name, payload in CASES:
                 with self.subTest(locale=locale, case=name):
                     self.assertEqual(self.escape(self.old, payload, locale),
                                      self.escape(self.new, payload, locale))
+
+    def test_loop_and_python_paths_match(self):
+        for locale in ("C", "en_US.UTF-8"):
+            for name, payload in CASES:
+                with self.subTest(locale=locale, case=name):
+                    self.assertEqual(
+                        self.escape(self.new, payload, locale, call=b"json_escape_loop"),
+                        self.escape(self.new, payload, locale, call=b"json_escape_python"))
+
+    def test_without_python3_short_and_long_input_use_the_loop(self):
+        unit = b'a\\"\x01\n' + "台".encode() + b"\xff"
+        escaped = b'a\\\\\\"\\u0001\\n' + "台".encode() + b"\xff"
+        with tempfile.TemporaryDirectory() as empty:
+            for count in (1, 512):
+                with self.subTest(count=count):
+                    self.assertEqual(self.escape(self.new, unit * count, "en_US.UTF-8", path=empty),
+                                     escaped * count)
+
+    def test_python_starts_from_1024_characters_and_a_failure_uses_the_loop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "called"
+            stub = Path(directory) / "python3"
+            stub.write_text('#!/bin/sh\n: > "%s"\nexit 1\n' % marker)
+            stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+            for count, called in ((1023, False), (1024, True)):
+                for locale, payload in (("C", b"a" * count), ("en_US.UTF-8", "台".encode() * count)):
+                    with self.subTest(count=count, locale=locale):
+                        self.assertEqual(self.escape(self.new, payload, locale, path=directory), payload)
+                        self.assertEqual(marker.exists(), called)
+                        if called:
+                            marker.unlink()
 
     def test_256_kib_under_five_seconds(self):
         # Independently specified output checks correctness as well as speed.

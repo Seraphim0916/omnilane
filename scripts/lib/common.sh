@@ -32,9 +32,37 @@ private_job_files() (
   done
 )
 
+# The unquoted backslash case pattern intentionally matches one backslash.
+# shellcheck disable=SC1003
+json_escape_loop() {
+  local s="$1" out="" ch escaped code i
+  for ((i = 0; i < ${#s}; i++)); do
+    ch="${s:i:1}"
+    case "$ch" in
+      '"') out="$out\\\"" ;;
+      \\) out="$out\\\\" ;;
+      $'\b') out="$out\\b" ;;
+      $'\f') out="$out\\f" ;;
+      $'\n') out="$out\\n" ;;
+      $'\r') out="$out\\r" ;;
+      $'\t') out="$out\\t" ;;
+      *)
+        LC_CTYPE=C printf -v code '%d' "'$ch"
+        if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
+          printf -v escaped '\\u%04x' "$code"
+          out="$out$escaped"
+        else
+          out="$out$ch"
+        fi
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 # Escape bytes without decoding UTF-8 or passing the payload in argv.
-json_escape() {
-  printf '%s' "$1" | python3 -B -c '
+json_escape_python() {
+  printf '%s' "$1" | python3 -I -S -B -c '
 import sys
 table = [bytes((c,)) for c in range(256)]
 for c in range(32):
@@ -43,7 +71,19 @@ for c, escaped in ((8, b"\\b"), (12, b"\\f"), (10, b"\\n"),
                    (13, b"\\r"), (9, b"\\t"), (34, b"\\\""), (92, b"\\\\")):
     table[c] = escaped
 sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())))
-'
+' 2>/dev/null
+}
+
+# The Bash loop is quadratic on Bash 3.2 and starting Python costs about 10 ms;
+# from 1024 characters Python is measured faster in C and UTF-8 locales. Routing
+# works without python3, so a missing or failing interpreter must use the loop.
+json_escape() {
+  local out
+  if ((${#1} >= 1024)) && out="$(json_escape_python "$1")"; then
+    printf '%s' "$out"
+  else
+    json_escape_loop "$1"
+  fi
 }
 
 json_file_round_trip_valid() {
