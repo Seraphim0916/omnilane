@@ -89,8 +89,12 @@ class CancelGroupGuardTests(unittest.TestCase):
         signal.pause() child does not carry it, so this cannot prove every descendant has exited.
         """
         deadline = time.monotonic() + timeout
+        left = None
         while True:
             remaining = deadline - time.monotonic()
+            # A pause that overslept the deadline leaves the last listing to the assertion below.
+            if remaining <= 0 and left is not None:
+                break
             try:
                 listed = subprocess.run(["ps", "-axo", "pgid=,stat=,command="], env=self.env, text=True,
                                         capture_output=True, timeout=max(0.5, min(5, remaining)))
