@@ -75,13 +75,17 @@ class JsonEscapeLinearTests(unittest.TestCase):
         # Equal functions would make the byte comparison vacuous.
         self.assertNotEqual(self.old, self.new)
 
-    def escape(self, function, payload, locale, timeout=30, call=b"json_escape", path=None):
+    def escape(self, function, payload, locale, timeout=30, call=b"json_escape", path=None,
+               variables=None):
         # A sentinel preserves trailing newlines through command substitution.
         # Bash strings cannot contain NUL; all other bytes travel over stdin.
         # PATH changes only after cat ran, so the function alone sees the stub.
         script = (function + b'\ns=$(cat; printf x); s=${s%x}; '
                   b'[ -z "${JE_PATH:-}" ] || PATH=$JE_PATH; ' + call + b' "$s"')
-        env = dict(os.environ, LC_ALL=locale)
+        env = {k: v for k, v in os.environ.items() if k not in ("LC_ALL", "LC_CTYPE", "LANG")}
+        if locale is not None:
+            env["LC_ALL"] = locale
+        env.update(variables or {})
         if path is not None:
             env["JE_PATH"] = str(path)
         result = subprocess.run(
@@ -127,6 +131,50 @@ class JsonEscapeLinearTests(unittest.TestCase):
                         self.assertEqual(marker.exists(), called)
                         if called:
                             marker.unlink()
+
+    def test_big5_output_does_not_change_across_the_threshold(self):
+        # In Big5, 0xa4 0x5c is one character whose trailing byte is a
+        # backslash; the loop keeps it, a byte-wise escaper would double it.
+        try:
+            available = subprocess.run(["locale", "-a"], stdout=subprocess.PIPE,
+                                       stdin=subprocess.DEVNULL, check=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError) as error:
+            self.skipTest(f"locale -a failed: {error}")
+        if b"zh_TW.Big5" not in available.split():
+            self.skipTest("zh_TW.Big5 is not installed on this machine")
+        with tempfile.TemporaryDirectory() as empty:
+            for count in (1023, 1024, 1025):
+                payload = b"\xa4\x5c" * count
+                with self.subTest(count=count):
+                    loop = self.escape(self.old, payload, "zh_TW.Big5")
+                    self.assertEqual(len(loop), len(payload))
+                    self.assertEqual(self.escape(self.new, payload, "zh_TW.Big5"), loop)
+                    self.assertEqual(self.escape(self.new, payload, "zh_TW.Big5", path=empty), loop)
+
+    def test_python_is_used_only_in_c_posix_and_utf8_locales(self):
+        # Bash decodes with LC_ALL, then LC_CTYPE, then LANG, and C without any.
+        cases = [
+            ("C", None, True), ("POSIX", None, True), ("en_US.UTF-8", None, True),
+            ("zh_TW.UTF-8", None, True), ("C.UTF-8", None, True), ("en_US.utf8", None, True),
+            ("zh_TW.Big5", None, False), ("en_US.ISO8859-1", None, False),
+            (None, {}, True),
+            (None, {"LANG": "zh_TW.Big5"}, False),
+            (None, {"LC_CTYPE": "en_US.UTF-8", "LANG": "zh_TW.Big5"}, True),
+            (None, {"LC_CTYPE": "zh_TW.Big5", "LANG": "en_US.UTF-8"}, False),
+            ("en_US.UTF-8", {"LC_CTYPE": "zh_TW.Big5"}, True),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "called"
+            stub = Path(directory) / "python3"
+            stub.write_text('#!/bin/sh\n: > "%s"\nexit 1\n' % marker)
+            stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+            for locale, variables, called in cases:
+                with self.subTest(locale=locale, variables=variables):
+                    self.assertEqual(self.escape(self.new, b"a" * 1024, locale, path=directory,
+                                                 variables=variables), b"a" * 1024)
+                    self.assertEqual(marker.exists(), called)
+                    if called:
+                        marker.unlink()
 
     def test_256_kib_under_five_seconds(self):
         # Independently specified output checks correctness as well as speed.

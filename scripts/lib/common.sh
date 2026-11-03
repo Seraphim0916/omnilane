@@ -74,12 +74,23 @@ sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())
 ' 2>/dev/null
 }
 
+# Python escapes bytes, the loop escapes characters of the shell's locale. They
+# agree only in C and UTF-8, where no trailing byte of a character is ASCII; in
+# Big5 a 0x5c trailing byte would be doubled. Read the variables Bash decodes
+# with instead of forking `locale charmap` on every call.
+json_escape_python_locale() {
+  case "${LC_ALL:-${LC_CTYPE:-${LANG:-C}}}" in
+    C | POSIX | *.[Uu][Tt][Ff]-8 | *.[Uu][Tt][Ff]8 | *.[Uu][Tt][Ff]-8@* | *.[Uu][Tt][Ff]8@*) return 0 ;;
+  esac
+  return 1
+}
+
 # The Bash loop is quadratic on Bash 3.2 and starting Python costs about 10 ms;
 # from 1024 characters Python is measured faster in C and UTF-8 locales. Routing
 # works without python3, so a missing or failing interpreter must use the loop.
 json_escape() {
   local out
-  if ((${#1} >= 1024)) && out="$(json_escape_python "$1")"; then
+  if ((${#1} >= 1024)) && json_escape_python_locale && out="$(json_escape_python "$1")"; then
     printf '%s' "$out"
   else
     json_escape_loop "$1"
