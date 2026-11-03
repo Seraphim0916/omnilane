@@ -40,7 +40,9 @@ signal.pause()
 
 class CancelGroupGuardTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(prefix="omnilane-cancel-guard-")
+        scratch = ROOT / ".test-scratch"
+        scratch.mkdir(exist_ok=True)
+        self.temporary = tempfile.TemporaryDirectory(prefix="omnilane-cancel-guard-", dir=scratch)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.env, self.violations = isolated_environment(self.root / "isolated", os.environ["PATH"])
@@ -88,7 +90,7 @@ class CancelGroupGuardTests(unittest.TestCase):
             return False
         command = subprocess.run(["ps", "-o", "command=", "-p", str(pgid)], env=self.env, text=True,
                                  capture_output=True, timeout=5).stdout
-        return str(self.root) in command or str(ROOT) in command
+        return str(self.root) in command
 
     def wait_for(self, path, timeout=None):
         timeout = STARTUP_WAIT if timeout is None else timeout
@@ -107,6 +109,9 @@ class CancelGroupGuardTests(unittest.TestCase):
                     'printf \'%s\\n\' "$$" > "$FIXTURE_ROOT/caller.pid"\n'
                     'sleep 60 &\n'
                     'printf \'%s\\n\' "$!" > "$FIXTURE_ROOT/sibling.pid"\n')
+        # Foreground dispatch can itself become a leader (set -m); give its
+        # argv this fixture's unique root too, not just the shared repo path.
+        body = body.replace('bash "$DISPATCH"', 'bash "$DISPATCH" --workdir "$FIXTURE_ROOT"')
         source = prologue + body + '\nprintf \'%s\\n\' "$?" > "$FIXTURE_ROOT/caller.rc"\nwait\n'
         if script:
             path = self.root / "caller.sh"
@@ -429,6 +434,10 @@ printf '%s\\n' "$count" > "$SHIM_COUNT"
 case "$SHIM_MODE" in
   group-zero) /bin/ps "$@" | awk -v t="$CANCEL_TARGET" '$1 == t { $3 = 0 } { print }'; exit "${PIPESTATUS[0]}" ;;
   hide) /bin/ps "$@" | awk -v t="$CANCEL_TARGET" '$1 != t'; exit "${PIPESTATUS[0]}" ;;
+  hide-on-2)
+    if [[ "$count" -eq 2 ]]; then
+      /bin/ps "$@" | awk -v t="$CANCEL_TARGET" '$1 != t'; exit "${PIPESTATUS[0]}"
+    fi ;;
   "exit-on-$count")
     # The worker exits between cancel's identity check and this listing.
     kill -KILL "$CANCEL_TARGET"
@@ -450,15 +459,22 @@ exec /bin/ps "$@"
         self.env["SHIM_COUNT"] = str(self.root / "shim.count")
 
     def worker(self, ignore_term=False):
-        code = ("import signal, time\n"
+        ready = self.root / "worker.ready"
+        code = ("import signal, sys, time\nfrom pathlib import Path\n"
                 + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n" if ignore_term else "")
+                + "Path(sys.argv[1]).write_text('ready')\n"
                 + "time.sleep(60)\n")
-        process = subprocess.Popen([sys.executable, "-c", code], start_new_session=True, stdin=subprocess.DEVNULL)
+        process = subprocess.Popen([sys.executable, "-c", code, str(ready)],
+                                   start_new_session=True, stdin=subprocess.DEVNULL)
         self.addCleanup(process.wait, 5)
         self.addCleanup(lambda: process.poll() is None and process.kill())
         # Reaped as soon as it exits, so ps stops listing it.
         threading.Thread(target=process.wait, daemon=True).start()
-        time.sleep(0.2)
+        deadline = time.monotonic() + STARTUP_WAIT
+        while not ready.exists():
+            self.assertIsNone(process.poll(), f"worker PID {process.pid} exited before readiness ({ready})")
+            self.assertLess(time.monotonic(), deadline, f"worker PID {process.pid} did not become ready ({ready})")
+            time.sleep(0.02)
         (self.job / "pid.start").write_text(start_time(process.pid) + "\n")
         (self.job / "pid").write_text(f"{process.pid}\n")
         self.env["CANCEL_TARGET"] = str(process.pid)
@@ -476,6 +492,30 @@ exec /bin/ps "$@"
         reply = json.loads(result.stdout)
         self.assertEqual((reply["code"], reply["signal_sent"]), ("invalid-process-group", False))
         time.sleep(0.3)
+        self.assertIsNone(process.poll(), "the worker was signalled")
+        self.assertFalse((self.job / "exit").exists())
+
+    def test_failed_term_delivery_does_not_claim_term_was_sent(self):
+        process = self.worker()
+        self.env["SHIM_MODE"] = "hide-on-2"
+        # Bash uses its builtin kill before PATH; disable it only for this cancel.
+        startup = self.root / "bash-env"
+        startup.write_text("enable -n kill\n")
+        self.env["BASH_ENV"] = str(startup)
+        kill = self.root / "shims" / "kill"
+        kill.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$KILL_CALLS"\nexit 1\n')
+        kill.chmod(0o755)
+        calls = self.root / "kill.calls"
+        self.env["KILL_CALLS"] = str(calls)
+        result = self.cancel("--json")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual(reply["code"], "worker-unlisted-after-term")
+        self.assertIs(reply["signal_sent"], False)
+        self.assertEqual([line for line in calls.read_text().splitlines() if line.startswith("-TERM")],
+                         [f"-TERM -{process.pid}", f"-TERM {process.pid}"])
+        self.assertNotIn("TERM was sent", reply["reason"])
+        self.assertIn("TERM could not be delivered", reply["reason"])
         self.assertIsNone(process.poll(), "the worker was signalled")
         self.assertFalse((self.job / "exit").exists())
 
