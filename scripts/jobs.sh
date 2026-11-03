@@ -189,7 +189,7 @@ cancel_report() { # outcome, exit code or null, text
 }
 
 # A refused or failed cancel records no exit status. CANCEL_SIGNAL_SENT tells a
-# refusal before any signal from a failure after TERM was sent.
+# refusal before any signal from a failure after kill(2) accepted TERM.
 CANCEL_SIGNAL_SENT=false
 cancel_refuse() { # code, pid, reason
   if [[ "$JSON_MODE" -eq 1 ]]; then
@@ -218,13 +218,20 @@ cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE
   listing="$(LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
     "$PS_QUERY_LIMIT" ps -axo pid=,ppid=,pgid= 2>/dev/null)" || rc=$?
   verdict=""
+  # A process group of 0 would make kill -0 signal this command's own group, so only
+  # positive PIDs and groups are read; listing order keeps the outsider list stable.
   [[ "$rc" -ne 0 ]] || verdict="$(printf '%s\n' "$listing" | PID="$pid" awk '
-    $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { parent[$1] = $2; group[$1] = $3 }
+    $1 ~ /^[1-9][0-9]*$/ && $2 ~ /^[0-9]+$/ {
+      seen[$1] = 1
+      if ($3 ~ /^[1-9][0-9]*$/) { parent[$1] = $2; group[$1] = $3; order[++n] = $1 }
+    }
     END {
       target = ENVIRON["PID"]
-      if (!(target in group)) { print "unlisted"; exit }
+      if (!(target in seen)) { print "unlisted"; exit }
+      if (!(target in group)) { print "no-group"; exit }
       g = group[target]; outsiders = ""
-      for (p in group) {
+      for (i = 1; i <= n; i++) {
+        p = order[i]
         if (group[p] != g) continue
         q = p; steps = 0
         while (q != target && (q in parent) && q > 1 && steps < 100000) { q = parent[q]; steps++ }
@@ -242,6 +249,17 @@ cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE
       CANCEL_GROUP_CHANGE="PID${verdict#shared $2} in it are not part of this job"
       CANCEL_REFUSAL_CODE="shared-process-group"
       CANCEL_REFUSAL_REASON="$(printf 'job %s worker PID %s is in process group %s together with processes that are not part of this job (PID%s), so signalling the group would stop them too and no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid" "$2" "${verdict#shared $2}")"
+      return 1 ;;
+    unlisted)
+      # The listing worked but does not show the worker; the caller tells a worker
+      # that exited just now from one ps cannot see.
+      CANCEL_REFUSAL_CODE="worker-unlisted"
+      CANCEL_REFUSAL_REASON="$(printf 'the process list does not show job %s worker PID %s, but the worker is not confirmed gone, so no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid")"
+      return 1 ;;
+    no-group)
+      CANCEL_GROUP_CHANGE="ps now reports no usable process group for the worker"
+      CANCEL_REFUSAL_CODE="invalid-process-group"
+      CANCEL_REFUSAL_REASON="$(printf 'ps reports no usable process group for job %s worker PID %s (0 or missing), and signalling group 0 would reach this command'"'"'s own group, so no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid")"
       return 1 ;;
     *)
       CANCEL_REFUSAL_CODE="process-list-unavailable"
@@ -1521,10 +1539,30 @@ case "${1:-}" in
     # the whole group lets the supervisor stop the worker's session as well. The
     # group is checked again before SIGKILL; a check narrows, but cannot close, the
     # window between the ps snapshot and the signal.
-    cancel_group_check "$pid" || cancel_refuse "$CANCEL_REFUSAL_CODE" "$pid" "$CANCEL_REFUSAL_REASON"
+    if ! cancel_group_check "$pid"; then
+      if [[ "$CANCEL_REFUSAL_CODE" == worker-unlisted ]]; then
+        # Gone between the identity check and the snapshot: nothing is left to cancel.
+        cancel_unlisted=0
+        recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_unlisted=$?
+        if [[ "$cancel_unlisted" -eq 1 ]]; then
+          if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+            if read_exit_code "$exit_path"; then
+              cancel_report already_finished "$RECORDED_EXIT" "already finished (exit $RECORDED_EXIT)"
+            fi
+            cancel_report already_finished null "already finished (invalid exit metadata)"
+          fi
+          cancel_report not_running null "not running (no live worker to cancel)"
+        fi
+      fi
+      cancel_refuse "$CANCEL_REFUSAL_CODE" "$pid" "$CANCEL_REFUSAL_REASON"
+    fi
     cancel_grp="$CANCEL_GROUP"
-    CANCEL_SIGNAL_SENT=true
-    kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+    [[ "$cancel_grp" =~ ^[1-9][0-9]*$ ]] ||
+      cancel_refuse invalid-process-group "$pid" "process group '$cancel_grp' of job $CANCEL_JOB_ID worker PID $pid is not a positive number, so no signal was sent. End the job from its caller."
+    # kill(2) accepting TERM is all signal_sent can claim, not that it was handled.
+    if kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null; then
+      CANCEL_SIGNAL_SENT=true
+    fi
     cancel_waited=0
     while [[ "$cancel_waited" -lt 5 ]]; do
       # finish_job records exit before publishing its completion inbox record.
@@ -1539,16 +1577,26 @@ case "${1:-}" in
     if recorded_pid_identity "$JOB_DIR/pid" "$pid"; then
       # The TERM trap did not fire in time; SIGKILL cannot be trapped, so no exit
       # gets recorded — force the group down and record the terminal state below.
+      cancel_escalate=1
       if ! cancel_group_check "$pid" || [[ "$CANCEL_GROUP" != "$cancel_grp" ]]; then
         case "$CANCEL_REFUSAL_CODE" in
+          worker-unlisted)
+            # Gone after the identity check: no SIGKILL, and the checks below record it.
+            cancel_unlisted=0
+            recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_unlisted=$?
+            [[ "$cancel_unlisted" -eq 1 ]] ||
+              cancel_refuse worker-unlisted-after-term "$pid" "$(printf 'TERM was sent to process group %s of job %s, but the process list before SIGKILL does not show its worker PID %s and the worker is not confirmed gone, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid")"
+            cancel_escalate=0 ;;
           process-list-unavailable)
             cancel_refuse process-list-unavailable-after-term "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but processes could not be listed again to confirm the group before SIGKILL, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid")" ;;
           *)
             cancel_refuse group-changed "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but the group changed before SIGKILL (%s), so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid" "${CANCEL_GROUP_CHANGE:-it now holds processes that are not part of this job}")" ;;
         esac
       fi
-      kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
-      sleep 1
+      if [[ "$cancel_escalate" -eq 1 ]]; then
+        kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+        sleep 1
+      fi
     fi
     if [[ -e "$exit_path" || -L "$exit_path" ]]; then
       if read_exit_code "$exit_path"; then

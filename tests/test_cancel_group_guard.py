@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -22,6 +23,8 @@ from test_close_holder_early import start_time
 
 ROOT = Path(__file__).resolve().parents[1]
 DISPATCH = ROOT / "scripts/dispatch.sh"
+# dispatch may spend up to 30s reading a start time (PS_START_LIMIT in common.sh).
+STARTUP_WAIT = 45
 JOBS = ROOT / "scripts/jobs.sh"
 
 GATE = """import json, os, signal, subprocess, sys, time
@@ -55,12 +58,19 @@ class CancelGroupGuardTests(unittest.TestCase):
 
     def stop_fixture_groups(self):
         groups = list(self.groups)
+        for pid_file in (self.home / "jobs").glob("*/pid"):
+            try:
+                pid = int(pid_file.read_text())
+                if os.getpgid(pid) == pid:
+                    groups.append(pid)
+            except (OSError, ValueError):
+                pass
         if (self.root / "gate.started").exists():
             groups.append(json.loads((self.root / "gate.started").read_text())["pgid"])
         for sig in (signal.SIGTERM, signal.SIGKILL):
             for pgid in groups:
-                # Only groups this fixture started may be signalled.
-                if pgid != os.getpgrp():
+                # Only groups this fixture started, and still led by that process, may be signalled.
+                if pgid != os.getpgrp() and self.fixture_leader(pgid):
                     try:
                         os.killpg(pgid, sig)
                     except (ProcessLookupError, PermissionError):
@@ -69,7 +79,19 @@ class CancelGroupGuardTests(unittest.TestCase):
         for caller in self.callers:
             caller.wait(10)
 
-    def wait_for(self, path, timeout=15):
+    def fixture_leader(self, pgid):
+        """A reaped group's number may already lead somebody else's group."""
+        try:
+            if os.getpgid(pgid) != pgid:
+                return False
+        except (ProcessLookupError, PermissionError):
+            return False
+        command = subprocess.run(["ps", "-o", "command=", "-p", str(pgid)], env=self.env, text=True,
+                                 capture_output=True, timeout=5).stdout
+        return str(self.root) in command or str(ROOT) in command
+
+    def wait_for(self, path, timeout=None):
+        timeout = STARTUP_WAIT if timeout is None else timeout
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if path.exists() and path.stat().st_size:
@@ -80,7 +102,9 @@ class CancelGroupGuardTests(unittest.TestCase):
 
     def start_caller(self, body, shell=("bash",), script=True):
         """Start a caller that leads a process group, as a terminal or an agent tool shell does."""
-        prologue = ('printf \'%s\\n\' "$$" > "$FIXTURE_ROOT/caller.pid"\n'
+        # The fixture root in the source lets cleanup recognise this caller as the group's leader.
+        prologue = (f'# fixture {self.root}\n'
+                    'printf \'%s\\n\' "$$" > "$FIXTURE_ROOT/caller.pid"\n'
                     'sleep 60 &\n'
                     'printf \'%s\\n\' "$!" > "$FIXTURE_ROOT/sibling.pid"\n')
         source = prologue + body + '\nprintf \'%s\\n\' "$?" > "$FIXTURE_ROOT/caller.rc"\nwait\n'
@@ -227,7 +251,7 @@ class CancelGroupGuardTests(unittest.TestCase):
 
     def background(self):
         dispatched = subprocess.run(["bash", str(DISPATCH), "--background", "--single-shot", "fixture", "background"],
-                                    env=self.env, text=True, capture_output=True, timeout=15, stdin=subprocess.DEVNULL)
+                                    env=self.env, text=True, capture_output=True, timeout=STARTUP_WAIT, stdin=subprocess.DEVNULL)
         self.assertEqual(dispatched.returncode, 0, dispatched.stderr)
         job_dir = self.home / "jobs" / dispatched.stdout.strip()
         self.wait_for(job_dir / "pid")
@@ -298,6 +322,8 @@ class GroupChangeTests(unittest.TestCase):
     # The worker ignores TERM so cancel escalates. Its child moves into a group of
     # its own and forks the outsider, then exits: the outsider is reparented and no
     # longer descends from the worker. Once TERM arrives it joins the worker's group.
+    # The middle process's PID is taken before the fork: it may exit before the
+    # outsider first runs, and getppid() would then already name the adopter.
     WORKER = """import os, signal, sys, time
 from pathlib import Path
 root = Path(sys.argv[1])
@@ -308,12 +334,20 @@ group = os.getpgrp()
 middle = os.fork()
 if middle == 0:
     os.setpgid(0, 0)
+    parent = os.getpid()
     if os.fork() == 0:
-        leader = os.getppid()
-        while os.getppid() == leader:
+        published = root / 'outsider.pid'
+        published.with_suffix('.tmp').write_text(str(os.getpid()))
+        published.with_suffix('.tmp').replace(published)
+        deadline = time.monotonic() + 60
+        while os.getppid() == parent:
+            if time.monotonic() > deadline:
+                os._exit(1)
             time.sleep(0.01)
-        (root / 'outsider.pid').write_text(str(os.getpid()))
+        (root / 'outsider.ready').write_text('1')
         while not (root / 'term.seen').exists():
+            if time.monotonic() > deadline:
+                os._exit(1)
             time.sleep(0.01)
         os.setpgid(0, group)
         (root / 'outsider.joined').write_text('1')
@@ -342,12 +376,11 @@ while True:
         worker = subprocess.Popen([sys.executable, "-c", self.WORKER, str(self.root)],
                                   start_new_session=True, stdin=subprocess.DEVNULL)
         self.addCleanup(self.stop, worker)
-        deadline = time.monotonic() + 15
-        while not ((self.root / "ready").exists() and (self.root / "outsider.pid").exists()):
+        deadline = time.monotonic() + STARTUP_WAIT
+        while not ((self.root / "ready").exists() and (self.root / "outsider.ready").exists()):
             self.assertLess(time.monotonic(), deadline, "fixture did not start")
             time.sleep(0.02)
         outsider = int((self.root / "outsider.pid").read_text())
-        self.outsider = outsider
         self.assertNotEqual(os.getpgid(outsider), worker.pid)
         (self.job / "pid.start").write_text(start_time(worker.pid) + "\n")
         (self.job / "pid").write_text(f"{worker.pid}\n")
@@ -371,13 +404,108 @@ while True:
         return result.returncode == 0 and not result.stdout.strip().startswith("Z")
 
     def stop(self, worker):
-        for pid in (getattr(self, "outsider", None), worker.pid):
-            if pid:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+        # The outsider publishes its PID before it waits for anything, so a fixture
+        # that never became ready is stopped as well.
+        pids = [worker.pid]
+        try:
+            pids.append(int((self.root / "outsider.pid").read_text()))
+        except (OSError, ValueError):
+            pass
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         worker.wait(5)
+
+
+class ListingShapeTests(unittest.TestCase):
+    """What the process list says about the worker, shaped by a ps shim for -axo only."""
+
+    SHIM = """#!/bin/bash
+case " $* " in *" -axo "*) ;; *) exec /bin/ps "$@" ;; esac
+count=$(( $(cat "$SHIM_COUNT" 2>/dev/null || echo 0) + 1 ))
+printf '%s\\n' "$count" > "$SHIM_COUNT"
+case "$SHIM_MODE" in
+  group-zero) /bin/ps "$@" | awk -v t="$CANCEL_TARGET" '$1 == t { $3 = 0 } { print }'; exit "${PIPESTATUS[0]}" ;;
+  hide) /bin/ps "$@" | awk -v t="$CANCEL_TARGET" '$1 != t'; exit "${PIPESTATUS[0]}" ;;
+  "exit-on-$count")
+    # The worker exits between cancel's identity check and this listing.
+    kill -KILL "$CANCEL_TARGET"
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+      /bin/ps -o pid= -p "$CANCEL_TARGET" >/dev/null || break
+      sleep 0.1
+    done ;;
+esac
+exec /bin/ps "$@"
+"""
+
+    def setUp(self):
+        GroupChangeTests.setUp(self)
+        shims = self.root / "shims"
+        shims.mkdir()
+        (shims / "ps").write_text(self.SHIM)
+        (shims / "ps").chmod(0o755)
+        self.env["PATH"] = f"{shims}{os.pathsep}{os.environ['PATH']}"
+        self.env["SHIM_COUNT"] = str(self.root / "shim.count")
+
+    def worker(self, ignore_term=False):
+        code = ("import signal, time\n"
+                + ("signal.signal(signal.SIGTERM, signal.SIG_IGN)\n" if ignore_term else "")
+                + "time.sleep(60)\n")
+        process = subprocess.Popen([sys.executable, "-c", code], start_new_session=True, stdin=subprocess.DEVNULL)
+        self.addCleanup(process.wait, 5)
+        self.addCleanup(lambda: process.poll() is None and process.kill())
+        # Reaped as soon as it exits, so ps stops listing it.
+        threading.Thread(target=process.wait, daemon=True).start()
+        time.sleep(0.2)
+        (self.job / "pid.start").write_text(start_time(process.pid) + "\n")
+        (self.job / "pid").write_text(f"{process.pid}\n")
+        self.env["CANCEL_TARGET"] = str(process.pid)
+        return process
+
+    def cancel(self, *flags):
+        return subprocess.run(["/bin/bash", str(JOBS), *flags, "cancel", self.job.name], env=self.env,
+                              capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+
+    def test_a_worker_in_process_group_zero_is_refused(self):
+        process = self.worker()
+        self.env["SHIM_MODE"] = "group-zero"
+        result = self.cancel("--json")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual((reply["code"], reply["signal_sent"]), ("invalid-process-group", False))
+        time.sleep(0.3)
+        self.assertIsNone(process.poll(), "the worker was signalled")
+        self.assertFalse((self.job / "exit").exists())
+
+    def test_a_live_worker_missing_from_the_listing_is_refused(self):
+        process = self.worker()
+        self.env["SHIM_MODE"] = "hide"
+        result = self.cancel("--json")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual((reply["code"], reply["signal_sent"]), ("worker-unlisted", False))
+        time.sleep(0.3)
+        self.assertIsNone(process.poll(), "the worker was signalled")
+        self.assertFalse((self.job / "exit").exists())
+
+    def test_a_worker_gone_before_the_first_listing_is_not_running(self):
+        self.worker()
+        self.env["SHIM_MODE"] = "exit-on-1"
+        result = self.cancel()
+        self.assertEqual((result.returncode, result.stdout), (0, "not running (no live worker to cancel)\n"),
+                         result.stderr)
+        self.assertFalse((self.job / "exit").exists())
+
+    def test_a_worker_gone_before_the_sigkill_listing_records_137(self):
+        self.worker(ignore_term=True)
+        self.env["SHIM_MODE"] = "exit-on-2"
+        result = self.cancel("--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout)["job"], {"id": self.job.name, "outcome": "cancelled", "exit_code": 137})
+        self.assertEqual((self.job / "exit").read_text(), "137\n")
+        self.assertEqual((self.root / "shim.count").read_text().strip(), "2")
 
 
 if __name__ == "__main__":
