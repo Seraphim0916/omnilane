@@ -8,13 +8,16 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 
 from offline_env import isolated_environment
+from test_close_holder_early import start_time
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -145,7 +148,8 @@ class CancelGroupGuardTests(unittest.TestCase):
         result = self.cancel(job_dir, "--json", env=env)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         reply = json.loads(result.stdout)
-        self.assertEqual((reply["ok"], reply["code"], reply["job"]), (False, code, {"id": job_dir.name, "pid": pid}))
+        self.assertEqual((reply["ok"], reply["code"], reply["signal_sent"], reply["job"]),
+                         (False, code, False, {"id": job_dir.name, "pid": pid}))
         self.assertEqual(reply["reason"], text.stderr.rstrip("\n"))
         time.sleep(0.3)
         self.assertEqual(self.snapshot(job_dir), before)
@@ -227,9 +231,9 @@ class CancelGroupGuardTests(unittest.TestCase):
         self.assertEqual(dispatched.returncode, 0, dispatched.stderr)
         job_dir = self.home / "jobs" / dispatched.stdout.strip()
         self.wait_for(job_dir / "pid")
-        self.wait_for(self.root / "gate.started")
         pid = int((job_dir / "pid").read_text())
         self.groups.append(pid)
+        self.wait_for(self.root / "gate.started")
         return job_dir, pid
 
     def test_background_job_is_cancelled_with_its_whole_tree(self):
@@ -237,9 +241,11 @@ class CancelGroupGuardTests(unittest.TestCase):
         gate = json.loads((self.root / "gate.started").read_text())
         result = self.cancel(job_dir, "--json")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(json.loads(result.stdout),
-                         {"schema_version": 1, "command": "cancel", "ok": True,
-                          "job": {"id": job_dir.name, "outcome": "cancelled", "exit_code": 143}})
+        reply = json.loads(result.stdout)
+        # 143 when the worker's TERM trap records it; 137 when a loaded host needs the SIGKILL.
+        self.assertIn(reply["job"].pop("exit_code"), (137, 143))
+        self.assertEqual(reply, {"schema_version": 1, "command": "cancel", "ok": True,
+                                 "job": {"id": job_dir.name, "outcome": "cancelled"}})
         for process in (pid, gate["pid"], gate["child"]):
             self.assert_gone(process)
         again = self.cancel(job_dir, "--json")
@@ -259,6 +265,119 @@ class CancelGroupGuardTests(unittest.TestCase):
         (shims / "ps").chmod(0o755)
         env = dict(self.env, PATH=f"{shims}{os.pathsep}{self.env['PATH']}")
         self.assert_refused(job_dir, "process-list-unavailable", env=env)
+
+    def shimmed(self, name, source):
+        shims = self.root / "shims"
+        shims.mkdir(exist_ok=True)
+        (shims / name).write_text("#!/bin/bash\n" + source)
+        (shims / name).chmod(0o755)
+        return dict(self.env, PATH=f"{shims}{os.pathsep}{self.env['PATH']}")
+
+    def test_a_perl_that_cannot_run_the_bounded_listing_is_refused(self):
+        # Without the perl alarm there is no limit on ps, so the listing is not attempted.
+        job_dir, _ = self.background()
+        real_perl = Path(self.env["PATH"].split(os.pathsep)[0]) / "perl"
+        for status in (126, 127):
+            with self.subTest(status=status):
+                env = self.shimmed("perl", f'[[ " $* " == *" -axo "* ]] && exit {status}\nexec "{real_perl}" "$@"\n')
+                self.assert_refused(job_dir, "process-list-unavailable", env=env)
+
+    def test_a_listing_that_hangs_is_refused_within_its_limit(self):
+        job_dir, _ = self.background()
+        real_ps = Path(self.env["PATH"].split(os.pathsep)[0]) / "ps"
+        env = self.shimmed("ps", f'[[ " $* " == *" -axo "* ]] && exec sleep 60\nexec "{real_ps}" "$@"\n')
+        started = time.monotonic()
+        self.assert_refused(job_dir, "process-list-unavailable", env=env)
+        # Two cancels (text and --json), each bounded by the 5s ps limit.
+        self.assertLess(time.monotonic() - started, 25)
+
+
+class GroupChangeTests(unittest.TestCase):
+    """A process that joins the worker's group after TERM must not receive the SIGKILL."""
+
+    # The worker ignores TERM so cancel escalates. Its child moves into a group of
+    # its own and forks the outsider, then exits: the outsider is reparented and no
+    # longer descends from the worker. Once TERM arrives it joins the worker's group.
+    WORKER = """import os, signal, sys, time
+from pathlib import Path
+root = Path(sys.argv[1])
+def on_term(*_):
+    (root / 'term.seen').write_text('1')
+signal.signal(signal.SIGTERM, on_term)
+group = os.getpgrp()
+middle = os.fork()
+if middle == 0:
+    os.setpgid(0, 0)
+    if os.fork() == 0:
+        leader = os.getppid()
+        while os.getppid() == leader:
+            time.sleep(0.01)
+        (root / 'outsider.pid').write_text(str(os.getpid()))
+        while not (root / 'term.seen').exists():
+            time.sleep(0.01)
+        os.setpgid(0, group)
+        (root / 'outsider.joined').write_text('1')
+        time.sleep(60)
+        os._exit(0)
+    os._exit(0)
+os.waitpid(middle, 0)
+(root / 'ready').write_text('1')
+while True:
+    time.sleep(60)
+"""
+
+    def setUp(self):
+        scratch = ROOT / ".test-scratch"
+        scratch.mkdir(exist_ok=True)
+        self.root = Path(tempfile.mkdtemp(prefix="cancel-group-change-", dir=scratch))
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.job = self.root / "jobs" / "20261103-170000-12345-1"
+        self.job.mkdir(parents=True)
+        (self.job / "meta.json").write_text('{"lane":"triage","vendor":"codex","session_mode":"live"}')
+        (self.job / "supervised").write_text("1\n")
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith("OMNILANE_")}
+        self.env["OMNILANE_HOME"] = str(self.root)
+
+    def test_a_process_that_joins_the_group_after_term_gets_no_sigkill(self):
+        worker = subprocess.Popen([sys.executable, "-c", self.WORKER, str(self.root)],
+                                  start_new_session=True, stdin=subprocess.DEVNULL)
+        self.addCleanup(self.stop, worker)
+        deadline = time.monotonic() + 15
+        while not ((self.root / "ready").exists() and (self.root / "outsider.pid").exists()):
+            self.assertLess(time.monotonic(), deadline, "fixture did not start")
+            time.sleep(0.02)
+        outsider = int((self.root / "outsider.pid").read_text())
+        self.outsider = outsider
+        self.assertNotEqual(os.getpgid(outsider), worker.pid)
+        (self.job / "pid.start").write_text(start_time(worker.pid) + "\n")
+        (self.job / "pid").write_text(f"{worker.pid}\n")
+        result = subprocess.run(["/bin/bash", str(JOBS), "--json", "cancel", self.job.name], env=self.env,
+                                capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+        self.assertTrue((self.root / "outsider.joined").exists(), "the outsider never joined the group")
+        time.sleep(0.3)
+        self.assertTrue(self.alive(outsider), "the outsider received the SIGKILL: " + result.stdout + result.stderr)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual((reply["ok"], reply["code"], reply["signal_sent"]), (False, "group-changed", True))
+        self.assertIn(str(outsider), reply["reason"])
+        self.assertIn("no SIGKILL was sent", reply["reason"])
+        self.assertIsNone(worker.poll(), "the worker received SIGKILL")
+        self.assertFalse((self.job / "exit").exists())
+
+    @staticmethod
+    def alive(pid):
+        result = subprocess.run(["/bin/ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True,
+                                timeout=5, stdin=subprocess.DEVNULL)
+        return result.returncode == 0 and not result.stdout.strip().startswith("Z")
+
+    def stop(self, worker):
+        for pid in (getattr(self, "outsider", None), worker.pid):
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        worker.wait(5)
 
 
 if __name__ == "__main__":

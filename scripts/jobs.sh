@@ -188,11 +188,13 @@ cancel_report() { # outcome, exit code or null, text
   exit 0
 }
 
-# A refused or failed cancel records no exit status; a refused one sent no signal.
+# A refused or failed cancel records no exit status. CANCEL_SIGNAL_SENT tells a
+# refusal before any signal from a failure after TERM was sent.
+CANCEL_SIGNAL_SENT=false
 cancel_refuse() { # code, pid, reason
   if [[ "$JSON_MODE" -eq 1 ]]; then
-    printf '{"schema_version":1,"command":"cancel","ok":false,"code":"%s","reason":"%s","job":{"id":"%s","pid":%s}}\n' \
-      "$1" "$(json_escape "$3")" "$(json_escape "$CANCEL_JOB_ID")" "$2"
+    printf '{"schema_version":1,"command":"cancel","ok":false,"code":"%s","signal_sent":%s,"reason":"%s","job":{"id":"%s","pid":%s}}\n' \
+      "$1" "$CANCEL_SIGNAL_SENT" "$(json_escape "$3")" "$(json_escape "$CANCEL_JOB_ID")" "$2"
   else
     printf '%s\n' "$3" >&2
   fi
@@ -205,17 +207,16 @@ cancel_refuse() { # code, pid, reason
 # process in the group descends from the recorded PID; anything else is refused.
 cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE,REASON}
   local pid="$1" marker="$JOB_DIR/supervised" listing rc=0 verdict
-  CANCEL_GROUP=""; CANCEL_REFUSAL_CODE=""; CANCEL_REFUSAL_REASON=""
+  CANCEL_GROUP=""; CANCEL_REFUSAL_CODE=""; CANCEL_REFUSAL_REASON=""; CANCEL_GROUP_CHANGE=""
   if [[ -L "$marker" || ! -f "$marker" ]] || [[ "$(cat "$marker" 2>/dev/null)" != "1" ]]; then
+    CANCEL_GROUP_CHANGE="its supervisor marker is gone"
     CANCEL_REFUSAL_CODE="unsupervised"
     CANCEL_REFUSAL_REASON="$(printf 'job %s runs without the job supervisor (a foreground dispatch without --job-timeout, or a job started by an older omnilane that wrote no supervisor marker), so its worker PID %s shares a process group with whatever started it and no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid")"
     return 1
   fi
+  # A perl that cannot run leaves ps without a limit, so that counts as a failed listing.
   listing="$(LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
     "$PS_QUERY_LIMIT" ps -axo pid=,ppid=,pgid= 2>/dev/null)" || rc=$?
-  if [[ "$rc" -eq 126 || "$rc" -eq 127 ]]; then
-    rc=0; listing="$(LC_ALL=C ps -axo pid=,ppid=,pgid= 2>/dev/null)" || rc=$?
-  fi
   verdict=""
   [[ "$rc" -ne 0 ]] || verdict="$(printf '%s\n' "$listing" | PID="$pid" awk '
     $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { parent[$1] = $2; group[$1] = $3 }
@@ -232,9 +233,13 @@ cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE
       if (outsiders != "") print "shared " g outsiders; else print "own " g
     }')"
   case "$verdict" in
-    own\ *) CANCEL_GROUP="${verdict#own }"; return 0 ;;
+    own\ *)
+      CANCEL_GROUP="${verdict#own }"
+      CANCEL_GROUP_CHANGE="the worker is now in process group $CANCEL_GROUP"
+      return 0 ;;
     shared\ *)
       set -- $verdict
+      CANCEL_GROUP_CHANGE="PID${verdict#shared $2} in it are not part of this job"
       CANCEL_REFUSAL_CODE="shared-process-group"
       CANCEL_REFUSAL_REASON="$(printf 'job %s worker PID %s is in process group %s together with processes that are not part of this job (PID%s), so signalling the group would stop them too and no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid" "$2" "${verdict#shared $2}")"
       return 1 ;;
@@ -1513,10 +1518,12 @@ case "${1:-}" in
     esac
     # Supervised workers lead a process group of their own (background `set -m`),
     # and that leader traps SIGTERM to record a best-effort exit code. Signalling
-    # the whole group lets the supervisor stop the worker's session as well. Both
-    # the TERM and the SIGKILL below use this one check of the group's members.
+    # the whole group lets the supervisor stop the worker's session as well. The
+    # group is checked again before SIGKILL; a check narrows, but cannot close, the
+    # window between the ps snapshot and the signal.
     cancel_group_check "$pid" || cancel_refuse "$CANCEL_REFUSAL_CODE" "$pid" "$CANCEL_REFUSAL_REASON"
     cancel_grp="$CANCEL_GROUP"
+    CANCEL_SIGNAL_SENT=true
     kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     cancel_waited=0
     while [[ "$cancel_waited" -lt 5 ]]; do
@@ -1532,6 +1539,14 @@ case "${1:-}" in
     if recorded_pid_identity "$JOB_DIR/pid" "$pid"; then
       # The TERM trap did not fire in time; SIGKILL cannot be trapped, so no exit
       # gets recorded — force the group down and record the terminal state below.
+      if ! cancel_group_check "$pid" || [[ "$CANCEL_GROUP" != "$cancel_grp" ]]; then
+        case "$CANCEL_REFUSAL_CODE" in
+          process-list-unavailable)
+            cancel_refuse process-list-unavailable-after-term "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but processes could not be listed again to confirm the group before SIGKILL, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid")" ;;
+          *)
+            cancel_refuse group-changed "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but the group changed before SIGKILL (%s), so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid" "${CANCEL_GROUP_CHANGE:-it now holds processes that are not part of this job}")" ;;
+        esac
+      fi
       kill -KILL "-$cancel_grp" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
       sleep 1
     fi
@@ -1546,8 +1561,8 @@ case "${1:-}" in
       cancel_state=0
       recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_state=$?
       [[ "$cancel_state" -ne 0 ]] || cancel_refuse not-terminated "$pid" "cancel could not terminate worker pid $pid"
-      [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable "$pid" "$(ps_unusable_message "$pid" cancel "$2")"
-      [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
+      [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable-after-term "$pid" "$(printf 'TERM was sent to job %s, but whether its worker PID %s stopped cannot be confirmed because ps is blocked here, so no exit status was recorded. This does not mean the process is still running. Check it outside the sandbox with: omnilane jobs status %s' "$2" "$pid" "$2")"
+      [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time-after-term "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
       (umask 077; printf '137\n' > "$exit_path")
       cancel_report cancelled 137 "cancelled (exit 137)"
     fi ;;

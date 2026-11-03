@@ -435,10 +435,14 @@ omnilane jobs result JOB_ID     # the worker's public result
 ```
 
 Read the result, run the verification command from your brief (or send a second
-worker to), and only then report. Other job commands: `cancel JOB_ID` (background
-jobs and foreground jobs that lead their own process group under `--job-timeout`;
-any other foreground job is refused with exit 1 and its worker PID, so end it from
-the shell or tool call that started it, not with `kill` on a process group);
+worker to), and only then report. Other job commands: `cancel JOB_ID` (it signals
+the worker's process group only when the job carries the supervisor marker, which
+background jobs and `--job-timeout` jobs get, and every process in that group
+descends from the worker; it checks again before SIGKILL. A foreground job without
+`--job-timeout`, a job inside its caller's group (a script or a tool shell), a
+pipeline such as `dispatch | tee`, and any job started by an older omnilane are
+refused with exit 1 and the worker PID: end those from the shell or tool call that
+started them, not with `kill` on a process group);
 `send JOB_ID "<text>"` and `close JOB_ID` for a live session (Claude and Gemini
 background jobs stay resident; Codex and Grok are single-shot unless `--live`,
 and Grok live needs `--mode sysops`); `retry JOB_ID --caller-context FILE` (keeps
