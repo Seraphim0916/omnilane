@@ -24,32 +24,88 @@ test_completed=0
 with_limit() {
   perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' "$@"
 }
-live_job_home=""
-live_job_id=""
-# A case that registers its job gets it cancelled on every exit path. The exit
-# file only decides whether to cancel: jobs.sh records the status before its own
-# cleanup, so the wait for every process naming the job's home always runs.
-# Cancel and each ps have their own limit, and the wait ends after 10s.
-stop_live_job() {
-  [[ -n "$live_job_id" ]] || return 0
-  local cancel_rc=0 deadline
-  if [[ ! -e "$live_job_home/jobs/$live_job_id/exit" ]]; then
-    with_limit 15 env OMNILANE_HOME="$live_job_home" \
-      "$ROOT/scripts/jobs.sh" cancel "$live_job_id" >/dev/null 2>&1 || cancel_rc=$?
-  fi
-  deadline=$((SECONDS + 10))
-  while :; do
-    processes_under "$live_job_home/" || {
-      printf 'could not list processes to confirm live job %s stopped (cancel rc %s)\n' "$live_job_id" "$cancel_rc" >&2
-      return 1
-    }
-    [[ -n "$LIVE_PIDS" && "$SECONDS" -lt "$deadline" ]] || break
-    sleep 0.1
+# Every background job a case starts is registered as "<home><TAB><job id>" in this
+# process's list and in every list named by LIVE_JOB_LISTS, which a child inherits. So a
+# case, the cases it runs nested, and run_case above them all know each job, wherever it
+# was started: dispatch puts a background job in its own process group and disowns it,
+# so ending a case's group never reaches the job.
+LIVE_JOBS="$TEST_ROOT/live-jobs"
+: > "$LIVE_JOBS"
+LIVE_JOB_LISTS="${LIVE_JOB_LISTS:+$LIVE_JOB_LISTS:}$LIVE_JOBS"
+export LIVE_JOB_LISTS
+register_job() {
+  local list rest="$LIVE_JOB_LISTS"
+  while [[ -n "$rest" ]]; do
+    list="${rest%%:*}"
+    [[ "$rest" == *:* ]] && rest="${rest#*:}" || rest=""
+    printf '%s\t%s\n' "$1" "$2" >> "$list"
   done
-  [[ -z "$LIVE_PIDS" ]] || {
-    printf 'live job %s still running 10s after cancel (cancel rc %s): %s\n' "$live_job_id" "$cancel_rc" "$LIVE_PIDS" >&2
-    return 1
-  }
+}
+# Prints each job in list $1 with its controller PID and that PID's command line.
+describe_jobs() {
+  local home id pid command
+  while IFS=$'\t' read -r home id <&3; do
+    [[ -n "$id" ]] || continue
+    pid="$(cat "$home/jobs/$id/pid" 2>/dev/null || true)"
+    command="(controller PID not recorded)"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      command="$(with_limit 5 ps -o command= -p "$pid" 2>/dev/null)" || command="(not running)"
+    fi
+    printf 'job %s controller PID %s: %s\n' "$id" "${pid:-none}" "$command"
+  done 3< "$1"
+}
+# Stops every job in list $1. Without a recorded exit it gets a bounded cancel; then its
+# controller PID gets a bounded wait, since dispatch writes the job's inbox record after
+# the exit file. With $2 = homes, nothing naming a job's home may still run either.
+# Only homes inside this run's scratch directory are touched.
+stop_jobs() {
+  local list="$1" check="${2:-}" home id pid cancel_rc deadline failed=0 homes=""
+  [[ -s "$list" ]] || return 0
+  while IFS=$'\t' read -r home id <&3; do
+    [[ -n "$id" ]] || continue
+    case "$home" in
+      "$TEST_BASE"/*) ;;
+      *) printf 'not stopping job %s: its home %s is outside %s\n' "$id" "$home" "$TEST_BASE" >&2
+         failed=1; continue ;;
+    esac
+    homes="$homes$home"$'\n'
+    # A case that finished removed its home after stopping the job itself.
+    [[ -d "$home/jobs/$id" ]] || continue
+    cancel_rc=0
+    if [[ ! -e "$home/jobs/$id/exit" ]]; then
+      with_limit 15 env OMNILANE_HOME="$home" \
+        "$ROOT/scripts/jobs.sh" cancel "$id" </dev/null >/dev/null 2>&1 || cancel_rc=$?
+    fi
+    pid="$(cat "$home/jobs/$id/pid" 2>/dev/null || true)"
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+      deadline=$((SECONDS + 15))
+      while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$deadline" ]]; do sleep 0.1; done
+      if kill -0 "$pid" 2>/dev/null; then
+        printf 'live job %s controller PID %s still running 15s after cancel (cancel rc %s)\n' \
+          "$id" "$pid" "$cancel_rc" >&2
+        failed=1
+      fi
+    fi
+  done 3< "$list"
+  [[ "$check" == homes ]] || return "$failed"
+  while IFS= read -r home <&3; do
+    [[ -n "$home" ]] || continue
+    deadline=$((SECONDS + 10))
+    while :; do
+      processes_under "$home/" || {
+        printf 'could not list processes to confirm the jobs under %s stopped\n' "$home" >&2
+        failed=1
+        break
+      }
+      [[ -n "$LIVE_PIDS" && "$SECONDS" -lt "$deadline" ]] || break
+      sleep 0.1
+    done
+    [[ -z "$LIVE_PIDS" ]] || {
+      printf 'processes under %s still running 10s after their jobs stopped: %s\n' "$home" "$LIVE_PIDS" >&2
+      failed=1
+    }
+  done 3< <(printf '%s' "$homes" | sort -u)
+  return "$failed"
 }
 cleanup() {
   local rc=$?
@@ -57,7 +113,8 @@ cleanup() {
   # A signal now would skip stopping the job; every step below has a limit.
   trap '' INT TERM HUP
   if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
-  if stop_live_job; then
+  # The directory goes only after every job this process or its nested cases started has stopped.
+  if stop_jobs "$LIVE_JOBS" homes; then
     /bin/rm -rf -- "$TEST_ROOT"
     rmdir "$TEST_BASE" 2>/dev/null || true
   else
@@ -90,12 +147,14 @@ processes_under() {
 CASE_LIMIT="${OMNILANE_LIVE_CASE_LIMIT:-330}"
 RUN_DEADLINE=$((SECONDS + ${OMNILANE_LIVE_RUN_LIMIT:-540}))
 run_case() {
-  local name="$1" pid rc=0 deadline started="$SECONDS" grace listing
+  local name="$1" pid rc=0 deadline started="$SECONDS" grace listing case_jobs
+  case_jobs="$TEST_ROOT/case-$name.jobs"
+  : > "$case_jobs"
   deadline=$((SECONDS + CASE_LIMIT))
   [[ "$deadline" -le "$RUN_DEADLINE" ]] || deadline="$RUN_DEADLINE"
   # Its own process group, so what is left of the case can be listed and stopped as one.
   set -m
-  bash "$0" --omnilane-offline-child "$name" &
+  LIVE_JOB_LISTS="$case_jobs" bash "$0" --omnilane-offline-child "$name" &
   pid=$!
   set +m
   while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$deadline" ]]; do
@@ -106,7 +165,10 @@ run_case() {
       listing="(could not list processes)"
     printf 'case %s (PID %s) still running after %ss (case limit %ss, run limit %ss); waiting on:\n%s\n' \
       "$name" "$pid" "$((SECONDS - started))" "$CASE_LIMIT" "${OMNILANE_LIVE_RUN_LIMIT:-540}" "$listing" >&2
-    # TERM lets the case's own cleanup stop any live job it registered; that cleanup is bounded.
+    printf 'background jobs the case registered:\n%s\n' "$(describe_jobs "$case_jobs")" >&2
+    # Their own groups are outside the case's: cancel them and wait for their
+    # controllers first, and only then end the case.
+    stop_jobs "$case_jobs" || true
     kill -TERM "$pid" 2>/dev/null || true
     grace=$((SECONDS + 30))
     while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$grace" ]]; do sleep 0.2; done
@@ -115,6 +177,8 @@ run_case() {
     fail "case $name timed out"
   fi
   wait "$pid" || rc=$?
+  # A nested case killed before its own cleanup ran may have left a job behind.
+  stop_jobs "$case_jobs" homes || rc=1
   [[ "$rc" -eq 0 ]] || exit "$rc"
 }
 
@@ -241,6 +305,7 @@ PY
     --background --live --timeout "$timeout" --idle-timeout "$idle" \
     --mode sysops --workdir "$ROOT" --vendor "$vendor" triage first)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "$scenario: no exit recorded"
   [[ "$(cat "$job_dir/exit")" == "$expected" ]] || fail "$scenario: expected exit $expected, got $(cat "$job_dir/exit")"
   record="$home/inbox/$job.json"
@@ -391,6 +456,7 @@ case_codex_live_rpc() {
     --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
     triage 'initial prompt echo marker')"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "Codex live mailbox did not become ready"
   wait_for_lines "$job_dir/out.txt" 1 || fail "Codex agentMessage was not written incrementally"
   grep -Fxq 'initial agent text' "$job_dir/out.txt" || fail "Codex initial agentMessage missing"
@@ -464,7 +530,7 @@ PY
     --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
     triage - < "$task")"
   job_dir="$home/jobs/$job"
-  live_job_home="$home" live_job_id="$job"
+  register_job "$home" "$job"
   if [[ -n "${LIVE_LARGE_HOME_FILE:-}" ]]; then printf '%s\n' "$home" > "$LIVE_LARGE_HOME_FILE"; fi
   while ! grep -Fq '"method":"turn/start"' "$input" 2>/dev/null && [[ "$tries" -lt 1800 ]]; do
     sleep 0.1; tries=$((tries + 1))
@@ -554,6 +620,7 @@ EOF
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
     --workdir "$ROOT" --vendor codex triage fallback)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "Codex live fallback job did not finish"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex live fallback failed"
   grep -Fxq 'codex single-shot fallback' "$job_dir/out.txt" || fail "Codex fallback did not run single-shot"
@@ -577,6 +644,7 @@ case_single_shot_claude() {
     FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background \
       --single-shot --vendor claude triage x)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "single-shot Claude job did not finish"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "single-shot Claude job failed"
   grep -Fq '"session_mode":"single-shot"' "$job_dir/meta.json" ||
@@ -600,6 +668,7 @@ case_idle_cap() {
     FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
       --idle-timeout 1 --vendor claude triage x)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "idle-capped Claude job did not close"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "idle-capped Claude job failed"
   grep -Fq '"session_mode":"live"' "$job_dir/meta.json" ||
@@ -639,6 +708,7 @@ EOF
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
     --mode work --workdir "$ROOT" --vendor claude triage 'recover completed output')"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "stubborn Claude mailbox did not become ready"
   wait_for_lines "$job_dir/events.jsonl" 3 || fail "stubborn Claude did not emit a successful result"
   close_out="$(OMNILANE_HOME="$home" python3 - "$ROOT/scripts/jobs.sh" "$job" "$home/claude.pids" <<'PY'
@@ -694,6 +764,7 @@ EOF
     FAKE_AGY_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
       --idle-timeout 0 --mode sysops --vendor gemini triage first)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "Gemini live mailbox did not become ready"
   wait_for_lines "$input" 1 || fail "Gemini did not receive initial turn"
   OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" second >/dev/null
@@ -740,6 +811,7 @@ case_json_escape_round_trip() {
     FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
     --idle-timeout 0 --vendor claude triage "$prompt")"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "JSON escape live mailbox did not become ready"
   wait_for_lines "$input" 1 || fail "JSON escape prompt did not reach Claude input"
   close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
@@ -771,6 +843,7 @@ case_jobs_send_json_escape_round_trip() {
     FAKE_CLAUDE_INPUT="$input" "$ROOT/scripts/dispatch.sh" --background --live \
     --idle-timeout 0 --vendor claude triage initial)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "jobs.sh send JSON escape mailbox did not become ready"
   wait_for_lines "$input" 1 || fail "jobs.sh send JSON escape initial prompt did not arrive"
 
@@ -1352,6 +1425,7 @@ PY
       --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.6 \
       --effort - live-search 'initial Grok prompt')"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/inbox.ready" || fail "Grok live mailbox did not become ready"
 
   tries=0
@@ -1463,6 +1537,7 @@ EOF
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
       --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.6 live-search fallback)"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "Grok fallback job did not finish"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Grok fallback job failed"
   grep -Fxq 'grok single-shot fallback' "$job_dir/out.txt" || \
@@ -1866,6 +1941,7 @@ EOF
     "$ROOT/scripts/dispatch.sh" --background --workdir "$ROOT" --vendor grok \
     --model grok-advise-model live-search 'advise dispatch')"
   job_dir="$home/jobs/$job"
+  register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "Grok advise single-shot dispatch did not finish"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Grok advise single-shot dispatch failed"
   grep -Fq '"session_mode":"single-shot"' "$job_dir/meta.json" ||
