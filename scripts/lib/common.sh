@@ -74,15 +74,18 @@ sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())
 ' 2>/dev/null
 }
 
-# Python escapes bytes, the loop escapes characters of the shell's locale. They
-# agree only in C and UTF-8, where no trailing byte of a character is ASCII; in
-# Big5 a 0x5c trailing byte would be doubled. Read the variables Bash decodes
-# with instead of forking `locale charmap` on every call.
+# Python escapes bytes, the loop escapes characters as Bash decodes them now.
+# They agree when no character can hold an ASCII trailing byte: in Big5, GBK and
+# Shift_JIS a 0x5c trailing byte would be doubled. Variable names are not
+# enough, because a failed setlocale keeps the previous encoding, so ask Bash.
+# Measured with bash 3.2 as ${#} of c3 80, a4 5c, f0 9f 98 80, 95 5c:
+#   C, POSIX, ISO8859-1: 2 2 4 2   UTF-8: 1 2 1 2   Big5: 2 1 4 1
+#   GBK, GB18030: 1 1 2 1          Shift_JIS: 2 2 2 1   EUC: 1 1 3 2
+# Python is used for UTF-8 (one character for four bytes, a4 5c split) and for
+# one character per byte; any other answer uses the loop.
 json_escape_python_locale() {
-  case "${LC_ALL:-${LC_CTYPE:-${LANG:-C}}}" in
-    C | POSIX | *.[Uu][Tt][Ff]-8 | *.[Uu][Tt][Ff]8 | *.[Uu][Tt][Ff]-8@* | *.[Uu][Tt][Ff]8@*) return 0 ;;
-  esac
-  return 1
+  local a=$'\xc3\x80' b=$'\xa4\x5c' c=$'\xf0\x9f\x98\x80' d=$'\x95\x5c'
+  [[ ${#c} -eq 1 && ${#b} -eq 2 ]] || [[ "${#a} ${#b} ${#c} ${#d}" == "2 2 4 2" ]]
 }
 
 # The Bash loop is quadratic on Bash 3.2 and starting Python costs about 10 ms;
