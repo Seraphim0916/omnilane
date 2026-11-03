@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 
 # Only these utilities are discoverable. Never add provider CLIs or a general
@@ -81,6 +82,27 @@ def isolated_environment(root: Path, search_path: str) -> tuple[dict[str, str], 
         "OMNILANE_AA_OPERATOR_ASSERTED_HUMAN": "1",
     }
     return environment, violations
+
+
+def wait_for_job_controller(test_case, job_dir: Path, timeout: float = 30) -> None:
+    """Fail unless the job's recorded controller PID exits within timeout.
+
+    dispatch records `exit` before it writes the inbox completion record, so the
+    job's home is still being written until this PID is gone.
+    """
+    try:
+        pid = int((job_dir / "pid").read_text())
+    except (OSError, ValueError):
+        return
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError):
+            return
+        if time.monotonic() >= deadline:
+            test_case.fail(f"job controller PID {pid} still running {timeout}s after the job finished")
+        time.sleep(0.05)
 
 
 def fixture_environment_with_isolated_tools(test_case, environment=None) -> dict[str, str]:

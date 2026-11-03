@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from offline_env import fixture_environment_with_isolated_tools, isolated_environment
+from offline_env import fixture_environment_with_isolated_tools, isolated_environment, wait_for_job_controller
 
 import json
 import os
@@ -560,6 +560,7 @@ class LiveFirstMessageCarriesWorkerRules(unittest.TestCase):
             env=env, text=True, capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
         self.assertEqual(started.returncode, 0, started.stderr)
         job = started.stdout.strip()
+        self.addCleanup(wait_for_job_controller, self, home / "jobs" / job)
         self.addCleanup(subprocess.run, ["bash", str(ROOT / "scripts/jobs.sh"), "close", job],
                         env=env, capture_output=True, stdin=subprocess.DEVNULL, timeout=60)
         deadline = time.monotonic() + 30

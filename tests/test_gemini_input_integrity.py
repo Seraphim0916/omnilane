@@ -9,7 +9,7 @@ import tempfile
 import time
 import unittest
 
-from offline_env import isolated_environment
+from offline_env import isolated_environment, wait_for_job_controller
 
 ROOT = Path(__file__).resolve().parents[1]
 GEMINI_MAX_TASK_BYTES = 130000 if platform.system() == "Linux" else 180000
@@ -190,6 +190,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
             if not (job / "exit").exists():
                 subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "close", job_id],
                                env=self.env, capture_output=True, timeout=30)
+            wait_for_job_controller(self, job)
 
 
 if __name__ == "__main__":
