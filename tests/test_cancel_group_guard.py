@@ -83,14 +83,26 @@ class CancelGroupGuardTests(unittest.TestCase):
         self.assert_groups_gone(groups)
 
     def assert_groups_gone(self, groups, timeout=5):
-        """Every group this fixture started must be empty once cleanup has run."""
+        """Every group this fixture started must be empty once cleanup has run.
+
+        Only processes whose command line carries this fixture's root are counted. The gate's
+        signal.pause() child does not carry it, so this cannot prove every descendant has exited.
+        """
         deadline = time.monotonic() + timeout
         while True:
-            listing = subprocess.run(["ps", "-axo", "pgid=,stat=,command="], env=self.env, text=True,
-                                     capture_output=True, timeout=5).stdout
+            remaining = deadline - time.monotonic()
+            try:
+                listed = subprocess.run(["ps", "-axo", "pgid=,stat=,command="], env=self.env, text=True,
+                                        capture_output=True, timeout=max(0.5, min(5, remaining)))
+            except subprocess.TimeoutExpired:
+                self.fail("ps timed out while checking that fixture process groups are gone")
+            if listed.returncode != 0:
+                self.fail(f"ps failed with returncode {listed.returncode}: {listed.stderr.strip()}")
+            listing = listed.stdout
             left = [line for line in listing.splitlines() if line.split(None, 2)[0] in {str(g) for g in groups}
                     and not line.split(None, 2)[1].startswith("Z") and str(self.root) in line]
-            if not left or time.monotonic() >= deadline:
+            # No new ps starts once the pause before it would reach the deadline.
+            if not left or time.monotonic() + 0.1 >= deadline:
                 break
             time.sleep(0.1)
         self.assertEqual(left, [], "fixture process groups outlived cleanup")
