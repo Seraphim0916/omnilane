@@ -65,28 +65,58 @@ def extract_escape(source):
     return match.group()
 
 
+def normalize_locale(name):
+    # Case and hyphens do not distinguish locale names: UTF-8 is utf8 and
+    # ISO8859-1 is iso88591 in glibc's `locale -a`.
+    return name.lower().replace("-", "")
+
+
+# Spellings of each locale on macOS and glibc.
+LOCALES = {
+    "c": ("C",),
+    "utf8": ("en_US.UTF-8", "en_US.utf8"),
+    "big5": ("zh_TW.Big5", "zh_TW.big5"),
+    "gbk": ("zh_CN.GBK", "zh_CN.gbk"),
+    "gb18030": ("zh_CN.GB18030", "zh_CN.gb18030"),
+    "sjis": ("ja_JP.SJIS", "ja_JP.sjis", "ja_JP.Shift_JIS"),
+    "eucjp": ("ja_JP.eucJP", "ja_JP.eucjp"),
+    "iso8859_1": ("en_US.ISO8859-1", "en_US.iso88591"),
+    "big5hkscs": ("zh_HK.Big5HKSCS", "zh_HK.big5hkscs"),
+    "gb2312": ("zh_CN.GB2312", "zh_CN.gb2312", "zh_CN.eucCN"),
+    "euckr": ("ko_KR.eucKR", "ko_KR.euckr"),
+}
+
+
 class JsonEscapeLinearTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.old = OLD_JSON_ESCAPE
         cls.new = extract_escape((ROOT / "scripts/lib/common.sh").read_bytes())
         try:
-            cls.installed = set(subprocess.run(
+            names = subprocess.run(
                 ["locale", "-a"], stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                check=True, timeout=10).stdout.decode("ascii", "replace").split())
+                check=True, timeout=10).stdout.decode("ascii", "replace").split()
         except (OSError, subprocess.SubprocessError):
-            cls.installed = set()
+            names = []
+        cls.installed = {normalize_locale(name): name for name in names}
 
-    def require_locale(self, locale):
-        if locale not in self.installed:
-            self.skipTest(f"{locale} is not installed on this machine (locale -a)")
+    def locale(self, *candidates):
+        # macOS and glibc spell the same locale differently (zh_TW.Big5 and
+        # zh_TW.big5, en_US.ISO8859-1 and en_US.iso88591); use the installed one.
+        for candidate in candidates:
+            if candidate in ("C", "POSIX"):
+                return candidate
+            name = self.installed.get(normalize_locale(candidate))
+            if name is not None:
+                return name
+        self.skipTest(f"none of {', '.join(candidates)} is installed on this machine (locale -a)")
 
     def test_reference_is_the_pre_linear_implementation(self):
         # Equal functions would make the byte comparison vacuous.
         self.assertNotEqual(self.old, self.new)
 
     def escape(self, function, payload, locale, timeout=30, call=b"json_escape", path=None,
-               variables=None, switch=b""):
+               variables=None, switch=b"", setlocale_warning=False):
         # A sentinel preserves trailing newlines through command substitution.
         # Bash strings cannot contain NUL; all other bytes travel over stdin.
         # PATH changes only after cat ran, so the function alone sees the stub.
@@ -102,24 +132,29 @@ class JsonEscapeLinearTests(unittest.TestCase):
         result = subprocess.run(
             [BASH, "-c", script], input=payload, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, env=env, check=True, timeout=timeout, cwd=ROOT)
-        self.assertEqual(result.stderr, b"")
+        stderr = result.stderr
+        if setlocale_warning:
+            # Some Bash builds warn when setlocale fails; bash 3.2 on macOS does not.
+            stderr = b"".join(line for line in stderr.splitlines(keepends=True)
+                              if b"setlocale" not in line)
+        self.assertEqual(stderr, b"")
         return result.stdout
 
     def test_byte_compatibility(self):
-        for locale in ("C", "en_US.UTF-8"):
+        for locale in ("C", ("en_US.UTF-8", "en_US.utf8", "C.UTF-8", "C.utf8")):
             for name, payload in CASES:
                 with self.subTest(locale=locale, case=name):
-                    self.assertEqual(self.escape(self.old, payload, locale),
-                                     self.escape(self.new, payload, locale))
+                    name_ = self.locale(*locale) if isinstance(locale, tuple) else locale
+                    self.assertEqual(self.escape(self.old, payload, name_),
+                                     self.escape(self.new, payload, name_))
 
     def test_loop_and_python_paths_match(self):
         # These are the locales the router sends to Python; ISO8859-1 stands
         # for single-byte locales, where the loop also sees one byte per character.
-        for locale in ("C", "en_US.UTF-8", "en_US.ISO8859-1"):
+        for candidates in (("C",), ("en_US.UTF-8", "C.UTF-8"), ("en_US.ISO8859-1",)):
             for name, payload in CASES:
-                with self.subTest(locale=locale, case=name):
-                    if locale != "C":
-                        self.require_locale(locale)
+                with self.subTest(locale=candidates[0], case=name):
+                    locale = self.locale(*candidates)
                     self.assertEqual(
                         self.escape(self.new, payload, locale, call=b"json_escape_loop"),
                         self.escape(self.new, payload, locale, call=b"json_escape_python"))
@@ -130,7 +165,8 @@ class JsonEscapeLinearTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as empty:
             for count in (1, 512):
                 with self.subTest(count=count):
-                    self.assertEqual(self.escape(self.new, unit * count, "en_US.UTF-8", path=empty),
+                    locale = self.locale("en_US.UTF-8", "C.UTF-8")
+                    self.assertEqual(self.escape(self.new, unit * count, locale, path=empty),
                                      escaped * count)
 
     def test_python_starts_from_1024_characters_and_a_failure_uses_the_loop(self):
@@ -140,8 +176,10 @@ class JsonEscapeLinearTests(unittest.TestCase):
             stub.write_text('#!/bin/sh\n: > "%s"\nexit 1\n' % marker)
             stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
             for count, called in ((1023, False), (1024, True)):
-                for locale, payload in (("C", b"a" * count), ("en_US.UTF-8", "台".encode() * count)):
-                    with self.subTest(count=count, locale=locale):
+                for candidates, payload in ((("C",), b"a" * count),
+                                            (("en_US.UTF-8", "C.UTF-8"), "台".encode() * count)):
+                    with self.subTest(count=count, locale=candidates[0]):
+                        locale = self.locale(*candidates)
                         self.assertEqual(self.escape(self.new, payload, locale, path=directory), payload)
                         self.assertEqual(marker.exists(), called)
                         if called:
@@ -157,49 +195,51 @@ class JsonEscapeLinearTests(unittest.TestCase):
             payloads += [("a4_5c_x%d" % count, b"\xa4\x5c" * count),
                          ("95_5c_x%d" % count, b"\x95\x5c" * count)]
         with tempfile.TemporaryDirectory() as empty:
-            for locale in ("C", "en_US.UTF-8", "zh_TW.Big5", "zh_CN.GBK", "zh_CN.GB18030",
-                           "ja_JP.SJIS", "ja_JP.eucJP", "en_US.ISO8859-1", "zh_HK.Big5HKSCS",
-                           "zh_CN.GB2312", "ko_KR.eucKR"):
+            for candidates in LOCALES.values():
                 for name, payload in payloads:
-                    with self.subTest(locale=locale, case=name):
-                        if locale != "C":
-                            self.require_locale(locale)
+                    with self.subTest(locale=candidates[0], case=name):
+                        locale = self.locale(*candidates)
                         loop = self.escape(self.old, payload, locale)
                         self.assertEqual(self.escape(self.new, payload, locale), loop)
                         self.assertEqual(self.escape(self.new, payload, locale, path=empty), loop)
 
     def test_a_failed_switch_to_a_utf8_name_keeps_big5_and_the_loop(self):
         # setlocale fails for these names, so Bash keeps decoding Big5.
-        self.require_locale("zh_TW.Big5")
         with tempfile.TemporaryDirectory() as empty:
             for name in (b"typo.UTF-8", b"en_US.UTF-8@euro"):
                 for count in (1024, 1025):
                     payload = b"\xa4\x5c" * count
                     switch = b"LC_ALL=" + name + b"; "
                     with self.subTest(name=name, count=count):
-                        loop = self.escape(self.old, payload, "zh_TW.Big5", switch=switch)
+                        big5 = self.locale(*LOCALES["big5"])
+                        if normalize_locale(name.decode()) in self.installed:
+                            self.skipTest(f"{name.decode()} is installed, so the switch succeeds")
+                        options = dict(switch=switch, setlocale_warning=True)
+                        loop = self.escape(self.old, payload, big5, **options)
                         self.assertEqual(len(loop), len(payload))
-                        self.assertEqual(self.escape(self.new, payload, "zh_TW.Big5", switch=switch),
+                        self.assertEqual(self.escape(self.new, payload, big5, **options), loop)
+                        self.assertEqual(self.escape(self.new, payload, big5, path=empty, **options),
                                          loop)
-                        self.assertEqual(self.escape(self.new, payload, "zh_TW.Big5", path=empty,
-                                                     switch=switch), loop)
 
     def test_python_is_used_only_where_bash_decodes_utf8_or_single_bytes(self):
-        # (LC_ALL, other variables, command run after reading input, Python used)
+        utf8, zh_utf8 = ("en_US.UTF-8", "C.UTF-8"), ("zh_TW.UTF-8",)
+        big5 = LOCALES["big5"]
+        # (LC_ALL, other variables, command run after reading input, Python used);
+        # tuples list the spellings of one locale and resolve to the installed one.
         cases = [
-            ("C", None, b"", True), ("POSIX", None, b"", True), ("en_US.UTF-8", None, b"", True),
-            ("zh_TW.UTF-8", None, b"", True), ("C.UTF-8", None, b"", True),
-            ("en_US.ISO8859-1", None, b"", True),
-            ("zh_TW.Big5", None, b"", False), ("zh_CN.GBK", None, b"", False),
-            ("zh_CN.GB18030", None, b"", False), ("ja_JP.SJIS", None, b"", False),
-            ("ja_JP.eucJP", None, b"", False),
+            ("C", None, b"", True), ("POSIX", None, b"", True), (utf8, None, b"", True),
+            (zh_utf8, None, b"", True), (("C.UTF-8",), None, b"", True),
+            (LOCALES["iso8859_1"], None, b"", True),
+            (big5, None, b"", False), (LOCALES["gbk"], None, b"", False),
+            (LOCALES["gb18030"], None, b"", False), (LOCALES["sjis"], None, b"", False),
+            (LOCALES["eucjp"], None, b"", False),
             (None, {}, b"", True),
-            (None, {"LANG": "zh_TW.Big5"}, b"", False),
-            (None, {"LC_CTYPE": "en_US.UTF-8", "LANG": "zh_TW.Big5"}, b"", True),
-            (None, {"LC_CTYPE": "zh_TW.Big5", "LANG": "en_US.UTF-8"}, b"", False),
-            ("en_US.UTF-8", {"LC_CTYPE": "zh_TW.Big5"}, b"", True),
-            ("zh_TW.Big5", None, b"LC_ALL=typo.UTF-8; ", False),
-            ("zh_TW.Big5", None, b"LC_ALL=en_US.UTF-8; ", True),
+            (None, {"LANG": big5}, b"", False),
+            (None, {"LC_CTYPE": utf8, "LANG": big5}, b"", True),
+            (None, {"LC_CTYPE": big5, "LANG": utf8}, b"", False),
+            (utf8, {"LC_CTYPE": big5}, b"", True),
+            (big5, None, b"LC_ALL=typo.UTF-8; ", False),
+            (big5, None, b"LC_ALL=" + "{utf8}".encode() + b"; ", True),
         ]
         with tempfile.TemporaryDirectory() as directory:
             marker = Path(directory) / "called"
@@ -207,15 +247,41 @@ class JsonEscapeLinearTests(unittest.TestCase):
             stub.write_text('#!/bin/sh\n: > "%s"\nexit 1\n' % marker)
             stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
             for locale, variables, switch, called in cases:
-                with self.subTest(locale=locale, variables=variables, switch=switch):
-                    for name in [locale] + list((variables or {}).values()):
-                        if name not in (None, "C", "POSIX"):
-                            self.require_locale(name)
-                    self.assertEqual(self.escape(self.new, b"a" * 1024, locale, path=directory,
-                                                 variables=variables, switch=switch), b"a" * 1024)
+                label = locale[0] if isinstance(locale, tuple) else locale
+                with self.subTest(locale=label, variables=variables, switch=switch):
+                    resolve = lambda name: self.locale(*name) if isinstance(name, tuple) else name
+                    locale_ = resolve(locale)
+                    variables_ = {k: resolve(v) for k, v in (variables or {}).items()}
+                    switch_ = switch.replace(b"{utf8}", resolve(utf8).encode())
+                    self.assertEqual(self.escape(self.new, b"a" * 1024, locale_, path=directory,
+                                                 variables=variables_, switch=switch_,
+                                                 setlocale_warning=b"typo" in switch_),
+                                     b"a" * 1024)
                     self.assertEqual(marker.exists(), called)
                     if called:
                         marker.unlink()
+
+    def test_an_uninstalled_locale_falls_back_to_c_and_uses_python(self):
+        # Bash keeps C when setlocale fails at startup, so the probes read one
+        # character per byte; this must route to Python, not fail.
+        name = "xx_YY.UTF-8"
+        if normalize_locale(name) in self.installed:
+            self.skipTest(f"{name} is installed")
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / "called"
+            stub = Path(directory) / "python3"
+            stub.write_text('#!/bin/sh\n: > "%s"\nexit 1\n' % marker)
+            stub.chmod(stub.stat().st_mode | stat.S_IXUSR)
+            probe = (self.new + b'\na=$\'\\xc3\\x80\' b=$\'\\xa4\\x5c\' c=$\'\\xf0\\x9f\\x98\\x80\' '
+                     b'd=$\'\\x95\\x5c\'; printf "%s %s %s %s" ${#a} ${#b} ${#c} ${#d}')
+            env = {k: v for k, v in os.environ.items() if k not in ("LC_ALL", "LC_CTYPE", "LANG")}
+            result = subprocess.run([BASH, "-c", probe], env=dict(env, LC_ALL=name),
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    stdin=subprocess.DEVNULL, check=True, timeout=30)
+            self.assertEqual(result.stdout, b"2 2 4 2")
+            self.assertEqual(self.escape(self.new, b"a" * 1024, name, path=directory,
+                                         setlocale_warning=True), b"a" * 1024)
+            self.assertTrue(marker.exists())
 
     def test_256_kib_under_five_seconds(self):
         # Independently specified output checks correctness as well as speed.
