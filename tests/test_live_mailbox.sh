@@ -84,6 +84,40 @@ processes_under() {
   LIVE_PIDS="$(printf '%s\n' "$listing" | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }')"
 }
 
+# Every case runs under its own limit and the whole run under one more, both inside the
+# 10-minute CI step limit, so a slow or stuck case fails with its name, its PID and what
+# is still running instead of being killed by CI with no case named.
+CASE_LIMIT="${OMNILANE_LIVE_CASE_LIMIT:-330}"
+RUN_DEADLINE=$((SECONDS + ${OMNILANE_LIVE_RUN_LIMIT:-540}))
+run_case() {
+  local name="$1" pid rc=0 deadline started="$SECONDS" grace listing
+  deadline=$((SECONDS + CASE_LIMIT))
+  [[ "$deadline" -le "$RUN_DEADLINE" ]] || deadline="$RUN_DEADLINE"
+  # Its own process group, so what is left of the case can be listed and stopped as one.
+  set -m
+  bash "$0" --omnilane-offline-child "$name" &
+  pid=$!
+  set +m
+  while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$deadline" ]]; do
+    sleep 0.2
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    listing="$(with_limit 5 ps -axo pid=,pgid=,etime=,command= | awk -v group="$pid" '$2 == group')" ||
+      listing="(could not list processes)"
+    printf 'case %s (PID %s) still running after %ss (case limit %ss, run limit %ss); waiting on:\n%s\n' \
+      "$name" "$pid" "$((SECONDS - started))" "$CASE_LIMIT" "${OMNILANE_LIVE_RUN_LIMIT:-540}" "$listing" >&2
+    # TERM lets the case's own cleanup stop any live job it registered; that cleanup is bounded.
+    kill -TERM "$pid" 2>/dev/null || true
+    grace=$((SECONDS + 30))
+    while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$grace" ]]; do sleep 0.2; done
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    fail "case $name timed out"
+  fi
+  wait "$pid" || rc=$?
+  [[ "$rc" -eq 0 ]] || exit "$rc"
+}
+
 wait_for_file() {
   local path="$1" tries=0
   while [[ ! -f "$path" && "$tries" -lt 100 ]]; do
@@ -1893,60 +1927,60 @@ PY
 case "$CASE" in
  "")
     for scenario in gemini-success gemini-incomplete gemini-two gemini-empty gemini-idle claude-success claude-error; do
-      bash "$0" --omnilane-offline-child "call-timeout-$scenario"
+      run_case "call-timeout-$scenario"
       printf 'ok - live per-call timeout %s\n' "$scenario"
     done
-    bash "$0" --omnilane-offline-child call-timeout-warnings
+    run_case call-timeout-warnings
     printf 'ok - live per-call timeout dispatch warnings\n'
-    bash "$0" --omnilane-offline-child codex-killed-runner
+    run_case codex-killed-runner
     printf 'ok - killed Codex live runner reaps app-server process group\n'
-    bash "$0" --omnilane-offline-child codex-app-server-eof-cleanup
+    run_case codex-app-server-eof-cleanup
     printf 'ok - Codex app-server prefers EOF cleanup and bounds TERM/KILL escalation\n'
-    bash "$0" --omnilane-offline-child codex-close-grace-invariant
+    run_case codex-close-grace-invariant
     printf 'ok - Codex close grace precedes worker escalation\n'
-    bash "$0" --omnilane-offline-child codex-full-close-budget-invariant
+    run_case codex-full-close-budget-invariant
     printf 'ok - Codex turn plus app-server close budget precedes worker escalation\n'
-    bash "$0" --omnilane-offline-child codex-shutdown-grace
+    run_case codex-shutdown-grace
     printf 'ok - Codex live shutdown waits gracefully then escalates\n'
-    /bin/bash "$ROOT/tests/test_live_close_deadline.sh" --omnilane-offline-child
+    run_case codex-close-deadline
     printf 'ok - bounded close preserves queued input and precedes jobs timeout\n'
-    bash "$0" --omnilane-offline-child live-fail-fast
+    run_case live-fail-fast
     printf 'ok - live mode rejects non-capable vendor\n'
-    bash "$0" --omnilane-offline-child single-shot-claude
+    run_case single-shot-claude
     printf 'ok - single-shot mode forces Claude one-shot\n'
-    bash "$0" --omnilane-offline-child idle-cap
+    run_case idle-cap
     printf 'ok - live mailbox idle cap closes session\n'
-    bash "$0" --omnilane-offline-child claude-close-recovery
+    run_case claude-close-recovery
     printf 'ok - Claude close recovers completed result output\n'
-    bash "$0" --omnilane-offline-child gemini-schema
+    run_case gemini-schema
     printf 'ok - Gemini live mailbox uses agy schema\n'
-    bash "$0" --omnilane-offline-child json-escape
+    run_case json-escape
     printf 'ok - live prompt JSON escaping round-trips exact text\n'
-  bash "$0" --omnilane-offline-child jobs-send-json-escape
+  run_case jobs-send-json-escape
   printf 'ok - jobs.sh send JSON escaping round-trips exact text\n'
-  bash "$0" --omnilane-offline-child codex-live-rpc
+  run_case codex-live-rpc
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
-  bash "$0" --omnilane-offline-child codex-live-large-task
+  run_case codex-live-large-task
   printf 'ok - Codex live large task truncates only the worker copy\n'
-  bash "$0" --omnilane-offline-child codex-live-large-task-cleanup
+  run_case codex-live-large-task-cleanup
   printf 'ok - Codex live large task stops its job when a step fails\n'
-    bash "$0" --omnilane-offline-child codex-live-fallback
+    run_case codex-live-fallback
     printf 'ok - Codex failed handshake degrades to single-shot\n'
-    bash "$0" --omnilane-offline-child grok-killed-runner
+    run_case grok-killed-runner
     printf 'ok - killed Grok live runner reaps ACP process group\n'
-    bash "$0" --omnilane-offline-child grok-close-grace-invariant
+    run_case grok-close-grace-invariant
     printf 'ok - Grok close grace precedes worker escalation\n'
-    bash "$0" --omnilane-offline-child grok-live-acp
+    run_case grok-live-acp
     printf 'ok - Grok live ACP mailbox, cancellation, and incremental output\n'
-    bash "$0" --omnilane-offline-child grok-model-errors
+    run_case grok-model-errors
     printf 'ok - Grok model argv and prompt error correlation\n'
-    bash "$0" --omnilane-offline-child grok-advise-fail-closed
+    run_case grok-advise-fail-closed
     printf 'ok - Grok advise dispatch and internal FIFO fail closed\n'
-    bash "$0" --omnilane-offline-child grok-live-fallback
+    run_case grok-live-fallback
     printf 'ok - Grok failed handshake degrades to single-shot\n'
-    bash "$0" --omnilane-offline-child codex-probe-stdin-open
+    run_case codex-probe-stdin-open
     printf 'ok - Codex initialize probe keeps stdin open\n'
-    bash "$0" --omnilane-offline-child grok-probe-stdin-open
+    run_case grok-probe-stdin-open
     printf 'ok - Grok initialize probe keeps stdin open\n'
     ;;
   live-fail-fast) case_live_fail_fast ;;
