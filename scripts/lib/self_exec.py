@@ -50,13 +50,13 @@ def parse_stamp(text) -> datetime.datetime | None:
 
 def since_cutoff(text: str, moment: datetime.datetime) -> datetime.datetime:
     match = re.fullmatch(r"([1-9][0-9]*)([dh])", text)
-    if match:
-        amount = int(match.group(1))
-        return moment - (datetime.timedelta(days=amount) if match.group(2) == "d"
-                         else datetime.timedelta(hours=amount))
     try:
+        if match:
+            amount = int(match.group(1))
+            return moment - (datetime.timedelta(days=amount) if match.group(2) == "d"
+                             else datetime.timedelta(hours=amount))
         return datetime.datetime.strptime(text, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
-    except ValueError:
+    except (OverflowError, ValueError):
         raise SystemExit("omnilane: --since takes Nd, Nh or YYYY-MM-DD") from None
 
 
