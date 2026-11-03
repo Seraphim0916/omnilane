@@ -132,7 +132,10 @@ def dispatched(cutoff: datetime.datetime) -> collections.Counter:
             continue
         moment = parse_stamp(value.get("started")) if isinstance(value, dict) else None
         if moment is not None and moment >= cutoff:
-            count[value.get("executor") or "unknown"] += 1
+            executor = value.get("executor") or "unknown"
+            if not isinstance(executor, str):
+                continue
+            count[executor] += 1
     return count
 
 
