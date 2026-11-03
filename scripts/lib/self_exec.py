@@ -107,10 +107,12 @@ def record(args) -> int:
 def records(cutoff: datetime.datetime) -> list[dict]:
     found = []
     try:
-        lines = (home() / LOG_NAME).read_text(encoding="utf-8").splitlines()
+        with (home() / LOG_NAME).open(encoding="utf-8", newline="") as stream:
+            lines = stream.read().split("\n")
     except FileNotFoundError:
         return found
     for line in lines:
+        line = line.removesuffix("\r")
         try:
             entry = json.loads(line)
         except ValueError:
