@@ -80,6 +80,20 @@ class CancelGroupGuardTests(unittest.TestCase):
             time.sleep(0.1)
         for caller in self.callers:
             caller.wait(10)
+        self.assert_groups_gone(groups)
+
+    def assert_groups_gone(self, groups, timeout=5):
+        """Every group this fixture started must be empty once cleanup has run."""
+        deadline = time.monotonic() + timeout
+        while True:
+            listing = subprocess.run(["ps", "-axo", "pgid=,stat=,command="], env=self.env, text=True,
+                                     capture_output=True, timeout=5).stdout
+            left = [line for line in listing.splitlines() if line.split(None, 2)[0] in {str(g) for g in groups}
+                    and not line.split(None, 2)[1].startswith("Z") and str(self.root) in line]
+            if not left or time.monotonic() >= deadline:
+                break
+            time.sleep(0.1)
+        self.assertEqual(left, [], "fixture process groups outlived cleanup")
 
     def fixture_leader(self, pgid):
         """A reaped group's number may already lead somebody else's group."""
@@ -255,7 +269,8 @@ class CancelGroupGuardTests(unittest.TestCase):
         self.assert_caller_untouched()
 
     def background(self):
-        dispatched = subprocess.run(["bash", str(DISPATCH), "--background", "--single-shot", "fixture", "background"],
+        dispatched = subprocess.run(["bash", str(DISPATCH), "--workdir", str(self.root), "--background", "--single-shot",
+                                     "fixture", "background"],
                                     env=self.env, text=True, capture_output=True, timeout=STARTUP_WAIT, stdin=subprocess.DEVNULL)
         self.assertEqual(dispatched.returncode, 0, dispatched.stderr)
         job_dir = self.home / "jobs" / dispatched.stdout.strip()
