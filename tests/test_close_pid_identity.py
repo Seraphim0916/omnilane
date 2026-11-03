@@ -358,6 +358,11 @@ class CancelTests(IdentityTestCase):
              "print(child.pid, flush=True)\n"
              "time.sleep(60)\n")
 
+    def setUp(self):
+        super().setUp()
+        # Each victim leads a session of its own, as a supervised background worker does.
+        (self.job / "supervised").write_text("1\n")
+
     def group_victim(self):
         process = subprocess.Popen([sys.executable, "-c", self.GROUP], start_new_session=True,
                                    stdout=subprocess.PIPE, text=True, stdin=subprocess.DEVNULL)

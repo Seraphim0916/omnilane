@@ -435,7 +435,10 @@ omnilane jobs result JOB_ID     # the worker's public result
 ```
 
 Read the result, run the verification command from your brief (or send a second
-worker to), and only then report. Other job commands: `cancel JOB_ID`;
+worker to), and only then report. Other job commands: `cancel JOB_ID` (background
+jobs and foreground jobs that lead their own process group under `--job-timeout`;
+any other foreground job is refused with exit 1 and its worker PID, so end it from
+the shell or tool call that started it, not with `kill` on a process group);
 `send JOB_ID "<text>"` and `close JOB_ID` for a live session (Claude and Gemini
 background jobs stay resident; Codex and Grok are single-shot unless `--live`,
 and Grok live needs `--mode sysops`); `retry JOB_ID --caller-context FILE` (keeps

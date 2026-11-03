@@ -1478,6 +1478,11 @@ if [[ -n "$QUOTA_DECISION" ]]; then
     --path="$JOB_DIR/quota-preflight.json" --decision="$QUOTA_JOB_DECISION"
 fi
 mv "$META_TMP" "$JOB_DIR/meta.json"
+# jobs cancel signals a process group only for jobs marked here. It is written
+# before the PID, and only where run_job starts the job supervisor.
+if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+  (umask 077; printf '1\n' > "$JOB_DIR/supervised")
+fi
 
 if [[ -n "$THREAD_NAME" ]]; then
   # The goal caller requires exactly the claimed job ID on stdout. Its private

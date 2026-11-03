@@ -178,6 +178,73 @@ older_job_message() { # job id, pid, signal flag
     "$1" "$2" "$2" "$3" "$2" "$JOB_DIR"
 }
 
+cancel_report() { # outcome, exit code or null, text
+  if [[ "$JSON_MODE" -eq 1 ]]; then
+    printf '{"schema_version":1,"command":"cancel","ok":true,"job":{"id":"%s","outcome":"%s","exit_code":%s}}\n' \
+      "$(json_escape "$CANCEL_JOB_ID")" "$1" "$2"
+  else
+    printf '%s\n' "$3"
+  fi
+  exit 0
+}
+
+# A refused or failed cancel records no exit status; a refused one sent no signal.
+cancel_refuse() { # code, pid, reason
+  if [[ "$JSON_MODE" -eq 1 ]]; then
+    printf '{"schema_version":1,"command":"cancel","ok":false,"code":"%s","reason":"%s","job":{"id":"%s","pid":%s}}\n' \
+      "$1" "$(json_escape "$3")" "$(json_escape "$CANCEL_JOB_ID")" "$2"
+  else
+    printf '%s\n' "$3" >&2
+  fi
+  exit 1
+}
+
+# A foreground dispatch without the job supervisor runs in its caller's process
+# group, so signalling that group would stop the caller and its other work too.
+# The group is signalled only when dispatch marked the job as supervised and every
+# process in the group descends from the recorded PID; anything else is refused.
+cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE,REASON}
+  local pid="$1" marker="$JOB_DIR/supervised" listing rc=0 verdict
+  CANCEL_GROUP=""; CANCEL_REFUSAL_CODE=""; CANCEL_REFUSAL_REASON=""
+  if [[ -L "$marker" || ! -f "$marker" ]] || [[ "$(cat "$marker" 2>/dev/null)" != "1" ]]; then
+    CANCEL_REFUSAL_CODE="unsupervised"
+    CANCEL_REFUSAL_REASON="$(printf 'job %s runs without the job supervisor (a foreground dispatch without --job-timeout, or a job started by an older omnilane that wrote no supervisor marker), so its worker PID %s shares a process group with whatever started it and no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid")"
+    return 1
+  fi
+  listing="$(LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
+    "$PS_QUERY_LIMIT" ps -axo pid=,ppid=,pgid= 2>/dev/null)" || rc=$?
+  if [[ "$rc" -eq 126 || "$rc" -eq 127 ]]; then
+    rc=0; listing="$(LC_ALL=C ps -axo pid=,ppid=,pgid= 2>/dev/null)" || rc=$?
+  fi
+  verdict=""
+  [[ "$rc" -ne 0 ]] || verdict="$(printf '%s\n' "$listing" | PID="$pid" awk '
+    $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { parent[$1] = $2; group[$1] = $3 }
+    END {
+      target = ENVIRON["PID"]
+      if (!(target in group)) { print "unlisted"; exit }
+      g = group[target]; outsiders = ""
+      for (p in group) {
+        if (group[p] != g) continue
+        q = p; steps = 0
+        while (q != target && (q in parent) && q > 1 && steps < 100000) { q = parent[q]; steps++ }
+        if (q != target) outsiders = outsiders " " p
+      }
+      if (outsiders != "") print "shared " g outsiders; else print "own " g
+    }')"
+  case "$verdict" in
+    own\ *) CANCEL_GROUP="${verdict#own }"; return 0 ;;
+    shared\ *)
+      set -- $verdict
+      CANCEL_REFUSAL_CODE="shared-process-group"
+      CANCEL_REFUSAL_REASON="$(printf 'job %s worker PID %s is in process group %s together with processes that are not part of this job (PID%s), so signalling the group would stop them too and no signal was sent. End the job from its caller.' "$CANCEL_JOB_ID" "$pid" "$2" "${verdict#shared $2}")"
+      return 1 ;;
+    *)
+      CANCEL_REFUSAL_CODE="process-list-unavailable"
+      CANCEL_REFUSAL_REASON="$(printf 'cannot list processes to confirm that the process group of job %s worker PID %s holds only this job, so no signal was sent. A sandbox usually causes this; rerun jobs cancel outside the sandbox: omnilane jobs cancel %s' "$CANCEL_JOB_ID" "$pid" "$CANCEL_JOB_ID")"
+      return 1 ;;
+  esac
+}
+
 read_cli_job_state() {
   local directory="$1" pid_state=0
   JOB_STATE="running"
@@ -463,7 +530,7 @@ if [[ "$COMMAND" != "wait" ]] && { [[ "$COMMAND" == "complete-native" ]] ||
 fi
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
-    list|status|result|stats|recommend|audit|threads) ;;
+    list|status|result|stats|recommend|audit|threads|cancel) ;;
     *) usage ;;
   esac
 fi
@@ -1410,49 +1477,46 @@ case "${1:-}" in
       sleep 1
     done ;;
   cancel)
-    [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
+    [[ $# -eq 2 ]] || usage
     select_job "$2"
+    CANCEL_JOB_ID="$2"
     exit_path="$JOB_DIR/exit"
     if [[ -e "$exit_path" || -L "$exit_path" ]]; then
       if read_exit_code "$exit_path"; then
-        echo "already finished (exit $RECORDED_EXIT)"
+        cancel_report already_finished "$RECORDED_EXIT" "already finished (exit $RECORDED_EXIT)"
       else
-        echo "already finished (invalid exit metadata)"
+        cancel_report already_finished null "already finished (invalid exit metadata)"
       fi
-      exit 0
     fi
     pid=""; pid_state="missing"
     if [[ -e "$JOB_DIR/pid" || -L "$JOB_DIR/pid" ]]; then
       if read_job_pid "$JOB_DIR/pid"; then pid="$RECORDED_PID"; pid_state="valid"; else pid_state="invalid"; fi
     fi
     if [[ "$pid_state" != "valid" ]]; then
-      echo "not running (no live worker to cancel)"
-      exit 0
+      cancel_report not_running null "not running (no live worker to cancel)"
     fi
     cancel_identity=0
     recorded_pid_identity "$JOB_DIR/pid" "$pid" || cancel_identity=$?
     case "$cancel_identity" in
       0) ;;
-      2) die 1 "$(ps_unusable_message "$pid" cancel "$2")" ;;
-      3) die 1 "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "no signal was sent")" ;;
+      2) cancel_refuse ps-unavailable "$pid" "$(ps_unusable_message "$pid" cancel "$2")" ;;
+      3) cancel_refuse invalid-start-time "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "no signal was sent")" ;;
       4)
         older_state=0
         older_pid_state "$pid" || older_state=$?
-        [[ "$older_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
-        [[ "$older_state" -ne 0 ]] || die 1 "$(older_job_message "$2" "$pid" -TERM)"
-        echo "not running (no live worker to cancel)"
-        exit 0 ;;
+        [[ "$older_state" -ne 2 ]] || cancel_refuse ps-unavailable "$pid" "$(ps_unusable_message "$pid" cancel "$2")"
+        [[ "$older_state" -ne 0 ]] || cancel_refuse older-job "$pid" "$(older_job_message "$2" "$pid" -TERM)"
+        cancel_report not_running null "not running (no live worker to cancel)" ;;
       *)
         note_pid_mismatch "$JOB_DIR/pid" "$pid"
-        echo "not running (no live worker to cancel)"
-        exit 0 ;;
+        cancel_report not_running null "not running (no live worker to cancel)" ;;
     esac
-    # Background workers run as their own process-group leader (dispatch `set -m`),
-    # and that leader traps SIGTERM to record a best-effort exit code. Signal the
-    # whole group so the vendor CLI child dies too and the worker writes its exit.
-    cancel_grp="$pid"
-    cancel_pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)"
-    [[ "$cancel_pgid" =~ ^[1-9][0-9]*$ ]] && cancel_grp="$cancel_pgid"
+    # Supervised workers lead a process group of their own (background `set -m`),
+    # and that leader traps SIGTERM to record a best-effort exit code. Signalling
+    # the whole group lets the supervisor stop the worker's session as well. Both
+    # the TERM and the SIGKILL below use this one check of the group's members.
+    cancel_group_check "$pid" || cancel_refuse "$CANCEL_REFUSAL_CODE" "$pid" "$CANCEL_REFUSAL_REASON"
+    cancel_grp="$CANCEL_GROUP"
     kill -TERM "-$cancel_grp" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     cancel_waited=0
     while [[ "$cancel_waited" -lt 5 ]]; do
@@ -1473,21 +1537,20 @@ case "${1:-}" in
     fi
     if [[ -e "$exit_path" || -L "$exit_path" ]]; then
       if read_exit_code "$exit_path"; then
-        echo "cancelled (exit $RECORDED_EXIT)"
+        cancel_report cancelled "$RECORDED_EXIT" "cancelled (exit $RECORDED_EXIT)"
       else
-        echo "cancelled (invalid exit metadata)"
+        cancel_report cancelled null "cancelled (invalid exit metadata)"
       fi
     else
       # 137 says the worker is dead, so it is written only once that is known.
       cancel_state=0
       recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_state=$?
-      [[ "$cancel_state" -ne 0 ]] || die 1 "cancel could not terminate worker pid $pid"
-      [[ "$cancel_state" -ne 2 ]] || die 1 "$(ps_unusable_message "$pid" cancel "$2")"
-      [[ "$cancel_state" -ne 3 ]] || die 1 "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
+      [[ "$cancel_state" -ne 0 ]] || cancel_refuse not-terminated "$pid" "cancel could not terminate worker pid $pid"
+      [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable "$pid" "$(ps_unusable_message "$pid" cancel "$2")"
+      [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
       (umask 077; printf '137\n' > "$exit_path")
-      echo "cancelled (exit 137)"
-    fi
-    exit 0 ;;
+      cancel_report cancelled 137 "cancelled (exit 137)"
+    fi ;;
   rm)
     [[ "$JSON_MODE" -eq 0 && $# -eq 2 ]] || usage
     select_job "$2"

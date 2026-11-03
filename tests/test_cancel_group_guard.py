@@ -1,0 +1,265 @@
+"""jobs cancel signals a process group only when that group is the job's own.
+
+A foreground dispatch runs in its caller's process group. Signalling that group
+used to end the caller, its other work and anything piped to the dispatch.
+Every fixture here is a real dispatch with an offline exec runner.
+"""
+import hashlib
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import tempfile
+import time
+import unittest
+
+from offline_env import isolated_environment
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DISPATCH = ROOT / "scripts/dispatch.sh"
+JOBS = ROOT / "scripts/jobs.sh"
+
+GATE = """import json, os, signal, subprocess, sys, time
+from pathlib import Path
+root = Path(os.environ['FIXTURE_ROOT'])
+child = subprocess.Popen([sys.executable, '-c', 'import signal; signal.pause()'])
+ready = root / 'gate.started'
+ready.with_suffix('.tmp').write_text(json.dumps({'pid': os.getpid(), 'pgid': os.getpgrp(), 'child': child.pid}))
+ready.with_suffix('.tmp').replace(ready)
+signal.pause()
+"""
+
+
+class CancelGroupGuardTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="omnilane-cancel-guard-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.env, self.violations = isolated_environment(self.root / "isolated", os.environ["PATH"])
+        self.addCleanup(lambda: self.assertFalse(self.violations.exists()))
+        self.home = self.root / "jobs-home"
+        self.home.mkdir()
+        gate = self.root / "gate"
+        gate.write_text("#!/usr/bin/env python3\n" + GATE, encoding="utf-8")
+        gate.chmod(0o755)
+        (self.home / "routing.local.yaml").write_text(f'fixture: exec "{gate}" -\n')
+        self.env.update(OMNILANE_HOME=str(self.home), FIXTURE_ROOT=str(self.root))
+        self.groups = []
+        self.callers = []
+        self.addCleanup(self.stop_fixture_groups)
+
+    def stop_fixture_groups(self):
+        groups = list(self.groups)
+        if (self.root / "gate.started").exists():
+            groups.append(json.loads((self.root / "gate.started").read_text())["pgid"])
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            for pgid in groups:
+                # Only groups this fixture started may be signalled.
+                if pgid != os.getpgrp():
+                    try:
+                        os.killpg(pgid, sig)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+            time.sleep(0.1)
+        for caller in self.callers:
+            caller.wait(10)
+
+    def wait_for(self, path, timeout=15):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if path.exists() and path.stat().st_size:
+                return
+            time.sleep(0.02)
+        errors = self.root / "caller.err"
+        self.fail("fixture did not reach " + path.name + (": " + errors.read_text() if errors.exists() else ""))
+
+    def start_caller(self, body, shell=("bash",), script=True):
+        """Start a caller that leads a process group, as a terminal or an agent tool shell does."""
+        prologue = ('printf \'%s\\n\' "$$" > "$FIXTURE_ROOT/caller.pid"\n'
+                    'sleep 60 &\n'
+                    'printf \'%s\\n\' "$!" > "$FIXTURE_ROOT/sibling.pid"\n')
+        source = prologue + body + '\nprintf \'%s\\n\' "$?" > "$FIXTURE_ROOT/caller.rc"\nwait\n'
+        if script:
+            path = self.root / "caller.sh"
+            path.write_text("#!/bin/bash\n" + source)
+            path.chmod(0o755)
+            argv = [str(path)]
+        else:
+            argv = [*shell, "-c", source]
+        errors = (self.root / "caller.err").open("w")
+        self.addCleanup(errors.close)
+        caller = subprocess.Popen(argv, env=dict(self.env, DISPATCH=str(DISPATCH)), start_new_session=True,
+                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=errors)
+        self.groups.append(caller.pid)
+        self.callers.append(caller)
+        self.wait_for(self.root / "gate.started")
+        return caller
+
+    def job_dir(self):
+        jobs = list((self.home / "jobs").iterdir())
+        self.assertEqual(len(jobs), 1, jobs)
+        self.wait_for(jobs[0] / "pid")
+        return jobs[0]
+
+    def cancel(self, job_dir, *flags, env=None):
+        return subprocess.run(["bash", str(JOBS), *flags, "cancel", job_dir.name], env=env or self.env,
+                              text=True, capture_output=True, timeout=30, stdin=subprocess.DEVNULL)
+
+    @staticmethod
+    def snapshot(job_dir):
+        state = {}
+        for path in sorted(job_dir.rglob("*")):
+            info = path.lstat()
+            digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+            state[str(path.relative_to(job_dir))] = (info.st_mode, info.st_size, info.st_mtime_ns, digest)
+        return state
+
+    def alive(self, pid):
+        result = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], env=self.env, text=True,
+                                capture_output=True, timeout=5)
+        return result.returncode == 0 and not result.stdout.strip().startswith("Z")
+
+    def read_pid(self, name):
+        return int((self.root / name).read_text())
+
+    def assert_gone(self, pid, timeout=5):
+        deadline = time.monotonic() + timeout
+        while self.alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertFalse(self.alive(pid), f"process {pid} survived cancellation")
+
+    def assert_refused(self, job_dir, code, *, env=None):
+        gate = json.loads((self.root / "gate.started").read_text())
+        pid = int((job_dir / "pid").read_text())
+        before = self.snapshot(job_dir)
+        text = self.cancel(job_dir, env=env)
+        self.assertEqual(text.returncode, 1, text.stdout + text.stderr)
+        self.assertEqual(text.stdout, "")
+        self.assertIn(f"PID {pid}", text.stderr)
+        self.assertIn("no signal was sent", text.stderr)
+        if code != "process-list-unavailable":
+            self.assertIn("End the job from its caller.", text.stderr)
+        self.assertNotIn("kill", text.stderr)
+        result = self.cancel(job_dir, "--json", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual((reply["ok"], reply["code"], reply["job"]), (False, code, {"id": job_dir.name, "pid": pid}))
+        self.assertEqual(reply["reason"], text.stderr.rstrip("\n"))
+        time.sleep(0.3)
+        self.assertEqual(self.snapshot(job_dir), before)
+        for process in (pid, gate["pid"], gate["child"]):
+            self.assertTrue(self.alive(process), f"refused cancel stopped process {process}")
+        return pid
+
+    def assert_caller_untouched(self):
+        for name in ("caller.pid", "sibling.pid"):
+            self.assertTrue(self.alive(self.read_pid(name)), name + " was signalled")
+        self.assertFalse((self.root / "caller.rc").exists())
+
+    def test_foreground_dispatch_from_a_script_is_refused(self):
+        self.start_caller('bash "$DISPATCH" fixture "script caller"')
+        self.assert_refused(self.job_dir(), "unsupervised")
+        self.assert_caller_untouched()
+
+    def test_foreground_dispatch_from_a_tool_shell_is_refused(self):
+        self.start_caller('bash "$DISPATCH" fixture "tool shell caller"', script=False)
+        self.assert_refused(self.job_dir(), "unsupervised")
+        self.assert_caller_untouched()
+
+    def test_foreground_dispatch_leading_its_own_group_without_a_supervisor_is_refused(self):
+        self.start_caller('set -m\nbash "$DISPATCH" fixture "alone"')
+        job_dir = self.job_dir()
+        pid = int((job_dir / "pid").read_text())
+        self.assertEqual(os.getpgid(pid), pid)
+        self.groups.append(pid)
+        self.assert_refused(job_dir, "unsupervised")
+        self.assert_caller_untouched()
+
+    def test_job_timeout_in_the_caller_group_is_refused(self):
+        self.start_caller('bash "$DISPATCH" --job-timeout 600 fixture "shared group"')
+        job_dir = self.job_dir()
+        self.assertTrue((job_dir / "supervised").is_file())
+        self.assert_refused(job_dir, "shared-process-group")
+        self.assert_caller_untouched()
+
+    def test_job_timeout_leading_its_own_group_is_cancelled_and_the_caller_survives(self):
+        self.start_caller('set -m\nbash "$DISPATCH" --job-timeout 600 fixture "own group"')
+        job_dir = self.job_dir()
+        pid = int((job_dir / "pid").read_text())
+        self.assertEqual(os.getpgid(pid), pid)
+        self.groups.append(pid)
+        gate = json.loads((self.root / "gate.started").read_text())
+        result = self.cancel(job_dir, "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        reply = json.loads(result.stdout)
+        self.assertEqual((reply["ok"], reply["job"]["outcome"]), (True, "cancelled"))
+        self.assertIn(reply["job"]["exit_code"], (137, 143))
+        for process in (pid, gate["pid"], gate["child"]):
+            self.assert_gone(process)
+        self.wait_for(self.root / "caller.rc")
+        self.assertIn(int((self.root / "caller.rc").read_text()), (137, 143))
+        for name in ("caller.pid", "sibling.pid"):
+            self.assertTrue(self.alive(self.read_pid(name)), name + " was signalled")
+
+    def test_a_pipeline_led_by_the_dispatch_is_refused(self):
+        # set -m makes the dispatch lead the pipeline's group, so pgid equals its PID,
+        # but tee shares that group without descending from it.
+        self.start_caller('set -m\nbash "$DISPATCH" --job-timeout 600 fixture "piped" '
+                          '| tee "$FIXTURE_ROOT/tee.out" >/dev/null')
+        job_dir = self.job_dir()
+        pid = int((job_dir / "pid").read_text())
+        self.assertEqual(os.getpgid(pid), pid)
+        self.groups.append(pid)
+        listing = subprocess.run(["ps", "-axo", "pid=,pgid=,command="], env=self.env, text=True,
+                                 capture_output=True, timeout=5).stdout
+        tee = [int(line.split()[0]) for line in listing.splitlines()
+               if line.split()[1] == str(pid) and " tee " in f" {line} "]
+        self.assertEqual(len(tee), 1, listing)
+        self.assert_refused(job_dir, "shared-process-group")
+        self.assertTrue(self.alive(tee[0]), "tee was signalled")
+        self.assert_caller_untouched()
+
+    def background(self):
+        dispatched = subprocess.run(["bash", str(DISPATCH), "--background", "--single-shot", "fixture", "background"],
+                                    env=self.env, text=True, capture_output=True, timeout=15, stdin=subprocess.DEVNULL)
+        self.assertEqual(dispatched.returncode, 0, dispatched.stderr)
+        job_dir = self.home / "jobs" / dispatched.stdout.strip()
+        self.wait_for(job_dir / "pid")
+        self.wait_for(self.root / "gate.started")
+        pid = int((job_dir / "pid").read_text())
+        self.groups.append(pid)
+        return job_dir, pid
+
+    def test_background_job_is_cancelled_with_its_whole_tree(self):
+        job_dir, pid = self.background()
+        gate = json.loads((self.root / "gate.started").read_text())
+        result = self.cancel(job_dir, "--json")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(json.loads(result.stdout),
+                         {"schema_version": 1, "command": "cancel", "ok": True,
+                          "job": {"id": job_dir.name, "outcome": "cancelled", "exit_code": 143}})
+        for process in (pid, gate["pid"], gate["child"]):
+            self.assert_gone(process)
+        again = self.cancel(job_dir, "--json")
+        self.assertEqual((again.returncode, json.loads(again.stdout)["job"]["outcome"]), (0, "already_finished"))
+
+    def test_background_job_without_the_marker_is_refused(self):
+        job_dir, _ = self.background()
+        os.replace(job_dir / "supervised", self.root / "supervised.moved")
+        self.assert_refused(job_dir, "unsupervised")
+
+    def test_an_unusable_process_list_is_refused(self):
+        job_dir, _ = self.background()
+        shims = self.root / "shims"
+        shims.mkdir()
+        real_ps = Path(self.env["PATH"].split(os.pathsep)[0]) / "ps"
+        (shims / "ps").write_text(f'#!/bin/bash\n[[ " $* " == *" -axo "* ]] && exit 1\nexec "{real_ps}" "$@"\n')
+        (shims / "ps").chmod(0o755)
+        env = dict(self.env, PATH=f"{shims}{os.pathsep}{self.env['PATH']}")
+        self.assert_refused(job_dir, "process-list-unavailable", env=env)
+
+
+if __name__ == "__main__":
+    unittest.main()
