@@ -408,8 +408,8 @@ case_codex_live_large_task() {
   # task.txt, the preserved record, keeps every byte. This checks the first
   # turn/start the fake Codex actually received, not task.txt.worker: run-codex.sh
   # rebuilds that file from the full task after job-worker.sh has read it.
-  # The fixture is ASCII, so LC_ALL=C only speeds up the bash json_escape of the
-  # ~100 KB first message (it is quadratic); it does not change the bytes sent.
+  # The fixture is ASCII, so LC_ALL=C does not change the bytes sent. json_escape
+  # hands a ~100 KB first message to Python, so it is not slow in any locale.
   local home="$TEST_ROOT/codex-live-large" bin="$TEST_ROOT/codex-live-large/bin"
   local fake="$bin/codex" input="$home/codex.input" task="$home/task.src" job job_dir close_out tries=0
   mkdir -p "$home" "$bin"
