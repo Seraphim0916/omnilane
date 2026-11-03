@@ -191,6 +191,14 @@ cancel_report() { # outcome, exit code or null, text
 # A refused or failed cancel records no exit status. CANCEL_SIGNAL_SENT tells a
 # refusal before any signal from a failure after kill(2) accepted TERM.
 CANCEL_SIGNAL_SENT=false
+cancel_term_prefix() { # original successful-delivery suffix
+  if [[ "$CANCEL_SIGNAL_SENT" == true ]]; then
+    printf 'TERM was sent%s' "$1"
+  else
+    printf 'TERM could not be delivered to process group %s of job %s' "$cancel_grp" "$CANCEL_JOB_ID"
+  fi
+}
+
 cancel_refuse() { # code, pid, reason
   if [[ "$JSON_MODE" -eq 1 ]]; then
     printf '{"schema_version":1,"command":"cancel","ok":false,"code":"%s","signal_sent":%s,"reason":"%s","job":{"id":"%s","pid":%s}}\n' \
@@ -1585,12 +1593,12 @@ case "${1:-}" in
             cancel_unlisted=0
             recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_unlisted=$?
             [[ "$cancel_unlisted" -eq 1 ]] ||
-              cancel_refuse worker-unlisted-after-term "$pid" "$(printf 'TERM was sent to process group %s of job %s, but the process list before SIGKILL does not show its worker PID %s and the worker is not confirmed gone, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid")"
+              cancel_refuse worker-unlisted-after-term "$pid" "$(printf '%s, but the process list before SIGKILL does not show its worker PID %s and the worker is not confirmed gone, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$(cancel_term_prefix " to process group $cancel_grp of job $CANCEL_JOB_ID")" "$pid")"
             cancel_escalate=0 ;;
           process-list-unavailable)
-            cancel_refuse process-list-unavailable-after-term "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but processes could not be listed again to confirm the group before SIGKILL, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid")" ;;
+            cancel_refuse process-list-unavailable-after-term "$pid" "$(printf '%s, and its worker PID %s is still running, but processes could not be listed again to confirm the group before SIGKILL, so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$(cancel_term_prefix " to process group $cancel_grp of job $CANCEL_JOB_ID")" "$pid")" ;;
           *)
-            cancel_refuse group-changed "$pid" "$(printf 'TERM was sent to process group %s of job %s, and its worker PID %s is still running, but the group changed before SIGKILL (%s), so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$cancel_grp" "$CANCEL_JOB_ID" "$pid" "${CANCEL_GROUP_CHANGE:-it now holds processes that are not part of this job}")" ;;
+            cancel_refuse group-changed "$pid" "$(printf '%s, and its worker PID %s is still running, but the group changed before SIGKILL (%s), so no SIGKILL was sent and no exit status was recorded. End the job from its caller.' "$(cancel_term_prefix " to process group $cancel_grp of job $CANCEL_JOB_ID")" "$pid" "${CANCEL_GROUP_CHANGE:-it now holds processes that are not part of this job}")" ;;
         esac
       fi
       if [[ "$cancel_escalate" -eq 1 ]]; then
@@ -1609,8 +1617,8 @@ case "${1:-}" in
       cancel_state=0
       recorded_pid_state "$JOB_DIR/pid" "$pid" || cancel_state=$?
       [[ "$cancel_state" -ne 0 ]] || cancel_refuse not-terminated "$pid" "cancel could not terminate worker pid $pid"
-      [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable-after-term "$pid" "$(printf 'TERM was sent to job %s, but whether its worker PID %s stopped cannot be confirmed because ps is blocked here, so no exit status was recorded. This does not mean the process is still running. Check it outside the sandbox with: omnilane jobs status %s' "$2" "$pid" "$2")"
-      [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time-after-term "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "TERM was sent, but no exit status was recorded")"
+      [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable-after-term "$pid" "$(printf '%s, but whether its worker PID %s stopped cannot be confirmed because ps is blocked here, so no exit status was recorded. This does not mean the process is still running. Check it outside the sandbox with: omnilane jobs status %s' "$(cancel_term_prefix " to job $2")" "$pid" "$2")"
+      [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time-after-term "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "$(cancel_term_prefix ""), but no exit status was recorded")"
       (umask 077; printf '137\n' > "$exit_path")
       cancel_report cancelled 137 "cancelled (exit 137)"
     fi ;;
