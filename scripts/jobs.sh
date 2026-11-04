@@ -325,8 +325,8 @@ read_cli_job_state_once() {
 # recorded exit wins, a removed directory is reported as removed, and a pid file
 # gone from a job that is still there is read again as the startup window.
 read_cli_job_state() {
-  local directory="$1" pass
-  for pass in 1 2 3; do
+  local directory="$1" attempt
+  for ((attempt = 1; attempt <= 3; attempt++)); do
     read_cli_job_state_once "$directory"
     case "$JOB_STATE" in dead|invalid) ;; *) return 0 ;; esac
     if [[ ! -d "$directory" || -L "$directory" ]]; then
