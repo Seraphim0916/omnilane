@@ -297,6 +297,31 @@ class JsonEscapeLinearTests(unittest.TestCase):
         self.assertEqual(actual, expected)
         self.assertLess(elapsed, 5.0)
 
+    def test_no_setlocale_warning_without_locale_variables(self):
+        # Homebrew bash resolves setlocale(LC_CTYPE, "") through libintl, which
+        # can fail when LANG and LC_* are unset (AppleLocale zh-Hant_US gives
+        # zh_Hant_US). A temporary LC_CTYPE then warned once per character and
+        # left the process in C mid-loop, so a leading multibyte character was
+        # re-read from its second byte. /bin/bash 3.2 has no libintl and gives
+        # the reference output.
+        bash = Path("/opt/homebrew/bin/bash")
+        if not os.access(bash, os.X_OK):
+            self.skipTest("/opt/homebrew/bin/bash is not installed; /bin/bash 3.2 never warns")
+        env = {k: v for k, v in os.environ.items()
+               if k != "LANG" and not k.startswith("LC_")}
+        script = b'\ns=$(cat; printf x); s=${s%x}; json_escape "$s"'
+        for name, payload in CASES:
+            with self.subTest(case=name):
+                new = subprocess.run(
+                    [str(bash), "-c", self.new + script], input=payload, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, env=env, check=True, timeout=30, cwd=ROOT)
+                self.assertNotIn(b"setlocale", new.stderr)
+                reference = subprocess.run(
+                    [BASH, "-c", self.old + script], input=payload, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, env=env, check=True, timeout=30, cwd=ROOT)
+                self.assertEqual(reference.stderr, b"")
+                self.assertEqual(new.stdout, reference.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
