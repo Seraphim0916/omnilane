@@ -252,7 +252,8 @@ class JsonEscapeLinearTests(unittest.TestCase):
                     resolve = lambda name: self.locale(*name) if isinstance(name, tuple) else name
                     locale_ = resolve(locale)
                     variables_ = {k: resolve(v) for k, v in (variables or {}).items()}
-                    switch_ = switch.replace(b"{utf8}", resolve(utf8).encode())
+                    switch_ = (switch.replace(b"{utf8}", resolve(utf8).encode())
+                               if b"{utf8}" in switch else switch)
                     self.assertEqual(self.escape(self.new, b"a" * 1024, locale_, path=directory,
                                                  variables=variables_, switch=switch_,
                                                  setlocale_warning=b"typo" in switch_),
