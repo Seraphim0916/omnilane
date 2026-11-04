@@ -1493,6 +1493,13 @@ case "${1:-}" in
           if [[ -e "$exit_path" || -L "$exit_path" ]]; then
             continue
           fi
+          # The pid file read above can vanish before the identity check while
+          # the job is being removed, and recorded_pid_state then reports the
+          # worker as gone. Loop again instead: the directory check reports a
+          # removed job, and a job without a pid file is polled as before.
+          if [[ ! -e "$JOB_DIR/pid" && ! -L "$JOB_DIR/pid" ]]; then
+            continue
+          fi
           [[ "$wait_pid_state" -ne 3 ]] || die 1 "$(invalid_start_message "${JOB_DIR##*/}" "$JOB_DIR" "$pid" "wait stopped without an answer")"
           note_pid_mismatch "$JOB_DIR/pid" "$pid"
           echo "dead (worker gone, no exit recorded)"

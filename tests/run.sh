@@ -1331,6 +1331,73 @@ test_jobs_wait_is_bounded_and_terminal() {
   fi
 }
 
+# Removing a job is not atomic for wait: it can read the pid file and only then
+# find it gone. A copy of jobs.sh pauses right after that read until the test has
+# removed the job, so the window is hit on every run instead of by chance.
+test_jobs_wait_removal_after_pid_read() {
+  local name="jobs wait treats removal after the pid read as removal, not a dead worker"
+  local repo home hook id anchor inserted rc dir_rc dir_out pid_rc pid_out waiter tries case_name
+  repo="$TEST_ROOT/wait-pid-read-repo"
+  home="$TEST_ROOT/wait-pid-read"
+  id="20260717-150001-123-1"
+  anchor='          pid="$RECORDED_PID"; pid_state="valid"'
+  mkdir -p "$repo" "$home"
+  cp -R "$ROOT/scripts" "$repo/scripts"
+  cat > "$home/hook.sh" <<'HOOK'
+          if [[ -n "${OMNILANE_TEST_AFTER_PID_READ:-}" && ! -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]]; then
+            : > "$OMNILANE_TEST_AFTER_PID_READ.reached"
+            for ((hook_try = 0; hook_try < 200; hook_try++)); do
+              [[ -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]] && break
+              sleep 0.05
+            done
+          fi
+HOOK
+  awk -v anchor="$anchor" -v hook="$home/hook.sh" '
+    { print }
+    $0 == anchor { while ((getline line < hook) > 0) print line; close(hook); n++ }
+    END { if (n != 1) exit 1 }' "$ROOT/scripts/jobs.sh" > "$repo/scripts/jobs.sh"
+  inserted=$?
+  if [[ "$inserted" -ne 0 ]]; then
+    fail "$name" "the pid read in jobs wait no longer matches the injection anchor"
+    return
+  fi
+
+  for case_name in dir pid; do
+    hook="$home/hook-$case_name"
+    mkdir -p "$home/jobs/$id"
+    printf '%s\n' "$$" > "$home/jobs/$id/pid"
+    OMNILANE_HOME="$home" OMNILANE_TEST_AFTER_PID_READ="$hook" \
+      bash "$repo/scripts/jobs.sh" wait "$id" --timeout 2 > "$home/out-$case_name" 2>&1 &
+    waiter=$!
+    for ((tries = 0; tries < 200; tries++)); do
+      [[ -e "$hook.reached" ]] && break
+      sleep 0.05
+    done
+    if [[ "$case_name" == dir ]]; then
+      mv "$home/jobs/$id" "$home/removed-job"
+    else
+      mv "$home/jobs/$id/pid" "$home/removed-pid"
+    fi
+    : > "$hook.go"
+    wait "$waiter"
+    rc=$?
+    if [[ "$case_name" == dir ]]; then
+      dir_rc="$rc"; dir_out="$(cat "$home/out-dir")"
+    else
+      pid_rc="$rc"; pid_out="$(cat "$home/out-pid")"
+      mv "$home/jobs/$id" "$home/removed-job-2"
+    fi
+  done
+
+  if [[ "$dir_rc" -ne 1 || "$dir_out" != "job disappeared while waiting" ]]; then
+    fail "$name" "job directory removed after the pid read: rc=$dir_rc out=$dir_out"
+  elif [[ "$pid_rc" -ne 124 || "$pid_out" != "wait timeout after 2s" ]]; then
+    fail "$name" "pid file removed after the pid read: rc=$pid_rc out=$pid_out"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -3444,6 +3511,7 @@ test_jobs_cli_contains_malformed_public_metadata
 test_jobs_stats_aggregates_only_public_metadata
 test_jobs_json_is_versioned_and_private_by_default
 test_jobs_wait_is_bounded_and_terminal
+test_jobs_wait_removal_after_pid_read
 test_jobs_audit_is_private_read_only_and_fail_closed
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
