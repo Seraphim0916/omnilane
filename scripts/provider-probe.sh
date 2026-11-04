@@ -30,7 +30,11 @@ json_escape() {
       $'\r') out="$out\\r" ;;
       $'\t') out="$out\\t" ;;
       *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
+        # Control characters are one byte in every ASCII-compatible encoding, so
+        # no locale switch is needed. With LANG unset, Homebrew bash (libintl)
+        # cannot restore a temporary LC_CTYPE: it warns once per character and
+        # stays in C, which re-reads an earlier multibyte character by bytes.
+        printf -v code '%d' "'$ch"
         if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
           printf -v escaped '\\u%04x' "$code"
           out="$out$escaped"
