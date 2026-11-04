@@ -167,6 +167,28 @@ def load_regular_json(path, limit):
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
 
+def load_completion(home, job_id):
+    # The prompt hook moves a delivered record from inbox/ to inbox/consumed/.
+    # It never moves onto an existing name, so a record still in inbox/ is the
+    # newer one. Only a name that is absent from inbox/ falls through, and a
+    # record moved between the two checks is found in consumed/.
+    inbox = os.path.join(home, "inbox")
+    consumed = os.path.join(inbox, "consumed")
+    for directory in (inbox, consumed):
+        if directory == consumed and (not os.path.isdir(consumed) or os.path.islink(consumed)):
+            return None
+        path = os.path.join(directory, f"{job_id}.json")
+        if not os.path.lexists(path):
+            continue
+        if not os.path.isfile(path) or os.path.islink(path):
+            return None
+        try:
+            return load_regular_json(path, 1048576)
+        except (OSError, ValueError):
+            if os.path.lexists(path):
+                raise
+    return None
+
 def write_json(path, value):
     tmp = f"{path}.tmp.{os.getpid()}"
     with open(tmp, "w", encoding="utf-8") as handle:
@@ -252,9 +274,8 @@ for record_path in sorted(glob.glob(pattern)):
             ).strftime("%Y-%m-%dT%H:%M:%SZ")
             submitted = int(record.get("submitted_epoch", now))
             record["seconds"] = max(0, int(os.path.getmtime(exit_path)) - submitted)
-            inbox_path = os.path.join(home, "inbox", f"{job_id}.json")
-            if os.path.isfile(inbox_path) and not os.path.islink(inbox_path):
-                completion = load_regular_json(inbox_path, 1048576)
+            completion = load_completion(home, job_id)
+            if completion is not None:
                 if isinstance(completion.get("finished"), str):
                     record["finished"] = completion["finished"]
                 if isinstance(completion.get("tail"), str):

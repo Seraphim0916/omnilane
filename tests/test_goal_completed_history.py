@@ -1,6 +1,7 @@
 """Completed goal history remains useful after normal job artifact cleanup."""
 import offline_env  # Activate suite isolation for direct file execution.
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -57,16 +58,17 @@ class CompletedGoalHistoryTests(unittest.TestCase):
             self.assertTrue(consumed_path.is_file())
             if prune_consumed:
                 completion = json.loads(consumed_path.read_text())
-                for ordinal in range(200):
-                    newer_id = f"29991001-000000-1234-{ordinal:04d}"
-                    # 199 ordinary newer consumed fixtures plus one incoming
-                    # record exercise the hook's actual 200-record retention.
-                    directory = consumed_path.parent if ordinal < 199 else inbox_path.parent
-                    (directory / (newer_id + ".json")).write_text(
-                        json.dumps(dict(completion, job_id=newer_id)))
+                # Delivered more than 14 days ago: one incoming record runs the
+                # hook's actual retention, which removes it.
+                expired = time.time() - 15 * 86400
+                os.utime(consumed_path, (expired, expired))
+                newer_id = "29991001-000000-1234-0001"
+                (inbox_path.parent / (newer_id + ".json")).write_text(
+                    json.dumps(dict(completion, job_id=newer_id)))
                 consume()
                 self.assertFalse(consumed_path.exists())
-                self.assertEqual(len(list(consumed_path.parent.glob("*.json"))), 200)
+                self.assertEqual([path.name for path in consumed_path.parent.glob("*.json")],
+                                 [newer_id + ".json"])
         self.assertEqual(case.run_goal("status", case.goal_id).returncode, 0)
         original = json.loads(record_path.read_text())
         failures = json.loads((case.goal / "failures.json").read_text())

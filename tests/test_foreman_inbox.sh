@@ -296,14 +296,18 @@ last_header="$(printf '%s\n' "$bounded" | grep '^Omnilane completion:' | tail -n
 [[ "$(find "$bounded_home/inbox" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" == "2" ]] || fail "withheld records were claimed"
 
 for n in $(seq 1 205); do
-  : > "$bounded_home/inbox/consumed/$(printf '20260827-0000%03d-1-1.json' "$n")"
+  : > "$bounded_home/inbox/consumed/$(printf '20260827-000%03d-1-1.json' "$n")"
 done
+expired_id="20260801-000000-1-1"
+: > "$bounded_home/inbox/consumed/$expired_id.json"
+perl -e 'my $t = time - 15 * 86400; utime $t, $t, $ARGV[0] or exit 1' "$bounded_home/inbox/consumed/$expired_id.json" ||
+  fail "could not age the expired consumed fixture"
 retention_id="20260828-020000-1-1"
 record_json "$bounded_home/inbox/$retention_id.json" "$retention_id" "$workdir"
 OMNILANE_HOME="$bounded_home" CLAUDE_PROJECT_DIR="$workdir" "$ROOT/hooks/report-completions.sh" </dev/null >/dev/null
-[[ "$(find "$bounded_home/inbox/consumed" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" == "200" ]] || fail "consumed retention is not 200"
-[[ ! -e "$bounded_home/inbox/consumed/20260827-0000001-1-1.json" ]] || fail "oldest consumed record was retained"
-[[ -e "$bounded_home/inbox/consumed/20260827-0000205-1-1.json" && -e "$bounded_home/inbox/consumed/$retention_id.json" ]] || fail "recent consumed records were pruned"
+[[ "$(find "$bounded_home/inbox/consumed" -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" == "218" ]] || fail "consumed retention dropped recent records"
+[[ ! -e "$bounded_home/inbox/consumed/$expired_id.json" ]] || fail "consumed record older than 14 days was retained"
+[[ -e "$bounded_home/inbox/consumed/20260827-000001-1-1.json" && -e "$bounded_home/inbox/consumed/$retention_id.json" ]] || fail "recent consumed records were pruned"
 
 optout="$TEST_ROOT/optout"
 mkdir -p "$optout"

@@ -102,18 +102,26 @@ report_completions() {
         my $destination = "$consumed/$name";
         next if -e $destination || -l $destination;
         next unless rename $source, $destination;
+        # Retention counts from delivery, not from when dispatch wrote the record.
+        my $claimed_at = time;
+        utime $claimed_at, $claimed_at, $destination;
         push @claimed, $record;
       }
 
+      # Keep delivered records for 14 days: a count dropped them within hours of
+      # a large fan-out, before goal status could read their tails. Only regular
+      # files named like a record are removed; lstat keeps a symlink in consumed/
+      # from being followed or deleted. A record dated ahead of a clock that was
+      # set back is kept until it ages past the limit.
+      my $now = time;
       opendir my $cdh, $consumed or return "";
-      my @consumed_names = sort { $b cmp $a } grep {
-        /\.json\z/ && -f "$consumed/$_" && !-l "$consumed/$_"
-      } readdir $cdh;
-      closedir $cdh;
-      if (@consumed_names > 200) {
-        my @old = splice @consumed_names, 200;
-        unlink "$consumed/$_" for @old;
+      for my $name (readdir $cdh) {
+        next unless $name =~ /\A[0-9]{8}-[0-9]{6}-[0-9]+-[0-9]+\.json\z/;
+        my @info = lstat "$consumed/$name" or next;
+        next unless -f _;
+        unlink "$consumed/$name" if $now - $info[9] > 14 * 86400;
       }
+      closedir $cdh;
 
       my $output = "";
       for my $record (@claimed) {
