@@ -276,7 +276,8 @@ cancel_group_check() { # pid -> 0 with CANCEL_GROUP set, or CANCEL_REFUSAL_{CODE
   esac
 }
 
-read_cli_job_state() {
+# One pass over the job's files; read_cli_job_state decides whether its answer stands.
+read_cli_job_state_once() {
   local directory="$1" pid_state=0
   JOB_STATE="running"
   JOB_STATE_EXIT="null"
@@ -315,6 +316,31 @@ read_cli_job_state() {
       esac
     fi
   fi
+  return 0
+}
+
+# A pass reads exit, then pid, then checks the worker. Between those reads the job
+# can be moved to the trash, or record its exit and end, and the pass then answers
+# dead or invalid. That answer stands only once nothing it read has changed: a
+# recorded exit wins, a removed directory is reported as removed, and a pid file
+# gone from a job that is still there is read again as the startup window.
+read_cli_job_state() {
+  local directory="$1" pass
+  for pass in 1 2 3; do
+    read_cli_job_state_once "$directory"
+    case "$JOB_STATE" in dead|invalid) ;; *) return 0 ;; esac
+    if [[ ! -d "$directory" || -L "$directory" ]]; then
+      JOB_STATE="removed"
+      JOB_STATE_EXIT="null"
+      JOB_STATE_REASON="job disappeared while reading its state"
+      return 0
+    fi
+    if [[ -e "$directory/exit" || -L "$directory/exit" ]]; then
+      [[ "$JOB_STATE" == "dead" ]] || return 0
+    elif [[ "$JOB_STATE" == "dead" ]] && [[ -e "$directory/pid" || -L "$directory/pid" ]]; then
+      return 0
+    fi
+  done
   return 0
 }
 
@@ -1171,6 +1197,7 @@ case "${1:-}" in
           expired) expired=$((expired + 1)); continue ;;
           invalid) invalid_exit=$((invalid_exit + 1)); continue ;;
           unknown) continue ;;
+          removed) sampled=$((sampled - 1)); continue ;;
         esac
         completed=$((completed + 1))
         outcomes+=("$STATS_LANE"$'\t'"$STATS_VENDOR"$'\t'"$JOB_STATE_EXIT")
@@ -1263,6 +1290,7 @@ case "${1:-}" in
           dead) dead=$((dead + 1)) ;;
           expired) expired=$((expired + 1)) ;;
           invalid) invalid_exit=$((invalid_exit + 1)) ;;
+          removed) sampled=$((sampled - 1)); continue ;;
         esac
         if [[ "$meta_ok" -eq 1 ]]; then
           lanes+=("$STATS_LANE")
@@ -1332,6 +1360,7 @@ case "${1:-}" in
     shown=0
     while IFS= read -r id; do
       read_job_state "$JOBS/$id"
+      [[ "$JOB_STATE" != "removed" ]] || continue
       json_state="$JOB_STATE"
       exit_json="$JOB_STATE_EXIT"
       if is_native_job "$JOBS/$id"; then
@@ -1398,7 +1427,7 @@ case "${1:-}" in
     select_job "$2"
     [[ "$JSON_MODE" -eq 1 ]] || print_isolation_notice
     read_cli_job_state "$JOB_DIR"
-    [[ "$JOB_STATE" != "invalid" ]] || die 1 "$JOB_STATE_REASON"
+    [[ "$JOB_STATE" != "invalid" && "$JOB_STATE" != "removed" ]] || die 1 "$JOB_STATE_REASON"
     if [[ "$JOB_STATE" == "done" ]]; then
       if [[ "$JSON_MODE" -eq 1 ]]; then
         printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s}}\n' \
@@ -1657,7 +1686,7 @@ case "${1:-}" in
       running) die 1 "still running" ;;
       dead) die 1 "job is dead ($JOB_STATE_REASON); no recorded result available" ;;
       unknown) die 1 "job state is unknown ($JOB_STATE_REASON); no recorded result available" ;;
-      invalid) die 1 "$JOB_STATE_REASON" ;;
+      invalid|removed) die 1 "$JOB_STATE_REASON" ;;
     esac
     rc="$JOB_STATE_EXIT"
     if [[ "$JSON_MODE" -eq 1 ]]; then

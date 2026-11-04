@@ -1413,6 +1413,113 @@ HOOK
   fi
 }
 
+# read_cli_job_state reads exit, then pid, then checks the worker. A job that is
+# removed between those reads, or that records its exit and ends between them,
+# must not read as dead or invalid. Copies of jobs.sh pause at one read each until
+# the test has changed the job, so every window is hit on every run.
+test_jobs_state_read_removal_and_finish_windows() {
+  local name="jobs status, result, list and stats read a job removed or finished mid-read as removed or finished"
+  local base="$TEST_ROOT/state-read-window" id="20260717-150002-123-1" problems=""
+  local case_name point setup action cmd want_rc want_out home hook worker reader rc out tries
+  mkdir -p "$base"
+  cat > "$base/hook.sh" <<'HOOK'
+  if [[ -n "${OMNILANE_TEST_STATE_HOOK:-}" && ! -e "$OMNILANE_TEST_STATE_HOOK.go" ]]; then
+    : > "$OMNILANE_TEST_STATE_HOOK.reached"
+    for ((hook_try = 0; hook_try < 200; hook_try++)); do
+      [[ -e "$OMNILANE_TEST_STATE_HOOK.go" ]] && break
+      sleep 0.05
+    done
+  fi
+HOOK
+  state_read_copy() { # point, before|after, anchor line in read_cli_job_state
+    mkdir -p "$base/repo-$1"
+    cp -R "$ROOT/scripts" "$base/repo-$1/scripts"
+    awk -v anchor="$3" -v mode="$2" -v hook="$base/hook.sh" '
+      mode == "before" && $0 == anchor { while ((getline l < hook) > 0) print l; close(hook); n++ }
+      { print }
+      mode == "after" && $0 == anchor { while ((getline l < hook) > 0) print l; close(hook); n++ }
+      END { if (n != 1) exit 1 }' "$ROOT/scripts/jobs.sh" > "$base/repo-$1/scripts/jobs.sh"
+  }
+  if ! state_read_copy exitread after '  if [[ -e "$directory/exit" || -L "$directory/exit" ]]; then' ||
+     ! state_read_copy pidcheck before '  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then' ||
+     ! state_read_copy pidread after '  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then' ||
+     ! state_read_copy identity before '      recorded_pid_state "$directory/pid" "$RECORDED_PID" || pid_state=$?'; then
+    fail "$name" "a read in read_cli_job_state no longer matches its injection anchor"
+    return
+  fi
+  while read -r case_name point setup action cmd want_rc; do
+    case "$case_name" in
+      finish-status) want_out="done exit=0" ;;
+      finish-result) want_out="the recorded output" ;;
+      finish-list) want_out="$id  done(exit 0)  {\"lane\":\"triage\",\"vendor\":\"codex\"}" ;;
+      removed-list) want_out="" ;;
+      removed-stats) want_out=$'jobs: sampled=0 succeeded=0 failed=0 running=0 invalid_exit=0 success_rate=0% pending=0 dead=0 expired=0 call_timed_out=0\ninvalid_metadata=0' ;;
+      pid-only-status) want_out="running" ;;
+      *) want_out="job disappeared while reading its state" ;;
+    esac
+    home="$base/home-$case_name"
+    hook="$home/hook"
+    worker=""
+    mkdir -p "$home/jobs/$id"
+    printf '{"lane":"triage","vendor":"codex"}\n' > "$home/jobs/$id/meta.json"
+    printf 'the recorded output\n' > "$home/jobs/$id/out.txt"
+    if [[ "$setup" == exit ]]; then
+      printf '0\n' > "$home/jobs/$id/exit"
+    else
+      # No start file: the older-job path, so the test needs no ps lstart format.
+      sleep 30 &
+      worker=$!
+      printf '%s\n' "$worker" > "$home/jobs/$id/pid"
+    fi
+    if [[ "$cmd" == status || "$cmd" == result ]]; then
+      OMNILANE_HOME="$home" OMNILANE_TEST_STATE_HOOK="$hook" \
+        bash "$base/repo-$point/scripts/jobs.sh" "$cmd" "$id" > "$home/out" 2>&1 &
+    else
+      OMNILANE_HOME="$home" OMNILANE_TEST_STATE_HOOK="$hook" \
+        bash "$base/repo-$point/scripts/jobs.sh" "$cmd" > "$home/out" 2>&1 &
+    fi
+    reader=$!
+    for ((tries = 0; tries < 200; tries++)); do
+      [[ -e "$hook.reached" ]] && break
+      sleep 0.05
+    done
+    case "$action" in
+      remove) mv "$home/jobs/$id" "$home/removed-job" ;;
+      remove-pid) mv "$home/jobs/$id/pid" "$home/removed-pid" ;;
+      finish)
+        printf '0\n' > "$home/jobs/$id/exit"
+        kill -TERM "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; worker="" ;;
+    esac
+    : > "$hook.go"
+    wait "$reader"
+    rc=$?
+    if [[ -n "$worker" ]]; then kill -TERM "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; fi
+    out="$(cat "$home/out")"
+    if [[ ! -e "$hook.reached" ]]; then
+      problems="$problems; $case_name: the $point pause was not reached"
+    elif [[ "$rc" -ne "$want_rc" || "$out" != "$want_out" ]]; then
+      problems="$problems; $case_name: rc=$rc out=$out"
+    fi
+  done <<'CASES'
+finish-status pidcheck live finish status 0
+finish-result pidcheck live finish result 0
+finish-list pidcheck live finish list 0
+exit-removed-status exitread exit remove status 1
+exit-removed-result exitread exit remove result 1
+pid-removed-status pidread live remove status 1
+identity-removed-result identity live remove result 1
+removed-list identity live remove list 0
+removed-stats identity live remove stats 0
+pid-only-status identity live remove-pid status 0
+CASES
+  unset -f state_read_copy
+  if [[ -n "$problems" ]]; then
+    fail "$name" "${problems#; }"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -3527,6 +3634,7 @@ test_jobs_stats_aggregates_only_public_metadata
 test_jobs_json_is_versioned_and_private_by_default
 test_jobs_wait_is_bounded_and_terminal
 test_jobs_wait_removal_after_pid_read
+test_jobs_state_read_removal_and_finish_windows
 test_jobs_audit_is_private_read_only_and_fail_closed
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
