@@ -16,7 +16,19 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CASE="${1:-}"
 TEST_BASE="$ROOT/.test-scratch"
 mkdir -p "$TEST_BASE"
-TEST_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-tests.XXXXXX")"
+# One root per run: the cases and the cases they run nested share it and nothing else
+# does, so jobs and processes of another run in this checkout are never counted or touched.
+own_run_root=0
+case "${LIVE_RUN_ROOT:-}" in
+  "$TEST_BASE"/omnilane-live-run.*) [[ -d "$LIVE_RUN_ROOT" ]] || LIVE_RUN_ROOT="" ;;
+  *) LIVE_RUN_ROOT="" ;;
+esac
+if [[ -z "$LIVE_RUN_ROOT" ]]; then
+  LIVE_RUN_ROOT="$(mktemp -d "$TEST_BASE/omnilane-live-run.XXXXXX")"
+  own_run_root=1
+fi
+export LIVE_RUN_ROOT
+TEST_ROOT="$(mktemp -d "$LIVE_RUN_ROOT/omnilane-live-tests.XXXXXX")"
 
 test_completed=0
 # Runs a command with a limit of $1 seconds, as common.sh does for ps: alarm survives
@@ -24,6 +36,44 @@ test_completed=0
 with_limit() {
   perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' "$@"
 }
+
+# One deadline for the whole run. Every step that runs a case or stops one takes only
+# what is left of it, so more jobs or slower steps never add time:
+#   running cases     until RUN_DEADLINE  520s  run_case ends a case at its own limit or here
+#   stopping a case   until STOP_BY       +35s  diagnostics, wait for PIDs, cancel, wait for
+#                                               controllers (all until KILL_BY, 10s before
+#                                               STOP_BY), end the jobs' groups, end the case
+#   last word         until FINAL_BY      +10s  end the case's group, check nothing is left,
+#                                               report, remove this run's directories
+# Worst case 520 + 35 + 10 = 565s. Waits poll in whole seconds and each limited command
+# rounds up to one, which the last 5s of a 570s budget covers; CI's 600s step limit keeps
+# 30s beyond that. The deadline is passed down as a wall-clock time, so a case's own
+# cleanup and the cases it runs nested keep to it as well.
+LIVE_EPOCH0="$(date +%s)"
+LIVE_RUN_LIMIT="${OMNILANE_LIVE_RUN_LIMIT:-520}"
+[[ "${LIVE_FINAL_BY_EPOCH:-}" =~ ^[0-9]+$ ]] || LIVE_FINAL_BY_EPOCH=$((LIVE_EPOCH0 + LIVE_RUN_LIMIT + 35 + 10))
+export LIVE_FINAL_BY_EPOCH
+FINAL_BY=$((SECONDS + LIVE_FINAL_BY_EPOCH - LIVE_EPOCH0))
+STOP_BY=$((FINAL_BY - 10))
+KILL_BY=$((STOP_BY - 10))
+RUN_DEADLINE=$((STOP_BY - 35))
+# Seconds left before deadline $2 (STOP_BY when omitted), at most $1, never below 0.
+budget() {
+  local left=$(( ${2:-$STOP_BY} - SECONDS ))
+  [[ "$left" -le "$1" ]] || left="$1"
+  [[ "$left" -ge 0 ]] || left=0
+  printf '%s\n' "$left"
+}
+# Runs a command limited to what budget $1 $2 leaves; with no whole second left it does
+# not start and returns 142, as a timeout would.
+within() {
+  local seconds
+  seconds="$(budget "$1" "$2")"
+  shift 2
+  [[ "$seconds" -ge 1 ]] || return 142
+  with_limit "$seconds" "$@"
+}
+
 # Every background job a case starts is registered as "<home><TAB><job id>" in this
 # process's list and in every list named by LIVE_JOB_LISTS, which a child inherits. So a
 # case, the cases it runs nested, and run_case above them all know each job, wherever it
@@ -41,6 +91,8 @@ register_job() {
     printf '%s\t%s\n' "$1" "$2" >> "$list"
   done
 }
+# Groups never signalled from here: this process's own and, in run_case, the case's.
+EXCLUDE_GROUPS=""
 # Prints each job in list $1 with its controller PID and that PID's command line.
 describe_jobs() {
   local home id pid command
@@ -49,50 +101,161 @@ describe_jobs() {
     pid="$(cat "$home/jobs/$id/pid" 2>/dev/null || true)"
     command="(controller PID not recorded)"
     if [[ "$pid" =~ ^[0-9]+$ ]]; then
-      command="$(with_limit 5 ps -o command= -p "$pid" 2>/dev/null)" || command="(not running)"
+      command="$(within 2 "$FINAL_BY" ps -o command= -p "$pid" 2>/dev/null)" || command="(not running)"
     fi
     printf 'job %s controller PID %s: %s\n' "$id" "${pid:-none}" "$command"
   done 3< "$1"
 }
-# Stops every job in list $1. Without a recorded exit it gets a bounded cancel; then its
-# controller PID gets a bounded wait, since dispatch writes the job's inbox record after
-# the exit file. With $2 = homes, nothing naming a job's home may still run either.
-# Only homes inside this run's scratch directory are touched.
+# A controller is signalled only while it is still the process dispatch recorded for the
+# job (same start time, compared the way jobs.sh compares it) and is this checkout's
+# dispatch.sh leading its own process group.
+controller_is_job() {
+  local home="$1" id="$2" pid="$3" line
+  within 6 "$STOP_BY" bash -c 'source "$1/scripts/lib/common.sh"; recorded_pid_identity "$2" "$3"' \
+    identity "$ROOT" "$home/jobs/$id/pid" "$pid" >/dev/null 2>&1 || return 1
+  line="$(within 5 "$STOP_BY" ps -o pgid=,command= -p "$pid" 2>/dev/null)" || return 1
+  [[ "$line" =~ ^[[:space:]]*([0-9]+)[[:space:]]+(.*)$ ]] || return 1
+  [[ "${BASH_REMATCH[1]}" == "$pid" && "${BASH_REMATCH[2]}" == *"$ROOT/scripts/dispatch.sh"* ]]
+}
+# Prints the process groups of job $2 under home $1: the controller's (PID $3) once it is
+# confirmed as the job's, and each group whose leader's command line names the job's
+# directory. Groups in EXCLUDE_GROUPS are left out.
+job_groups() {
+  local home="$1" id="$2" pid="$3" listing group
+  listing="$(within 5 "$STOP_BY" ps -axo pid=,pgid=,command=)" || return 1
+  {
+    if [[ -n "$pid" ]] && controller_is_job "$home" "$id" "$pid"; then printf '%s\n' "$pid"; fi
+    printf '%s\n' "$listing" | DIR="$home/jobs/$id/" awk '$1 == $2 && index($0, ENVIRON["DIR"]) { print $2 }'
+  } | sort -u | while IFS= read -r group; do
+    case " $EXCLUDE_GROUPS " in *" $group "*) ;; *) printf '%s\n' "$group" ;; esac
+  done
+}
+groups_alive() {
+  local group
+  for group in "$@"; do kill -0 -- "-$group" 2>/dev/null && return 0; done
+  return 1
+}
+# TERM to each group in $@, KILL to what is left after 5s, and success only once none of
+# their processes remains; both waits end at STOP_BY.
+end_groups() {
+  local group deadline
+  [[ $# -gt 0 ]] || return 1
+  for group in "$@"; do kill -TERM -- "-$group" 2>/dev/null || true; done
+  deadline=$((SECONDS + $(budget 5)))
+  while groups_alive "$@" && [[ "$SECONDS" -lt "$deadline" ]]; do sleep 0.2; done
+  groups_alive "$@" || return 0
+  for group in "$@"; do kill -KILL -- "-$group" 2>/dev/null || true; done
+  deadline=$((SECONDS + $(budget 3)))
+  while groups_alive "$@" && [[ "$SECONDS" -lt "$deadline" ]]; do sleep 0.2; done
+  ! groups_alive "$@"
+}
+# Ends job $2 under home $1 (controller PID $3, if any) by its own process groups after
+# a cancel did not, and reports what it did. Returns non-zero when the job is not shown gone.
+end_job() {
+  local home="$1" id="$2" pid="$3" groups named
+  groups="$(job_groups "$home" "$id" "$pid")" || {
+    printf 'live job %s: could not list processes to find its groups\n' "$id" >&2
+    return 1
+  }
+  if [[ -z "$groups" ]]; then
+    printf 'live job %s: no process group confirmed as its own, so none was signalled\n' "$id" >&2
+    return 1
+  fi
+  named="$(printf '%s ' $groups)"
+  # shellcheck disable=SC2086
+  if ! end_groups $groups; then
+    printf 'live job %s: groups %sstill running after TERM and KILL\n' "$id" "$named" >&2
+    return 1
+  fi
+  printf 'live job %s: ended its groups %s\n' "$id" "$named" >&2
+  [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null
+}
+# Stops every job in list $1, all of them together and within one deadline:
+#   1. wait for each job's PID file, since dispatch prints the job id before it writes one;
+#   2. cancel each job that has no exit recorded;
+#   3. wait for every controller to exit, since dispatch writes the exit file before the
+#      inbox record, so a recorded exit does not mean the job is done;
+#   4. a job with no PID, a controller still running, or a process still naming the job's
+#      directory is a failure, printed with the job id, PID and command line, and its own
+#      groups are ended once confirmed as the job's.
+# Steps 1-3 end at KILL_BY so that step 4 keeps time. With $2 = homes, nothing naming a
+# job's home may run either. Only homes inside this run's root are touched.
 stop_jobs() {
-  local list="$1" check="${2:-}" home id pid cancel_rc deadline failed=0 homes=""
+  local list="$1" check="${2:-}" home id dir pid rc deadline waiting failed=0 i command
+  local -a homes=() ids=() pids=() cancels=()
   [[ -s "$list" ]] || return 0
   while IFS=$'\t' read -r home id <&3; do
     [[ -n "$id" ]] || continue
     case "$home" in
-      "$TEST_BASE"/*) ;;
-      *) printf 'not stopping job %s: its home %s is outside %s\n' "$id" "$home" "$TEST_BASE" >&2
-         failed=1; continue ;;
+      "$LIVE_RUN_ROOT"/*) homes+=("$home"); ids+=("$id"); pids+=(""); cancels+=(0) ;;
+      *) printf 'not stopping job %s: its home %s is outside this run'"'"'s root %s\n' "$id" "$home" "$LIVE_RUN_ROOT" >&2
+         failed=1 ;;
     esac
-    homes="$homes$home"$'\n'
-    # A case that finished removed its home after stopping the job itself.
-    [[ -d "$home/jobs/$id" ]] || continue
-    cancel_rc=0
-    if [[ ! -e "$home/jobs/$id/exit" ]]; then
-      with_limit 15 env OMNILANE_HOME="$home" \
-        "$ROOT/scripts/jobs.sh" cancel "$id" </dev/null >/dev/null 2>&1 || cancel_rc=$?
-    fi
-    pid="$(cat "$home/jobs/$id/pid" 2>/dev/null || true)"
-    if [[ "$pid" =~ ^[0-9]+$ ]]; then
-      deadline=$((SECONDS + 15))
-      while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$deadline" ]]; do sleep 0.1; done
-      if kill -0 "$pid" 2>/dev/null; then
-        printf 'live job %s controller PID %s still running 15s after cancel (cancel rc %s)\n' \
-          "$id" "$pid" "$cancel_rc" >&2
-        failed=1
-      fi
-    fi
   done 3< "$list"
+  [[ "${#ids[@]}" -gt 0 ]] || return "$failed"
+  deadline=$((SECONDS + $(budget 10 "$KILL_BY")))
+  while :; do
+    waiting=0
+    for i in "${!ids[@]}"; do
+      dir="${homes[i]}/jobs/${ids[i]}"
+      # A case removes a job's directory only after it confirmed the job stopped.
+      [[ ! -d "$dir" || -s "$dir/pid" ]] || waiting=1
+    done
+    [[ "$waiting" -eq 1 && "$SECONDS" -lt "$deadline" ]] || break
+    sleep 0.1
+  done
+  for i in "${!ids[@]}"; do
+    dir="${homes[i]}/jobs/${ids[i]}"
+    [[ -d "$dir" ]] || continue
+    pid="$(cat "$dir/pid" 2>/dev/null || true)"
+    [[ ! "$pid" =~ ^[1-9][0-9]*$ ]] || pids[i]="$pid"
+    if [[ ! -e "$dir/exit" ]]; then
+      rc=0
+      within 15 "$KILL_BY" env OMNILANE_HOME="${homes[i]}" \
+        "$ROOT/scripts/jobs.sh" cancel "${ids[i]}" </dev/null >/dev/null 2>&1 || rc=$?
+      cancels[i]="$rc"
+    fi
+  done
+  deadline=$((SECONDS + $(budget 15 "$KILL_BY")))
+  while :; do
+    waiting=0
+    for i in "${!ids[@]}"; do
+      [[ -z "${pids[i]}" ]] || ! kill -0 "${pids[i]}" 2>/dev/null || waiting=1
+    done
+    [[ "$waiting" -eq 1 && "$SECONDS" -lt "$deadline" ]] || break
+    sleep 0.1
+  done
+  for i in "${!ids[@]}"; do
+    dir="${homes[i]}/jobs/${ids[i]}"
+    [[ -d "$dir" ]] || continue
+    pid="${pids[i]}"
+    if [[ -z "$pid" ]]; then
+      printf 'live job %s: no controller PID recorded, so it cannot be confirmed stopped\n' "${ids[i]}" >&2
+    elif kill -0 "$pid" 2>/dev/null; then
+      command="$(within 2 "$STOP_BY" ps -o command= -p "$pid" 2>/dev/null)" || command="(command line unavailable)"
+      printf 'live job %s: controller PID %s still running after cancel (cancel rc %s): %s\n' \
+        "${ids[i]}" "$pid" "${cancels[i]}" "$command" >&2
+    elif processes_under "$dir/" "$STOP_BY" && [[ -n "$LIVE_PIDS" ]]; then
+      printf 'live job %s: controller PID %s exited but processes naming the job are still running: %s\n' \
+        "${ids[i]}" "$pid" "$LIVE_PIDS" >&2
+    else
+      continue
+    fi
+    failed=1
+    end_job "${homes[i]}" "${ids[i]}" "$pid" || true
+  done
   [[ "$check" == homes ]] || return "$failed"
+  check_homes "$list" || failed=1
+  return "$failed"
+}
+# Fails while anything naming the home of a job in list $1 still runs; the wait ends at FINAL_BY.
+check_homes() {
+  local home deadline failed=0
   while IFS= read -r home <&3; do
     [[ -n "$home" ]] || continue
-    deadline=$((SECONDS + 10))
+    deadline=$((SECONDS + $(budget 10 "$FINAL_BY")))
     while :; do
-      processes_under "$home/" || {
+      processes_under "$home/" "$FINAL_BY" || {
         printf 'could not list processes to confirm the jobs under %s stopped\n' "$home" >&2
         failed=1
         break
@@ -101,21 +264,24 @@ stop_jobs() {
       sleep 0.1
     done
     [[ -z "$LIVE_PIDS" ]] || {
-      printf 'processes under %s still running 10s after their jobs stopped: %s\n' "$home" "$LIVE_PIDS" >&2
+      printf 'processes under %s still running after their jobs stopped: %s\n' "$home" "$LIVE_PIDS" >&2
       failed=1
     }
-  done 3< <(printf '%s' "$homes" | sort -u)
+  done 3< <(cut -f1 "$1" | sort -u)
   return "$failed"
 }
 cleanup() {
-  local rc=$?
+  local rc=$? group
   trap - EXIT
   # A signal now would skip stopping the job; every step below has a limit.
   trap '' INT TERM HUP
   if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
+  group="$(within 5 "$FINAL_BY" ps -o pgid= -p "$$" 2>/dev/null | tr -d '[:space:]')" || group=""
+  EXCLUDE_GROUPS="$EXCLUDE_GROUPS $group"
   # The directory goes only after every job this process or its nested cases started has stopped.
   if stop_jobs "$LIVE_JOBS" homes; then
     /bin/rm -rf -- "$TEST_ROOT"
+    [[ "$own_run_root" -ne 1 ]] || rmdir "$LIVE_RUN_ROOT" 2>/dev/null || true
     rmdir "$TEST_BASE" 2>/dev/null || true
   else
     printf 'kept %s for the job that may still run\n' "$TEST_ROOT" >&2
@@ -130,24 +296,24 @@ fail() {
   exit 1
 }
 
-# Sets LIVE_PIDS to the PIDs whose command line contains $1, and fails when ps
-# fails or takes over 5s, so a failed query never reads as "nothing left".
-# awk reads the mark from the environment so that its own command line does not match.
+# Sets LIVE_PIDS to the PIDs whose command line contains $1, and fails when ps fails or
+# takes over 5s (or runs past deadline $2, FINAL_BY by default), so a failed query never
+# reads as "nothing left". awk reads the mark from the environment so that its own
+# command line does not match.
 processes_under() {
   local listing
   LIVE_PIDS=""
-  listing="$(with_limit 5 ps -axo pid=,command=)" || return 1
+  listing="$(within 5 "${2:-$FINAL_BY}" ps -axo pid=,command=)" || return 1
   [[ -n "$listing" ]] || return 1
   LIVE_PIDS="$(printf '%s\n' "$listing" | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }')"
 }
 
-# Every case runs under its own limit and the whole run under one more, both inside the
-# 10-minute CI step limit, so a slow or stuck case fails with its name, its PID and what
-# is still running instead of being killed by CI with no case named.
+# Every case runs under its own limit and all of them before RUN_DEADLINE, so a slow or
+# stuck case fails with its name, its PID, its jobs and what is still running instead of
+# being killed by CI with no case named.
 CASE_LIMIT="${OMNILANE_LIVE_CASE_LIMIT:-330}"
-RUN_DEADLINE=$((SECONDS + ${OMNILANE_LIVE_RUN_LIMIT:-540}))
 run_case() {
-  local name="$1" pid rc=0 deadline started="$SECONDS" grace listing case_jobs
+  local name="$1" pid rc=0 deadline started="$SECONDS" grace listing case_jobs group
   case_jobs="$TEST_ROOT/case-$name.jobs"
   : > "$case_jobs"
   deadline=$((SECONDS + CASE_LIMIT))
@@ -157,23 +323,26 @@ run_case() {
   LIVE_JOB_LISTS="$case_jobs" bash "$0" --omnilane-offline-child "$name" &
   pid=$!
   set +m
+  group="$(within 5 "$FINAL_BY" ps -o pgid= -p "$$" 2>/dev/null | tr -d '[:space:]')" || group=""
+  EXCLUDE_GROUPS="$group $pid"
   while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$deadline" ]]; do
     sleep 0.2
   done
   if kill -0 "$pid" 2>/dev/null; then
-    listing="$(with_limit 5 ps -axo pid=,pgid=,etime=,command= | awk -v group="$pid" '$2 == group')" ||
+    listing="$(within 5 "$STOP_BY" ps -axo pid=,pgid=,etime=,command= | awk -v group="$pid" '$2 == group')" ||
       listing="(could not list processes)"
     printf 'case %s (PID %s) still running after %ss (case limit %ss, run limit %ss); waiting on:\n%s\n' \
-      "$name" "$pid" "$((SECONDS - started))" "$CASE_LIMIT" "${OMNILANE_LIVE_RUN_LIMIT:-540}" "$listing" >&2
+      "$name" "$pid" "$((SECONDS - started))" "$CASE_LIMIT" "$LIVE_RUN_LIMIT" "$listing" >&2
     printf 'background jobs the case registered:\n%s\n' "$(describe_jobs "$case_jobs")" >&2
-    # Their own groups are outside the case's: cancel them and wait for their
-    # controllers first, and only then end the case.
+    # Their own groups are outside the case's: stop them first, and only then end the
+    # case. Whatever fails here is printed, and the run fails below in any case.
     stop_jobs "$case_jobs" || true
     kill -TERM "$pid" 2>/dev/null || true
-    grace=$((SECONDS + 30))
+    grace=$((SECONDS + $(budget 30)))
     while kill -0 "$pid" 2>/dev/null && [[ "$SECONDS" -lt "$grace" ]]; do sleep 0.2; done
     kill -KILL -- "-$pid" 2>/dev/null || true
     wait "$pid" 2>/dev/null || true
+    check_homes "$case_jobs" || true
     fail "case $name timed out"
   fi
   wait "$pid" || rc=$?
