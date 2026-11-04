@@ -446,6 +446,19 @@ check("without perl prompt cleanup still runs and says it is unbounded", no_perl
 idle_fake = base / "idle-live-cli"
 idle_fake.write_text("#!/usr/bin/env python3\nimport os, pathlib, sys, time\npathlib.Path(os.environ[\"RUNNER_PID\"]).write_text(str(os.getpid()))\nsys.stdin.readline()\ntime.sleep(60)\n")
 idle_fake.chmod(0o755)
+def read_pid(path, timeout=10):
+    # The fake creates the file before it writes the PID, so a fast reader can see it empty.
+    deadline = time.monotonic() + timeout
+    text = None
+    while time.monotonic() < deadline:
+        try:
+            text = path.read_text()
+        except FileNotFoundError:
+            text = None
+        if text and text.strip().isdigit():
+            return int(text)
+        time.sleep(.01)
+    raise AssertionError("%s held no PID after %ss: exists=%s content=%r" % (path, timeout, path.exists(), text))
 def signal_in_mailbox_wait_case(name, signum, to_group, expected_rc):
     # Without a supervisor nothing else ends a worker that fails to exit. The cleanup
     # outlasts the mailbox read timeout, and the wait below keeps a spin from holding the suite.
@@ -460,7 +473,7 @@ def signal_in_mailbox_wait_case(name, signum, to_group, expected_rc):
         while not (job / "runner.pid").exists() and process.poll() is None and time.monotonic() < deadline:
             time.sleep(.01)
         assert (job / "runner.pid").exists(), "runner never started"
-        runner = int((job / "runner.pid").read_text())
+        runner = read_pid(job / "runner.pid")
         time.sleep(.3)
         (os.killpg if to_group else os.kill)(process.pid, signum)
         try:
