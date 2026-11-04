@@ -37,27 +37,36 @@ with_limit() {
   perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' "$@"
 }
 
-# One deadline for the whole run, in three phases. Every step takes only what is left of
-# its phase, so more jobs or slower steps never add time:
-#   running cases    until RUN_DEADLINE  520s  run_case ends a case at its own limit or here
-#   cancel and wait  until STOP_BY       +40s  a timed-out case gets 5s of diagnostics, then
-#                                              stop_jobs: PID files 10s, cancel 15s in all,
-#                                              controllers exiting the rest
-#   report           until FINAL_BY      +15s  end the timed-out case's own group (TERM, 3s,
-#                                              KILL, 2s), name each job that did not stop
-#                                              (1s per ps), remove this run's directories (5s)
-# A limited command never starts with less than a second left and gets at most what is
-# left, and every wait polls the clock, so only the rounding of the last step (under 2s)
-# can pass FINAL_BY: at worst 520 + 40 + 15 = 575s, so the run ends before 577s, more than
-# 20s inside CI's 600s step limit. The deadline is passed down as a wall-clock time, so a
-# case's own cleanup and the cases it runs nested keep to it as well.
+# One deadline for the whole run, in four phases (seconds from the start of the run):
+#   running cases  until RUN_DEADLINE  520  run_case ends a case at its own limit or here
+#   cancel, wait   until STOP_BY       555  a timed-out case gets 5s of diagnostics, then
+#                                           stop_jobs gets 30s: PID files until 25s before
+#                                           its end, one process snapshot until 20s before,
+#                                           cancel until 10s before, waiting the rest
+#   force stop     until FORCE_BY      575  force_stop_jobs gets 20s: one process table and
+#                                           one file-holder search for every job, TERM to
+#                                           every confirmed group at once, wait, one more
+#                                           table, KILL, wait
+#   report         until FINAL_BY      585  end the timed-out case's own group (TERM 3s,
+#                                           KILL 2s), name each job that did not stop,
+#                                           remove this run's directories (5s)
+# Every step that can block runs through within, which gives it what is left before its
+# phase's deadline and ends it with SIGALRM when that runs out, also halfway through. A
+# step never starts with less than a whole second left. Waits poll the clock every 0.1s.
+# SECONDS counts whole seconds, so a step can end up to a second after its deadline;
+# phases are absolute times, so that never adds up across steps. The last step of the
+# report phase can end by FINAL_BY + 1s, after which only kill, exit and the shell's own
+# exit remain: about 587s after LIVE_EPOCH0, 13s inside CI's 600s step limit. The
+# deadline is passed down as a wall-clock time, so a case's own cleanup and the cases it
+# runs nested keep to it as well.
 LIVE_EPOCH0="$(date +%s)"
 LIVE_RUN_LIMIT="${OMNILANE_LIVE_RUN_LIMIT:-520}"
-[[ "${LIVE_FINAL_BY_EPOCH:-}" =~ ^[0-9]+$ ]] || LIVE_FINAL_BY_EPOCH=$((LIVE_EPOCH0 + LIVE_RUN_LIMIT + 40 + 15))
+[[ "${LIVE_FINAL_BY_EPOCH:-}" =~ ^[0-9]+$ ]] || LIVE_FINAL_BY_EPOCH=$((LIVE_EPOCH0 + LIVE_RUN_LIMIT + 5 + 30 + 20 + 10))
 export LIVE_FINAL_BY_EPOCH
 FINAL_BY=$((SECONDS + LIVE_FINAL_BY_EPOCH - LIVE_EPOCH0))
-STOP_BY=$((FINAL_BY - 15))
-RUN_DEADLINE=$((STOP_BY - 40))
+FORCE_BY=$((FINAL_BY - 10))
+STOP_BY=$((FORCE_BY - 20))
+RUN_DEADLINE=$((STOP_BY - 35))
 # Seconds left before deadline $2 (STOP_BY when omitted), at most $1, never below 0.
 budget() {
   local left=$(( ${2:-$STOP_BY} - SECONDS ))
@@ -73,6 +82,12 @@ within() {
   shift 2
   [[ "$seconds" -ge 1 ]] || return 142
   with_limit "$seconds" "$@"
+}
+# Reads the first line of file $1 into PID_READ; a private regular file, so this never blocks.
+read_pid_file() {
+  PID_READ=""
+  [[ -f "$1" ]] || return 0
+  read -r PID_READ < "$1" 2>/dev/null || true
 }
 
 # Every background job a case starts is registered as "<home><TAB><job id>" in this
@@ -92,34 +107,243 @@ register_job() {
     printf '%s\t%s\n' "$1" "$2" >> "$list"
   done
 }
-# Prints each job in list $1 with its controller PID and that PID's command line; ps gets
-# at most a second per job and nothing after deadline $2.
+# Prints each job in list $1 with its controller PID and that PID's command line, from one
+# process listing for all jobs that gets at most 2s and nothing after deadline $2.
 describe_jobs() {
-  local home id pid command
+  local home id listing="" listed=0 command
+  if listing="$(within 2 "$2" ps -axo pid=,command=)"; then listed=1; fi
   while IFS=$'\t' read -r home id <&3; do
     [[ -n "$id" ]] || continue
-    pid="$(cat "$home/jobs/$id/pid" 2>/dev/null || true)"
+    read_pid_file "$home/jobs/$id/pid"
     command="(controller PID not recorded)"
-    if [[ "$pid" =~ ^[0-9]+$ ]]; then
-      command="$(within 1 "$2" ps -o command= -p "$pid" 2>/dev/null)" || command="(not running or not listed in time)"
+    if [[ "$PID_READ" =~ ^[1-9][0-9]*$ ]]; then
+      command="(not running or not listed in time)"
+      if [[ "$listed" -eq 1 ]]; then
+        command="$(printf '%s\n' "$listing" | within 1 "$2" awk -v pid="$PID_READ" \
+          '$1 == pid { sub(/^[[:space:]]*[0-9]+[[:space:]]+/, ""); print; exit }')" || command=""
+        [[ -n "$command" ]] || command="(not running or not listed in time)"
+      fi
     fi
-    printf 'job %s controller PID %s: %s\n' "$id" "${pid:-none}" "$command"
+    printf 'job %s controller PID %s: %s\n' "$id" "${PID_READ:-none}" "$command"
   done 3< "$1"
 }
-# Stops every job in list $1, all of them together, by cancel and wait only, in at most
-# 40s and never after STOP_BY. Nothing here signals a job's processes:
+
+# Forced stop. Every job's processes are identified from one process table and one search
+# for the processes holding a job's worker.log open, both shared by all jobs, so slow
+# queries cost the same with one job or ten. A process is a job's when it is
+#   - the controller of its PID file, with the start time dispatch recorded beside it;
+#   - a process holding <job dir>/worker.log open, which dispatch makes the controller's
+#     stdout, for a job with no PID file or with a controller that cannot be confirmed;
+#   - a descendant of one of those, or in the process group of one of those;
+#   - recorded as one of the job's processes earlier and still the same process, with
+#     the same PID and start time, even after its group's leader exited.
+# Groups are signalled only while one of their members is such a process in a table taken
+# just before the signal, and never the group of this script or of any of its ancestors.
+# A PID that is listed with another start time than the one recorded is reused: it is
+# printed and gets no signal.
+#
+# Writes the process table to file $1 (pid, parent, group, start time in UTC); gets at
+# most $2 seconds and nothing after deadline $3.
+take_process_table() {
+  within "$2" "$3" env TZ=UTC LC_ALL=C ps -axo pid=,ppid=,pgid=,lstart= > "$1" 2>/dev/null || return 1
+  [[ -s "$1" ]]
+}
+# Prints "PID PATH" for each process holding one of the files $3... open, from /proc where
+# there is one, else with lsof. The whole search is one process limited to $1 seconds and
+# nothing after deadline $2, so running out of time ends it halfway through. The test
+# hooks LIVE_PROC_ROOT, LIVE_LSOF and LIVE_HOLDER_SCAN_DELAY stand in for /proc, lsof and
+# a slow system.
+file_holders() {
+  local seconds="$1" by="$2" proc="${LIVE_PROC_ROOT:-/proc}" lsof="${LIVE_LSOF:-}" out rc=0
+  shift 2
+  [[ "$#" -gt 0 ]] || return 0
+  if [[ -d "$proc/self/fd" ]]; then
+    within "$seconds" "$by" env LIVE_PROC_ROOT="$proc" perl -e '
+      my %want = map { $_ => 1 } @ARGV;
+      my $delay = $ENV{LIVE_HOLDER_SCAN_DELAY} || 0;
+      for my $fd (glob("$ENV{LIVE_PROC_ROOT}/[0-9]*/fd/*")) {
+        select(undef, undef, undef, $delay) if $delay;
+        my $target = readlink($fd);
+        next unless defined $target && $want{$target};
+        print "$1 $target\n" if $fd =~ m{/([0-9]+)/fd/[^/]+\z};
+      }' "$@"
+    return
+  fi
+  if [[ -z "$lsof" ]]; then
+    [[ -x /usr/sbin/lsof ]] && lsof=/usr/sbin/lsof
+    [[ -n "$lsof" || ! -x /usr/bin/lsof ]] || lsof=/usr/bin/lsof
+  fi
+  [[ -n "$lsof" ]] || return 3
+  out="$(within "$seconds" "$by" "$lsof" -n -P -w -F pn -- "$@" 2>/dev/null)" || rc=$?
+  # lsof exits 1 when nobody holds the files: an answer, not a failure.
+  [[ "$rc" -eq 0 || ( "$rc" -eq 1 && -z "$out" ) ]] || return "$rc"
+  printf '%s\n' "$out" | awk '/^p[0-9]+$/ { pid = substr($0, 2) } /^n/ && pid != "" { print pid, substr($0, 2) }'
+}
+# Reads process table $1, roots $2 ("job pid start", start "-" when none was recorded)
+# and members $3 (earlier output of this function) and prints, for the processes that
+# are still the job's: "M job pid group start" for each and "G job group" for each group
+# to signal; "R job pid recorded-start listed-start" for each reused PID. $4 is the PID
+# whose group and whose ancestors' groups are never signalled. Gets at most $5 seconds
+# and nothing after deadline $6.
+job_processes() {
+  within "$5" "$6" awk -v self="$4" '
+    function add(job, pid,   n, k, list) {
+      if (pid in owner) return
+      owner[pid] = job
+      n = split(kids[pid], list, " ")
+      for (k = 1; k <= n; k++) add(job, list[k])
+    }
+    function check(job, pid, start) {
+      if (!(pid in begun)) return
+      if (start != "-" && begun[pid] != start) {
+        printf "R\t%s\t%s\t%s\t%s\n", job, pid, start, begun[pid]
+        return
+      }
+      add(job, pid)
+    }
+    FILENAME == ARGV[1] {
+      if (NF < 8) next
+      parent[$1] = $2; group[$1] = $3; begun[$1] = $4 " " $5 " " $6 " " $7 " " $8
+      kids[$2] = kids[$2] " " $1
+      next
+    }
+    FILENAME == ARGV[2] { check($1, $2, $3 == "-" ? "-" : $3 " " $4 " " $5 " " $6 " " $7); next }
+    FILENAME == ARGV[3] && $1 == "M" { check($2, $3, $5 " " $6 " " $7 " " $8 " " $9); next }
+    END {
+      for (pid = self; pid in parent && !(pid in seen); pid = parent[pid]) {
+        seen[pid] = 1; mine[group[pid]] = 1
+      }
+      for (pid in owner) {
+        g = group[pid]
+        if (g + 0 > 1 && !(g in mine) && !(g in leader)) leader[g] = owner[pid]
+      }
+      for (pid in group) if ((group[pid] in leader) && !(pid in owner)) owner[pid] = leader[group[pid]]
+      for (pid in owner) printf "M\t%s\t%s\t%s\t%s\n", owner[pid], pid, group[pid], begun[pid]
+      for (g in leader) printf "G\t%s\t%s\n", leader[g], g
+    }' "$1" "$2" "$3"
+}
+# Writes the roots of the jobs at indexes $3... of the arrays homes and ids to file $1:
+# each confirmed controller, and the holders of worker.log for a job without one. The
+# holder search runs once for all of those jobs, at most 3s and not after deadline $2.
+# Unconfirmed controllers and jobs with no PID file are printed.
+write_roots() {
+  local out="$1" by="$2" i dir start line pid path j
+  local -a logs=() log_jobs=()
+  shift 2
+  : > "$out"
+  for i in "$@"; do
+    dir="${homes[i]}/jobs/${ids[i]}"
+    read_pid_file "$dir/pid"
+    start=""
+    [[ ! -f "$dir/pid.start" ]] || read -r start < "$dir/pid.start" 2>/dev/null || true
+    if [[ "$PID_READ" =~ ^[1-9][0-9]*$ && -n "$start" ]]; then
+      printf '%s %s %s\n' "$i" "$PID_READ" "$start" >> "$out"
+    else
+      [[ "$PID_READ" =~ ^[1-9][0-9]*$ ]] && printf 'live job %s: PID %s has no recorded start time\n' "${ids[i]}" "$PID_READ" >&2
+    fi
+    if [[ -e "$dir/worker.log" ]]; then logs+=("$dir/worker.log"); log_jobs+=("$i"); fi
+  done
+  [[ "${#logs[@]}" -gt 0 ]] || return 0
+  line="$(file_holders 3 "$by" "${logs[@]}")" || {
+    printf 'live jobs: could not search for the holders of %s worker.log files in time\n' "${#logs[@]}" >&2
+    return 0
+  }
+  while read -r pid path; do
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || continue
+    for j in "${!logs[@]}"; do
+      [[ "${logs[j]}" == "$path" ]] || continue
+      printf '%s %s -\n' "${log_jobs[j]}" "$pid" >> "$out"
+    done
+  done <<< "$line"
+}
+# Prints the reused PIDs in job_processes output $1 and keeps its groups as SIGNAL_GROUPS.
+read_decision() {
+  local kind job a b c
+  SIGNAL_GROUPS=""
+  while IFS=$'\t' read -r kind job a b c; do
+    case "$kind" in
+      G) SIGNAL_GROUPS="$SIGNAL_GROUPS $a"
+         printf 'live job %s: process group %s\n' "${ids[job]}" "$a" >&2 ;;
+      R) printf 'live job %s: PID %s now started %s, not %s as recorded; reused, not signalled\n' \
+           "${ids[job]}" "$a" "$c" "$b" >&2 ;;
+    esac
+  done < "$1"
+}
+groups_alive() {
+  local group
+  for group in $1; do kill -0 -- "-$group" 2>/dev/null && return 0; done
+  return 1
+}
+# Ends the processes of the jobs at indexes $2... (of homes and ids) in at most 20s and
+# never after FORCE_BY, all jobs together; $1 is the file of members recorded earlier.
+# Prints what it signals and returns the members still running as FORCE_LEFT.
+force_stop_jobs() {
+  local recorded="$1" end tmp table roots decided group left
+  shift
+  end=$((SECONDS + 20))
+  [[ "$end" -le "$FORCE_BY" ]] || end="$FORCE_BY"
+  tmp="$TEST_ROOT/force.$$"
+  table="$tmp.table" roots="$tmp.roots" decided="$tmp.term"
+  : > "$decided"
+  # TERM: PID files read once more, one table (3s), one holder search (3s), decide (1s).
+  if take_process_table "$table" 3 "$((end - 14))"; then
+    write_roots "$roots" "$((end - 14))" "$@"
+    job_processes "$table" "$roots" "$recorded" "$$" 1 "$((end - 13))" > "$decided" ||
+      printf 'live jobs: could not decide which groups to end in time\n' >&2
+  else
+    printf 'live jobs: could not list processes in time to end %s job(s)\n' "$#" >&2
+  fi
+  read_decision "$decided"
+  for group in $SIGNAL_GROUPS; do
+    printf 'live jobs: TERM process group %s\n' "$group" >&2
+    kill -TERM -- "-$group" 2>/dev/null || true
+  done
+  left=$((SECONDS + $(budget 4 "$((end - 9))")))
+  while groups_alive "$SIGNAL_GROUPS" && [[ "$SECONDS" -lt "$left" ]]; do sleep 0.1; done
+  # KILL: one more table (3s), and only groups that still hold a member recorded above
+  # with the same PID and start time, even when the group's leader has exited (1s).
+  : > "$roots"
+  : > "$decided.kill"
+  if [[ -s "$decided" ]] && take_process_table "$table" 3 "$((end - 6))"; then
+    job_processes "$table" "$roots" "$decided" "$$" 1 "$((end - 5))" > "$decided.kill" ||
+      printf 'live jobs: could not decide which groups to KILL in time\n' >&2
+  fi
+  read_decision "$decided.kill"
+  for group in $SIGNAL_GROUPS; do
+    printf 'live jobs: KILL process group %s\n' "$group" >&2
+    kill -KILL -- "-$group" 2>/dev/null || true
+  done
+  left=$((SECONDS + $(budget 4 "$((end - 1))")))
+  while groups_alive "$SIGNAL_GROUPS" && [[ "$SECONDS" -lt "$left" ]]; do sleep 0.1; done
+  FORCE_LEFT="$decided"
+}
+# A member recorded in file $2 for job index $1 that is still running.
+member_alive() {
+  local kind job pid rest
+  while IFS=$'\t' read -r kind job pid rest; do
+    [[ "$kind" == M && "$job" == "$1" ]] || continue
+    kill -0 "$pid" 2>/dev/null && { printf '%s\n' "$pid"; return 0; }
+  done < "$2"
+  return 1
+}
+
+# Stops every job in list $1, all of them together, in at most 30s and never after
+# STOP_BY, and then, for a job that did not stop, its processes in at most 20s more and
+# never after FORCE_BY:
 #   1. wait for each job's PID file, since dispatch prints the job id before it writes one
-#      (at most 10s);
-#   2. cancel each job with no exit recorded (15s in all);
-#   3. wait for every controller to exit, also one whose exit is recorded, since dispatch
-#      writes the exit file before the inbox record (the rest);
-#   4. read each PID file once more, then fail by name for a job with no PID file or with
-#      its controller still running, printing the job id, PID and command line (ps gets
-#      at most a second per job and nothing after FINAL_BY).
+#      (until 25s before the end);
+#   2. when a controller runs or a PID file is missing, record each job's processes from
+#      one process table and one file-holder search (until 20s before the end);
+#   3. cancel each job with no exit recorded (until 10s before the end);
+#   4. wait for every controller and every recorded process to exit, also for a job whose
+#      exit is recorded, since dispatch writes the exit file before the inbox record;
+#   5. force_stop_jobs for the jobs with a process still running or no PID file;
+#   6. fail by name for a job with no PID file or with a process still running.
 # Only homes inside this run's root are touched.
 stop_jobs() {
-  local list="$1" home id dir pid rc deadline waiting failed=0 i end pid_by cancel_by command
-  local -a homes=() ids=() cancels=()
+  local list="$1" home id dir rc deadline waiting failed=0 i end pid_by snap_by cancel_by
+  local recorded table roots alive
+  local -a homes=() ids=() cancels=() pending=()
   [[ -s "$list" ]] || return 0
   while IFS=$'\t' read -r home id <&3; do
     [[ -n "$id" ]] || continue
@@ -130,11 +354,13 @@ stop_jobs() {
     esac
   done 3< "$list"
   [[ "${#ids[@]}" -gt 0 ]] || return "$failed"
-  end=$((SECONDS + 40))
+  end=$((SECONDS + 30))
   [[ "$end" -le "$STOP_BY" ]] || end="$STOP_BY"
-  pid_by=$((end - 30)) cancel_by=$((end - 15))
+  pid_by=$((end - 25)) snap_by=$((end - 20)) cancel_by=$((end - 10))
+  recorded="$TEST_ROOT/members.$$"
+  : > "$recorded"
 
-  deadline=$((SECONDS + $(budget 10 "$pid_by")))
+  deadline=$((SECONDS + $(budget 5 "$pid_by")))
   while :; do
     waiting=0
     for i in "${!ids[@]}"; do
@@ -147,35 +373,71 @@ stop_jobs() {
   done
   for i in "${!ids[@]}"; do
     dir="${homes[i]}/jobs/${ids[i]}"
+    [[ -d "$dir" ]] || continue
+    read_pid_file "$dir/pid"
+    if [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]] || kill -0 "$PID_READ" 2>/dev/null; then pending+=("$i"); fi
+  done
+  if [[ "${#pending[@]}" -gt 0 ]]; then
+    table="$recorded.table" roots="$recorded.roots"
+    if take_process_table "$table" 3 "$snap_by"; then
+      write_roots "$roots" "$snap_by" "${pending[@]}"
+      : > "$recorded.none"
+      job_processes "$table" "$roots" "$recorded.none" "$$" 1 "$snap_by" > "$recorded" || : > "$recorded"
+    fi
+  fi
+  for i in "${!ids[@]}"; do
+    dir="${homes[i]}/jobs/${ids[i]}"
     [[ -d "$dir" && ! -e "$dir/exit" ]] || continue
     rc=0
-    within 15 "$cancel_by" env OMNILANE_HOME="${homes[i]}" \
+    within 10 "$cancel_by" env OMNILANE_HOME="${homes[i]}" \
       "$ROOT/scripts/jobs.sh" cancel "${ids[i]}" </dev/null >/dev/null 2>&1 || rc=$?
     cancels[i]="rc $rc"
   done
-  deadline=$((SECONDS + $(budget 40 "$end")))
+  deadline=$((SECONDS + $(budget 30 "$end")))
   while :; do
     waiting=0
     for i in "${!ids[@]}"; do
-      pid="$(cat "${homes[i]}/jobs/${ids[i]}/pid" 2>/dev/null || true)"
-      [[ ! "$pid" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "$pid" 2>/dev/null || waiting=1
+      read_pid_file "${homes[i]}/jobs/${ids[i]}/pid"
+      [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "$PID_READ" 2>/dev/null || waiting=1
+      [[ "$waiting" -eq 1 ]] || ! member_alive "$i" "$recorded" >/dev/null || waiting=1
     done
     [[ "$waiting" -eq 1 && "$SECONDS" -lt "$deadline" ]] || break
     sleep 0.1
   done
 
+  pending=()
   for i in "${!ids[@]}"; do
     dir="${homes[i]}/jobs/${ids[i]}"
     [[ -d "$dir" ]] || continue
-    # Read once more, so a PID file written late still names the controller.
-    pid="$(cat "$dir/pid" 2>/dev/null || true)"
-    if [[ ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+    read_pid_file "$dir/pid"
+    if [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]] || kill -0 "$PID_READ" 2>/dev/null ||
+      member_alive "$i" "$recorded" >/dev/null; then
+      pending+=("$i")
+    fi
+  done
+  [[ "${#pending[@]}" -gt 0 ]] || return "$failed"
+  printf 'live jobs: %s job(s) still running or without a PID file after cancel and wait; ending their process groups\n' \
+    "${#pending[@]}" >&2
+  force_stop_jobs "$recorded" "${pending[@]}"
+
+  for i in "${pending[@]}"; do
+    dir="${homes[i]}/jobs/${ids[i]}"
+    read_pid_file "$dir/pid"
+    if [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]]; then
       printf 'live job %s: no PID file after waiting for it (cancel %s)\n' "${ids[i]}" "${cancels[i]}" >&2
       failed=1
-    elif kill -0 "$pid" 2>/dev/null; then
-      command="$(within 1 "$FINAL_BY" ps -o command= -p "$pid" 2>/dev/null)" || command="(not listed in time)"
-      printf 'live job %s: controller PID %s still running after cancel and wait (cancel %s): %s\n' \
-        "${ids[i]}" "$pid" "${cancels[i]}" "${command:-(not listed)}" >&2
+    elif kill -0 "$PID_READ" 2>/dev/null; then
+      printf 'live job %s: controller PID %s still running after cancel, wait, TERM and KILL (cancel %s)\n' \
+        "${ids[i]}" "$PID_READ" "${cancels[i]}" >&2
+      failed=1
+    elif alive="$(member_alive "$i" "$FORCE_LEFT")" || alive="$(member_alive "$i" "$recorded")"; then
+      printf 'live job %s: process %s still running after cancel, wait, TERM and KILL (cancel %s)\n' \
+        "${ids[i]}" "$alive" "${cancels[i]}" >&2
+      failed=1
+    else
+      # Its processes were ended here, not by cancel: the job did not stop on its own.
+      printf 'live job %s: did not stop after cancel and wait; its process groups were ended (cancel %s)\n' \
+        "${ids[i]}" "${cancels[i]}" >&2
       failed=1
     fi
   done
@@ -188,8 +450,8 @@ cleanup() {
   trap '' INT TERM HUP
   if [[ "$rc" -eq 0 && "$test_completed" -ne 1 ]]; then rc=1; fi
   # The directory goes only after every job this process or its nested cases started has
-  # stopped. Removing it gets at most 5s and nothing after FINAL_BY; running out of time
-  # is printed and does not fail the run.
+  # stopped. Removing it gets at most 5s and nothing after FINAL_BY, and each rmdir a
+  # second; running out of time is printed and does not fail the run.
   if stop_jobs "$LIVE_JOBS"; then
     within 5 "$FINAL_BY" /bin/rm -rf -- "$TEST_ROOT" || printf 'could not remove %s in time\n' "$TEST_ROOT" >&2
     [[ "$own_run_root" -ne 1 ]] || within 1 "$FINAL_BY" rmdir "$LIVE_RUN_ROOT" 2>/dev/null || true
@@ -216,7 +478,8 @@ processes_under() {
   LIVE_PIDS=""
   listing="$(within 5 "${2:-$FINAL_BY}" ps -axo pid=,command=)" || return 1
   [[ -n "$listing" ]] || return 1
-  LIVE_PIDS="$(printf '%s\n' "$listing" | MARK="$1" awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }')"
+  LIVE_PIDS="$(printf '%s\n' "$listing" | within 5 "${2:-$FINAL_BY}" env MARK="$1" \
+    awk 'index($0, ENVIRON["MARK"]) { printf "%s ", $1 }')" || return 1
 }
 
 # Every case runs under its own limit and all of them before RUN_DEADLINE, so a slow or
@@ -240,14 +503,15 @@ run_case() {
   if kill -0 "$pid" 2>/dev/null; then
     diag_by=$((SECONDS + 5))
     [[ "$diag_by" -le "$STOP_BY" ]] || diag_by="$STOP_BY"
-    listing="$(within 3 "$diag_by" ps -axo pid=,pgid=,etime=,command= | awk -v group="$pid" '$2 == group')" ||
+    listing="$(within 3 "$diag_by" ps -axo pid=,pgid=,etime=,command=)" &&
+      listing="$(printf '%s\n' "$listing" | within 1 "$diag_by" awk -v group="$pid" '$2 == group')" ||
       listing="(could not list processes in time)"
     printf 'case %s (PID %s) still running after %ss (case limit %ss, run limit %ss); waiting on:\n%s\n' \
       "$name" "$pid" "$((SECONDS - started))" "$CASE_LIMIT" "$LIVE_RUN_LIMIT" "$listing" >&2
     printf 'background jobs the case registered:\n%s\n' "$(describe_jobs "$case_jobs" "$diag_by")" >&2
-    # Their own groups are outside the case's and are never signalled from here: cancel
-    # them and wait first, and only then end the case. Whatever fails here is printed, and
-    # the run fails below in any case.
+    # Their own groups are outside the case's: cancel them, wait, and end what is left of
+    # them first, and only then end the case. Whatever fails here is printed, and the run
+    # fails below in any case.
     stop_jobs "$case_jobs" || true
     kill -TERM "$pid" 2>/dev/null || true
     deadline=$((SECONDS + $(budget 3 "$((FINAL_BY - 7))")))
@@ -2088,6 +2352,230 @@ PY
     fail "Grok runner invoked CLI after rejecting live high effort"
 }
 
+# Forced stop of live jobs, offline: each fake job is a controller in a session of its
+# own (as dispatch's background subshell is in a group of its own), whose parent exits
+# at once, so like a real job it is not this case's child. FS_GROUPS and FS_SESSIONS keep
+# every group started here, and the case ends them itself, whatever the code under test did.
+FS_GROUPS="" FS_SESSIONS=""
+force_stop_fixture_end() {
+  local group
+  for group in $FS_GROUPS $FS_SESSIONS; do kill -KILL -- "-$group" 2>/dev/null || true; done
+}
+# Starts fake job $2 in home $1. $3: "ignore" (the controller ignores TERM) or "exit"
+# (it exits on TERM). Its child in its group and a grandchild in a session of its own both
+# ignore TERM. $4 "nopid" writes no PID file. Sets FS_LAST to the controller PID.
+force_stop_fixture_job() {
+  local home="$1" id="$2" mode="$3" pidfile="${4:-pid}" dir tries=0 pid session
+  dir="$home/jobs/$id"
+  mkdir -p "$dir"
+  (
+    exec perl -MPOSIX=setsid -e 'setsid() or die "setsid: $!"; exec { $ARGV[0] } @ARGV' \
+      /bin/bash -c '
+        dir="$1" mode="$2" pidfile="$3" real_ps="$4"
+        if [[ "$mode" == ignore ]]; then trap "" TERM; else trap "exit 0" TERM; fi
+        (trap "" TERM; exec sleep 300) &
+        perl -MPOSIX=setsid -e '"'"'setsid(); $SIG{TERM} = "IGNORE"; exec "sleep", "300"'"'"' &
+        printf "%s\n" "$!" > "$dir/session"
+        if [[ "$pidfile" == pid ]]; then
+          start="$(TZ=UTC LC_ALL=C "$real_ps" -o lstart= -p "$$")"
+          start="${start#"${start%%[![:space:]]*}"}"
+          printf "%s\n" "${start%"${start##*[![:space:]]}"}" > "$dir/pid.start"
+          printf "%s\n" "$$" > "$dir/pid.tmp" && mv "$dir/pid.tmp" "$dir/pid"
+        fi
+        printf "%s\n" "$$" > "$dir/ready"
+        while :; do sleep 1; done' fake-controller "$dir" "$mode" "$pidfile" "$FS_REAL_PS" \
+      > "$dir/worker.log" 2>&1 < /dev/null &
+  )
+  while [[ ! -s "$dir/ready" && "$tries" -lt 100 ]]; do sleep 0.1; tries=$((tries + 1)); done
+  read -r pid < "$dir/ready" || fail "fake job $id did not start"
+  read -r session < "$dir/session" || fail "fake job $id did not record its grandchild"
+  # Both children are started before ready is written; give them a moment to exec.
+  sleep 0.3
+  FS_GROUPS="$FS_GROUPS $pid"
+  FS_SESSIONS="$FS_SESSIONS $session"
+  FS_LAST="$pid"
+}
+# Every process of group $1 and of the sessions its members started is gone.
+force_stop_group_gone() {
+  local listing
+  listing="$(TZ=UTC LC_ALL=C "$FS_REAL_PS" -axo pid=,ppid=,pgid=)" || return 1
+  printf '%s\n' "$listing" | awk -v g="$1" '$3 == g { found = 1 } END { exit found ? 1 : 0 }'
+}
+force_stop_alive_count() {
+  local group n=0
+  for group in $FS_GROUPS $FS_SESSIONS; do kill -0 -- "-$group" 2>/dev/null && n=$((n + 1)); done
+  printf '%s\n' "$n"
+}
+# A ps that answers like ps after FAKE_PS_DELAY seconds for process tables with start
+# times, and from call FAKE_PS_REUSE_FROM on lists PID FAKE_PS_REUSE_PID and every
+# process of its group with another start time, as reused PIDs would be.
+force_stop_fake_ps() {
+  local bin="$1"
+  mkdir -p "$bin"
+  cat > "$bin/ps" <<'EOF'
+#!/bin/bash
+case " $* " in
+  *lstart=*) ;;
+  *) exec "$FS_REAL_PS" "$@" ;;
+esac
+calls=0
+read -r calls < "$FAKE_PS_DIR/calls" 2>/dev/null || calls=0
+calls=$((calls + 1))
+printf '%s\n' "$calls" > "$FAKE_PS_DIR/calls"
+sleep "${FAKE_PS_DELAY:-0}"
+if [[ -n "${FAKE_PS_REUSE_PID:-}" && "$calls" -ge "${FAKE_PS_REUSE_FROM:-1}" ]]; then
+  "$FS_REAL_PS" "$@" | awk -v pid="$FAKE_PS_REUSE_PID" \
+    '$1 == pid || $3 == pid { print $1, $2, $3, "Thu Jan  1 00:00:00 1970"; next } { print }'
+  exit "${PIPESTATUS[0]}"
+fi
+exec "$FS_REAL_PS" "$@"
+EOF
+  cat > "$bin/lsof" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+  chmod +x "$bin/ps" "$bin/lsof"
+}
+
+case_force_stop() {
+  local scenario="$1" dir="$TEST_ROOT/force-$1" home log start elapsed i pid pids recorded
+  local -a homes=() ids=()
+  FS_REAL_PS="$(command -v ps)"
+  export FS_REAL_PS
+  # Under TEST_ROOT, which is inside this run's root, so cleanup removes it.
+  home="$TEST_ROOT/force-$scenario-home"
+  mkdir -p "$dir" "$home/jobs"
+  log="$dir/stderr"
+  trap 'fs_rc=$?; force_stop_fixture_end; (exit "$fs_rc"); cleanup' EXIT
+  force_stop_fake_ps "$dir/bin"
+  export FAKE_PS_DIR="$dir"
+  export LIVE_LSOF="$dir/bin/lsof"
+  PATH="$dir/bin:$PATH"
+  recorded="$dir/recorded"
+  : > "$recorded"
+  case "$scenario" in
+    batch)
+      # Four jobs, a process table that takes 2s each time it is taken: one table for all
+      # of them leaves time to TERM and KILL every one; a table per job would not.
+      for i in 0 1 2 3; do
+        force_stop_fixture_job "$home" "job$i" ignore
+        homes+=("$home") ids+=("job$i")
+      done
+      pids="$FS_GROUPS"
+      export FAKE_PS_DELAY=2
+      FORCE_BY=$((SECONDS + 20))
+      start="$SECONDS"
+      force_stop_jobs "$recorded" 0 1 2 3 2> "$log"
+      elapsed=$((SECONDS - start))
+      cat "$log" >&2
+      # Each job has two groups: the controller's and its grandchild's session.
+      for pid in $pids; do
+        grep -q "TERM process group $pid\$" "$log" || fail "batch: the group of controller $pid got no TERM"
+        grep -q "KILL process group $pid\$" "$log" || fail "batch: the group of controller $pid got no KILL"
+      done
+      [[ "$(grep -c 'TERM process group' "$log")" -eq 8 ]] || fail "batch: not every job's groups got TERM"
+      [[ "$(grep -c 'KILL process group' "$log")" -eq 8 ]] || fail "batch: not every job's groups got KILL"
+      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "batch: a job group is still running"
+      [[ "$elapsed" -le 21 ]] || fail "batch: took ${elapsed}s, over its 20s"
+      ;;
+    leader-exits)
+      # The controller exits on TERM, its child and a grandchild in a session of its own
+      # do not: KILL goes by the members recorded, not by the leader.
+      force_stop_fixture_job "$home" job0 exit; pid="$FS_LAST"
+      homes+=("$home") ids+=("job0")
+      FORCE_BY=$((SECONDS + 20))
+      force_stop_jobs "$recorded" 0 2> "$log"
+      cat "$log" >&2
+      grep -q "TERM process group $pid\$" "$log" || fail "leader-exits: no TERM for the job's group"
+      grep -q "KILL process group $pid\$" "$log" || fail "leader-exits: the group was not KILLed after its leader exited"
+      [[ "$(grep -c 'KILL process group' "$log")" -eq 2 ]] || fail "leader-exits: the grandchild's session was not KILLed"
+      force_stop_group_gone "$pid" || fail "leader-exits: a member of the job's group is still running"
+      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "leader-exits: a job group is still running"
+      ;;
+    reuse-term | reuse-kill)
+      # The controller's PID is listed with another start time: from the first table it is
+      # never signalled; from the second, it gets TERM but no KILL.
+      force_stop_fixture_job "$home" job0 ignore; pid="$FS_LAST"
+      homes+=("$home") ids+=("job0")
+      export FAKE_PS_REUSE_PID="$pid"
+      if [[ "$scenario" == reuse-term ]]; then export FAKE_PS_REUSE_FROM=1; else export FAKE_PS_REUSE_FROM=2; fi
+      FORCE_BY=$((SECONDS + 20))
+      force_stop_jobs "$recorded" 0 2> "$log"
+      cat "$log" >&2
+      grep -q "PID $pid now started Thu Jan 1 00:00:00 1970, not .* as recorded; reused, not signalled" "$log" ||
+        fail "$scenario: the reused PID was not reported"
+      if [[ "$scenario" == reuse-term ]]; then
+        ! grep -q "TERM process group $pid\$" "$log" || fail "reuse-term: a reused PID's group got TERM"
+      else
+        grep -q "TERM process group $pid\$" "$log" || fail "reuse-kill: the job's group got no TERM"
+      fi
+      ! grep -q "KILL process group $pid\$" "$log" || fail "$scenario: a reused PID's group got KILL"
+      kill -0 "$pid" 2>/dev/null || fail "$scenario: the process listed as reused was signalled"
+      ;;
+    no-pid)
+      # No PID file: the controller is found as the holder of the job's worker.log.
+      unset LIVE_LSOF
+      force_stop_fixture_job "$home" job0 ignore nopid; pid="$FS_LAST"
+      homes+=("$home") ids+=("job0")
+      FORCE_BY=$((SECONDS + 20))
+      force_stop_jobs "$recorded" 0 2> "$log"
+      cat "$log" >&2
+      grep -q "KILL process group $pid\$" "$log" || fail "no-pid: the holder of worker.log was not ended"
+      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "no-pid: a job group is still running"
+      ;;
+    stop-flow)
+      # The whole stop: the exit is recorded but the controller keeps running and ignores
+      # TERM. The job is named as not stopping, every process is gone, and it all ends
+      # before FORCE_BY.
+      force_stop_fixture_job "$home" job0 exit; pid="$FS_LAST"
+      printf '0\n' > "$home/jobs/job0/exit"
+      printf '%s\t%s\n' "$home" job0 > "$dir/jobs"
+      STOP_BY=$((SECONDS + 30)) FORCE_BY=$((SECONDS + 50))
+      start="$SECONDS"
+      if stop_jobs "$dir/jobs" 2> "$log"; then cat "$log" >&2; fail "stop-flow: a job that did not stop passed"; fi
+      elapsed=$((SECONDS - start))
+      cat "$log" >&2
+      grep -q 'live job job0: did not stop after cancel and wait; its process groups were ended' "$log" ||
+        fail "stop-flow: the job was not named"
+      grep -q "KILL process group $pid\$" "$log" || fail "stop-flow: the leader-exited group was not KILLed"
+      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "stop-flow: a job group is still running"
+      [[ "$SECONDS" -le $((FORCE_BY + 1)) ]] || fail "stop-flow: ended ${elapsed}s after it started, past FORCE_BY"
+      ;;
+    holders-proc)
+      # The /proc search, on a stand-in tree, reports the PID holding a file.
+      mkdir -p "$dir/proc/self/fd" "$dir/proc/123/fd" "$dir/proc/456/fd"
+      ln -s "$dir/worker.log" "$dir/proc/123/fd/1"
+      ln -s /dev/null "$dir/proc/456/fd/1"
+      [[ "$(LIVE_PROC_ROOT="$dir/proc" file_holders 3 "$((SECONDS + 5))" "$dir/worker.log")" == "123 $dir/worker.log" ]] ||
+        fail "holders-proc: the holder in /proc was not found"
+      ;;
+    interrupt)
+      # A slow holder search, a hung lsof and a hung command are ended halfway through by
+      # their limit, not after.
+      mkdir -p "$dir/proc/self/fd"
+      for i in $(seq 100 130); do mkdir -p "$dir/proc/$i/fd"; ln -s /dev/null "$dir/proc/$i/fd/1"; done
+      start="$SECONDS"
+      if LIVE_PROC_ROOT="$dir/proc" LIVE_HOLDER_SCAN_DELAY=1 file_holders 2 "$((SECONDS + 30))" "$dir/worker.log"; then
+        fail "interrupt: a /proc search that needs 31s finished within its 2s"
+      fi
+      [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: the /proc search ran past its limit"
+      printf '#!/bin/bash\nexec sleep 30\n' > "$dir/bin/lsof"
+      start="$SECONDS"
+      if LIVE_PROC_ROOT="$dir/no-proc" file_holders 2 "$((SECONDS + 30))" "$dir/worker.log"; then
+        fail "interrupt: a hung lsof passed"
+      fi
+      [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: lsof ran past its limit"
+      start="$SECONDS"
+      if within 2 "$((SECONDS + 30))" sleep 30; then fail "interrupt: a hung command passed"; fi
+      [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: a command ran past its limit"
+      ;;
+    *) fail "unknown force-stop scenario: $scenario" ;;
+  esac
+  force_stop_fixture_end
+  FS_GROUPS="" FS_SESSIONS=""
+  trap cleanup EXIT
+}
+
 case "$CASE" in
  "")
     for scenario in gemini-success gemini-incomplete gemini-two gemini-empty gemini-idle claude-success claude-error; do
@@ -2180,6 +2668,7 @@ case "$CASE" in
     grok-live-fallback) case_grok_live_fallback ;;
     codex-probe-stdin-open) case_codex_probe_stdin_open ;;
     grok-probe-stdin-open) case_grok_probe_stdin_open ;;
+  force-stop-*) case_force_stop "${CASE#force-stop-}" ;;
   *) fail "unknown live mailbox test case: $CASE" ;;
 esac
 test_completed=1
