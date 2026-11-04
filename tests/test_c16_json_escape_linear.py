@@ -322,6 +322,35 @@ class JsonEscapeLinearTests(unittest.TestCase):
                 self.assertEqual(reference.stderr, b"")
                 self.assertEqual(new.stdout, reference.stdout)
 
+    def test_script_copies_do_not_switch_locale_without_locale_variables(self):
+        # doctor.sh, provider-probe.sh and release-audit.sh keep their own copy
+        # of the character loop; each had the same temporary LC_CTYPE.
+        bash = Path("/opt/homebrew/bin/bash")
+        if not os.access(bash, os.X_OK):
+            self.skipTest("/opt/homebrew/bin/bash is not installed; /bin/bash 3.2 never warns")
+        env = {k: v for k, v in os.environ.items()
+               if k != "LANG" and not k.startswith("LC_")}
+        script = b'\ns=$(cat; printf x); s=${s%x}; json_escape "$s"'
+        payloads = [("leading_cjk", "中文task".encode()), ("quoted_cjk", '"中文'.encode())] + [
+            case for case in CASES if case[0] in ("utf8", "invalid_utf8", "punctuation", "control_01")]
+        for relative in ("scripts/doctor.sh", "scripts/provider-probe.sh", "scripts/release-audit.sh"):
+            source = (ROOT / relative).read_bytes()
+            match = re.search(rb"(?ms)^json_escape\(\) \{\n.*?^\}\n", source)
+            self.assertIsNotNone(match, relative)
+            for name, payload in payloads:
+                with self.subTest(script=relative, case=name):
+                    copy = subprocess.run(
+                        [str(bash), "-c", match.group() + script], input=payload,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=True,
+                        timeout=30, cwd=ROOT)
+                    self.assertNotIn(b"setlocale", copy.stderr)
+                    if payload.decode("utf-8", "replace").encode() == payload:
+                        copy.stdout.decode("utf-8")
+                    reference = subprocess.run(
+                        [BASH, "-c", self.old + script], input=payload, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, env=env, check=True, timeout=30, cwd=ROOT)
+                    self.assertEqual(copy.stdout, reference.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
