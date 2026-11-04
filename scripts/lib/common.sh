@@ -292,6 +292,25 @@ write_current_pid_file() {
   }
 }
 
+# Written in place, the exit file is empty between its truncation and the write,
+# and a reader then takes the job for one with an invalid exit. The rename
+# publishes it whole. Only the temporary this call created is removed.
+publish_exit_file() { # path, exit code
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  [[ ! -d "$path" ]] || return 1
+  old_umask="$(umask)"
+  umask 077
+  if (set -C; : > "$tmp") 2>/dev/null; then
+    printf '%s\n' "$2" > "$tmp" || rc=$?
+    if [[ "$rc" -eq 0 ]]; then mv "$tmp" "$path" || rc=$?; fi
+    if [[ "$rc" -ne 0 ]]; then rm "$tmp" 2>/dev/null || true; fi
+  else
+    rc=1
+  fi
+  umask "$old_umask"
+  return "$rc"
+}
+
 process_start_time() { # pid -> stable ps(1) start timestamp
   local pid="$1" value
   [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1

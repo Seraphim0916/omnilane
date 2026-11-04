@@ -1610,7 +1610,7 @@ finish_job() {
   # Preserve early non-timeout results used by cancellation recovery if a stuck
   # finalizer needs SIGKILL. Whole-job timeout waits for the receipt attempt below.
   if [[ "$rc" -ne 124 ]]; then
-    (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+    publish_exit_file "$JOB_DIR/exit" "$rc"
   fi
   if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
     write_completion_record "$rc" >/dev/null || true
@@ -1620,7 +1620,7 @@ finish_job() {
   # result, not this controller's exit: observers needing quiescence must also
   # wait for the recorded PID to disappear after this function returns.
   if [[ "$rc" -eq 124 ]]; then
-    (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+    publish_exit_file "$JOB_DIR/exit" "$rc"
   fi
   FINISHED_RC="$rc"
 }

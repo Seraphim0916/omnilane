@@ -75,9 +75,9 @@ read_exit_code() {
   local path="$1" size value length
   RECORDED_EXIT=""
   [[ -f "$path" && ! -L "$path" ]] || return 1
-  size="$(LC_ALL=C wc -c < "$path" | tr -d '[:space:]')" || return 2
+  size="$(LC_ALL=C wc -c 2>/dev/null < "$path" | tr -d '[:space:]')" || return 2
   [[ "$size" =~ ^[0-9]+$ && "$size" -le 4 ]] || return 2
-  value="$(cat "$path")" || return 2
+  value="$(cat "$path" 2>/dev/null)" || return 2
   length="${#value}"
   # Accept digits with either no terminator or exactly one trailing newline.
   [[ "$size" -eq "$length" || "$size" -eq $((length + 1)) ]] || return 2
@@ -1655,7 +1655,15 @@ case "${1:-}" in
       [[ "$cancel_state" -ne 0 ]] || cancel_refuse not-terminated "$pid" "cancel could not terminate worker pid $pid"
       [[ "$cancel_state" -ne 2 ]] || cancel_refuse ps-unavailable-after-term "$pid" "$(printf '%s, but whether its worker PID %s stopped cannot be confirmed because ps is blocked here, so no exit status was recorded. This does not mean the process is still running. Check it outside the sandbox with: omnilane jobs status %s' "$(cancel_term_prefix " to job $2")" "$pid" "$2")"
       [[ "$cancel_state" -ne 3 ]] || cancel_refuse invalid-start-time-after-term "$pid" "$(invalid_start_message "$2" "$JOB_DIR" "$pid" "$(cancel_term_prefix ""), but no exit status was recorded")"
-      (umask 077; printf '137\n' > "$exit_path")
+      # The worker records its exit before it ends, so it may have written one after
+      # the check above. Now that it is gone nothing else will, and it is kept.
+      if [[ -e "$exit_path" || -L "$exit_path" ]]; then
+        if read_exit_code "$exit_path"; then
+          cancel_report cancelled "$RECORDED_EXIT" "cancelled (exit $RECORDED_EXIT)"
+        fi
+        cancel_report cancelled null "cancelled (invalid exit metadata)"
+      fi
+      publish_exit_file "$exit_path" 137
       cancel_report cancelled 137 "cancelled (exit 137)"
     fi ;;
   rm)
