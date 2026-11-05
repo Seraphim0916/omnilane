@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import fcntl
 import json
+import json_depth
 import os
 import socket
 import stat
@@ -127,8 +128,8 @@ def load(path=None):
     if raw is None:
         return {"schema_version": 1, "host": socket.gethostname(), "vendors": {}}
     try:
-        return validate(json.loads(raw, object_pairs_hook=_pairs,
-                                   parse_constant=lambda _: (_ for _ in ()).throw(OriginError("invalid JSON number"))))
+        return validate(json_depth.loads(raw, object_pairs_hook=_pairs,
+                                         parse_constant=lambda _: (_ for _ in ()).throw(OriginError("invalid JSON number"))))
     except (ValueError, TypeError, UnicodeError, RecursionError) as error:
         raise OriginError("invalid origin policy: " + str(error)) from None
 

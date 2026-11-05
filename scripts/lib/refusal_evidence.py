@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import json_depth
 import os
 import secrets
 import sys
@@ -26,7 +27,7 @@ def refusal_from(text: str) -> dict | None:
         if not line.startswith("{"):
             continue
         try:
-            value = json.loads(line)
+            value = json_depth.loads(line)
         except (ValueError, RecursionError):
             continue
         if isinstance(value, dict) and value.get("allowed") is False:

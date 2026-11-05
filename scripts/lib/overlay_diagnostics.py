@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import json_depth
 import shlex
 from pathlib import Path
 
@@ -15,7 +16,7 @@ def read_object(path: Path) -> dict:
     except (OSError, ValueError):
         return {}
     try:
-        value = json.loads(raw)
+        value = json_depth.loads(raw)
     except (ValueError, RecursionError):
         return {}
     return value if isinstance(value, dict) else {}

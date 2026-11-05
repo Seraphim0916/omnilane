@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts/lib"))
 import origin_policy as op
+import json_depth
 
 
 class OriginDecodeErrorsTests(unittest.TestCase):
@@ -20,16 +21,16 @@ class OriginDecodeErrorsTests(unittest.TestCase):
         self.path = self.root / "fixture-policy.json"
 
     def test_invalid_encoding_and_deep_json_become_origin_errors(self):
-        # The C JSON decoder can have a separate recursion threshold from Python.
-        # Stay below MAX_BYTES without changing either runtime recursion limit.
+        # Deep nesting is refused by the explicit depth check, the same on 3.9-3.14;
+        # 3.14 measures C stack use and would otherwise decode it. Stay below MAX_BYTES.
         depth = 10000
         cases = (("invalid UTF-8", b'{"host":"\xff"}', UnicodeDecodeError),
-                 ("deep JSON", b"[" * depth + b"0" + b"]" * depth, RecursionError))
+                 ("deep JSON", b"[" * depth + b"0" + b"]" * depth, json_depth.JSONDepthError))
         for name, raw, underlying in cases:
             with self.subTest(case=name):
                 # Verify the fixture actually reaches the intended decoder failure.
                 with self.assertRaises(underlying):
-                    json.loads(raw)
+                    json_depth.loads(raw)
                 with patch.object(op, "_read", return_value=raw) as read, \
                         patch.object(op, "_save") as save:
                     try:

@@ -9,6 +9,9 @@ semantic version tags.
 ### Changed
 - Clarify that local overrides take precedence when inspecting current lane candidates; the skill keeps only lane names and purposes, with `omnilane list` for resolved targets and `omnilane route --explain <lane>` for ordered candidates.
 
+### Fixed
+- Python 3.14: host rows (`--host-rows`), the origin policy, overlay diagnostics and dispatch refusal evidence now refuse JSON nested deeper than 256 levels with an explicit depth check (`scripts/lib/json_depth.py`) instead of relying on `RecursionError`. Python 3.14 measures C stack use rather than counting calls, so `json.loads` decodes nesting that 3.9–3.13 refused; the messages and fallbacks are now the same on every supported version.
+
 ## [0.59.0] - 2026-11-05
 
 ### Changed

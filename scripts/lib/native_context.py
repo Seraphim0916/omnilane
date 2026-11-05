@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import caller_identity  # noqa: E402
 import host_context  # noqa: E402
+import json_depth  # noqa: E402
 
 HARNESSES = {"codex": "codex", "claude": "claude-code", "grok": "grok-build", "gemini": "antigravity"}
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -111,8 +112,8 @@ def _unique_keys(pairs):
 def load_host_rows(path: Path) -> dict[str, list[tuple[str, list[str]]]]:
     """harness -> [(model, efforts)], from a file shaped exactly as documented in --help."""
     try:
-        value = json.loads(path.read_text(), object_pairs_hook=_unique_keys)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+        value = json_depth.loads(path.read_text(), object_pairs_hook=_unique_keys)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, json_depth.JSONDepthError, RecursionError) as error:
         raise HostRowsError(f"cannot read: {error}") from None
     if not isinstance(value, dict) or set(value) != {"schema_version", "harnesses"}:
         raise HostRowsError('top level must have exactly the keys "schema_version" and "harnesses"')

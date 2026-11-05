@@ -8,14 +8,16 @@ from unittest.mock import Mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts/lib"))
 import overlay_diagnostics as diagnostics
+import json_depth
 
 
 class DiagnosticDepthTests(unittest.TestCase):
     def deep_path(self):
         path = Mock(spec=Path)
         path.read_text.return_value = '{"a":' * 10000 + '{}' + '}' * 10000
-        with self.assertRaises(RecursionError):
-            json.loads(path.read_text.return_value)
+        # Rejected by the explicit depth check on every Python, not by RecursionError (3.14 decodes it).
+        with self.assertRaises(json_depth.JSONDepthError):
+            json_depth.check(path.read_text.return_value)
         return path
 
     def test_deep_json_returns_empty_object(self):
