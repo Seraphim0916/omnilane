@@ -67,7 +67,10 @@ class CloseHolderVanishTests(unittest.TestCase):
             except Exception:
                 pass
             for stream in (closer.stdout, closer.stderr):
-                stream.close()
+                try:
+                    stream.close()
+                except Exception:
+                    pass
             return
         closer.wait(timeout=GENEROUS)
         for stream in (closer.stdout, closer.stderr):
@@ -76,9 +79,9 @@ class CloseHolderVanishTests(unittest.TestCase):
         # receipt poller) is not a leftover, so a group that empties within the grace
         # passes. One still present after the grace is a leftover: it is killed whether
         # or not the leader is alive, the group must then be gone, and the test fails.
-        # Zombies need no special case: closer.wait() reaps the leader, and orphaned
-        # members are reaped by launchd/init within the grace. A zombie that lingers has
-        # a live parent in the group, and that parent is itself a leftover.
+        # Zombies get no special case. closer.wait() reaps the leader, and orphaned
+        # members are reaped by launchd/init, but with no bound on when: a member still
+        # a zombie at the end of the grace fails the test as a leftover. Not seen so far.
         grace = time.monotonic() + LEFTOVER_GRACE
         while time.monotonic() < grace:
             if not self._group_exists(pgid):
