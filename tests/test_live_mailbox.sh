@@ -186,24 +186,19 @@ file_holders() {
 # Reads process table $1, roots $2 ("job pid start", start "-" when none was recorded)
 # and members $3 (earlier output of this function) and prints, for the processes that
 # are still the job's: "M job pid group start" for each and "G job group" for each group
-# to signal; "R job pid recorded-start listed-start" for each reused PID. $4 is the PID
-# whose group and whose ancestors' groups are never signalled. Gets at most $5 seconds
-# and nothing after deadline $6.
+# to signal; "R job pid recorded-start listed-start" for each reused PID, and "X job
+# group" for a group not signalled because a reused PID is in it. A reused PID is never
+# taken as the job's, whatever else names it (a holder root has no start time to compare,
+# so it must not bring one back), and neither are its descendants. $4 is the PID whose
+# group and whose ancestors' groups are never signalled. Gets at most $5 seconds and
+# nothing after deadline $6.
 job_processes() {
   within "$5" "$6" awk -v self="$4" '
     function add(job, pid,   n, k, list) {
-      if (pid in owner) return
+      if ((pid in owner) || (pid in reused)) return
       owner[pid] = job
       n = split(kids[pid], list, " ")
       for (k = 1; k <= n; k++) add(job, list[k])
-    }
-    function check(job, pid, start) {
-      if (!(pid in begun)) return
-      if (start != "-" && begun[pid] != start) {
-        printf "R\t%s\t%s\t%s\t%s\n", job, pid, start, begun[pid]
-        return
-      }
-      add(job, pid)
     }
     FILENAME == ARGV[1] {
       if (NF < 8) next
@@ -211,25 +206,45 @@ job_processes() {
       kids[$2] = kids[$2] " " $1
       next
     }
-    FILENAME == ARGV[2] { check($1, $2, $3 == "-" ? "-" : $3 " " $4 " " $5 " " $6 " " $7); next }
-    FILENAME == ARGV[3] && $1 == "M" { check($2, $3, $5 " " $6 " " $7 " " $8 " " $9); next }
+    FILENAME == ARGV[2] {
+      n++; job_of[n] = $1; pid_of[n] = $2
+      start_of[n] = $3 == "-" ? "-" : $3 " " $4 " " $5 " " $6 " " $7
+      next
+    }
+    FILENAME == ARGV[3] && $1 == "M" {
+      n++; job_of[n] = $2; pid_of[n] = $3; start_of[n] = $5 " " $6 " " $7 " " $8 " " $9
+      next
+    }
     END {
+      # Every reused PID is known before anything is added.
+      for (k = 1; k <= n; k++) {
+        pid = pid_of[k]
+        if (!(pid in begun) || start_of[k] == "-" || begun[pid] == start_of[k]) continue
+        printf "R\t%s\t%s\t%s\t%s\n", job_of[k], pid, start_of[k], begun[pid]
+        reused[pid] = job_of[k]
+      }
+      for (k = 1; k <= n; k++) if (pid_of[k] in begun) add(job_of[k], pid_of[k])
       for (pid = self; pid in parent && !(pid in seen); pid = parent[pid]) {
         seen[pid] = 1; mine[group[pid]] = 1
       }
+      for (pid in reused) if (!(group[pid] in tainted)) tainted[group[pid]] = reused[pid]
       for (pid in owner) {
         g = group[pid]
-        if (g + 0 > 1 && !(g in mine) && !(g in leader)) leader[g] = owner[pid]
+        if (g + 0 > 1 && !(g in mine) && !(g in tainted) && !(g in leader)) leader[g] = owner[pid]
       }
       for (pid in group) if ((group[pid] in leader) && !(pid in owner)) owner[pid] = leader[group[pid]]
       for (pid in owner) printf "M\t%s\t%s\t%s\t%s\n", owner[pid], pid, group[pid], begun[pid]
       for (g in leader) printf "G\t%s\t%s\n", leader[g], g
+      for (g in tainted) if (g + 0 > 1 && !(g in mine)) printf "X\t%s\t%s\n", tainted[g], g
     }' "$1" "$2" "$3"
 }
 # Writes the roots of the jobs at indexes $3... of the arrays homes and ids to file $1:
-# each confirmed controller, and the holders of worker.log for a job without one. The
-# holder search runs once for all of those jobs, at most 3s and not after deadline $2.
-# Unconfirmed controllers and jobs with no PID file are printed.
+# each controller with its recorded start time, and, only for a job without one (no PID
+# file, or no start time beside it), the holders of its worker.log. A controller whose PID
+# turns out to be reused is not replaced by holders: the job's processes it had are known
+# from the members recorded before, with their own start times. The holder search runs
+# once for all of those jobs, at most 3s and not after deadline $2. Controllers without
+# a start time are printed.
 write_roots() {
   local out="$1" by="$2" i dir start line pid path j
   local -a logs=() log_jobs=()
@@ -242,9 +257,10 @@ write_roots() {
     [[ ! -f "$dir/pid.start" ]] || read -r start < "$dir/pid.start" 2>/dev/null || true
     if [[ "$PID_READ" =~ ^[1-9][0-9]*$ && -n "$start" ]]; then
       printf '%s %s %s\n' "$i" "$PID_READ" "$start" >> "$out"
-    else
-      [[ "$PID_READ" =~ ^[1-9][0-9]*$ ]] && printf 'live job %s: PID %s has no recorded start time\n' "${ids[i]}" "$PID_READ" >&2
+      continue
     fi
+    [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]] ||
+      printf 'live job %s: PID %s has no recorded start time\n' "${ids[i]}" "$PID_READ" >&2
     if [[ -e "$dir/worker.log" ]]; then logs+=("$dir/worker.log"); log_jobs+=("$i"); fi
   done
   [[ "${#logs[@]}" -gt 0 ]] || return 0
@@ -270,6 +286,7 @@ read_decision() {
          printf 'live job %s: process group %s\n' "${ids[job]}" "$a" >&2 ;;
       R) printf 'live job %s: PID %s now started %s, not %s as recorded; reused, not signalled\n' \
            "${ids[job]}" "$a" "$c" "$b" >&2 ;;
+      X) printf 'live job %s: process group %s holds a reused PID; not signalled\n' "${ids[job]}" "$a" >&2 ;;
     esac
   done < "$1"
 }
@@ -2497,11 +2514,22 @@ case_force_stop() {
       force_stop_group_gone "$pid" || fail "leader-exits: a member of the job's group is still running"
       [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "leader-exits: a job group is still running"
       ;;
-    reuse-term | reuse-kill)
+    reuse-term | reuse-kill | reuse-term-proc | reuse-kill-proc)
       # The controller's PID is listed with another start time: from the first table it is
-      # never signalled; from the second, it gets TERM but no KILL.
+      # never signalled; from the second, it gets TERM but no KILL. The -proc variants find
+      # holders through a stand-in /proc in which the job's processes hold worker.log, as
+      # they do in Linux's real /proc, so a holder can never bring a reused PID back.
       force_stop_fixture_job "$home" job0 ignore; pid="$FS_LAST"
       homes+=("$home") ids+=("job0")
+      if [[ "$scenario" == *-proc ]]; then
+        mkdir -p "$dir/proc/self/fd"
+        for i in $("$FS_REAL_PS" -axo pid=,pgid= | awk -v g="$pid" '$2 == g { print $1 }') $FS_SESSIONS; do
+          mkdir -p "$dir/proc/$i/fd"
+          ln -s "$home/jobs/job0/worker.log" "$dir/proc/$i/fd/1"
+        done
+        export LIVE_PROC_ROOT="$dir/proc"
+        scenario="${scenario%-proc}"
+      fi
       export FAKE_PS_REUSE_PID="$pid"
       if [[ "$scenario" == reuse-term ]]; then export FAKE_PS_REUSE_FROM=1; else export FAKE_PS_REUSE_FROM=2; fi
       FORCE_BY=$((SECONDS + 20))

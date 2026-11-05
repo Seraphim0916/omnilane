@@ -36,6 +36,12 @@ class LiveForceStopTests(unittest.TestCase):
     def test_a_pid_reused_after_term_gets_no_kill(self):
         self.assertIn("reused, not signalled", self.run_scenario("reuse-kill"))
 
+    def test_a_reused_pid_gets_no_term_when_proc_lists_holders(self):
+        self.assertIn("reused, not signalled", self.run_scenario("reuse-term-proc"))
+
+    def test_a_pid_reused_after_term_gets_no_kill_when_proc_lists_holders(self):
+        self.assertIn("reused, not signalled", self.run_scenario("reuse-kill-proc"))
+
     def test_a_job_without_a_pid_file_is_found_by_its_worker_log(self):
         self.run_scenario("no-pid")
 
