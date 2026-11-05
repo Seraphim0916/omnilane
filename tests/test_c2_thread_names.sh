@@ -27,6 +27,31 @@ fail() {
   exit 1
 }
 
+# The same 60s outer limit B04/B05 give each dispatch. dispatch's own --timeout only bounds
+# the provider call, so a stall before or after it would otherwise hang the suite. The
+# command runs in its own process group so its children end with it; exit 124 = timed out.
+DISPATCH_LIMIT=60
+run_bounded() {
+  python3 -c '
+import os, signal, subprocess, sys
+process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+try:
+    sys.exit(process.wait(timeout=float(sys.argv[1])))
+except subprocess.TimeoutExpired:
+    for sig, grace in ((signal.SIGTERM, 2), (signal.SIGKILL, 5)):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            process.wait(timeout=grace)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    sys.exit(124)
+' "$DISPATCH_LIMIT" "$@"
+}
+
 count=0
 check_name() {
   local expected="$1" label="$2" name="$3" rc=0 notice
@@ -34,10 +59,11 @@ check_name() {
   # Rejected names deliberately use real dispatch, not --dry-run, so an early
   # rejection is required to prevent the fake executor from being called.
   [[ "$expected" != valid ]] || flags=(--dry-run)
-  bash "$ROOT/scripts/dispatch.sh" ${flags[@]+"${flags[@]}"} \
+  run_bounded bash "$ROOT/scripts/dispatch.sh" ${flags[@]+"${flags[@]}"} \
     --thread "$name" --vendor claude --model fake-thread-model --effort low \
     --single-shot --workdir "$ROOT" consult 'name boundary probe' \
     > "$TEST_ROOT/stdout" 2> "$TEST_ROOT/stderr" || rc=$?
+  [[ "$rc" -ne 124 ]] || fail "$label: dispatch did not finish within ${DISPATCH_LIMIT}s (outer limit)"
 
   if [[ "$expected" == valid ]]; then
     [[ "$rc" -eq 0 ]] || fail "$label: expected exit 0, got $rc"

@@ -92,14 +92,41 @@ assert {f.name for f in p.iterdir()} == expected, list(p.iterdir())
 ' "$C2_HOME/threads" "$1" || fail "partial state or temporary artifact remains"
 }
 
+# The same 60s outer limit B04/B05 give each dispatch. dispatch's own --timeout only bounds
+# the provider call, so a stall in preparation or state writing would otherwise hang the
+# suite. The command runs in its own process group so its children end with it; exit 124
+# = timed out.
+DISPATCH_LIMIT=60
+run_bounded() {
+  python3 -c '
+import os, signal, subprocess, sys
+process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+try:
+    sys.exit(process.wait(timeout=float(sys.argv[1])))
+except subprocess.TimeoutExpired:
+    for sig, grace in ((signal.SIGTERM, 2), (signal.SIGKILL, 5)):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            process.wait(timeout=grace)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    sys.exit(124)
+' "$DISPATCH_LIMIT" "$@"
+}
+
 dispatch() {
   local label="$1" fault="$2"
   RC=0
   OMNILANE_HOME="$C2_HOME" C2_FAULT="$fault" BASH_ENV="$C2_TEST_SCRIPT" \
-    /bin/bash "$ROOT/scripts/dispatch.sh" --thread orchard --vendor claude \
+    run_bounded /bin/bash "$ROOT/scripts/dispatch.sh" --thread orchard --vendor claude \
     --model fake-thread-model --effort low --single-shot --workdir "$ROOT" \
     consult 'C2 state persistence fixture' > "$C2_HOME/$label.out" \
     2> "$C2_HOME/$label.err" || RC=$?
+  [[ "$RC" != 124 ]] || fail "${C2_HOME##*/} $label: dispatch did not finish within ${DISPATCH_LIMIT}s (outer limit)"
 }
 
 for prior in existing first; do
