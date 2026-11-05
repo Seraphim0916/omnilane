@@ -74,7 +74,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-gemini.sh":
         "09188c48bd68fae91cda519dbf34ddbdcc428b16463de8430323e4af10d3748d",
     "scripts/runners/run-grok.sh":
-        "3bb8018c38ca1c3ca5cdfc8a9c5cecdf8cedf5448408340069c44aab1488ae69",
+        "5e511923150d786df33c99f200534f3db06332d51d26a6bf424ad7edf31df79f",
     "scripts/runners/run-groq.sh":
         "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
     # Comment-only Kimi update with the official URL; runtime behavior is unchanged.
