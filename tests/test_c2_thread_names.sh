@@ -33,21 +33,27 @@ fail() {
 DISPATCH_LIMIT=60
 run_bounded() {
   python3 -c '
-import os, signal, subprocess, sys
+import os, signal, subprocess, sys, time
 process = subprocess.Popen(sys.argv[2:], start_new_session=True)
 try:
     sys.exit(process.wait(timeout=float(sys.argv[1])))
 except subprocess.TimeoutExpired:
-    for sig, grace in ((signal.SIGTERM, 2), (signal.SIGKILL, 5)):
+    pgid = process.pid
+    # The leader exiting on TERM does not empty the group: a descendant that ignores
+    # TERM keeps it, so KILL goes to the remembered group after the grace period anyway.
+    for sig, grace in ((signal.SIGTERM, 2.0), (signal.SIGKILL, 5.0)):
         try:
-            os.killpg(process.pid, sig)
+            os.killpg(pgid, sig)
         except ProcessLookupError:
             break
-        try:
-            process.wait(timeout=grace)
-            break
-        except subprocess.TimeoutExpired:
-            continue
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                try:
+                    os.killpg(pgid, 0)
+                except ProcessLookupError:
+                    break
+            time.sleep(0.1)
     sys.exit(124)
 ' "$DISPATCH_LIMIT" "$@"
 }
