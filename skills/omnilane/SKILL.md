@@ -64,7 +64,7 @@ decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
 
 The table lists lanes and their purposes only; `omnilane list` shows the live
 table with one resolved target per lane. For a lane's ordered candidate chain,
-run `omnilane route --explain <lane>`. `--dry-run` prints the decision without calling.
+run `omnilane route --explain <lane>`; local overrides take precedence. `--dry-run` prints the decision without calling.
 
 | Lane | Use for |
 |---|---|

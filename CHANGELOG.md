@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- Clarify that local overrides take precedence when inspecting current lane candidates; the skill keeps only lane names and purposes, with `omnilane list` for resolved targets and `omnilane route --explain <lane>` for ordered candidates.
+
 ## [0.59.0] - 2026-11-05
 
 ### Changed
