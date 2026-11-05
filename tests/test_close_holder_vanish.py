@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 JOB_ID = "20260905-160000-12345-1"
 # Hang guard only; the tests check observable state, not how fast the host schedules them.
 GENEROUS = 60
+# How long close's process group may take to finish exiting after close itself has returned.
+LEFTOVER_GRACE = 5
 
 # Stands in for the worker exiting at the worst moment: jobs close has seen the
 # holder PID file, then the file is gone when cat opens it.
@@ -53,31 +55,54 @@ class CloseHolderVanishTests(unittest.TestCase):
 
     def reap(self, closer):
         """Kill what is left of close's process group, reap it, and check nothing in the group survived."""
+        pgid = closer.pid  # start_new_session: the leader's PID is the group ID
         if closer.poll() is None:
-            try:
-                os.killpg(closer.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            # The test body stopped before close returned; it already reports its own
+            # failure, so only clean up here.
+            self._killpg(pgid)
         closer.wait(timeout=GENEROUS)
         for stream in (closer.stdout, closer.stderr):
             stream.close()
-        deadline = time.monotonic() + GENEROUS
-        while True:
-            try:
-                os.killpg(closer.pid, 0)
-            except ProcessLookupError:
+        # A member that is still finishing its exit just after close returned (its
+        # receipt poller) is not a leftover, so a group that empties within the grace
+        # passes. One still present after the grace is a leftover: it is killed whether
+        # or not the leader is alive, the group must then be gone, and the test fails.
+        grace = time.monotonic() + LEFTOVER_GRACE
+        while time.monotonic() < grace:
+            if not self._group_exists(pgid):
                 return
-            if time.monotonic() > deadline:
-                os.killpg(closer.pid, signal.SIGKILL)
-                self.fail(f"process group {closer.pid} survived jobs close")
             time.sleep(.02)
+        self._killpg(pgid)
+        deadline = time.monotonic() + GENEROUS
+        while self._group_exists(pgid):
+            self.assertLess(time.monotonic(), deadline, f"process group {pgid} survived SIGKILL")
+            time.sleep(.02)
+        self.fail(f"process group {pgid} outlived jobs close by more than {LEFTOVER_GRACE}s")
+
+    @staticmethod
+    def _group_exists(pgid):
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return False
+        return True
+
+    @staticmethod
+    def _killpg(pgid):
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
     def receipt_poller_running(self, closer, end):
         """Whether close's direct child polling for the exit receipt is in the process table now."""
         receipt = str(self.job / "exit")
-        listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="], capture_output=True,
-                                 text=True, timeout=max(.1, end - time.monotonic())).stdout
-        for line in listing.splitlines():
+        ps = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="], capture_output=True,
+                            text=True, timeout=max(.1, end - time.monotonic()))
+        # An empty listing from a failed ps says nothing about the poller; never read it as absent.
+        if ps.returncode != 0:
+            self.fail(f"ps failed with exit {ps.returncode}: {ps.stderr.strip()!r}")
+        for line in ps.stdout.splitlines():
             fields = line.split(None, 1)
             if len(fields) == 2 and fields[0] == str(closer.pid) and receipt in fields[1]:
                 return True
