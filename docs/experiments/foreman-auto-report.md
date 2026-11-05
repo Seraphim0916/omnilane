@@ -4,7 +4,7 @@
 
 Every completed dispatch now writes one private, atomic JSON record to `$OMNILANE_HOME/inbox/` from `finish_job()`, the common completion point for foreground jobs, background jobs, and HUP/TERM traps. Records contain routing metadata, final exit status, finish time, and a byte-bounded tail of `out.txt`; they never contain the task prompt. `OMNILANE_INBOX=0` disables producer writes.
 
-A Claude Code `UserPromptSubmit` hook runs `hooks/report-completions.sh`. It claims a pending record with a same-filesystem rename before printing a short completion block, so concurrent consumers deliver a record at most once. Each invocation prints at most ten records, leaves excess records pending, and retains only the 200 newest consumed records. Missing, empty, unsafe, or malformed inbox state fails open without affecting the user's prompt.
+A Claude Code `UserPromptSubmit` hook runs `hooks/report-completions.sh`. It claims a pending record with a same-filesystem rename before printing a short completion block, so concurrent consumers deliver a record at most once. Each invocation prints at most ten records, leaves excess records pending, and keeps each consumed record for 14 days from when it was claimed; cleanup removes only regular files named like a job record. Missing, empty, unsafe, or malformed inbox state fails open without affecting the user's prompt.
 
 ## Session targeting
 
