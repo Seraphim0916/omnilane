@@ -4760,6 +4760,17 @@ test_c2_thread_state_write_failures() {
 }
 test_c2_thread_state_write_failures
 
+test_c2_thread_pinning() {
+  local name="thread pins the physical workdir across symlink aliases (C2-B04)" out rc=0
+  out="$(/bin/bash "$ROOT/tests/test_c2_thread_pinning.sh" --omnilane-offline-child 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_c2_thread_pinning
+
 test_native_executor() {
   local name="native executor protocol (offline fixtures)" out rc=0
   out="$(python3 "$ROOT/tests/test_native_executor.py" 2>&1)" || rc=$?
