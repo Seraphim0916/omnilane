@@ -9,6 +9,10 @@ fi
 shift
 set -u
 
+# No case reads the inherited stdin, and a child that does (the completion hook
+# reads its payload until EOF) would wait forever on an open pipe.
+exec </dev/null
+
 # Tests own their dispatch environment. Inherited recursion guards or watchdog
 # overrides must not turn a healthy suite into a host-dependent false failure.
 unset OMNILANE_DEPTH OMNILANE_TIMEOUT OMNILANE_LOCK_EMPTY_GRACE OMNILANE_LOCK_TIMEOUT
@@ -69,6 +73,26 @@ trap cleanup_test_root EXIT
 
 pass() { PASS=$((PASS + 1)); printf 'ok - %s\n' "$1"; }
 fail() { FAIL=$((FAIL + 1)); printf 'not ok - %s: %s\n' "$1" "$2"; }
+# kill -0 also succeeds for a zombie. A zombie cannot execute; the host init
+# process owns reaping it, and some inits reap orphans only seconds later.
+process_running() {
+  local stat state
+  kill -0 "$1" 2>/dev/null || return 1
+  if [[ -e "/proc/$1/stat" ]]; then
+    stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
+    if [[ "$stat" == *') '* ]]; then
+      state="${stat##*) }"
+      state="${state%% *}"
+      [[ "$state" == Z ]] && return 1
+    fi
+  fi
+  return 0
+}
+
+# Reports the environment only: the counts and the exit status stay the tests' own.
+if ! bash -c 'source "$1/scripts/lib/common.sh"; can_record_start_time' _ "$ROOT"; then
+  printf "omnilane tests: ps cannot read process start times here, so tests that start a job or check a job's process fail. Run the full suite outside the sandbox.\n"
+fi
 
 mode_notice_contract() {
   local home="$1" vendor="$2" expected_count="$3" path count=0
@@ -1322,6 +1346,180 @@ test_jobs_wait_is_bounded_and_terminal() {
   fi
 }
 
+# Removing a job is not atomic for wait: it can read the pid file and only then
+# find it gone. A copy of jobs.sh pauses right after that read until the test has
+# removed the job, so the window is hit on every run instead of by chance.
+test_jobs_wait_removal_after_pid_read() {
+  local name="jobs wait treats removal after the pid read as removal, not a dead worker"
+  local repo home hook id anchor inserted rc dir_rc dir_out pid_rc pid_out waiter tries case_name
+  repo="$TEST_ROOT/wait-pid-read-repo"
+  home="$TEST_ROOT/wait-pid-read"
+  id="20260717-150001-123-1"
+  anchor='          pid="$RECORDED_PID"; pid_state="valid"'
+  mkdir -p "$repo" "$home"
+  cp -R "$ROOT/scripts" "$repo/scripts"
+  cat > "$home/hook.sh" <<'HOOK'
+          if [[ -n "${OMNILANE_TEST_AFTER_PID_READ:-}" && ! -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]]; then
+            : > "$OMNILANE_TEST_AFTER_PID_READ.reached"
+            for ((hook_try = 0; hook_try < 200; hook_try++)); do
+              [[ -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]] && break
+              sleep 0.05
+            done
+          fi
+HOOK
+  awk -v anchor="$anchor" -v hook="$home/hook.sh" '
+    { print }
+    $0 == anchor { while ((getline line < hook) > 0) print line; close(hook); n++ }
+    END { if (n != 1) exit 1 }' "$ROOT/scripts/jobs.sh" > "$repo/scripts/jobs.sh"
+  inserted=$?
+  if [[ "$inserted" -ne 0 ]]; then
+    fail "$name" "the pid read in jobs wait no longer matches the injection anchor"
+    return
+  fi
+
+  for case_name in dir pid; do
+    hook="$home/hook-$case_name"
+    mkdir -p "$home/jobs/$id"
+    printf '%s\n' "$$" > "$home/jobs/$id/pid"
+    OMNILANE_HOME="$home" OMNILANE_TEST_AFTER_PID_READ="$hook" \
+      bash "$repo/scripts/jobs.sh" wait "$id" --timeout 2 > "$home/out-$case_name" 2>&1 &
+    waiter=$!
+    for ((tries = 0; tries < 200; tries++)); do
+      [[ -e "$hook.reached" ]] && break
+      sleep 0.05
+    done
+    if [[ "$case_name" == dir ]]; then
+      mv "$home/jobs/$id" "$home/removed-job"
+    else
+      mv "$home/jobs/$id/pid" "$home/removed-pid"
+    fi
+    : > "$hook.go"
+    wait "$waiter"
+    rc=$?
+    if [[ "$case_name" == dir ]]; then
+      dir_rc="$rc"; dir_out="$(cat "$home/out-dir")"
+    else
+      pid_rc="$rc"; pid_out="$(cat "$home/out-pid")"
+      mv "$home/jobs/$id" "$home/removed-job-2"
+    fi
+  done
+
+  if [[ "$dir_rc" -ne 1 || "$dir_out" != "job disappeared while waiting" ]]; then
+    fail "$name" "job directory removed after the pid read: rc=$dir_rc out=$dir_out"
+  elif [[ "$pid_rc" -ne 124 || "$pid_out" != "wait timeout after 2s" ]]; then
+    fail "$name" "pid file removed after the pid read: rc=$pid_rc out=$pid_out"
+  else
+    pass "$name"
+  fi
+}
+
+# read_cli_job_state reads exit, then pid, then checks the worker. A job that is
+# removed between those reads, or that records its exit and ends between them,
+# must not read as dead or invalid. Copies of jobs.sh pause at one read each until
+# the test has changed the job, so every window is hit on every run.
+test_jobs_state_read_removal_and_finish_windows() {
+  local name="jobs status, result, list and stats read a job removed or finished mid-read as removed or finished"
+  local base="$TEST_ROOT/state-read-window" id="20260717-150002-123-1" problems=""
+  local case_name point setup action cmd want_rc want_out home hook worker reader rc out tries
+  mkdir -p "$base"
+  cat > "$base/hook.sh" <<'HOOK'
+  if [[ -n "${OMNILANE_TEST_STATE_HOOK:-}" && ! -e "$OMNILANE_TEST_STATE_HOOK.go" ]]; then
+    : > "$OMNILANE_TEST_STATE_HOOK.reached"
+    for ((hook_try = 0; hook_try < 200; hook_try++)); do
+      [[ -e "$OMNILANE_TEST_STATE_HOOK.go" ]] && break
+      sleep 0.05
+    done
+  fi
+HOOK
+  state_read_copy() { # point, before|after, anchor line in read_cli_job_state
+    mkdir -p "$base/repo-$1"
+    cp -R "$ROOT/scripts" "$base/repo-$1/scripts"
+    awk -v anchor="$3" -v mode="$2" -v hook="$base/hook.sh" '
+      mode == "before" && $0 == anchor { while ((getline l < hook) > 0) print l; close(hook); n++ }
+      { print }
+      mode == "after" && $0 == anchor { while ((getline l < hook) > 0) print l; close(hook); n++ }
+      END { if (n != 1) exit 1 }' "$ROOT/scripts/jobs.sh" > "$base/repo-$1/scripts/jobs.sh"
+  }
+  if ! state_read_copy exitread after '  if [[ -e "$directory/exit" || -L "$directory/exit" ]]; then' ||
+     ! state_read_copy pidcheck before '  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then' ||
+     ! state_read_copy pidread after '  if [[ -e "$directory/pid" || -L "$directory/pid" ]]; then' ||
+     ! state_read_copy identity before '      recorded_pid_state "$directory/pid" "$RECORDED_PID" || pid_state=$?'; then
+    fail "$name" "a read in read_cli_job_state no longer matches its injection anchor"
+    return
+  fi
+  while read -r case_name point setup action cmd want_rc; do
+    case "$case_name" in
+      finish-status) want_out="done exit=0" ;;
+      finish-result) want_out="the recorded output" ;;
+      finish-list) want_out="$id  done(exit 0)  {\"lane\":\"triage\",\"vendor\":\"codex\"}" ;;
+      removed-list) want_out="" ;;
+      removed-stats) want_out=$'jobs: sampled=0 succeeded=0 failed=0 running=0 invalid_exit=0 success_rate=0% pending=0 dead=0 expired=0 call_timed_out=0\ninvalid_metadata=0' ;;
+      pid-only-status) want_out="running" ;;
+      *) want_out="job disappeared while reading its state" ;;
+    esac
+    home="$base/home-$case_name"
+    hook="$home/hook"
+    worker=""
+    mkdir -p "$home/jobs/$id"
+    printf '{"lane":"triage","vendor":"codex"}\n' > "$home/jobs/$id/meta.json"
+    printf 'the recorded output\n' > "$home/jobs/$id/out.txt"
+    if [[ "$setup" == exit ]]; then
+      printf '0\n' > "$home/jobs/$id/exit"
+    else
+      # No start file: the older-job path, so the test needs no ps lstart format.
+      sleep 30 &
+      worker=$!
+      printf '%s\n' "$worker" > "$home/jobs/$id/pid"
+    fi
+    if [[ "$cmd" == status || "$cmd" == result ]]; then
+      OMNILANE_HOME="$home" OMNILANE_TEST_STATE_HOOK="$hook" \
+        bash "$base/repo-$point/scripts/jobs.sh" "$cmd" "$id" > "$home/out" 2>&1 &
+    else
+      OMNILANE_HOME="$home" OMNILANE_TEST_STATE_HOOK="$hook" \
+        bash "$base/repo-$point/scripts/jobs.sh" "$cmd" > "$home/out" 2>&1 &
+    fi
+    reader=$!
+    for ((tries = 0; tries < 200; tries++)); do
+      [[ -e "$hook.reached" ]] && break
+      sleep 0.05
+    done
+    case "$action" in
+      remove) mv "$home/jobs/$id" "$home/removed-job" ;;
+      remove-pid) mv "$home/jobs/$id/pid" "$home/removed-pid" ;;
+      finish)
+        printf '0\n' > "$home/jobs/$id/exit"
+        kill -TERM "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; worker="" ;;
+    esac
+    : > "$hook.go"
+    wait "$reader"
+    rc=$?
+    if [[ -n "$worker" ]]; then kill -TERM "$worker" 2>/dev/null; wait "$worker" 2>/dev/null; fi
+    out="$(cat "$home/out")"
+    if [[ ! -e "$hook.reached" ]]; then
+      problems="$problems; $case_name: the $point pause was not reached"
+    elif [[ "$rc" -ne "$want_rc" || "$out" != "$want_out" ]]; then
+      problems="$problems; $case_name: rc=$rc out=$out"
+    fi
+  done <<'CASES'
+finish-status pidcheck live finish status 0
+finish-result pidcheck live finish result 0
+finish-list pidcheck live finish list 0
+exit-removed-status exitread exit remove status 1
+exit-removed-result exitread exit remove result 1
+pid-removed-status pidread live remove status 1
+identity-removed-result identity live remove result 1
+removed-list identity live remove list 0
+removed-stats identity live remove stats 0
+pid-only-status identity live remove-pid status 0
+CASES
+  unset -f state_read_copy
+  if [[ -n "$problems" ]]; then
+    fail "$name" "${problems#; }"
+  else
+    pass "$name"
+  fi
+}
+
 test_jobs_cli_bounds_pid_metadata() {
   local name="jobs CLI bounds pid metadata" home outside id symlinked oversized
   name="jobs CLI bounds pid metadata"
@@ -1430,8 +1628,8 @@ test_job_timeout_supervisor_kills_process_group() {
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1570,8 +1768,8 @@ test_job_timeout_supervisor_forwards_term() {
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1750,8 +1948,8 @@ EOF
 
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.1
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
@@ -1787,8 +1985,8 @@ EOF
   rc=$?
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.2
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
   job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
@@ -1893,8 +2091,8 @@ EOF
   rc=$?
   if [[ -f "$pidfile" ]]; then read -r worker_pid child_pid < "$pidfile"; fi
   sleep 0.2
-  [[ -n "$worker_pid" ]] && kill -0 "$worker_pid" 2>/dev/null && worker_alive=yes
-  [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+  [[ -n "$worker_pid" ]] && process_running "$worker_pid" && worker_alive=yes
+  [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
   [[ "$child_alive" == yes ]] && kill -KILL "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill -KILL "$worker_pid" 2>/dev/null || true
   job_dir="$(find "$home/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null)"
@@ -2016,9 +2214,9 @@ EOF
   ticks=0
   while [[ "$ticks" -lt 100 ]]; do
     controller_alive=no; gate_alive=no; child_alive=no
-    [[ -n "$controller_pid" ]] && kill -0 "$controller_pid" 2>/dev/null && controller_alive=yes
-    [[ -n "$gate_pid" ]] && kill -0 "$gate_pid" 2>/dev/null && gate_alive=yes
-    [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null && child_alive=yes
+    [[ -n "$controller_pid" ]] && process_running "$controller_pid" && controller_alive=yes
+    [[ -n "$gate_pid" ]] && process_running "$gate_pid" && gate_alive=yes
+    [[ -n "$child_pid" ]] && process_running "$child_pid" && child_alive=yes
     [[ "$controller_alive" == no && "$gate_alive" == no && "$child_alive" == no ]] && break
     sleep 0.05
     ticks=$((ticks + 1))
@@ -3435,6 +3633,8 @@ test_jobs_cli_contains_malformed_public_metadata
 test_jobs_stats_aggregates_only_public_metadata
 test_jobs_json_is_versioned_and_private_by_default
 test_jobs_wait_is_bounded_and_terminal
+test_jobs_wait_removal_after_pid_read
+test_jobs_state_read_removal_and_finish_windows
 test_jobs_audit_is_private_read_only_and_fail_closed
 test_jobs_cli_bounds_pid_metadata
 test_jobs_prune_is_preview_first_and_preserves_running
@@ -4176,9 +4376,9 @@ EOF
   if [[ "$rc" -ne 0 ]]; then
     fail "$name" "cancel exited $rc: $out"; return
   fi
-  if kill -0 "$pid" 2>/dev/null; then
+  if process_running "$pid"; then
     sleep 1
-    kill -0 "$pid" 2>/dev/null && { fail "$name" "worker still alive after cancel"; kill -KILL "-$pid" 2>/dev/null; return; }
+    process_running "$pid" && { fail "$name" "worker still alive after cancel"; kill -KILL "-$pid" 2>/dev/null; return; }
   fi
 
   local final
@@ -4318,6 +4518,10 @@ test_mode_unification() {
 }
 test_mode_unification
 
+c16_out="$(bash "$ROOT/tests/test_c16_task_txt_preserved.sh" --omnilane-offline-child 2>&1)" &&
+  pass "all-runner boundary preserves task.txt and existing truncation" ||
+  fail "all-runner boundary preserves task.txt and existing truncation" "$c16_out"
+
 test_live_mailbox_case live-fail-fast "live mode rejects non-capable vendor"
 test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-shot"
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"
@@ -4328,6 +4532,8 @@ for scenario in gemini-success gemini-incomplete gemini-two gemini-empty gemini-
 done
 test_live_mailbox_case call-timeout-warnings "live per-call timeout dispatch warnings"
 test_live_mailbox_case codex-live-rpc "Codex live JSON-RPC mailbox and incremental output"
+test_live_mailbox_case codex-live-large-task "Codex live large task truncates only the worker copy"
+test_live_mailbox_case codex-live-large-task-cleanup "Codex live large task stops its job when a step fails"
 test_live_mailbox_case codex-close-deadline "Codex worker close deadline preserves queued input and precedes jobs timeout"
 close_floor_out="$(bash "$ROOT/tests/test_jobs_close_deadline_floor.sh" --omnilane-offline-child 2>&1)" &&
   pass "jobs close waits its full 11s deadline whatever the wall-clock second" ||
@@ -4380,7 +4586,7 @@ test_configure_model_catalogs() {
       return
     fi
   done <<'EOF'
-codex|1|12|1|gpt-5.3-codex-spark
+codex|1|13|1|gpt-5.3-codex-spark
 claude|2|15|1|claude-haiku-5-5
 claude|2|24|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official
@@ -4531,6 +4737,17 @@ test_completion_idle_fixes() {
   fi
 }
 test_completion_idle_fixes
+
+test_c2_thread_event_recovery() {
+  local name="thread event recovery ignores non-object events (C2-B06)" out rc=0
+  out="$(/bin/bash "$ROOT/tests/test_c2_thread_event_recovery.sh" --omnilane-offline-child 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_c2_thread_event_recovery
 
 test_native_executor() {
   local name="native executor protocol (offline fixtures)" out rc=0

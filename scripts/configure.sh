@@ -62,7 +62,8 @@ cfg_set() (
   fi
   tmp="$(mktemp "$LOCAL_FILE.tmp.XXXXXX")"
   # Keep cleanup local to this command, including validation/publication errors.
-  trap '/bin/rm -f -- "$tmp"' EXIT
+  omnilane_track_completion
+  trap 'omnilane_exit_trap $? /bin/rm -f -- "$tmp"' EXIT
   {
     echo "# updated by 'configure set' on $(date +%F) — first match per lane wins"
     echo "$lane: $spec"
@@ -106,6 +107,7 @@ cfg_set() (
   fi
   mv "$tmp" "$LOCAL_FILE"
   echo "set $lane -> $spec"
+  omnilane_mark_completed
 )
 
 cfg_get() {
@@ -152,7 +154,8 @@ cfg_unset() (
     printf 'omnilane: configure unset: failed to prepare routing candidate (exit %s)\n' "$status" >&2
     exit "$status"
   fi
-  trap '/bin/rm -f -- "$tmp"' EXIT
+  omnilane_track_completion
+  trap 'omnilane_exit_trap $? /bin/rm -f -- "$tmp"' EXIT
   # Retain every other row, including all comments and configure-set stamps.
   # Empty output is valid; a failed read must never reach the public file.
   if awk -v lane="$lane:" 'index($0, lane) != 1' "$LOCAL_FILE" 2>/dev/null > "$tmp"; then
@@ -172,6 +175,7 @@ cfg_unset() (
     exit "$status"
   fi
   echo "unset $lane (local override removed)"
+  omnilane_mark_completed
 )
 
 cfg_list() {
@@ -244,7 +248,7 @@ esac
 
 # Native CLI catalogs are pinned from each installed CLI's live model surface.
 # Dynamic/API catalogs stay curated — "c" always accepts an exact model ID.
-CODEX_MODELS=("gpt-6-astra" "gpt-6.1-sol" "gpt-6-sol" "gpt-6-luna" "gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
+CODEX_MODELS=("gpt-6-astra" "gpt-6.1-sol" "gpt-6.1-terra" "gpt-6-sol" "gpt-6-luna" "gpt-5.6" "gpt-5.6-sol" "gpt-5.6-terra" "gpt-5.6-luna" "gpt-5.5" "gpt-5.4" "gpt-5.4-mini" "gpt-5.3-codex-spark")
 CODEX_EFFORTS=("xhigh" "max" "ultra" "high" "medium" "low" "minimal" "none")
 CLAUDE_MODELS=("default" "best" "fable" "opus" "sonnet" "haiku" "opus[1m]" "sonnet[1m]" "opusplan" "claude-fable-5" "claude-fable-5-1" "claude-opus-5-5" "claude-opus-5" "claude-sonnet-5-5" "claude-haiku-5-5" "claude-sonnet-5" "claude-opus-4-8" "claude-opus-4-7" "claude-opus-4-6" "claude-opus-4-5-20251101" "claude-sonnet-4-6" "claude-sonnet-4-5-20250929" "claude-haiku-4-5" "claude-haiku-4-5-20251001")
 CLAUDE_EFFORTS=("max" "xhigh" "high" "medium" "low" "-")

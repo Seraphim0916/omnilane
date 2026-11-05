@@ -1318,6 +1318,14 @@ if [[ "$EXECUTOR_REASON" == "no-native-context" && -n "$AA_CALLER_CONTEXT" && -r
     echo "omnilane: the target is this harness's own vendor, yet it goes out through an external CLI because no capability file was given. To use your own sub-agent tool: omnilane native-context --workdir \"$WORKDIR\", then pass --native-context FILE (or --inherit for a worker on your own model and effort)" >&2
   fi
 fi
+# Without a recorded start time a job can never be signalled safely. A background
+# dispatch reports its ID before the worker writes one, so refuse here while the
+# caller can still see the reason and no job directory exists.
+can_record_start_time || {
+  [[ $? -ne "$PS_TIMED_OUT" ]] || { echo "omnilane: ps did not answer within ${PS_START_LIMIT}s, so no job was started." >&2; exit 1; }
+  echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)." >&2
+  exit 1
+}
 mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
@@ -1470,6 +1478,11 @@ if [[ -n "$QUOTA_DECISION" ]]; then
     --path="$JOB_DIR/quota-preflight.json" --decision="$QUOTA_JOB_DECISION"
 fi
 mv "$META_TMP" "$JOB_DIR/meta.json"
+# jobs cancel signals a process group only for jobs marked here. It is written
+# before the PID, and only where run_job starts the job supervisor.
+if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
+  (umask 077; printf '1\n' > "$JOB_DIR/supervised")
+fi
 
 if [[ -n "$THREAD_NAME" ]]; then
   # The goal caller requires exactly the claimed job ID on stdout. Its private
@@ -1597,7 +1610,7 @@ finish_job() {
   # Preserve early non-timeout results used by cancellation recovery if a stuck
   # finalizer needs SIGKILL. Whole-job timeout waits for the receipt attempt below.
   if [[ "$rc" -ne 124 ]]; then
-    (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+    publish_exit_file "$JOB_DIR/exit" "$rc"
   fi
   if [[ "${OMNILANE_INBOX:-1}" != "0" ]]; then
     write_completion_record "$rc" >/dev/null || true
@@ -1607,14 +1620,20 @@ finish_job() {
   # result, not this controller's exit: observers needing quiescence must also
   # wait for the recorded PID to disappear after this function returns.
   if [[ "$rc" -eq 124 ]]; then
-    (umask 077; printf '%s\n' "$rc" > "$JOB_DIR/exit")
+    publish_exit_file "$JOB_DIR/exit" "$rc"
   fi
   FINISHED_RC="$rc"
 }
 
 run_job() {
   local rc=0 entry_shell_options="$-"
-  write_current_pid_file "$JOB_DIR/pid"
+  if ! write_current_pid_file "$JOB_DIR/pid"; then
+    # Record the failure: a job with no PID and no exit reads as still starting.
+    set -e
+    finish_job 1
+    [[ "$entry_shell_options" == *e* ]] || set +e
+    return "$FINISHED_RC"
+  fi
   set +e
   if [[ -n "$JOB_TIMEOUT" || "$BACKGROUND" == "1" ]]; then
     # Supervise every background tree so cancel reaches its descendants even

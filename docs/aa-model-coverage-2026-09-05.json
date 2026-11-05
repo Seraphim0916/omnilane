@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 117,
+    "catalogEntries": 118,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -362,6 +362,63 @@
       "mappingStatus": "no-aa-row",
       "aaSlugs": [],
       "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as gpt-6-1-sol (max), gpt-6-1-sol-xhigh, -high, -medium and -low"
+    },
+    {
+      "vendor": "codex",
+      "access": "cli",
+      "catalogModel": "gpt-6.1-terra",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "high"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "low"
+        },
+        {
+          "lane": "fast-agentic",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "fast-agentic",
+          "position": "fallback",
+          "effort": "low"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this v4.2 inventory; config/aa-model-policy.json scores it from AA v4.3.2 as gpt-6-1-terra (max), gpt-6-1-terra-xhigh, -high, -medium, -low and -non-reasoning"
     },
     {
       "vendor": "codex",

@@ -59,9 +59,10 @@ def contextual_failure(verdict, descriptor, stdout, stderr):
     """Identify plain-text login/network failures without changing the proof engine."""
     if verdict[0] == "fail" and verdict[1] in ("invalid-json", "invalid-json-result") \
             and descriptor.get("exit_code") != 0:
-        reason = f"result-error: {(stderr or stdout)[:300]}"
-        if environment_reason(reason):
-            return verdict[0], reason, verdict[2], verdict[3]
+        for stream in (stderr, stdout):
+            reason = f"result-error: {stream[:300]}"
+            if environment_reason(reason):
+                return verdict[0], reason, verdict[2], verdict[3]
     return verdict
 
 
@@ -228,13 +229,40 @@ def advisor_disabled(vendor: str):
             os.environ[ADVISOR_KILL_SWITCH] = previous
 
 
+def engine_view(vendor: str, record: dict) -> dict:
+    """What the pinned engine may read of a failed codex probe: codex's final error, if any.
+
+    A codex run also connects every MCP server its plugins declare, and those log
+    their own 401s to stderr. The engine reads stderr, and verdict_reason's
+    stderr-review repeats it, so an unrelated failure would read as "not logged in".
+    This lives here because probe.py and probe_sweep.py are hashed into every proof.
+    """
+    if vendor != "codex" or record.get("verdict") == "pass":
+        return record
+    reason, _, review = str(record.get("verdict_reason") or "").partition("; stderr-review: ")
+    if "; codex-event:" not in reason:
+        # With no final event stderr is all there is; codex can print a login error there and exit.
+        kept = [line for line in review.split(" | ") if line and "mcp" not in line.lower()]
+        if kept:
+            reason += "; " + " | ".join(kept)
+    view = {key: value for key, value in record.items() if key not in ("stdout", "stderr")}
+    view["verdict_reason"] = reason
+    return view
+
+
+def not_authenticated(vendor: str, record: dict) -> bool:
+    import probe_sweep
+    return bool(probe_sweep.NOT_AUTHENTICATED.search(probe_sweep._text(engine_view(vendor, record))))
+
+
 def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
               retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False) -> dict:
     """Reuse the pinned sweep engine, exposing only eligible staged gaps to it.
 
     The original live evidence never changes. The pinned engine's handling of a
-    first-time login failure is preserved; retry login failures keep their new
-    negative evidence so the next unattended run can respect the cooldown.
+    first-time login failure is preserved, with its output moved out of the
+    evidence to root/unprobeable; retry login failures keep their new negative
+    evidence so the next unattended run can respect the cooldown.
     """
     import probe_sweep
     entries = {entry["config_id"]: entry for entry in probe_sweep.plan(vendor)}
@@ -265,7 +293,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
     for cid in skip_configs:
         skipped[cid] = snapshot(entries[cid]["name"])
 
-    def run_probe(name, argv, **kwargs):
+    def real_probe(name, argv, **kwargs):
         cid = by_name[name]["config_id"]
         if cid in skipped:
             return json.loads(skipped[cid]["json"])
@@ -288,6 +316,9 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
         captured[cid] = snapshot(name)
         return record
 
+    def run_probe(name, argv, **kwargs):
+        return engine_view(vendor, real_probe(name, argv, **kwargs))
+
     try:
         result = probe_sweep.sweep(vendor, root, log=log, only_missing=only_missing, run_probe=run_probe)
         # The original engine deletes descriptors for unauthenticated probes.
@@ -299,12 +330,21 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
             record = json.loads(saved["json"])
             if record.get("verdict") == "fail" and environment_reason(record.get("verdict_reason")):
                 restore(entries[cid]["name"], saved)
-                if probe_sweep.NOT_AUTHENTICATED.search(probe_sweep._text(record)):
+                if not_authenticated(vendor, record):
                     retry_login = True
                     if cid not in result["failed"]:
                         result["failed"].append(cid)
         if only_missing and retry_login and result["outcome"] == "unprobeable":
             result["outcome"] = "done"
+        if result["outcome"] == "unprobeable":
+            for cid, saved in captured.items():
+                name = entries[cid]["name"]
+                if not (root / "evidence" / f"{name}.json").exists():
+                    kept = root / "unprobeable"
+                    kept.mkdir(parents=True, exist_ok=True)
+                    for suffix, content in saved.items():
+                        (kept / f"{name}.unprobeable.{suffix}").write_bytes(content)
+                    log(f"omnilane: {vendor}: kept this run's output for {cid} in {kept}")
         return result
     finally:
         for cid, saved in originals.items():

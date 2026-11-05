@@ -50,6 +50,21 @@ def transport_guidance(vendor, config_id=None, candidates=(), environment_failur
                               + "登入失敗不需要加 --approve。")
 
 
+def team_wide_notice(vendor, team):
+    """An approval with no product identifier passes any program from that team and location."""
+    return (f"{vendor}: An approval for team {team} with no product identifier covers every program "
+            "that team signs at this location, not only this CLI. To bind it to the product, run "
+            f"omnilane resign --trust-origin {vendor} without --team while a verified factory sample "
+            f"is installed. / {vendor}：團隊 {team} 的核准沒有綁定產品識別名稱，會涵蓋該團隊在這個位置簽署的"
+            "所有程式，不只這個 CLI。要綁定到產品，請在安裝有效原廠樣本時，不加 --team 再執行一次 "
+            f"omnilane resign --trust-origin {vendor}。")
+
+
+def team_wide_notices(vendor, channels):
+    return [team_wide_notice(vendor, channel["team_id"]) for channel in channels
+            if channel.get("kind") == "developer-id" and channel.get("identifier_family") == ""]
+
+
 def origin_guidance(vendor, reason, current=None):
     """Source failures never suggest login or treat approval as signature repair."""
     vendor = vendor if vendor in VENDORS else "VENDOR"
@@ -87,6 +102,11 @@ def origin_guidance(vendor, reason, current=None):
     detail = json.dumps(observed, ensure_ascii=True)
     message = f"{vendor}: {en}. This attempt did not execute the CLI. Observed: {detail}. "
     message_zh = f"{vendor}：{zh}。這次沒有執行該執行檔。觀察值：{detail}。"
+    if reason == "identifier-changed" and isinstance(current.get("identifier"), str):
+        import cli_provenance
+        if cli_provenance.identifier_kept_whole(current["identifier"]):
+            message += "Its version annotation could also name a different program, so each new identifier needs its own approval. "
+            message_zh += "它的版本附註也可能是另一支程式的名稱，所以每個新的識別名稱都要各自核准。"
     if command:
         message += f"After reviewing the source, run: {command}. Then run omnilane resign --vendor {vendor}."
         message_zh += f"查明來源後執行：{command}；再執行 omnilane resign --vendor {vendor}。"

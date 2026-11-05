@@ -438,9 +438,12 @@ def origin_action(args, report, log):
                 raise origin_policy.OriginError("adhoc samples require an explicit ten-character --team")
             log(f"omnilane: {vendor}: kind={kind}, team={team}, identifier={current.get('identifier')}, "
                 f"path={entry['cli']}, Apple-chain={'verified' if kind == 'developer-id' else 'not observed yet'}")
+            sample = current if kind == "developer-id" else {"identifier": ""}
+            if not sample["identifier"]:
+                from verification_status import team_wide_notice
+                log("omnilane: " + team_wide_notice(vendor, team))
             if input(f"Trust this source on this host? Type TRUST {vendor} {team}: ").strip() != f"TRUST {vendor} {team}":
                 raise origin_policy.OriginError("explicit confirmation not received")
-            sample = current if kind == "developer-id" else {"identifier": ""}
             channel = origin_policy._channel("developer-id", entry["cli"], sample, team=team)
         else:
             if kind not in ("script", "no-platform-signature") or entry["cli_changed"] or not pinned:
@@ -710,6 +713,9 @@ def _resign(args, live: Path, anchors, log) -> int:
                 continue
             log(f"omnilane: {vendor}: kind={entry['codesign'].get('kind')}, "
                 f"channels={json.dumps(entry['origin_channels'])}")
+            from verification_status import team_wide_notices
+            for notice in team_wide_notices(vendor, entry["origin_channels"]):
+                log("omnilane: " + notice)
             if entry["cli_changed"] and not entry["origin_allowed"]:
                 from verification_status import origin_guidance
                 guidance = origin_guidance(vendor, entry["origin_reason"], entry["codesign"])

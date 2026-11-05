@@ -151,7 +151,7 @@ Record the signers of the unchanged executables from Step 2 once with `omnilane 
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement.
+For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement. An adhoc sample shows no factory identifier, so the `--team` form approves the whole team at that location: until you replace it, any program that team signed there can pass the source check and be probed, not only this CLI. `omnilane resign --check` and `omnilane doctor` show this as `"identifier_family": ""`. To bind the approval to the product, run `omnilane resign --trust-origin claude` again, without `--team`, while a verified factory sample is installed; it replaces the team-wide entry.
 
 ```bash
 omnilane resign --trust-adhoc claude   # only if you re-sign claude adhoc yourself
@@ -263,21 +263,21 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v4.3.2-2026-10-18-v1`: **approved by the operator on 2026-10-19**; 124 scored configurations and 9 unknown rows. It puts the three `gpt-5.4-mini` rows back in the score table without adding them to any lane. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-18.md).
+AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
 | ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
 | ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6.1 Terra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
 | 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
 | 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
@@ -925,7 +925,39 @@ working notes, including per-benchmark caveats, live in
   a Git worktree, so the automatic fuse above bounds that case and cleans the
   supervised process group. Omnilane neither initializes nor requires a repository.
 
+## ⬆️ Upgrade note: jobs started by an older version
+
+`jobs close` and `jobs cancel` now signal a worker only after `ps` confirms that its start time matches the one recorded in `pid.start` or `inbox.holder.pid.start`. A job started by an older version has no such file, so its PID cannot be confirmed:
+
+- While that PID is in use, `jobs close` and `jobs cancel` send no signal and exit 1, naming the PID. Check it with `ps -o lstart=,command= -p PID`. If it is the job's worker, stop it by hand (`kill -USR1 PID` for `close`, `kill -TERM PID` for `cancel`). If it is not, leave that process alone: the worker is gone, and you can move the job directory to the trash.
+- A dead PID behaves as before, and `status`, `wait` and `rm` keep their `kill -0` answer for such a job.
+- Jobs started after the upgrade are not affected.
+
+These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Two cases need no `ps` and are still answered there: a job with a recorded exit, and a recorded PID that `kill -0` reports as gone. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
+
+A live PID whose start time file is invalid is not treated as finished either: `status` reads `unknown (invalid start time file)`, and `wait`, `cancel`, `close` and `rm` refuse. Check it with `ps -o lstart=,command= -p PID`. If that PID is not the job's worker, the worker is gone and you can move the job directory to the trash by hand.
+
+A live PID whose start time differs from the recorded one is treated as another process: `status` answers `dead (worker gone, no exit recorded)` and `cancel` answers `not running` while that process keeps running. A note on stderr says so, with the command to compare the two.
+
 ## 📜 Release history
+
+## What's new in v0.59.0
+
+- After upgrading, run `omnilane resign` on every host because the AA snapshot has changed.
+- AA snapshot `aa-v4.3.2-2026-10-28-v1` adds six scored Claude Opus/Sonnet 5.5 configurations hosted by Antigravity (136 scored rows total). Existing scores and routing lanes are unchanged; the new configurations require host-local probes.
+- Jobs verify process identity and group membership before signalling, refuse unsafe cancellation, and report unknown state when `ps` is blocked. Older jobs without the new supervision metadata cannot be cancelled this way. Live close waits within its deadline; completion/removal races and exit-file publication are fixed.
+- Workers prohibit nested delegation, preserve `task.txt`, and clean tracked prompt copies. Codex work jobs get private temporary directories inside the workdir and optional validated provider headers; live inbox handling and Bash 3.2 failure exits are fixed.
+- `goal status` keeps completion times and result tails after inbox delivery; consumed records remain for 14 days instead of only the latest 200.
+- Faster long-text JSON escaping preserves locale-dependent output. Fixes also cover Python 3.9/3.10 host configuration parsing, retry diagnostics, self-exec statistics, completion schema checks and re-signing login-error classification; see CHANGELOG for details.
+- Source approvals preserve annotated signing identifiers, and team-wide approval prompts explain their scope. Native job readers no longer hold locks while printing results.
+- Upgrade: `npm i -g omnilane@0.59.0`.
+
+## What's new in v0.58.0
+
+- After upgrading, every host must run `omnilane resign` because the AA snapshot has changed.
+- AA snapshot `aa-v4.3.2-2026-10-27-v1` adds GPT-6.1 Terra with six scored efforts (130 scored rows in total). Terra joins selected lane fallback chains; existing scores and every lane's first choice stay unchanged.
+- Fixes in refusal messages, Codex live sessions, caller identity, result normalization and the parsing of status and overlay files; see CHANGELOG for the list.
+- Upgrade: `npm i -g omnilane@0.58.0`.
 
 ## What's new in v0.57.0
 

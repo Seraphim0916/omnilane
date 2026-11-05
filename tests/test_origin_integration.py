@@ -1,5 +1,6 @@
 """Operator commands, source gate and transport proofs with fake vendor tools."""
 import offline_env  # noqa: F401
+import builtins
 import copy
 import hashlib
 import io
@@ -37,6 +38,19 @@ SNAPSHOT_REBASE_BASE_SHA256 = {
     # The Gemini runner stopped silently truncating large tasks (G1).
     "scripts/runners/run-gemini.sh":
         "2e4c4c064f3228293ff63e882154be77bac256e6c40add3f25403f1e539ff12c",
+    # Workers are told not to delegate; Codex also loses multi_agent and gets a
+    # workdir temp dir; Claude thread parsing skips non-object events (C2-B06).
+    "scripts/runners/run-claude.sh":
+        "a84c59ec7adf04893b2833c503606717a3288ca290138e8176adc4bc42448945",
+    "scripts/runners/run-codex.sh":
+        "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
+    "scripts/runners/run-grok.sh":
+        "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
+    # Bash 3.2 EXIT traps keep a set -u abort nonzero (TRAP32).
+    "scripts/runners/run-openai-compat.sh":
+        "e6e7b0cbf600823035f1714f0c617af14ddf530ecd4954744ad76ccea123e4f2",
+    "scripts/runners/run-vote.sh":
+        "22825848e8dfedd27b16029917cfbd4105a07b6f06e15ea1b0cb9c7d7d46c618",
 }
 PROTECTED_SHA256 = {
     "scripts/lib/probe.py":
@@ -44,23 +58,23 @@ PROTECTED_SHA256 = {
     "scripts/lib/probe_sweep.py":
         "5b98a7facc460e94cfab573a88c4835df06b55f56f6f56d6576d0c5975d14bc7",
     "scripts/lib/transport_compat.py":
-        "76c93ae1805dbd264cffd7ca102983c9a5d90bf0a1646460aca0552237256656",
+        "27738e53553c3109eebfafb5c7b169cc7f95d9ad6901a60c9e9fea0af36b2e92",
     "config/transport-compatibility.json":
-        "32b9da5f6572427098e9527395a508d2565a0bc004cbf4ab80cff88b806f363b",
+        "26b1ce02fdb633948a6bd73394eff756fa2632d038a4fc0bdf0616513f001d39",
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
-        "a84c59ec7adf04893b2833c503606717a3288ca290138e8176adc4bc42448945",
+        "df7f0c623b412bd9912b00a6d0d9d2ab8104ce8ed32b9ccbc7caa4e7a1e86e8b",
     "scripts/runners/run-codex.sh":
-        "edf44622756a5c72358bbc6a105df191fa8c9d7899090a1590921da367fa721f",
+        "1532b0b60dedcdee038257fdd9c4897fcd3f6bddf8222fd97322d380cb202b9e",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":
         "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
     "scripts/runners/run-gemini.sh":
-        "27ac29d5631a2962e7741c9e6793c5f59e0038a34027e34aa73fca82febdd8af",
+        "b3c69019e8d756fe4e9e5afc41ead18a567bff2c52a3083c718e2eb8705fff57",
     "scripts/runners/run-grok.sh":
-        "120910ce341e9bbfebb33f64c7d6ac72e7578fcfe20642016a649f035f0b613b",
+        "3bb8018c38ca1c3ca5cdfc8a9c5cecdf8cedf5448408340069c44aab1488ae69",
     "scripts/runners/run-groq.sh":
         "29f741cdbe62535ed029e53ae9ee7cb8647fdb1a71179715e7e60ff21707237f",
     # Comment-only Kimi update with the official URL; runtime behavior is unchanged.
@@ -69,7 +83,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-mistral.sh":
         "4893c2dc96ef193d6bd679638c81960ec911da82aea47dd0cee77bd459d8825a",
     "scripts/runners/run-openai-compat.sh":
-        "e6e7b0cbf600823035f1714f0c617af14ddf530ecd4954744ad76ccea123e4f2",
+        "cecece9de551cd1f8f939fec3688d961e9307ee1e1dd4dc528791a034b34611b",
     "scripts/runners/run-opencode.sh":
         "7dd07be771fb8a60194cacd18b0eeeebd6535bd9a7d0a5e4bad314c87651c90d",
     "scripts/runners/run-openrouter.sh":
@@ -77,7 +91,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-qwen.sh":
         "aed846b06a287291c210b153f727153a537aae8bfc9b49894f431298db24183d",
     "scripts/runners/run-vote.sh":
-        "22825848e8dfedd27b16029917cfbd4105a07b6f06e15ea1b0cb9c7d7d46c618",
+        "59ee974d39e2683a8eb1acaa6143b63ad313696879e08e7332b75272032bddd2",
     "scripts/runners/run-zai.sh":
         "45a05bf343ec4523d5f51ae1491ee444b26246576e8366c92a8f7238217833bc",
 }
@@ -131,6 +145,76 @@ class IntegrationTests(unittest.TestCase):
         self.signers["claude"] = "TEST000001"
         self.update("claude")
         self.assertEqual(self.command("omnilane resign --vendor claude"), 0)
+
+    def trust_seen_before_prompt(self, command, answer):
+        """What was already on screen when the operator was asked to type TRUST."""
+        seen, prompts = [], []
+
+        def ask(prompt):
+            prompts.append(prompt)
+            seen.extend(str(call.args[0]) for call in builtins.print.call_args_list if call.args)
+            return answer
+        with patch.object(sys.stdin, "isatty", return_value=True), patch("builtins.input", side_effect=ask):
+            try:
+                code = self.run_resign(_argv=shlex.split(command)[2:])
+            except SystemExit as error:
+                code = error.code
+        self.assertEqual(len(prompts), 1)
+        return code, seen, prompts[0]
+
+    def doctor_output(self):
+        import runpy
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["overlay_health.py", str(ROOT)]), patch("sys.stdout", output):
+            with self.assertRaises(SystemExit):
+                runpy.run_path(str(ROOT / "scripts/lib/overlay_health.py"), run_name="__main__")
+        return output.getvalue()
+
+    def assert_team_wide_notice(self, text):
+        for part in ("covers every program", "team TEST000001", "without --team", "verified factory sample",
+                     "omnilane resign --trust-origin claude", "所有程式", "不加 --team"):
+            self.assertIn(part, text)
+
+    def test_a_team_wide_approval_says_so_before_asking_for_trust(self):
+        self.signers["claude"] = "adhoc"
+        command = "omnilane resign --trust-origin claude --team TEST000001"
+        # The notice comes before the question, whatever the answer turns out to be.
+        code, seen, prompt = self.trust_seen_before_prompt(command, "no")
+        self.assertEqual(code, 20)
+        self.assert_team_wide_notice("\n".join(seen))
+        self.assertFalse(op.policy_path().exists())
+        code, seen, prompt = self.trust_seen_before_prompt(command, "TRUST claude TEST000001")
+        self.assertEqual(code, 0)
+        self.assert_team_wide_notice("\n".join(seen))
+        self.assertEqual(prompt, "Trust this source on this host? Type TRUST claude TEST000001: ")
+        self.assertEqual(op.load()["vendors"]["claude"]["channels"][0]["identifier_family"], "")
+
+    def test_a_factory_sample_prompt_is_unchanged(self):
+        self.signers["claude"] = "TEST000001"
+        code, seen, prompt = self.trust_seen_before_prompt("omnilane resign --trust-origin claude", "TRUST claude TEST000001")
+        self.assertEqual(code, 0)
+        self.assertEqual(len(seen), 1, seen)
+        self.assertRegex(seen[0], r"^omnilane: claude: kind=developer-id, team=TEST000001, identifier=\S+, "
+                                  r"path=\S+, Apple-chain=verified$")
+        self.assertEqual(prompt, "Trust this source on this host? Type TRUST claude TEST000001: ")
+        self.assertNotEqual(op.load()["vendors"]["claude"]["channels"][0]["identifier_family"], "")
+
+    def test_check_and_doctor_explain_a_team_wide_channel(self):
+        self.signers["claude"] = "adhoc"
+        self.assertEqual(self.command("omnilane resign --trust-origin claude --team TEST000001",
+                                      answer="TRUST claude TEST000001"), 0)
+        self.command("omnilane resign --check")
+        self.assert_team_wide_notice("\n".join(self.printed))
+        self.assert_team_wide_notice(self.doctor_output())
+
+    def test_check_and_doctor_add_nothing_for_a_bound_channel(self):
+        self.signers["claude"] = "TEST000001"
+        self.assertEqual(self.command("omnilane resign --trust-origin claude", answer="TRUST claude TEST000001"), 0)
+        self.command("omnilane resign --check")
+        for text in ("\n".join(self.printed), self.doctor_output()):
+            self.assertIn("identifier_family", text)
+            self.assertNotIn("covers every program", text)
+            self.assertNotIn("所有程式", text)
 
     def test_case39_trust_does_not_authorize_dispatch_before_probe(self):
         self.bins["claude"].write_text("updated executable")

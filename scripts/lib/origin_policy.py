@@ -218,6 +218,27 @@ def _lock(path):
         os.close(fd)
 
 
+def _write_descriptor(fd, content):
+    # closefd=False: fdopen can close fd itself before raising, and then closing it
+    # here could hit whatever reused the number. This function alone owns fd, and the
+    # first failure is the one reported, so a later close cannot hide why a write failed.
+    failure = None
+    try:
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            try:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+            except BaseException as error:
+                failure = error
+                raise
+    except BaseException as error:
+        with contextlib.suppress(OSError):
+            os.close(fd)
+        raise (error if failure is None else failure)
+    os.close(fd)
+
+
 def _save(path, data):
     validate(data)
     payload = (json.dumps(data, indent=2) + "\n").encode()
@@ -226,23 +247,19 @@ def _save(path, data):
     raw = _read(path)
     if raw is not None:
         backup = Path(str(path) + ".before-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
-        fd = os.open(str(backup), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_descriptor(os.open(str(backup), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), raw)
     fd, name = tempfile.mkstemp(prefix=path.name + ".tmp-", dir=str(path.parent))
     try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_descriptor(fd, payload)
         if _read(path) != raw:
             raise OriginError("origin policy changed during write")
         os.replace(name, path)
-    finally:
-        if os.path.exists(name):
+    except BaseException:
+        with contextlib.suppress(OSError):
             os.unlink(name)
+        raise
+    if os.path.exists(name):
+        os.unlink(name)
 
 
 def record(vendor, channel, recorded=None, recorded_path=None, path=None):

@@ -12,6 +12,7 @@ MODE="$1"; WORKDIR="$2"; MODEL="$3"; EFFORT="$4"; PROMPT_FILE="$5"; OUTPUT_FILE=
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 truncate_payload "$PROMPT_FILE" 102400
 WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
   echo "omnilane: Claude workdir is not accessible" >&2
@@ -60,6 +61,7 @@ case "$MODE" in
     MODE_ARGS=(
       --settings '{"sandbox":{"enabled":false}}'
       --permission-mode bypassPermissions --dangerously-skip-permissions
+      --disallowedTools Agent Task
     )
     ;;
   *)
@@ -179,7 +181,7 @@ if [[ -n "$THREAD_MODE" ]]; then
 else
   ARGS+=(--output-format text)
 fi
-ARGS+=(-p "$(cat "$PROMPT_FILE")")
+ARGS+=(-p -- "$(cat "$PROMPT_FILE")")
 
 set +e
 (
@@ -220,6 +222,8 @@ with events_path.open(encoding="utf-8") as events:
         try:
             event = json.loads(raw_line)
         except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
             continue
         if event.get("type") == "result" and isinstance(event.get("result"), str):
             last_result = event["result"]

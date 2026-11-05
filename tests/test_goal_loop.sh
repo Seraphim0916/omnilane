@@ -19,7 +19,10 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-goal-tests.XXXXXX")"
 cleanup() {
   /bin/rm -r -- "$TEST_ROOT" 2>/dev/null || true
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+# Assigned again from $? as the trap starts; declared here for shellcheck (SC2154).
+omnilane_rc=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -63,6 +66,20 @@ dispatch_goal() {
   local home="$1" goal_id="$2" task="$3"
   OMNILANE_HOME="$home" FAKE_WORKER_CALLS="$home/worker.calls" \
     "$ROOT/bin/omnilane" goal dispatch "$goal_id" --mode work probe "$task"
+}
+
+# Until the worker publishes its PID, goal status counts a dispatched job as a
+# reservation, not as running: only a PID or an exit is evidence that it started.
+wait_for_started() {
+  local home="$1" job_id="$2" tries=0 job="$1/jobs/$2"
+  while [[ "$tries" -lt 100 ]]; do
+    if [[ -f "$job/pid" && ! -L "$job/pid" && -s "$job/pid" ]] || [[ -f "$job/exit" ]]; then
+      return 0
+    fi
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  fail "job did not record a PID within 10s: $job_id"
 }
 
 wait_for_job() {
@@ -206,6 +223,7 @@ case_note_status() {
   make_fixture "$home"
   goal_id="$(open_goal "$home" "observe jobs as they land" 4 30)"
   slow="$(dispatch_goal "$home" "$goal_id" "slow success")"
+  wait_for_started "$home" "$slow"
   running="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
   [[ "$running" == *"job $slow:"* && "$running" == *"exit=running"* ]] ||
     fail "status did not show running job: $running"
@@ -277,3 +295,4 @@ case "$CASE" in
   cli-surface) case_cli_surface ;;
   *) fail "unknown case: $CASE" ;;
 esac
+OMNILANE_COMPLETED=1

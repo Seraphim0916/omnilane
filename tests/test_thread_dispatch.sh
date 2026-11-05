@@ -19,7 +19,10 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omnilane-thread-tests.XXXXXX")"
 cleanup() {
   /bin/rm -r -- "$TEST_ROOT"
 }
-trap cleanup EXIT
+OMNILANE_COMPLETED=0
+# Assigned again from $? as the trap starts; declared here for shellcheck (SC2154).
+omnilane_rc=0
+trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 fail() {
   printf 'not ok - threaded dispatch: %s\n' "$1" >&2
@@ -353,9 +356,9 @@ GROK_ARGV1="$(sed -n '1p' "$FAKE_GROK_ARGV_LOG")"
   || fail "Grok first turn argv malformed: $GROK_ARGV1"
 assert_state "$GROK_STATE" grok-thread fake-grok "$GROK_SESSION1" 1 grok
 
-GROK_OUT2="$(OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
+OMNILANE_HOME="$HOME_DIR" "$ROOT/scripts/dispatch.sh" \
   --thread grok-thread --vendor grok --model fake-grok --effort low \
-  --single-shot consult 'grok turn two')" || fail "Grok second turn failed"
+  --single-shot consult 'grok turn two' >/dev/null || fail "Grok second turn failed"
 GROK_ARGV2="$(sed -n '2p' "$FAKE_GROK_ARGV_LOG")"
 [[ "$GROK_ARGV2" == *"--resume $GROK_SESSION1"* && "$GROK_ARGV2" != *"--session-id"* ]] \
   || fail "Grok second turn omitted resume id: $GROK_ARGV2"
@@ -499,3 +502,4 @@ set -e
 [[ ! -e "$TEST_ROOT/bad.json" ]] || fail "invalid thread name escaped store"
 
 printf 'ok - four-vendor threaded dispatch state resume refusals and jobs CLI\n'
+OMNILANE_COMPLETED=1

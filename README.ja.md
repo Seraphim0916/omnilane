@@ -133,7 +133,7 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。
+自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。adhoc サンプルには正規の識別子がないため、`--team` はその場所にあるチーム全体を承認します。置き換えるまでは、このチームが署名してそこに置いたどのプログラムも、この CLI に限らず出所チェックを通過して再検証の対象になります。`omnilane resign --check` と `omnilane doctor` には `"identifier_family": ""` と表示されます。製品に結び付けるには、正規の署名サンプルをインストールした状態で、`--team` なしで `omnilane resign --trust-origin claude` をもう一度実行します。チーム単位の承認が置き換えられます。
 
 ```bash
 omnilane resign --trust-adhoc claude   # 自分で claude を adhoc 署名している場合のみ
@@ -234,21 +234,21 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
-AA `aa-v4.3.2-2026-10-18-v1`：**approved（2026-10-19 に操作者が承認済み）**。124 件の採点済み構成と 9 件の未評価構成。`gpt-5.4-mini` の 3 構成を採点表に戻しましたが、どのレーンにも入れていません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-18.md)。
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
 | ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | アーキテクチャ判断、深い推論、セカンドオピニオン |
 | ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6.1 Terra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
@@ -771,6 +771,24 @@ work の別名ではありません。サービス管理など、work の境界�
   リポジトリの作成も要求しません。
 
 ## 📜 リリース履歴
+
+## v0.59.0 の新機能
+
+- AA スナップショットが変わったため、アップグレード後はすべてのホストで `omnilane resign` を実行してください。
+- AA スナップショット `aa-v4.3.2-2026-10-28-v1` に、Antigravity がホストする Claude Opus／Sonnet 5.5 の採点済み構成を 6 件追加しました（採点済みは計 136 行）。既存スコアとルーティングレーンは変わりません。新しい構成にはホストごとのプローブが必要です。
+- ジョブはシグナル送信前にプロセスの同一性とプロセスグループの所属を確認し、安全でないキャンセルを拒否します。`ps` がブロックされている場合は状態不明と報告します。新しい監視メタデータを持たない旧ジョブはこの方法ではキャンセルできません。ライブクローズは期限内で待機し、完了／削除の競合と終了ファイルの書き出しを修正しました。
+- ワーカーは入れ子のディスパッチを禁止し、`task.txt` を保持し、追跡対象のプロンプトのコピーを削除します。Codex の work ジョブには workdir 内の専用一時ディレクトリが割り当てられ、検証済みのプロバイダーヘッダーを任意で付けられます。ライブインボックスの処理と Bash 3.2 での失敗時の終了も修正しました。
+- `goal status` はインボックス配信後も完了時刻と結果の末尾を保持します。消費済みレコードは最新 200 件だけでなく 14 日間保持されます。
+- 長いテキストの JSON エスケープを高速化し、ロケール依存の出力は維持します。ほかに Python 3.9／3.10 でのホスト設定の解析、リトライ診断、自己実行の統計、完了スキーマの検査、再署名時のログインエラー分類も修正しました。詳細は CHANGELOG を参照してください。
+- ソース承認は注記付きの署名識別子を保持し、チーム全体の承認プロンプトはその適用範囲を説明します。ネイティブジョブの読み取り処理は、結果の出力中にロックを保持しなくなりました。
+- アップグレード：`npm i -g omnilane@0.59.0`。
+
+## v0.58.0 の新機能
+
+- AA スナップショットが変わったため、アップグレード後はすべてのホストで `omnilane resign` を実行してください。
+- AA スナップショット `aa-v4.3.2-2026-10-27-v1` に GPT-6.1 Terra の推論レベル別スコアを 6 行追加し、採点済みは計 130 行になりました。Terra を一部レーンの代替候補に追加しましたが、既存スコアと各レーンの第一候補は変わりません。
+- 拒否メッセージ、Codex のライブセッション、呼び出し元の識別、結果の正規化、状態ファイルと overlay ファイルの解析に関する不具合を修正しました。一覧は CHANGELOG を参照してください。
+- アップグレード：`npm i -g omnilane@0.58.0`。
 
 ## v0.57.0 の新機能
 

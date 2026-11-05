@@ -128,7 +128,7 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-若你會自行修補並自簽，執行 `omnilane resign --trust-adhoc claude`，信任同位置之後的自簽更新。另在**每台主機各自**安裝有效原廠樣本時，執行 `omnilane resign --trust-origin claude`；目前若是自簽，改用 `omnilane resign --trust-origin claude --team TEAMID`，將 `TEAMID` 換成你獨立查明的十碼團隊代號。此指令限終端機，必須輸入畫面指定的明確確認，沒有略過確認的旗標，也沒有預設團隊。原廠更新與後來的自簽更新各自需要補測。同位置信任不能證明替換檔是誰產生的。
+若你會自行修補並自簽，執行 `omnilane resign --trust-adhoc claude`，信任同位置之後的自簽更新。另在**每台主機各自**安裝有效原廠樣本時，執行 `omnilane resign --trust-origin claude`；目前若是自簽，改用 `omnilane resign --trust-origin claude --team TEAMID`，將 `TEAMID` 換成你獨立查明的十碼團隊代號。此指令限終端機，必須輸入畫面指定的明確確認，沒有略過確認的旗標，也沒有預設團隊。原廠更新與後來的自簽更新各自需要補測。同位置信任不能證明替換檔是誰產生的。自簽樣本看不到原廠識別名稱，所以加 `--team` 等於核准該團隊在這個位置的所有程式：在換掉之前，該團隊簽署並放在這裡的任何程式都能通過來源檢查並進入補測，不只這個 CLI。`omnilane resign --check` 和 `omnilane doctor` 會顯示為 `"identifier_family": ""`。要綁定到這個產品，請在安裝有效原廠樣本時，不加 `--team` 再執行一次 `omnilane resign --trust-origin claude`，它會取代團隊層級的那筆核准。
 
 ```bash
 omnilane resign --trust-adhoc claude   # 只有你自己會把 claude 簽成 adhoc 時才需要
@@ -225,21 +225,21 @@ flowchart LR
 
 ## 🛤️ 通道一覽(預設值;實際生效值跑 `scripts/dispatch.sh --list` 看)
 
-AA `aa-v4.3.2-2026-10-18-v1`：**approved（操作者已於 2026-10-19 核准）**；124 列計分、9 列未知。三列 `gpt-5.4-mini` 放回評分表，但不進任何車道。仍待主機傳輸驗證。[證據](docs/reports/aa-rebaseline-2026-10-18.md)。
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控依操作者當天「把新模型收進去」的指示核准）**；130 列計分、9 列未知。新增 GPT-6.1 Terra（六列，max 48），依價值規則放進 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各車道首選不變。仍待主機傳輸驗證。[證據](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 核准）。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已於 2026-10-08 核准）**；2026-10-08 已由官方確認 Haiku 5.5 的 `claude-haiku-5-5` 代號與五種強度，仍待主機傳輸探測。[證據](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra （xhigh） | Gemini 4 Argon （High） → GPT-6.1 Sol （xhigh） → Claude Opus 5.5 （medium） → GPT-6.1 Sol （high） → GPT-6 Astra （medium） → GPT-6.1 Sol （medium） → Claude Fable 5.1 （medium） → Claude Opus 5 （high） → Claude Sonnet 5.5 （high） → GPT-6 Astra （low） → Claude Opus 5 （medium） → Claude Opus 5.5 （low） → Claude Haiku 5.5 （xhigh） → Claude Sonnet 5.5 （medium） → Claude Opus 5 （low） → Grok 4.7 （high） → Gemini 3.8 Flash （High） | 最難的實作、深度除錯、正確性攸關的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol （medium） | Claude Opus 5.5 （medium） → GPT-6 Astra （medium） → GPT-6.1 Sol （high） → Claude Sonnet 5.5 （high） → GPT-6.1 Sol （low） → GPT-6 Astra （low） → GPT-6 Sol （high） → GPT-5.6 Sol （high） → Claude Opus 5.5 （low） → Claude Haiku 5.5 （xhigh） → Claude Sonnet 5.5 （medium） → Claude Haiku 5.5 （high） → Claude Haiku 5.5 （medium） → Claude Haiku 5.5 （low） → GPT-6 Sol （medium） → Claude Opus 5 （low） → GPT-6 Sol （low） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
+| 🔥 hardest-coding | GPT-6 Astra （xhigh） | Gemini 4 Argon （High） → GPT-6.1 Sol （xhigh） → Claude Opus 5.5 （medium） → GPT-6.1 Sol （high） → GPT-6 Astra （medium） → GPT-6.1 Sol （medium） → GPT-6.1 Terra （xhigh） → GPT-6.1 Terra （high） → GPT-6.1 Terra （medium） → Claude Fable 5.1 （medium） → Claude Opus 5 （high） → Claude Sonnet 5.5 （high） → GPT-6 Astra （low） → Claude Opus 5 （medium） → Claude Opus 5.5 （low） → Claude Haiku 5.5 （xhigh） → Claude Sonnet 5.5 （medium） → Claude Opus 5 （low） → Grok 4.7 （high） → Gemini 3.8 Flash （High） | 最難的實作、深度除錯、正確性攸關的修改 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol （medium） | Claude Opus 5.5 （medium） → GPT-6 Astra （medium） → GPT-6.1 Sol （high） → GPT-6.1 Terra （high） → GPT-6.1 Terra （medium） → Claude Sonnet 5.5 （high） → GPT-6.1 Sol （low） → GPT-6 Astra （low） → GPT-6 Sol （high） → GPT-5.6 Sol （high） → Claude Opus 5.5 （low） → Claude Haiku 5.5 （xhigh） → Claude Sonnet 5.5 （medium） → Claude Haiku 5.5 （high） → Claude Haiku 5.5 （medium） → Claude Haiku 5.5 （low） → GPT-6 Sol （medium） → Claude Opus 5 （low） → GPT-6 Sol （low） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 重構、搬遷、測試、大面積掃描等耐力工作 |
 | 🧹 triage | GPT-6 Luna （high） | GPT-5.6 Luna （high） → Gemini 4 Argon （High） → Gemini 3.8 Flash （Low） → Claude Haiku 5.5 （medium） → Claude Haiku 5.5 （low） → Claude Sonnet 5 （low） → Claude Haiku 4.5 | 大量掃描、第一輪篩選 |
 | ⚖️ hard-judgment | Claude Opus 5.5 （xhigh） | Claude Fable 5.1 （xhigh） → Gemini 4 Argon （High） → Claude Opus 5.5 （medium） → Claude Fable 5.1 （medium） → Claude Opus 5 （high） → Claude Opus 5 （medium） → Claude Opus 5.5 （low） → GPT-6.1 Sol （xhigh） → GPT-6 Astra （high） → Grok 4.7 （high） → Gemini 3.8 Flash （High） | 架構裁決、深度推理、第二意見 |
 | ✒️ taste-final | Claude Sonnet 5.5 （xhigh） | Claude Opus 5.5 （xhigh） → Claude Opus 5.5 （high） → Claude Sonnet 5.5 （high） → Claude Opus 5.5 （medium） → Grok 4.7 （high） → GPT-6 Astra （xhigh） → Claude Haiku 5.5 （xhigh） → Gemini 4 Argon （High） → Claude Haiku 5.5 （high） → Gemini 3.8 Flash （High） | 對外文字與風格裁決；評測不等於審美證明 |
 | 💬 consult | GPT-6 Astra （xhigh） | Claude Opus 5.5 （xhigh） → Grok 4.7 （high） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 直接點名模型諮詢；保留 `--vendor` 避免降級 |
-| 🎨 ui-draft | Claude Opus 5.5 （high） | GPT-6.1 Sol （high） → Claude Opus 5.5 （medium） → GPT-6 Astra （medium） → GPT-6.1 Sol （medium） → GPT-6.1 Sol （low） → Claude Opus 5.5 （low） → GPT-6 Astra （low） → GPT-6 Sol （medium） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
+| 🎨 ui-draft | Claude Opus 5.5 （high） | GPT-6.1 Sol （high） → GPT-6.1 Terra （high） → Claude Opus 5.5 （medium） → GPT-6 Astra （medium） → GPT-6.1 Sol （medium） → GPT-6.1 Sol （low） → Claude Opus 5.5 （low） → GPT-6 Astra （low） → GPT-6.1 Terra （low） → GPT-6 Sol （medium） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 只有附設計系統／參考圖時做 UI 草稿；不把評測誇大成審美證明 |
 | 📚 long-context | Claude Opus 5 （high） | Claude Opus 5 （medium） → Claude Opus 5 （low） → GPT-5.6 Terra （xhigh） → Gemini 4 Argon （High） → Gemini 3.8 Flash （High） | 長文件整合；上下文容量本身不證明任務品質 |
-| ⚡ fast-agentic | GPT-6.1 Sol （medium） | GPT-6 Astra （medium） → GPT-6.1 Sol （low） → GPT-6 Sol （low） → GPT-6 Astra （low） → Gemini 4 Argon （High） → Gemini 3.8 Flash （Medium） → Claude Sonnet 5.5 （medium） → Claude Opus 5.5 （low） | 高速多步驟工具迴圈、多模態檢查 |
+| ⚡ fast-agentic | GPT-6.1 Sol （medium） | GPT-6.1 Terra （medium） → GPT-6.1 Terra （low） → GPT-6 Astra （medium） → GPT-6.1 Sol （low） → GPT-6 Sol （low） → GPT-6 Astra （low） → Gemini 4 Argon （High） → Gemini 3.8 Flash （Medium） → Claude Sonnet 5.5 （medium） → Claude Opus 5.5 （low） | 高速多步驟工具迴圈、多模態檢查 |
 | 📡 live-search | Grok 4.7 （high） | Gemini 4 Argon （High） → Gemini 3.8 Flash （High） → Claude Opus 5.5 （low） → off | 即時 X／網頁搜尋；備援只有一般網搜，不等同 X 脈絡 |
 | 🚰 coding-overflow | Grok 4.7 （high） | Gemini 4 Argon （High） → Gemini 3.8 Flash （High） → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | 顯式 Codex 額度卸載；供應商失敗後不自動跨家重試 |
 | 🗳️ arbitrate | `off`（選配模型評審團） | — | 重大決定的內建意見評審團；預設停用，在 `routing.local.yaml` 啟用，每位評審每輪一次呼叫 |
@@ -759,6 +759,24 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
   不會自動執行 `git init`，也不要求使用者建立 repo。
 
 ## 📜 版本歷程
+
+## v0.59.0 新功能
+
+- 升級後，每台主機都要執行 `omnilane resign`，因為 AA 快照已換版。
+- AA 快照 `aa-v4.3.2-2026-10-28-v1` 新增 Antigravity 代管的 Claude Opus／Sonnet 5.5 六組評分設定，合計 136 筆。既有分數與車道不變；新增設定仍須通過各主機的探測。
+- 工作在傳送訊號前核對程序身分與群組，拒絕不安全的取消；`ps` 被擋時回報狀態未知。缺少新版監督資料的舊工作無法用此方式取消。即時關閉在期限內等待，並修正完成／移除競態與結束碼檔案寫入。
+- 工人禁止巢狀派工、保留原始 `task.txt`，並清理有追蹤的提示副本。Codex 寫入模式使用工作目錄內的獨立暫存目錄，可選用經驗證的供應者標頭；另修正即時收件匣與 Bash 3.2 失敗結束碼。
+- `goal status` 在完成通知送達後仍能讀取完成時間與結果尾段；已消費紀錄保留 14 天，不再只留最新 200 筆。
+- 加速長文字 JSON 跳脫並保留語系相關輸出；另修正 Python 3.9／3.10 主機設定解析、重試診斷、自行執行統計、完成紀錄格式檢查與重簽登入錯誤判定，詳見 CHANGELOG。
+- 來源核准保留帶註記的簽署識別碼，整個團隊的核准提示明說涵蓋範圍；原生工作讀取結果時不再持鎖列印。
+- 升級：`npm i -g omnilane@0.59.0`。
+
+## v0.58.0 新功能
+
+- 升級後，每台主機都必須執行 `omnilane resign`，因為 AA 快照已換版。
+- AA 快照 `aa-v4.3.2-2026-10-27-v1` 新增 GPT-6.1 Terra 的六個推理檔位評分，評分列合計 130 筆。Terra 加入部分車道的備選順序；既有分數與各車道首選維持不變。
+- 修正派工拒絕訊息、Codex 即時工作階段、主控身分讀取、結果正規化，以及狀態檔與 overlay 檔解析的多項問題；清單見 CHANGELOG。
+- 升級：`npm i -g omnilane@0.58.0`。
 
 ## v0.57.0 新功能
 

@@ -31,6 +31,277 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # Two concurrent codex execs in one target dir corrupt its job index — serialize.
 [[ "$VENDOR" == "codex" ]] && acquire_cwd_lock codex "$WORKDIR"
 
+# Isolate prompt copies before any mode or fallback path. Keep the boundary
+# copy raw: the vendor runners (and the first live message)
+# add worker rules themselves. Passing the decorated copy would double them.
+TASK_PROMPT_FILE="$PROMPT_FILE"
+PROMPT_COPY_DIR=""
+PROMPT_COPY_ID=""
+PROMPT_IDENTITIES=""
+live_mailbox_cleanup_ready=0
+job_worker_completed=0
+# Keeps EXIT inside the 1.09s between the 9.91s worker close budget and the 11s
+# jobs close wait. A timed-out cleanup leaves its copies in place and says where.
+PROMPT_CLEANUP_LIMIT=1
+# shellcheck disable=SC2329
+prompt_cleanup_bounded() {
+  perl -e '
+use POSIX qw(WNOHANG);
+use Time::HiRes qw(clock_gettime CLOCK_MONOTONIC sleep);
+my ($limit, $directory) = splice(@ARGV, 0, 2);
+# The child inherits these, so a signal cannot abort a cleanup that is bounded anyway.
+$SIG{$_} = "IGNORE" for qw(HUP INT TERM);
+$SIG{CHLD} = "DEFAULT";
+my $deadline = clock_gettime(CLOCK_MONOTONIC) + $limit;
+my $pid = fork();
+if (!defined $pid) {
+  print STDERR "omnilane: prompt copy cleanup could not start; left $directory\n";
+  exit 1;
+}
+if (!$pid) {
+  exec { $ARGV[0] } @ARGV;
+  exit 127;
+}
+while (clock_gettime(CLOCK_MONOTONIC) < $deadline - 0.05) {
+  exit($? >> 8) if waitpid($pid, WNOHANG) == $pid;
+  sleep 0.02;
+}
+kill "KILL", $pid;
+while (clock_gettime(CLOCK_MONOTONIC) < $deadline) {
+  last if waitpid($pid, WNOHANG) == $pid;
+  sleep 0.005;
+}
+print STDERR "omnilane: prompt copy cleanup exceeded ${limit}s; left $directory\n";
+exit 124;
+' "$PROMPT_CLEANUP_LIMIT" "$PROMPT_COPY_DIR" "$@" </dev/null
+}
+# shellcheck disable=SC2329
+prompt_cleanup_run() {
+  if command -v perl >/dev/null 2>&1; then
+    prompt_cleanup_bounded "$@"
+  else
+    echo "omnilane: no perl; prompt copy cleanup runs without a time limit" >&2
+    "$@"
+  fi
+}
+# One exit handler owns prompt copies, mailbox resources, and the cwd lock.
+# Install after lock acquisition, which sets its own EXIT trap.
+# shellcheck disable=SC2329
+cleanup_job_worker() {
+  local rc=$?
+  # Observed on Bash 3.2: a repeated signal here exits with EXIT already cleared and
+  # skips the cleanup below. Children inherit the ignored signals, so none can be
+  # stopped by one here: rm, wc, tr and cat just finish, python is bounded by the perl
+  # limit, and without perl nothing bounds it (prompt_cleanup_run warns about that).
+  trap '' TERM HUP INT
+  trap - EXIT
+  if [[ "$rc" -eq 0 && "$job_worker_completed" -ne 1 ]]; then rc=1; fi
+  if [[ "$live_mailbox_cleanup_ready" -eq 1 ]]; then cleanup_live_mailbox || true; fi
+  # Both the directory and each creation must still have their original
+  # identity. Names alone never confer ownership, even in a private directory.
+  if [[ -n "$PROMPT_COPY_DIR" && -n "$PROMPT_COPY_ID" ]]; then
+    prompt_cleanup_run python3 -c '
+import os, stat, sys, tempfile, uuid
+path, identity, receipts = sys.argv[1:]
+try:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+except OSError:
+    sys.exit(0)
+try:
+    info = os.fstat(fd)
+    if "%s:%s" % (info.st_dev, info.st_ino) != identity:
+        sys.exit(0)
+    owned = dict(record.split("=", 1) for record in receipts.split())
+    for name in os.listdir(fd):
+        try:
+            info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            if not stat.S_ISREG(info.st_mode) or "%s:%s" % (info.st_dev, info.st_ino) != owned.get(name):
+                continue
+            # Hide the candidate name from the parent listing in a fresh 0700
+            # directory, pinning that directory for every inspection/removal.
+            quarantine = tempfile.mkdtemp(prefix=".cleanup-", dir=path)
+            quarantine_name = os.path.basename(quarantine)
+            quarantine_fd = os.open(quarantine_name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                os.rename(name, name, src_dir_fd=fd, dst_dir_fd=quarantine_fd)
+                info = os.lstat(name, dir_fd=quarantine_fd)
+                # macOS has no inode-based unlink; a same-uid writer that opens
+                # this 0700 subdirectory can still race the final check/unlink.
+                if stat.S_ISREG(info.st_mode) and "%s:%s" % (info.st_dev, info.st_ino) == owned.get(name):
+                    os.unlink(name, dir_fd=quarantine_fd)
+                else:
+                    # Rename back under a fresh recovery name, leaving any
+                    # concurrent occupant of the original name untouched.
+                    recovered = ".preserved-" + uuid.uuid4().hex + "-" + name
+                    os.rename(name, recovered, src_dir_fd=quarantine_fd, dst_dir_fd=fd)
+                    print("omnilane: left foreign file " + recovered, file=sys.stderr)
+            finally:
+                try:
+                    os.rmdir(quarantine_name, dir_fd=fd)
+                except OSError:
+                    print("omnilane: left foreign file " + quarantine_name, file=sys.stderr)
+                finally:
+                    os.close(quarantine_fd)
+        except FileNotFoundError:
+            pass
+    for name in os.listdir(fd):
+        print("omnilane: left foreign file " + name, file=sys.stderr)
+    current = os.lstat(path)
+    if not os.listdir(fd) and (current.st_dev, current.st_ino) == (os.fstat(fd).st_dev, os.fstat(fd).st_ino):
+        os.rmdir(path)
+finally:
+    os.close(fd)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_IDENTITIES" || true
+  fi
+  release_cwd_lock || true
+  exit "$rc"
+}
+trap cleanup_job_worker EXIT
+# job-timeout.pl signals both the worker and its group, so TERM often arrives twice.
+# Observed on Bash 3.2: a read -t interrupted by one of these leaves its timeout armed,
+# and when that fires during EXIT the shell spins at full CPU. No read -t runs after this.
+trap "trap '' ALRM TERM HUP INT; exit 143" TERM
+trap "trap '' ALRM TERM HUP INT; exit 129" HUP
+trap "trap '' ALRM TERM HUP INT; exit 130" INT
+# Refuse all pre-existing legacy sibling paths without overwriting or deleting
+# them. New copies live only in this invocation's exclusive 0700 directory.
+for copy_path in "${TASK_PROMPT_FILE}.worker" "${TASK_PROMPT_FILE}.runner" "${TASK_PROMPT_FILE}.runner.worker"; do
+  if [[ -e "$copy_path" || -L "$copy_path" ]]; then
+    echo "omnilane: pre-existing worker prompt path: $copy_path" >&2
+    exit 125
+  fi
+done
+PROMPT_COPY_DIR="$(umask 077; mktemp -d "${TASK_PROMPT_FILE}.copies.XXXXXX")" || exit 1
+PROMPT_COPY_ID="$(python3 -c 'import os,sys; s=os.lstat(sys.argv[1]); print("%s:%s" % (s.st_dev,s.st_ino))' "$PROMPT_COPY_DIR")" || exit 1
+# Allocate every helper target in the parent shell. Receipts never reside on
+# disk and are inherited read-only by runner/substitution processes. Updating
+# a target uses its verified open fd, so no child must register a new inode.
+for prompt_name in task.txt.runner task.txt.runner.worker task.txt task.txt.worker; do
+  PROMPT_IDENTITIES="$PROMPT_IDENTITIES $prompt_name=$(python3 -c '
+import os, sys
+directory, identity, name = sys.argv[1:]
+root = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    info = os.fstat(root)
+    if "%s:%s" % (info.st_dev, info.st_ino) != identity:
+        sys.exit("omnilane: prompt directory identity changed")
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=root)
+    try:
+        info = os.fstat(fd)
+        print("%s:%s" % (info.st_dev, info.st_ino), flush=True)
+    finally:
+        os.close(fd)
+finally:
+    os.close(root)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$prompt_name")" || exit 1
+done
+
+owned_prompt_operation() {
+  python3 -c '
+import os, pathlib, sys
+directory, directory_id, receipts, action, source, argument = sys.argv[1:]
+root = pathlib.Path(directory).resolve()
+root_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    info = os.fstat(root_fd)
+    if "%s:%s" % (info.st_dev, info.st_ino) != directory_id:
+        sys.exit("omnilane: prompt directory identity changed")
+    owned = dict(record.split("=", 1) for record in receipts.split())
+    src = pathlib.Path(source)
+    if action == "copy":
+        target = root / argument
+        data = src.read_bytes()
+    else:
+        if src.parent.resolve() != root:
+            sys.exit("omnilane: prompt outside private directory")
+        target = src.with_name(src.name + ".worker") if action == "decorate" else src
+        if action == "decorate":
+            if target.is_symlink() or (target.exists() and not target.is_file()):
+                sys.exit(125)
+            data = argument.encode() + src.read_bytes()
+        else:
+            cap, original_size = argument.split(":", 1)
+            cap = int(cap)
+            data = src.read_bytes()
+            if len(data) <= cap:
+                sys.exit(0)
+            data = data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original_size).encode() + data[-(cap // 4):]
+    fd = os.open(target.name, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
+    with os.fdopen(fd, "wb") as out:
+        info = os.fstat(out.fileno())
+        if "%s:%s" % (info.st_dev, info.st_ino) != owned.get(target.name):
+            sys.exit("omnilane: prompt file identity changed")
+        # The open fd pins the owned inode even if its name is replaced now.
+        out.write(data)
+        out.flush()
+        out.truncate()
+    if action == "decorate":
+        print(target)
+finally:
+    os.close(root_fd)
+' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_IDENTITIES" "$@"
+}
+
+worker_prompt_file() {
+  local header
+  printf -v header '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"
+  owned_prompt_operation decorate "$1" "$header" || return 125
+}
+
+untracked_truncate_definition="$(declare -f truncate_payload)"
+eval "${untracked_truncate_definition/truncate_payload/untracked_truncate_payload}"
+unset untracked_truncate_definition
+truncate_payload() {
+  local size
+  if [[ ! "${1%/*}" -ef "$PROMPT_COPY_DIR" ]]; then
+    untracked_truncate_payload "$@"
+    return $?
+  fi
+  size="$(wc -c < "$1")" || return 1
+  owned_prompt_operation truncate "$1" "${2:-140000}:$size"
+}
+
+# Keep the runner in a fresh Bash process, including its own PID and traps.
+# Install the tracked helpers immediately after the runner loads common.
+# A one-shot DEBUG hook avoids wrapping source (which corrupts BASH_SOURCE
+# on Bash 3.2). It is removed before any runner work or trap setup occurs.
+run_job_runner() {
+  local runner="$RUNNER" exec_compat='exec "$(dirname "${BASH_SOURCE[0]}")/run-openai-compat.sh" "$@"'
+  # Custom runners without the shared prompt helpers run unchanged.
+  IFS= read -r runner_header < "$RUNNER"
+  case "$runner_header" in
+    '#!'*bash*) ;;
+    *) exec "$RUNNER" "$@" ;;
+  esac
+  # A direct-API wrapper only names its vendor before exec, which would drop the
+  # tracked helpers. Load the shared runner here, but only if the wrapper does
+  # nothing else; any other content keeps the plain exec and its copies are reported.
+  if grep -Fxq "$exec_compat" "$RUNNER" &&
+    [[ -z "$(grep -Fxv -e "$exec_compat" -e 'set -euo pipefail' -e "export OMNILANE_OAI_VENDOR=$VENDOR" "$RUNNER" | grep -Ev '^(#.*)?$' || true)" ]]; then
+    export OMNILANE_OAI_VENDOR="$VENDOR"
+    runner="${RUNNER%/*}/run-openai-compat.sh"
+  fi
+  if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$runner"; then
+    exec "$RUNNER" "$@"
+  fi
+  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_IDENTITIES
+  exec bash -c '
+    overrides="$1"
+    runner="$2"
+    shift 2
+    set -T
+    trap '\''if [[ "${BASH_SOURCE[0]:-}" == "$runner" ]] && declare -F worker_prompt_file >/dev/null; then
+      eval "$overrides"
+      trap - DEBUG
+      set +T
+    fi'\'' DEBUG
+    builtin source "$runner" "$@"
+  ' bash "$(declare -f owned_prompt_operation worker_prompt_file truncate_payload untracked_truncate_payload)" "$runner" "$@"
+}
+RUNNER_PROMPT_FILE="$PROMPT_COPY_DIR/task.txt.runner"
+owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt.runner || exit 1
+PROMPT_FILE="$RUNNER_PROMPT_FILE"
+
 emit_mode_notice() {
   local notice="$1" notice_file="${OUTPUT_FILE%/*}/mode-notice.txt"
   printf '%s\n' "$notice" >&2
@@ -47,7 +318,7 @@ run_single_shot() {
   set +e
   (
     unset OMNILANE_INBOX
-    "$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE"
+    run_job_runner "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE"
   )
   rc=$?
   set -e
@@ -108,6 +379,7 @@ if [[ "$SESSION_MODE" == "single-shot" ]]; then
   fi
   rc=$?
   set -e
+  job_worker_completed=1
   exit "$rc"
 fi
 
@@ -137,27 +409,37 @@ CLOSE_DRAIN_TIMEOUT=0.1
 CLOSE_RUNNER_GRACE=7.5
 CLOSE_TERM_GRACE=0.1
 CLOSE_KILL_GRACE=0.1
+# A slow runner start is only cut short by the budget that would end it anyway.
+RUNNER_OPEN_TIMEOUT=600
+[[ "${OMNILANE_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_TIMEOUT"
+[[ "${OMNILANE_RUNNER_OPEN_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]] && RUNNER_OPEN_TIMEOUT="$OMNILANE_RUNNER_OPEN_TIMEOUT"
+# open_gives_up adds to this in shell arithmetic, which wraps at 64 bits.
+[[ "${#RUNNER_OPEN_TIMEOUT}" -le 15 ]] || RUNNER_OPEN_TIMEOUT=999999999999999
 runner_writer_open=0
+runner_writer_opened=0
 inbox_open=0
 events_reader_open=0
 forward_spool_open=0
 runner_pid=""
 
-# Invoked by the EXIT trap below.
+# Invoked by the shared job cleanup once the mailbox is prepared.
 # shellcheck disable=SC2329
 cleanup_live_mailbox() {
+  # PID first: a reader that sees a PID with no start time takes it for an older job.
+  rm "$HOLDER_PID_FILE" 2>/dev/null || true
+  rm "$HOLDER_PID_FILE.start" 2>/dev/null || true
   if [[ -n "${forward_spool:-}" ]]; then rm "$forward_spool" 2>/dev/null || true; fi
   if [[ "$forward_spool_open" -eq 1 ]]; then exec 6<&-; exec 7>&-; forward_spool_open=0; fi
   if [[ "$runner_writer_open" -eq 1 ]]; then exec 3>&-; runner_writer_open=0; fi
   if [[ "$inbox_open" -eq 1 ]]; then exec 4>&-; inbox_open=0; fi
   if [[ "$events_reader_open" -eq 1 ]]; then exec 5<&-; events_reader_open=0; fi
-  rm "$READY_FILE" "$HOLDER_PID_FILE" "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" 2>/dev/null || true
+  rm "$READY_FILE" "$HOLDER_PID_FILE" "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$RUNNER_INBOX_FIFO.opened" 2>/dev/null || true
 }
 
 prepare_live_mailbox() {
   local path old_umask rc=0
-  for path in "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$HOLDER_PID_FILE" \
-    "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
+  for path in "$INBOX_FIFO" "$RUNNER_INBOX_FIFO" "$RUNNER_INBOX_FIFO.opened" \
+    "$HOLDER_PID_FILE" "$HOLDER_PID_FILE.start" "$READY_FILE" "$EVENTS_FILE" "$EVENTS_ALIAS"; do
     [[ ! -e "$path" && ! -L "$path" ]] || return 1
   done
   old_umask="$(umask)"
@@ -292,12 +574,13 @@ if ! prepare_live_mailbox; then
   run_single_shot "omnilane: $VENDOR live mailbox unavailable because FIFO setup failed; ran in single-shot mode"
   rc=$?
   set -e
+  job_worker_completed=1
   exit "$rc"
 fi
 
 trap 'close_requested=1' USR1
 trap 'close_requested=1' PIPE
-trap cleanup_live_mailbox EXIT
+live_mailbox_cleanup_ready=1
 if [[ "$VENDOR" == "codex" ]]; then
   # Allocate once before publishing the holder PID. Reader and writer offsets
   # are independent; unlink immediately and keep this 0600 file private to us.
@@ -308,8 +591,14 @@ if [[ "$VENDOR" == "codex" ]]; then
   rm "$forward_spool"
   forward_spool=""
 fi
+# The first live message gets the same worker rules a single-shot runner
+# sends; later sends reach the worker through the inbox and stay verbatim.
+owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt || exit 1
+FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_COPY_DIR/task.txt")" || exit 1
+# Cap only the copy that is sent: task.txt is the preserved record. The rules
+# sit at the head of the copy, which truncate_payload keeps.
 if [[ "$VENDOR" != "gemini" ]]; then
-  truncate_payload "$PROMPT_FILE" 102400
+  truncate_payload "$FIRST_MESSAGE_FILE" 102400
 fi
 # Codex input must not be consumed by Bash read: an interrupted partial read
 # can discard bytes before the close trap runs. Pump raw bytes instead. The
@@ -372,7 +661,7 @@ if [[ "$VENDOR" == "gemini" ]]; then
   # Build before starting the runner so invalid UTF-8 fails explicitly.
   INITIAL_MESSAGE_FILE="$JOB_DIR/initial-gemini-message.json"
   private_job_files "$INITIAL_MESSAGE_FILE"
-  python3 - "$PROMPT_FILE" "$INITIAL_MESSAGE_FILE" <<'PY'
+  python3 - "$FIRST_MESSAGE_FILE" "$INITIAL_MESSAGE_FILE" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -387,7 +676,7 @@ message = {"event": "user", "message": {"role": "user", "content": [
 Path(sys.argv[2]).write_bytes((json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
 PY
 else
-  INITIAL_TEXT="$(cat "$PROMPT_FILE")"
+  INITIAL_TEXT="$(cat "$FIRST_MESSAGE_FILE")"
 fi
 if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
   FOREMAN_SESSION_VALUE="$FOREMAN_SESSION"
@@ -398,25 +687,132 @@ fi
 write_current_pid_file "$HOLDER_PID_FILE"
 export OMNILANE_INBOX="$RUNNER_INBOX_FIFO"
 aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || exit $?
-"$RUNNER" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
+run_job_runner "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE" 6<&- 7>&- &
 runner_pid=$!
 
-# Open the runner writer only after its FIFO reader starts.
-exec 3> "$RUNNER_INBOX_FIFO"
-runner_writer_open=1
+# Open the runner writer only after its FIFO reader starts. A plain blocking
+# open cannot do this safely: USR1 makes Bash 3.2 fail it with EINTR, while newer
+# Bash runs the trap and blocks again, and a reader that never comes blocks both
+# forever. A helper polls without blocking instead. When a reader exists it holds
+# both FIFO ends, so our open cannot block and a reader already in read() sees no
+# EOF, and says "ready". The parent only runs builtins on the helper's 20ms ticks,
+# so close, runner exit and the deadline (helper EOF) all converge. The helper dies
+# of SIGPIPE on its first tick after the parent closes FD 8. Once we hold the writer
+# the helper's reader must be gone before the prompt is written, or a reader that
+# already left would not fail the write. Bash 3.2 cannot wait for a process
+# substitution and its $! is not the helper, so a marker file tells the helper to
+# leave and its EOF is the receipt. A helper that stops answering must not hold the
+# worker, so every read has a timeout. Bash 3.2 returns 1 for both a timeout and EOF,
+# but a timeout takes at least a second: a failed read within the same second is EOF.
+open_runner_writer() {
+  local helper_ready=0 line read_rc read_began open_tries=0 helper_gone_by
+  local open_gives_up=$((SECONDS + RUNNER_OPEN_TIMEOUT + 5))
+  local release_marker="$RUNNER_INBOX_FIFO.opened"
+  exec 8< <(perl -MFcntl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
+    $| = 1;
+    my ($path, $limit, $marker) = @ARGV;
+    my $deadline = clock_gettime(CLOCK_MONOTONIC) + $limit;
+    my ($writer, $reader);
+    while (1) {
+      if (!$writer) {
+        if (sysopen($writer, $path, O_WRONLY | O_NONBLOCK)) {
+          sysopen($reader, $path, O_RDONLY | O_NONBLOCK) or exit 2;
+        } else {
+          undef $writer;
+          exit 2 unless $!{ENXIO};
+          if (clock_gettime(CLOCK_MONOTONIC) >= $deadline) { print "deadline\n"; exit 1 }
+        }
+      }
+      exit 0 if -e $marker;
+      print $writer ? "ready\n" : ".\n";
+      sleep(0.02);
+    }
+  ' "$RUNNER_INBOX_FIFO" "$RUNNER_OPEN_TIMEOUT" "$release_marker" 6<&- 7>&-)
+  while [[ "$close_requested" -eq 0 && "$runner_writer_opened" -eq 0 ]]; do
+    read_began=$SECONDS
+    if IFS= read -r -t 1 line <&8; then
+      if [[ "$line" == "ready" ]]; then helper_ready=1; fi
+      if [[ "$line" == "deadline" ]]; then
+        emit_mode_notice "omnilane: $VENDOR runner did not open its inbox within ${RUNNER_OPEN_TIMEOUT}s" || true
+        close_requested=1
+      elif [[ "$helper_ready" -eq 1 ]]; then
+        if exec 3> "$RUNNER_INBOX_FIFO"; then
+          runner_writer_open=1
+          runner_writer_opened=1
+        else
+          open_tries=$((open_tries + 1))
+          if [[ "$open_tries" -ge 3 ]]; then close_requested=1; fi
+        fi
+        continue
+      fi
+    else
+      read_rc=$?
+      if [[ "$close_requested" -eq 0 && "$read_rc" -le 128 && "$SECONDS" -eq "$read_began" ]]; then
+        emit_mode_notice "omnilane: $VENDOR inbox helper exited before the runner opened its inbox" || true
+        close_requested=1
+      fi
+    fi
+    if [[ "$close_requested" -eq 0 ]]; then
+      if ! kill -0 "$runner_pid" 2>/dev/null; then
+        natural_runner_exit=1
+        close_requested=1
+      elif [[ "$SECONDS" -ge "$open_gives_up" ]]; then
+        emit_mode_notice "omnilane: $VENDOR inbox helper stopped responding; the prompt was not delivered" || true
+        close_requested=1
+      fi
+    fi
+  done
+  if [[ "$runner_writer_opened" -eq 1 ]]; then
+    (umask 077; : > "$release_marker")
+    helper_gone_by=$((SECONDS + 5))
+    while :; do
+      read_began=$SECONDS
+      if IFS= read -r -t 1 line <&8; then
+        :
+      else
+        read_rc=$?
+        if [[ "$read_rc" -le 128 && "$SECONDS" -eq "$read_began" ]]; then break; fi
+      fi
+      if [[ "$SECONDS" -ge "$helper_gone_by" ]]; then
+        # It still holds the read end, so writing now would look like a delivery.
+        emit_mode_notice "omnilane: $VENDOR inbox helper did not exit; the prompt was not delivered" || true
+        exec 3>&-
+        runner_writer_open=0
+        runner_writer_opened=0
+        close_requested=1
+        break
+      fi
+    done
+    rm "$release_marker" 2>/dev/null || true
+  fi
+  exec 8<&-
+  if [[ "$runner_writer_opened" -eq 0 ]]; then release_runner_reader; fi
+}
+
+# A reader blocked in open(2) with no writer would outlive its killed parent.
+# Letting one writer appear briefly gives it EOF instead.
+release_runner_reader() {
+  perl -MFcntl -MTime::HiRes=sleep -e '
+    sysopen(my $writer, $ARGV[0], O_WRONLY | O_NONBLOCK) and sleep(0.05);
+  ' "$RUNNER_INBOX_FIFO" 6<&- 7>&- 2>/dev/null || true
+}
+
+open_runner_writer
 exec 4<> "$INBOX_FIFO"
 inbox_open=1
 exec 5< "$EVENTS_FILE"
 events_reader_open=1
 sent_turns=1
 last_turn_events_bytes=0
-if [[ "$VENDOR" == "gemini" ]]; then
-  if ! cat "$INITIAL_MESSAGE_FILE" >&3; then close_requested=1; fi
-else
-  initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
-  if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+if [[ "$runner_writer_opened" -eq 1 ]]; then
+  if [[ "$VENDOR" == "gemini" ]]; then
+    if ! cat "$INITIAL_MESSAGE_FILE" >&3; then close_requested=1; fi
+  else
+    initial_payload="$(live_encode_message "$VENDOR" "$JOB_ID" "$FOREMAN_SESSION_VALUE" "$INITIAL_TEXT")"
+    if ! write_runner_line "$initial_payload"; then close_requested=1; fi
+  fi
+  (umask 077; : > "$READY_FILE")
 fi
-(umask 077; : > "$READY_FILE")
 
 last_activity=$SECONDS
 last_result_event=""
@@ -429,7 +825,8 @@ while kill -0 "$runner_pid" 2>/dev/null || [[ "$VENDOR" == "codex" || "$close_re
   fi
   if [[ "$close_requested" -ne 0 ]]; then
     rm "$READY_FILE" 2>/dev/null || true
-    if [[ "$VENDOR" == "codex" ]]; then
+    # Without a writer no send was ever accepted: inbox.ready was never published.
+    if [[ "$VENDOR" == "codex" && "$runner_writer_opened" -eq 1 ]]; then
       # Bash 3.2 has no fractional read timeout. Bound the *whole* drain,
       # including backpressure, rather than granting each line another second.
       # Retain unforwarded bytes and report failure instead of silently dropping
@@ -572,7 +969,12 @@ if [[ "$close_requested" -eq 1 ]]; then
   # 0.1s drain + 7.5s grace + 0.1s TERM + 0.1s KILL = 7.8s.
   # With the input pump's 1s read + 0.05s write and supervisor's 1s cleanup,
   # plus up to 0.02s clock shutdown per phase, 9.91s precedes jobs close's
-  # 11s deadline (timed on a sub-second clock).
+  # 11s deadline (timed on a sub-second clock). That holds for a signal sent
+  # when close starts. A close that signals late, once the holder PID appears,
+  # keeps the same 11s, so it can return 124 while this shutdown is still in
+  # budget; its message says so. A close during the writer open has no pump,
+  # drain or grace, which more than pays for its two reader releases. A frozen
+  # helper delays the start by at most 1s before the writer opens and about 5s after.
   # Codex retains its full 3+2+1+1=7s normal shutdown budget.
   # Close is already committed. Repeated close requests must not interrupt wait.
   trap '' USR1
@@ -602,19 +1004,33 @@ if [[ "$close_requested" -eq 1 ]]; then
     wait "$timer_pid" 2>/dev/null || true
     ! kill -0 "$runner_pid" 2>/dev/null
   }
-  if ! wait_runner_for "$CLOSE_RUNNER_GRACE"; then
+  # A runner that never got a writer holds no message, so no turn can be lost.
+  close_grace="$CLOSE_RUNNER_GRACE"
+  if [[ "$runner_writer_opened" -eq 0 ]]; then close_grace="$CLOSE_TERM_GRACE"; fi
+  if ! wait_runner_for "$close_grace"; then
     runner_forced=1
     kill -TERM "$runner_pid" 2>/dev/null || true
-    if ! wait_runner_for "$CLOSE_TERM_GRACE"; then
+    # A runner's TERM trap only runs once its foreground child ends, and only the
+    # supervisor's group TERM reaches that child. KILLing the runner here would skip
+    # its EXIT cleanup, so a supervised runner that never got a message is left to
+    # the group; one that did keeps the deadline above.
+    if ! wait_runner_for "$CLOSE_TERM_GRACE" &&
+       [[ "$runner_writer_opened" -eq 1 || "${OMNILANE_JOB_SUPERVISED:-0}" != "1" ]]; then
       kill -KILL "$runner_pid" 2>/dev/null || true
       wait_runner_for "$CLOSE_KILL_GRACE" || close_drain_failed=1
     fi
   fi
+  # The runner may have reached open(2) after the first release.
+  if [[ "$runner_writer_opened" -eq 0 ]]; then release_runner_reader; fi
 fi
 if [[ "$close_requested" -eq 1 ]] && kill -0 "$runner_pid" 2>/dev/null; then
   runner_rc=1
   close_drain_failed=1
-  emit_mode_notice "omnilane: runner did not stop within close deadline" || true
+  if [[ "$runner_writer_opened" -eq 0 && "${OMNILANE_JOB_SUPERVISED:-0}" == "1" ]]; then
+    emit_mode_notice "omnilane: runner had not stopped when the worker closed; the job supervisor stops it" || true
+  else
+    emit_mode_notice "omnilane: runner did not stop within close deadline" || true
+  fi
 else
   wait "$runner_pid" 2>/dev/null
   runner_rc=$?
@@ -635,6 +1051,10 @@ elif [[ "$natural_runner_exit" -eq 1 ]]; then
   # into success because an earlier turn happened to emit a result event.
   rc="$runner_rc"
   if [[ "$rc" -eq 0 && "$close_drain_failed" -ne 0 ]]; then rc=1; fi
+  if [[ "$rc" -eq 0 && "$runner_writer_opened" -eq 0 ]]; then
+    rc=1
+    emit_mode_notice "omnilane: $VENDOR runner exited before opening its inbox; the prompt was not delivered" || true
+  fi
 elif [[ "$close_requested" -eq 1 ]]; then
   # A vendor-emitted result always stands. A transcript the normalizer recovered
   # stands only for an idle-cap close whose runner still exited on its own: that
@@ -717,4 +1137,5 @@ fi
 # with 158 instead of $rc.
 trap '' USR1
 trap - PIPE
+job_worker_completed=1
 exit "$rc"

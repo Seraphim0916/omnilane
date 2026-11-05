@@ -32,6 +32,9 @@ try:
     (job / 'meta.json').write_text('{"lane":"triage","vendor":"claude","session_mode":"live"}')
     # Stands in for a worker that takes the close signal but never finishes.
     holder = subprocess.Popen(['/bin/sh', '-c', 'trap "" USR1; exec sleep 60'], start_new_session=True)
+    start = subprocess.run(['/bin/ps', '-o', 'lstart=', '-p', str(holder.pid)], check=True, capture_output=True,
+                           text=True, timeout=10, env=dict(os.environ, TZ='UTC', LC_ALL='C')).stdout.strip()
+    (job / 'inbox.holder.pid.start').write_text(start + '\n')
     (job / 'inbox.holder.pid').write_text(f'{holder.pid}\n')
     env = {k: v for k, v in os.environ.items() if not k.startswith('OMNILANE_AA_')}
     env.update(OMNILANE_HOME=str(home), OMNILANE_AA_OPERATOR_ASSERTED_HUMAN='1')
@@ -44,7 +47,8 @@ try:
     elapsed = time.monotonic() - started
     assert result.returncode == 124, (result.returncode, result.stdout, result.stderr)
     assert elapsed >= 10.95, ('jobs close gave up before its 11s deadline', elapsed)
-    assert elapsed < 12.0, ('jobs close overran its 11s deadline', elapsed)
+    # A loaded machine must not fail this. test_close_holder_early.py checks the exact deadline on a virtual clock.
+    assert elapsed < 18.0, ('jobs close overran its 11s deadline', elapsed)
     print(f'PASS jobs close waited {elapsed:.3f}s before 124', flush=True)
 finally:
     if holder is not None and holder.poll() is None:

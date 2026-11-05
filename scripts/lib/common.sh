@@ -34,7 +34,7 @@ private_job_files() (
 
 # The unquoted backslash case pattern intentionally matches one backslash.
 # shellcheck disable=SC1003
-json_escape() {
+json_escape_loop() {
   local s="$1" out="" ch escaped code i
   for ((i = 0; i < ${#s}; i++)); do
     ch="${s:i:1}"
@@ -47,7 +47,11 @@ json_escape() {
       $'\r') out="$out\\r" ;;
       $'\t') out="$out\\t" ;;
       *)
-        LC_CTYPE=C printf -v code '%d' "'$ch"
+        # Control characters are one byte in every ASCII-compatible encoding, so
+        # no locale switch is needed. With LANG unset, Homebrew bash (libintl)
+        # cannot restore a temporary LC_CTYPE: it warns once per character and
+        # stays in C, which re-reads an earlier multibyte character by bytes.
+        printf -v code '%d' "'$ch"
         if [[ "$code" -ge 0 && "$code" -lt 32 ]]; then
           printf -v escaped '\\u%04x' "$code"
           out="$out$escaped"
@@ -58,6 +62,46 @@ json_escape() {
     esac
   done
   printf '%s' "$out"
+}
+
+# Escape bytes without decoding UTF-8 or passing the payload in argv.
+json_escape_python() {
+  printf '%s' "$1" | python3 -I -S -B -c '
+import sys
+table = [bytes((c,)) for c in range(256)]
+for c in range(32):
+    table[c] = b"\\u%04x" % c
+for c, escaped in ((8, b"\\b"), (12, b"\\f"), (10, b"\\n"),
+                   (13, b"\\r"), (9, b"\\t"), (34, b"\\\""), (92, b"\\\\")):
+    table[c] = escaped
+sys.stdout.buffer.write(b"".join(map(table.__getitem__, sys.stdin.buffer.read())))
+' 2>/dev/null
+}
+
+# Python escapes bytes, the loop escapes characters as Bash decodes them now.
+# They agree when no character can hold an ASCII trailing byte: in Big5, GBK and
+# Shift_JIS a 0x5c trailing byte would be doubled. Variable names are not
+# enough, because a failed setlocale keeps the previous encoding, so ask Bash.
+# Measured with bash 3.2 as ${#} of c3 80, a4 5c, f0 9f 98 80, 95 5c:
+#   C, POSIX, ISO8859-1: 2 2 4 2   UTF-8: 1 2 1 2   Big5: 2 1 4 1
+#   GBK, GB18030: 1 1 2 1          Shift_JIS: 2 2 2 1   EUC: 1 1 3 2
+# Python is used for UTF-8 (one character for four bytes, a4 5c split) and for
+# one character per byte; any other answer uses the loop.
+json_escape_python_locale() {
+  local a=$'\xc3\x80' b=$'\xa4\x5c' c=$'\xf0\x9f\x98\x80' d=$'\x95\x5c'
+  [[ ${#c} -eq 1 && ${#b} -eq 2 ]] || [[ "${#a} ${#b} ${#c} ${#d}" == "2 2 4 2" ]]
+}
+
+# The Bash loop is quadratic on Bash 3.2 and starting Python costs about 10 ms;
+# from 1024 characters Python is measured faster in C and UTF-8 locales. Routing
+# works without python3, so a missing or failing interpreter must use the loop.
+json_escape() {
+  local out
+  if ((${#1} >= 1024)) && json_escape_python_locale && out="$(json_escape_python "$1")"; then
+    printf '%s' "$out"
+  else
+    json_escape_loop "$1"
+  fi
 }
 
 json_file_round_trip_valid() {
@@ -214,16 +258,57 @@ current_pid() { # Call with direct redirection; command substitution records its
 }
 
 write_current_pid_file() {
-  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" start_tmp="${1}.start.tmp.$$-$RANDOM"
+  local old_umask rc=0 pid="" start="" reason start_rc
   old_umask="$(umask)"
   umask 077
   current_pid > "$tmp" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then pid="$(cat "$tmp")" || rc=$?; fi
+  if [[ "$rc" -eq 0 ]]; then
+    if start="$(pid_file_start_time "$pid" "$PS_START_LIMIT")"; then
+      printf '%s\n' "$start" > "$start_tmp" || rc=$?
+    else
+      start_rc=$?
+      rc=1
+      reason="omnilane: could not read the start time of PID $pid with ps, so this job did not start: it could never be signalled safely. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)."
+      [[ "$start_rc" -ne "$PS_TIMED_OUT" ]] || reason="omnilane: ps did not answer within ${PS_START_LIMIT}s for the start time of PID $pid, so this job did not start: it could never be signalled safely."
+      echo "$reason" >&2
+      # `jobs result` reads this file; a background worker's stderr goes elsewhere.
+      printf '%s\n' "$reason" >> "${path%/*}/out.txt.stderr.log" 2>/dev/null || true
+    fi
+  fi
   umask "$old_umask"
+  if [[ "$rc" -eq 0 ]]; then mv "$start_tmp" "${path}.start" || rc=$?; fi
   if [[ "$rc" -ne 0 ]]; then
-    rm "$tmp" 2>/dev/null || true
+    rm "$tmp" "$start_tmp" 2>/dev/null || true
     return "$rc"
   fi
-  mv "$tmp" "$path"
+  # The PID file is the publish point. Published the other way round, a reader
+  # would take a new job for an older one that recorded no start time.
+  mv "$tmp" "$path" || {
+    rc=$?
+    rm "$tmp" "${path}.start" 2>/dev/null || true
+    return "$rc"
+  }
+}
+
+# Written in place, the exit file is empty between its truncation and the write,
+# and a reader then takes the job for one with an invalid exit. The rename
+# publishes it whole. Only the temporary this call created is removed.
+publish_exit_file() { # path, exit code
+  local path="$1" tmp="${1}.tmp.$$-$RANDOM" old_umask rc=0
+  [[ ! -d "$path" ]] || return 1
+  old_umask="$(umask)"
+  umask 077
+  if (set -C; : > "$tmp") 2>/dev/null; then
+    printf '%s\n' "$2" > "$tmp" || rc=$?
+    if [[ "$rc" -eq 0 ]]; then mv "$tmp" "$path" || rc=$?; fi
+    if [[ "$rc" -ne 0 ]]; then rm "$tmp" 2>/dev/null || true; fi
+  else
+    rc=1
+  fi
+  umask "$old_umask"
+  return "$rc"
 }
 
 process_start_time() { # pid -> stable ps(1) start timestamp
@@ -234,6 +319,80 @@ process_start_time() { # pid -> stable ps(1) start timestamp
   value="${value%"${value##*[![:space:]]}"}"
   [[ -n "$value" ]] || return 1
   printf '%s\n' "$value"
+}
+
+# Start times are compared as strings, so writer and reader must agree on the
+# zone. process_start_time keeps the caller's zone: session records rely on it.
+# ps can hang. A query answers unknown after PS_QUERY_LIMIT seconds. Starting a job
+# waits PS_START_LIMIT, because failing a job on a loaded machine costs more than
+# the wait. A timeout returns PS_TIMED_OUT, which is 128 + SIGALRM.
+PS_QUERY_LIMIT=5
+PS_START_LIMIT=30
+PS_TIMED_OUT=142
+pid_file_start_time() { # pid [seconds]
+  local pid="$1" limit="${2:-$PS_QUERY_LIMIT}" value
+  [[ "$pid" =~ ^[1-9][0-9]{0,9}$ ]] || return 1
+  # alarm survives exec, and so would an inherited SIG_IGN, so the handler is reset first.
+  value="$(TZ=UTC LC_ALL=C perl -e '$SIG{ALRM} = "DEFAULT"; alarm shift; exec { $ARGV[0] } @ARGV; exit 126' \
+    "$limit" ps -o lstart= -p "$pid" 2>/dev/null)" || {
+    local rc=$?
+    # Without a perl that runs there is no limit, as before this limit existed: the foreground path needs no perl.
+    # 126 can also be a ps that cannot be executed. Then ps fails here too, and whatever status it gives comes back.
+    [[ "$rc" -eq 127 || "$rc" -eq 126 ]] || return "$rc"
+    value="$(TZ=UTC LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null)" || return $?
+  }
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  [[ -n "$value" ]] || return 1
+  printf '%s\n' "$value"
+}
+
+# dispatch refuses on this answer, and tests/run.sh reports it, so the two cannot disagree.
+can_record_start_time() { pid_file_start_time "$$" "$PS_START_LIMIT" >/dev/null; }
+
+# kill -0 answers this without ps, even where a sandbox blocks ps. A number beyond the PID range is no process either.
+pid_is_gone() { # pid
+  local answer
+  answer="$(LC_ALL=C kill -0 "$1" 2>&1)" && return 1
+  [[ "$answer" == *"No such process"* || "$answer" == *"arguments must be process or job IDs"* ]]
+}
+
+recorded_pid_identity() { # pid file, pid -> 0 same process, 1 gone or reused, 2 ps unusable, 3 invalid start file, 4 no start file (older job), 5 PID file removed meanwhile
+  local path="$1" pid="$2" start_path="${1}.start" size recorded live
+  local LC_ALL=C
+  if [[ ! -e "$start_path" && ! -L "$start_path" ]]; then
+    [[ -e "$path" || -L "$path" ]] && return 4
+    return 5
+  fi
+  # jobs list comes here once per job directory. A gone process has no identity to
+  # compare, so it needs neither the start file nor ps; a refused probe needs both.
+  pid_is_gone "$pid" && return 1
+  if [[ ! -f "$start_path" || -L "$start_path" ]]; then
+    [[ -e "$path" || -L "$path" ]] || return 5
+    return 3
+  fi
+  size="$(wc -c 2>/dev/null < "$start_path" | tr -d '[:space:]')" || size=""
+  if ! recorded="$(cat "$start_path" 2>/dev/null)" || [[ -z "$size" ]]; then
+    [[ -e "$path" || -L "$path" ]] || return 5
+    return 3
+  fi
+  [[ "$size" -le 129 && "$recorded" =~ ^[\ -~]{1,128}$ ]] || return 3
+  if ! live="$(pid_file_start_time "$pid")"; then
+    # ps can fail on this PID and still answer for others, so its failure says
+    # nothing about the process. Only kill -0 can show that it is gone.
+    pid_is_gone "$pid" && return 1
+    return 2
+  fi
+  [[ "$live" == "$recorded" ]] || return 1
+}
+
+older_pid_state() { # pid with no recorded start time -> 0 alive, 1 dead, 2 cannot tell
+  kill -0 "$1" 2>/dev/null && return 0
+  pid_is_gone "$1" && return 1
+  # A sandbox can refuse kill -0 as well. It blocks ps there too, and only then
+  # is a failed probe not evidence that the process is gone.
+  pid_file_start_time "$$" >/dev/null && return 1
+  return 2
 }
 
 process_parent_pid() {
@@ -610,7 +769,29 @@ acquire_cwd_lock() { # vendor, workdir — the lock keys on the TARGET dir, not 
   }
   OMNILANE_LOCK_OWNER="$LOCK_OWNER_VALUE"
   OMNILANE_LOCKDIR="$lockdir"
-  trap 'release_cwd_lock' EXIT
+  if [[ -n "${OMNILANE_COMPLETED+x}" ]]; then
+    trap 'omnilane_exit_trap $? release_cwd_lock' EXIT
+  else
+    trap 'release_cwd_lock' EXIT
+  fi
+}
+
+# Bash 3.2 runs an EXIT trap with $? = 0 after a set -u abort, so a trap whose
+# last command succeeds turns the abort into exit 0. Scripts that opt in call
+# omnilane_track_completion early and omnilane_mark_completed just before every
+# successful exit; an exit status of 0 without that mark becomes 1.
+# Usage: trap 'omnilane_exit_trap $? CMD...' EXIT
+omnilane_track_completion() { OMNILANE_COMPLETED=0; }
+omnilane_mark_completed() { OMNILANE_COMPLETED=1; }
+omnilane_exit_trap() {
+  local rc="$1"
+  shift
+  trap - EXIT
+  if [[ "$rc" -eq 0 && "${OMNILANE_COMPLETED:-0}" -ne 1 ]]; then
+    rc=1
+  fi
+  if [[ $# -gt 0 ]]; then "$@"; fi
+  exit "$rc"
 }
 
 release_cwd_lock() {
@@ -650,6 +831,31 @@ truncate_payload() { # file, cap_bytes
       printf '\n\n--- TRUNCATED (original: %s bytes) ---\n\n' "$size"
       tail -c $((cap / 4)) "$f"; } > "$f.tmp"
     mv "$f.tmp" "$f"
+  fi
+}
+
+OMNILANE_WORKER_RULES_MARKER='[omnilane worker rules]'
+# No quote characters: fixtures and logs re-split the worker argv with shlex.
+OMNILANE_WORKER_RULES='You are an omnilane worker. Do this task yourself. Do not call dispatch.sh or omnilane route, and do not use the sub-agent tools of your own host (for example Agent/Task, spawn_agent, spawn_subagent) to hand any part of it to another agent. Do not bypass an explicit permission or safety denial. A substitute that stays within the limit, a tool a hook directs you to, and unaffected authorized work may continue. If you cannot continue within the limits, report the exact error.'
+
+# The task file stays byte-identical (task.txt is the preserved record); the
+# runner sends a sibling copy with the rules in front. Rebuilding it from the
+# task each time keeps a retried candidate from stacking the header.
+worker_prompt_file() { # task file -> prints the file to send
+  local f="$1" out="$1.worker" tmp
+  if [[ -L "$out" || ( -e "$out" && ! -f "$out" ) ]]; then
+    echo "omnilane: unsafe worker prompt path" >&2
+    return 125
+  fi
+  # mktemp creates a new, unique file (O_EXCL): a planted name next to the
+  # task cannot turn the redirect into a write onto task.txt itself.
+  tmp="$(umask 077; mktemp "$out.XXXXXX")" || return 125
+  if { printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"; cat "$f"; } > "$tmp" &&
+    mv -f "$tmp" "$out"; then
+    printf '%s\n' "$out"
+  else
+    rm "$tmp" 2>/dev/null || true
+    return 125
   fi
 }
 

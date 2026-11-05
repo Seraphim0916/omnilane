@@ -354,16 +354,18 @@ Data lives under `$OMNILANE_HOME/jobs/ID/`: `task.txt`, `meta.json`,
 final ID under a private publication lock. Listing only accepts final ID names,
 so it never observes construction or an interrupted hidden stage. Normal
 failures clean only the creator's own stage; collisions leave the existing
-final directory untouched. The context itself and raw provider logs are not
+final directory untouched. `native.lock` serializes `complete-native` and
+`cancel` only: each replaces `native.json` in one step, so readers need no lock,
+and no command writes output while holding it. The context itself and raw provider logs are not
 stored. Completion is a
 caller attestation, not independent backend authentication or proof that the
 model honored the task; the parent still verifies evidence. Do not submit
 tokens, cookies, credential/session/cache values or raw logs in any public field.
 
-Only `list`, `status`, `result`, `cancel`, `complete-native` integrate native
-jobs. Native `send`, `watch`, `close`, `wait`, `retry`, `tail`, and `rm` reject;
-inspect status while the host owns execution. Native records do not have CLI
-exit markers and are not included in completed-CLI stats/recommend/prune.
+Native jobs work with `list`, `status`, `result`, `wait`, `cancel`,
+`complete-native`, `stats` and `recommend`. Native `send`, `watch`, `close`,
+`retry`, `tail`, and `rm` reject; inspect status while the host owns execution.
+`prune` skips native jobs.
 Do not use CLI-only UI/audit/goal-loop summaries as native acceptance evidence.
 
 ## Explicit existing-agent reuse（明示重用）

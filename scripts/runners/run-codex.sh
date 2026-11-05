@@ -40,6 +40,35 @@ else
 fi
 [[ -n "$EFFORT" && "$EFFORT" != "-" ]] && ARGS+=(-c "model_reasoning_effort=\"$EFFORT\"")
 ARGS+=(-c 'approval_policy="never"')
+# Controls both launch paths need: `codex exec` gets them through ARGS, the
+# live app-server through --codex-arg. A worker that spawns its own sub-agents
+# escapes the one-dispatch budget.
+SHARED_ARGS=(--disable multi_agent -c 'shell_environment_policy.set.OMNILANE_DEPTH="1"')
+
+# Optional, off unless both are set: the built-in `openai` provider id cannot
+# be overridden, so extra request headers need a provider of our own that keeps
+# the ChatGPT login (requires_openai_auth). The value of
+# OMNILANE_CODEX_HTTP_HEADERS is a TOML inline table of string headers, e.g.
+# {"x-headroom-bypass"="true"}; it is parsed and re-serialized so it can only
+# ever become http_headers, never another provider field.
+CODEX_SETUP="$(dirname "${BASH_SOURCE[0]}")/../lib/codex_worker_setup.py"
+CODEX_PROVIDER_BASE_URL="${OMNILANE_CODEX_PROVIDER_BASE_URL:-}"
+CODEX_HTTP_HEADERS="${OMNILANE_CODEX_HTTP_HEADERS:-}"
+if [[ -n "$CODEX_PROVIDER_BASE_URL" || -n "$CODEX_HTTP_HEADERS" ]]; then
+  [[ -n "$CODEX_PROVIDER_BASE_URL" && -n "$CODEX_HTTP_HEADERS" ]] || {
+    echo "omnilane: OMNILANE_CODEX_PROVIDER_BASE_URL and OMNILANE_CODEX_HTTP_HEADERS must be set together" >&2
+    exit 2
+  }
+  [[ "$CODEX_PROVIDER_BASE_URL" =~ ^https?://[^[:space:]\"]+$ ]] || {
+    echo "omnilane: invalid OMNILANE_CODEX_PROVIDER_BASE_URL" >&2
+    exit 2
+  }
+  CODEX_HTTP_HEADERS="$(python3 -I "$CODEX_SETUP" headers "$CODEX_HTTP_HEADERS")" || exit 2
+  SHARED_ARGS+=(
+    -c 'model_provider="omnilane_codex"'
+    -c "model_providers.omnilane_codex={name=\"omnilane Codex worker\", base_url=\"$CODEX_PROVIDER_BASE_URL\", wire_api=\"responses\", requires_openai_auth=true, http_headers=$CODEX_HTTP_HEADERS}"
+  )
+fi
 if [[ "$MODE" == "advise" ]]; then
   [[ -z "$THREAD_MODE" ]] && ARGS+=(--ephemeral)
   SANDBOX=read-only
@@ -58,6 +87,48 @@ else
   )
 fi
 ARGS+=(-c "sandbox_mode=\"$SANDBOX\"")
+
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
+
+# workspace-write excludes /tmp and $TMPDIR, so heredocs and xcrun fail there;
+# give the worker a temp dir inside the one root it may write. advise is a
+# read-only sandbox: a directory would not make it writable, so leave the
+# workdir untouched there.
+TMP_ENV=()
+CODEX_TMP=""
+cleanup_codex_tmp() {
+  local rc=$?
+  if [[ -n "$CODEX_TMP" ]]; then
+    python3 -I "$CODEX_SETUP" cleanup "$CODEX_TMP" || echo 'omnilane: Codex temp cleanup failed' >&2
+  fi
+  return "$rc"
+}
+omnilane_track_completion
+trap 'omnilane_exit_trap $? cleanup_codex_tmp' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+if [[ "$MODE" == "work" ]]; then
+  WORKDIR="$(cd -- "$WORKDIR" && pwd -P)" || {
+    echo "omnilane: Codex workdir is not accessible" >&2
+    exit 2
+  }
+  # Created and chmodded through one no-follow descriptor, so a link swapped
+  # in after a check cannot redirect either step; info/exclude (never
+  # tracked, so a worker cannot commit the rule) is written the same way.
+  CODEX_TMP="$(python3 -I "$CODEX_SETUP" tmpdir "$WORKDIR")" || exit 125
+  TMP_ENV=("TMPDIR=$CODEX_TMP/" "TMPPREFIX=$CODEX_TMP/zsh")
+  # The process env alone is not enough: shell_environment_policy (for example
+  # inherit = "core") drops TMPPREFIX before the tool shell starts, and zsh
+  # then writes heredocs to /tmp/zsh. `set` values apply after the filters.
+  if [[ "$CODEX_TMP" != *[\"\\]* ]]; then
+    SHARED_ARGS+=(
+      -c "shell_environment_policy.set.TMPDIR=\"$CODEX_TMP/\""
+      -c "shell_environment_policy.set.TMPPREFIX=\"$CODEX_TMP/zsh\""
+    )
+  fi
+fi
+ARGS+=("${SHARED_ARGS[@]}")
 
 LIVE_INBOX="${OMNILANE_INBOX:-}"
 if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
@@ -81,6 +152,8 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     echo "omnilane: Codex live runner is missing" >&2
     exit 127
   }
+  LIVE_ARGS=()
+  for arg in "${SHARED_ARGS[@]}"; do LIVE_ARGS+=("--codex-arg=$arg"); done
   truncate_payload "$PROMPT_FILE" 140000
   private_job_files "$EVENTS_FILE" "$STDERR_FILE"
   (umask 077; : > "$EVENTS_FILE"; : > "$STDERR_FILE")
@@ -90,7 +163,7 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
     cd "$WORKDIR" || exit 127
     run_with_timeout "$RUN_TIMEOUT" env \
       -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_ORGANIZATION -u OPENAI_PROJECT -u OPENAI_API_BASE \
-      OMNILANE_DEPTH=1 \
+      OMNILANE_DEPTH=1 ${TMP_ENV[@]+"${TMP_ENV[@]}"} \
       python3 "$CODEX_LIVE_RUNNER" \
         --codex-bin "$CODEX_BIN" \
         --cwd "$WORKDIR" \
@@ -102,11 +175,13 @@ if [[ -n "$LIVE_INBOX" && -p "$LIVE_INBOX" ]]; then
         --output "$OUTPUT_FILE" \
         --progress "$PROGRESS_FILE" \
         --session-id-file "$SESSION_ID_FILE" \
+        "${LIVE_ARGS[@]}" \
         2> "$STDERR_FILE"
   )
   RC=$?
   set -e
   [[ -s "$STDERR_FILE" ]] || rm "$STDERR_FILE" 2>/dev/null || true
+  omnilane_mark_completed
   exit "$RC"
 fi
 # `codex exec resume` has no -s/--sandbox flag (rejects it with exit 2); the
@@ -125,7 +200,7 @@ set +e
   # Subscription-login path: strip API-key env so the CLI uses its own auth.
   run_with_timeout "$RUN_TIMEOUT" env \
     -u OPENAI_API_KEY -u OPENAI_ORG_ID -u OPENAI_ORGANIZATION -u OPENAI_PROJECT -u OPENAI_API_BASE \
-    OMNILANE_DEPTH=1 \
+    OMNILANE_DEPTH=1 ${TMP_ENV[@]+"${TMP_ENV[@]}"} \
     "$CODEX_BIN" "${ARGS[@]}" < "$PROMPT_FILE" \
     > "${OUTPUT_FILE}.progress.log" 2> "${OUTPUT_FILE}.stderr.log"
 )
@@ -165,4 +240,5 @@ if [[ -f "${OUTPUT_FILE}.tmp" ]]; then
 fi
 # no -f: force-flag rm is blocked by some environments' destructive guards
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
+omnilane_mark_completed
 exit "$RC"

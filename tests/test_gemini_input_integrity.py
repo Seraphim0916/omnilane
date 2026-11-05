@@ -9,7 +9,7 @@ import tempfile
 import time
 import unittest
 
-from offline_env import isolated_environment
+from offline_env import isolated_environment, wait_for_job_controller
 
 ROOT = Path(__file__).resolve().parents[1]
 GEMINI_MAX_TASK_BYTES = 130000 if platform.system() == "Linux" else 180000
@@ -64,16 +64,27 @@ class GeminiInputIntegrityTests(unittest.TestCase):
              "--timeout", "30", "--vendor", "gemini", *flags, "consult", "-"],
             input=payload, env=self.env, capture_output=True, timeout=90)
 
+    def worker_rules_header(self):
+        return subprocess.run(
+            ["bash", "-c", 'source "$1/scripts/lib/common.sh"; '
+             'printf "%s\\n%s\\n\\n" "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"',
+             "header", str(ROOT)],
+            env=self.env, capture_output=True, check=True, timeout=30).stdout
+
     def assert_intact(self, payload, result):
         errors = "\n".join(p.read_text() for p in (self.home / "jobs").rglob("*.stderr.log"))
         self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", "replace")[-2000:] + errors)
         self.assertTrue(self.capture.exists(), "fake agy was not reached")
         received = self.capture.read_bytes()
-        self.assertTrue(received == payload,
+        # Both the runner and the live first message (built by job-worker.sh)
+        # send the worker rules ahead of the task.
+        expected = self.worker_rules_header() + payload
+        self.assertTrue(received == expected,
                         f"sent={len(payload)} received={len(received)} "
                         f"sent_sha256={hashlib.sha256(payload).hexdigest()} "
                         f"received_sha256={hashlib.sha256(received).hexdigest()}")
         self.assertNotIn(b"TRUNCATED (original", received)
+        self.assertEqual(received.count(b"[omnilane worker rules]"), 1)
         self.assertNotIn("\ufffd", received.decode("utf-8"))
         jobs = list((self.home / "jobs").iterdir())
         self.assertTrue(jobs)
@@ -142,7 +153,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
             ['bash', '-c', 'source "$1/scripts/lib/common.sh"; '
              'source "$1/scripts/lib/live-protocol.sh"; '
              'live_encode_message gemini job session "$2"; printf "\\n"',
-             'protocol-check', str(ROOT), payload.decode('utf-8')],
+             'protocol-check', str(ROOT), (self.worker_rules_header() + payload).decode('utf-8')],
             env=self.env, capture_output=True, check=True, timeout=30)
         self.assertEqual(Path(str(self.capture) + '.message').read_bytes(), encoded.stdout)
 
@@ -179,6 +190,7 @@ class GeminiInputIntegrityTests(unittest.TestCase):
             if not (job / "exit").exists():
                 subprocess.run(["bash", str(ROOT / "scripts/jobs.sh"), "close", job_id],
                                env=self.env, capture_output=True, timeout=30)
+            wait_for_job_controller(self, job)
 
 
 if __name__ == "__main__":

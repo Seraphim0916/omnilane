@@ -30,6 +30,11 @@ class HostConfigTests(unittest.TestCase):
         self.host = test_resign.ResignTests()
         self.addCleanup(self.host.doCleanups)
         self.host.setUp()
+        # Homebrew bash translates its own messages from the macOS language setting even
+        # without LANG, so the shells resign starts must run in the C locale here.
+        locale = patch.dict(os.environ, {"LC_ALL": "C"})
+        locale.start()
+        self.addCleanup(locale.stop)
         self.local = self.host.home / "local.sh"
 
     def invoke(self, flags=()):

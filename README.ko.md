@@ -132,7 +132,7 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 omnilane resign --record-signers     # once, right after Step 2
 ```
 
-직접 패치하고 adhoc 서명한다면 `omnilane resign --trust-adhoc claude`를 사용합니다. 또 **각 호스트에서 따로** 유효한 공식 서명 샘플을 설치한 상태로 `omnilane resign --trust-origin claude`를 실행합니다. 현재 파일이 adhoc이면 `omnilane resign --trust-origin claude --team TEAMID`에 독립적으로 확인한 10자리 팀 ID를 넣습니다. 터미널에서 화면에 나온 정확한 확인 문구를 입력해야 합니다. 확인 생략 옵션이나 기본 팀은 없습니다. 공식 업데이트와 이후 adhoc 업데이트는 각각 검증이 필요합니다. 같은 위치를 신뢰해도 파일의 제작자를 증명하지는 못합니다.
+직접 패치하고 adhoc 서명한다면 `omnilane resign --trust-adhoc claude`를 사용합니다. 또 **각 호스트에서 따로** 유효한 공식 서명 샘플을 설치한 상태로 `omnilane resign --trust-origin claude`를 실행합니다. 현재 파일이 adhoc이면 `omnilane resign --trust-origin claude --team TEAMID`에 독립적으로 확인한 10자리 팀 ID를 넣습니다. 터미널에서 화면에 나온 정확한 확인 문구를 입력해야 합니다. 확인 생략 옵션이나 기본 팀은 없습니다. 공식 업데이트와 이후 adhoc 업데이트는 각각 검증이 필요합니다. 같은 위치를 신뢰해도 파일의 제작자를 증명하지는 못합니다. adhoc 샘플에는 공식 식별자가 없으므로 `--team`은 그 위치의 팀 전체를 승인합니다. 교체하기 전까지는 이 CLI뿐 아니라 그 팀이 서명해 그 위치에 둔 어떤 프로그램도 출처 검사를 통과해 재검증 대상이 됩니다. `omnilane resign --check`와 `omnilane doctor`에는 `"identifier_family": ""`로 표시됩니다. 제품에 묶으려면 유효한 공식 서명 샘플을 설치한 상태에서 `--team` 없이 `omnilane resign --trust-origin claude`를 다시 실행합니다. 팀 단위 승인이 교체됩니다.
 
 ```bash
 omnilane resign --trust-adhoc claude   # 직접 claude 를 adhoc 서명하는 경우에만
@@ -232,21 +232,21 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-AA `aa-v4.3.2-2026-10-18-v1`: **approved (2026-10-19 운영자 승인)**. 점수가 있는 구성 124개와 미평가 구성 9개. `gpt-5.4-mini` 구성 3개를 점수표에 되돌렸지만 어떤 레인에도 넣지 않았습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-18.md).
+AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는 같은 날 운영자 지시에 따라 컨트롤러가 승인)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)을 대체합니다.
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
 | 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
 | ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 아키텍처 판정, 심층 추론, 2차 의견 |
 | ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6.1 Terra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
 | 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
 | 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
 | 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
@@ -755,6 +755,24 @@ doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스
   생성을 요구하지도 않습니다.
 
 ## 📜 릴리스 기록
+
+## v0.59.0 새 기능
+
+- AA 스냅샷이 바뀌었으므로 업그레이드 후 모든 호스트에서 `omnilane resign`을 실행해야 합니다.
+- AA 스냅샷 `aa-v4.3.2-2026-10-28-v1`에 Antigravity가 호스팅하는 Claude Opus/Sonnet 5.5의 평가 구성 6개가 추가되어 전체 평가 행은 136개입니다. 기존 점수와 라우팅 레인은 그대로이며, 새 구성은 호스트별 로컬 프로브가 필요합니다.
+- 작업은 시그널을 보내기 전에 프로세스 신원과 프로세스 그룹 소속을 확인하고, 안전하지 않은 취소는 거부하며, `ps`가 차단되면 상태를 알 수 없음으로 보고합니다. 새 감독 메타데이터가 없는 이전 작업은 이 방식으로 취소할 수 없습니다. 라이브 닫기는 기한 안에서 기다리며, 완료/제거 경쟁 상태와 종료 파일 기록 문제를 수정했습니다.
+- 워커는 중첩 디스패치를 금지하고 `task.txt`를 보존하며 추적 중인 프롬프트 사본을 정리합니다. Codex work 작업은 작업 디렉터리 안의 전용 임시 디렉터리를 받고, 검증된 공급자 헤더를 선택적으로 쓸 수 있습니다. 라이브 인박스 처리와 Bash 3.2의 실패 종료도 수정했습니다.
+- `goal status`는 인박스 전달 후에도 완료 시각과 결과 끝부분을 유지합니다. 소비된 기록은 최신 200개만이 아니라 14일 동안 보관됩니다.
+- 긴 텍스트의 JSON 이스케이프를 더 빠르게 하면서 로케일에 따른 출력은 그대로 유지합니다. 그 밖에 Python 3.9/3.10의 호스트 설정 파싱, 재시도 진단, 자체 실행 통계, 완료 스키마 검사, 재서명 로그인 오류 분류도 수정했습니다. 자세한 내용은 CHANGELOG를 참고하세요.
+- 소스 승인은 주석이 달린 서명 식별자를 보존하고, 팀 전체 승인 프롬프트는 그 적용 범위를 설명합니다. 네이티브 작업 리더는 결과를 출력하는 동안 더 이상 잠금을 유지하지 않습니다.
+- 업그레이드: `npm i -g omnilane@0.59.0`.
+
+## v0.58.0 새 기능
+
+- AA 스냅샷이 바뀌었으므로 업그레이드 후 모든 호스트에서 `omnilane resign`을 실행해야 합니다.
+- AA 스냅샷 `aa-v4.3.2-2026-10-27-v1`에 GPT-6.1 Terra의 추론 수준별 점수 6개가 추가되어 전체 평가 행은 130개입니다. Terra가 일부 레인의 대체 후보에 추가되었으며 기존 점수와 각 레인의 첫 번째 선택은 그대로입니다.
+- 거부 메시지, Codex 라이브 세션, 호출자 식별, 결과 정규화, 상태 파일과 overlay 파일 파싱의 여러 문제를 수정했습니다. 목록은 CHANGELOG를 참고하세요.
+- 업그레이드: `npm i -g omnilane@0.58.0`.
 
 ## v0.57.0 새 기능
 

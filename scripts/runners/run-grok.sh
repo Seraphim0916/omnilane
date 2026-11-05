@@ -44,6 +44,7 @@ unset XAI_API_KEY 2>/dev/null || true
 # empty text and exit 0. A dispatch from a Claude Code session inherits it.
 strip_caller_claude_env
 
+PROMPT_FILE="$(worker_prompt_file "$PROMPT_FILE")"
 truncate_payload "$PROMPT_FILE" 140000
 
 MODE_ARGS=()
@@ -161,7 +162,12 @@ if [[ "$MODE" == "advise" ]]; then
   export CONTEXT_MODE_MCP_SENTINEL_DIR="$GROK_MCP_READINESS_DIR"
   # Remove only our empty leaf. Never remove foreign markers or a live server's
   # newly created state if a future Grok version starts an MCP there.
-  trap 'rmdir "$GROK_MCP_READINESS_DIR" 2>/dev/null || echo "omnilane: retained nonempty Grok MCP readiness scope: $GROK_MCP_READINESS_DIR" >&2' EXIT
+  release_grok_mcp_readiness_dir() {
+    rmdir "$GROK_MCP_READINESS_DIR" 2>/dev/null ||
+      echo "omnilane: retained nonempty Grok MCP readiness scope: $GROK_MCP_READINESS_DIR" >&2
+  }
+  omnilane_track_completion
+  trap 'omnilane_exit_trap $? release_grok_mcp_readiness_dir' EXIT
 fi
 
 ARGS=(--cwd "$WORKDIR" --model "$MODEL"
@@ -204,4 +210,5 @@ fi
 
 [[ -f "${OUTPUT_FILE}.tmp" ]] && mv "${OUTPUT_FILE}.tmp" "$OUTPUT_FILE"
 [[ -s "${OUTPUT_FILE}.stderr.log" ]] || rm "${OUTPUT_FILE}.stderr.log" 2>/dev/null || true
+omnilane_mark_completed
 exit "$RC"
