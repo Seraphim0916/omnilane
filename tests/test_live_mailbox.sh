@@ -702,8 +702,7 @@ PY
 
 case_call_timeout_warnings() {
   local home="$TEST_ROOT/timeout-warnings" out idle
-  local idles=("$@")
-  [[ ${#idles[@]} -gt 0 ]] || idles=(5 0)
+  local idles=(5 0)
   mkdir -p "$home"
   printf '#!/bin/sh\nexit 0\n' > "$home/agy"
   chmod +x "$home/agy"
@@ -2468,6 +2467,7 @@ case_force_stop() {
   mkdir -p "$dir" "$home/jobs"
   log="$dir/stderr"
   # set +e first: under set -e, (exit 1) would end the trap before cleanup runs.
+  fs_rc=0
   trap 'fs_rc=$?; force_stop_fixture_end; set +e; (exit "$fs_rc"); cleanup' EXIT
   force_stop_fake_ps "$dir/bin"
   export FAKE_PS_DIR="$dir"
