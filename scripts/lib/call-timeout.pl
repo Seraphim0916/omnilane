@@ -77,6 +77,9 @@ while (1) {
     my ($done, $status) = reap();
     if ($done) {
         defined $status or exit 125;
+        # A stopped or delayed watchdog may first observe completion after
+        # the deadline. Late success must not bypass the per-call budget.
+        exit 142 if clock_gettime(CLOCK_MONOTONIC) >= $deadline;
         exit(($status & 127) ? 128 + ($status & 127) : ($status >> 8));
     }
     if (clock_gettime(CLOCK_MONOTONIC) >= $deadline) {

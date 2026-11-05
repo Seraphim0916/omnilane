@@ -52,6 +52,37 @@ class CallTimeoutTests(unittest.TestCase):
                 self.assertEqual(code, result.returncode, result.stderr)
                 self.assertEqual("owned output\n", result.stdout)
 
+    def test_stopped_watchdog_rechecks_deadline_after_successful_child_exit(self):
+        # Freeze only our watchdog after its owned child is ready. The child
+        # finishes normally while the watchdog cannot observe the deadline.
+        child = self.root / "child.py"
+        ready = self.root / "ready"
+        child.write_text("import pathlib,sys,time\n"
+                         "pathlib.Path(sys.argv[1]).write_text('ready')\n"
+                         "time.sleep(1.3)\nprint('complete', flush=True)\n")
+        process = subprocess.Popen(
+            ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "1",
+             sys.executable, str(child), str(ready)],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 3
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(ready.exists(), "owned child failed to start")
+            process.send_signal(signal.SIGSTOP)
+            time.sleep(1.6)
+            process.send_signal(signal.SIGCONT)
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertEqual(142, process.returncode, stderr)
+            self.assertEqual("complete\n", stdout)
+        finally:
+            if process.poll() is None:
+                process.send_signal(signal.SIGCONT)
+                process.kill()
+                process.communicate(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
+
     def test_child_stays_in_callers_process_group(self):
         result, _ = self.run_call("import os\nprint(os.getpgrp())\n", "5")
         self.assertEqual(0, result.returncode, result.stderr)
