@@ -2450,7 +2450,8 @@ case_force_stop() {
   home="$TEST_ROOT/force-$scenario-home"
   mkdir -p "$dir" "$home/jobs"
   log="$dir/stderr"
-  trap 'fs_rc=$?; force_stop_fixture_end; (exit "$fs_rc"); cleanup' EXIT
+  # set +e first: under set -e, (exit 1) would end the trap before cleanup runs.
+  trap 'fs_rc=$?; force_stop_fixture_end; set +e; (exit "$fs_rc"); cleanup' EXIT
   force_stop_fake_ps "$dir/bin"
   export FAKE_PS_DIR="$dir"
   export LIVE_LSOF="$dir/bin/lsof"

@@ -74,6 +74,20 @@ class LiveForceStopTests(unittest.TestCase):
         self.assertLess(force_by, final_by)
         self.assertLessEqual(final_by, total)
 
+    def test_a_failing_scenario_still_removes_its_run_directory(self):
+        # A scenario that fails (here an unknown one) must still run the script's cleanup,
+        # which removes the run's directory under .test-scratch.
+        scratch = ROOT / ".test-scratch"
+        before = set(scratch.glob("omnilane-live-run.*")) if scratch.exists() else set()
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "force-stop-bogus"],
+            cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, timeout=120, check=False)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("unknown force-stop scenario: bogus", result.stdout)
+        after = set(scratch.glob("omnilane-live-run.*")) if scratch.exists() else set()
+        self.assertEqual(after - before, set(), result.stdout)
+
     def test_cleanup_steps_that_can_block_run_within_a_limit(self):
         text = SCRIPT.read_text(encoding="utf-8")
         cleanup = text[text.index("\ncleanup() {"):text.index("\ntrap cleanup EXIT")]
