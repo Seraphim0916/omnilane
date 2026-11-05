@@ -4771,6 +4771,17 @@ test_c2_thread_pinning() {
 }
 test_c2_thread_pinning
 
+test_c2_thread_dry_run() {
+  local name="thread dry-run leaves state and workdir untouched (C2-B05)" out rc=0
+  out="$(/bin/bash "$ROOT/tests/test_c2_thread_dry_run.sh" --omnilane-offline-child 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_c2_thread_dry_run
+
 test_native_executor() {
   local name="native executor protocol (offline fixtures)" out rc=0
   out="$(python3 "$ROOT/tests/test_native_executor.py" 2>&1)" || rc=$?
