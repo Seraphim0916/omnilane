@@ -66,6 +66,20 @@ dispatch_goal() {
     "$ROOT/bin/omnilane" goal dispatch "$goal_id" --mode work probe "$task"
 }
 
+# Until the worker publishes its PID, goal status counts a dispatched job as a
+# reservation, not as running: only a PID or an exit is evidence that it started.
+wait_for_started() {
+  local home="$1" job_id="$2" tries=0 job="$1/jobs/$2"
+  while [[ "$tries" -lt 100 ]]; do
+    if [[ -f "$job/pid" && ! -L "$job/pid" && -s "$job/pid" ]] || [[ -f "$job/exit" ]]; then
+      return 0
+    fi
+    sleep 0.1
+    tries=$((tries + 1))
+  done
+  fail "job did not record a PID within 10s: $job_id"
+}
+
 wait_for_job() {
   local home="$1" job_id="$2" expected="$3" tries=0 actual
   while [[ "$tries" -lt 100 && ! -f "$home/jobs/$job_id/exit" ]]; do
@@ -207,6 +221,7 @@ case_note_status() {
   make_fixture "$home"
   goal_id="$(open_goal "$home" "observe jobs as they land" 4 30)"
   slow="$(dispatch_goal "$home" "$goal_id" "slow success")"
+  wait_for_started "$home" "$slow"
   running="$(OMNILANE_HOME="$home" "$ROOT/bin/omnilane" goal status "$goal_id")"
   [[ "$running" == *"job $slow:"* && "$running" == *"exit=running"* ]] ||
     fail "status did not show running job: $running"
