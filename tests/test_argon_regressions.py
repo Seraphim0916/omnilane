@@ -26,11 +26,20 @@ def fixture_tree():
     return ast.parse(source)
 
 
+def fixture_constants(tree):
+    # Helper defaults such as timeout=GENEROUS name top-level constants of the fixture.
+    return [node for node in tree.body if isinstance(node, ast.Assign)
+            and all(isinstance(target, ast.Name) for target in node.targets)
+            and isinstance(node.value, ast.Constant)]
+
+
 def helpers():
-    definitions = [node for node in ast.walk(fixture_tree()) if isinstance(node, ast.FunctionDef)
-                   and node.name in {"wait_for_stopped", "wait_for_exit", "record_exit", "cleanup_fixture"}]
+    tree = fixture_tree()
+    definitions = fixture_constants(tree) + [
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
+        and node.name in {"wait_for_stopped", "wait_for_exit", "record_exit", "cleanup_fixture"}]
     for node in definitions:
-        if node.name == "record_exit":
+        if getattr(node, "name", None) == "record_exit":
             node.args.defaults = []
     namespace = dict(os=os, time=time, signal=signal, sys=sys, shutil=shutil)
     exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), namespace)

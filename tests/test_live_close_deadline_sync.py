@@ -19,7 +19,11 @@ class CloseSynchronizationTests(unittest.TestCase):
     def setUp(self):
         source_path = Path(os.environ.get("CLOSE_SYNC_UNDER_TEST", ROOT / "tests/test_live_close_deadline.sh"))
         source = source_path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-        definitions = [node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef)]
+        body = ast.parse(source).body
+        # Helper defaults such as timeout=GENEROUS name top-level constants of the fixture.
+        definitions = [node for node in body if isinstance(node, ast.FunctionDef) or (
+            isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            and all(isinstance(target, ast.Name) for target in node.targets))]
         self.helpers = dict(os=os, subprocess=subprocess, time=time)
         exec(compile(ast.Module(body=definitions, type_ignores=[]), "close-helpers", "exec"), self.helpers)
 
