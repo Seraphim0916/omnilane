@@ -941,6 +941,17 @@ A live PID whose start time differs from the recorded one is treated as another 
 
 ## 📜 Release history
 
+## What's new in v0.59.0
+
+- After upgrading, run `omnilane resign` on every host because the AA snapshot has changed.
+- AA snapshot `aa-v4.3.2-2026-10-28-v1` adds six scored Claude Opus/Sonnet 5.5 configurations hosted by Antigravity (136 scored rows total). Existing scores and routing lanes are unchanged; the new configurations require host-local probes.
+- Jobs verify process identity and group membership before signalling, refuse unsafe cancellation, and report unknown state when `ps` is blocked. Older jobs without the new supervision metadata cannot be cancelled this way. Live close waits within its deadline; completion/removal races and exit-file publication are fixed.
+- Workers prohibit nested delegation, preserve `task.txt`, and clean tracked prompt copies. Codex work jobs get private temporary directories inside the workdir and optional validated provider headers; live inbox handling and Bash 3.2 failure exits are fixed.
+- `goal status` keeps completion times and result tails after inbox delivery; consumed records remain for 14 days instead of only the latest 200.
+- Faster long-text JSON escaping preserves locale-dependent output. Fixes also cover Python 3.9/3.10 host configuration parsing, retry diagnostics, self-exec statistics, completion schema checks and re-signing login-error classification; see CHANGELOG for details.
+- Source approvals preserve annotated signing identifiers, and team-wide approval prompts explain their scope. Native job readers no longer hold locks while printing results.
+- Upgrade: `npm i -g omnilane@0.59.0`.
+
 ## What's new in v0.58.0
 
 - After upgrading, every host must run `omnilane resign` because the AA snapshot has changed.
