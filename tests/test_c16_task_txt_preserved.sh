@@ -12,6 +12,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$ROOT/.test-scratch"
 TEST_ROOT="$(mktemp -d "$ROOT/.test-scratch/c16-trunc.XXXXXX")"
 test_completed=0
+# Assigned again from $? as the trap starts; declared here for shellcheck (SC2154).
+test_rc=0
 trap 'test_rc=$?; trap - EXIT
 if [[ "$test_rc" -eq 0 && "$test_completed" -ne 1 ]]; then test_rc=1; fi
 rm -rf -- "$TEST_ROOT"

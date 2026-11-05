@@ -18,6 +18,8 @@ cleanup() {
   /bin/rm -rf -- "$TEST_ROOT"
 }
 OMNILANE_COMPLETED=0
+# Assigned again from $? as the trap starts; declared here for shellcheck (SC2154).
+omnilane_rc=0
 trap 'omnilane_rc=$?; trap - EXIT; [[ "$omnilane_rc" -ne 0 || "${OMNILANE_COMPLETED:-0}" -eq 1 ]] || omnilane_rc=1; cleanup; exit "$omnilane_rc"' EXIT
 
 pass() {

@@ -155,22 +155,28 @@ assert "closed by idle cap" in fragment
 pathlib.Path(sys.argv[2]).write_text((start + fragment).replace("SECONDS", "test_now") + "\n")
 ' "$ROOT/scripts/lib/job-worker.sh" "$fragment"
   source "$ROOT/scripts/lib/live-protocol.sh"
+  # The job-worker fragment sourced below reads and writes these.
+  # shellcheck disable=SC2034
   local VENDOR=claude IDLE_TIMEOUT=5 last_activity=0 test_now=0
+  # shellcheck disable=SC2034
   local close_requested=0 close_reason="" last_result_event="" event
   # Each valid event arrives at the idle boundary. Ten virtual seconds pass
   # without any input-side refresh, regardless of host scheduling delays.
   for test_now in 5 10; do
     printf '%s\n' '{"type":"assistant","message":{"role":"assistant","content":[]}}' > "$event_file"
+    # shellcheck source=/dev/null  # generated from job-worker.sh at run time
     source "$fragment" 5< "$event_file"
     [[ "$last_activity" -eq "$test_now" && "$close_requested" -eq 0 ]] \
       || fail "valid events did not refresh activity"
   done
   test_now=14
   printf '%s\n' 'not json' > "$event_file"
+  # shellcheck source=/dev/null  # generated from job-worker.sh at run time
   source "$fragment" 5< "$event_file"
   [[ "$last_activity" -eq 10 && "$close_requested" -eq 0 ]] \
     || fail "invalid event refreshed activity or idle cap fired early"
   test_now=15
+  # shellcheck source=/dev/null  # generated from job-worker.sh at run time
   source "$fragment" 5< "$event_file"
   [[ "$close_requested" -eq 1 && "$close_reason" == 'closed by idle cap after 5s' ]] \
     || fail "idle cap did not close an inactive stream at its boundary"
