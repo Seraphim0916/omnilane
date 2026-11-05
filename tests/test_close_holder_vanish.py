@@ -53,13 +53,22 @@ class CloseHolderVanishTests(unittest.TestCase):
                                 env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 start_new_session=True)
 
-    def reap(self, closer):
-        """Kill what is left of close's process group, reap it, and check nothing in the group survived."""
+    def reap(self, closer, body_failed=False):
+        """Kill what is left of close's process group, reap it, and check nothing in the group survived.
+
+        With body_failed the test body already raised: only clean up, and never let a
+        cleanup error replace the body's own exception.
+        """
         pgid = closer.pid  # start_new_session: the leader's PID is the group ID
-        if closer.poll() is None:
-            # The test body stopped before close returned; it already reports its own
-            # failure, so only clean up here.
-            self._killpg(pgid)
+        if body_failed:
+            try:
+                self._killpg(pgid)
+                closer.wait(timeout=GENEROUS)
+            except Exception:
+                pass
+            for stream in (closer.stdout, closer.stderr):
+                stream.close()
+            return
         closer.wait(timeout=GENEROUS)
         for stream in (closer.stdout, closer.stderr):
             stream.close()
@@ -67,12 +76,17 @@ class CloseHolderVanishTests(unittest.TestCase):
         # receipt poller) is not a leftover, so a group that empties within the grace
         # passes. One still present after the grace is a leftover: it is killed whether
         # or not the leader is alive, the group must then be gone, and the test fails.
+        # Zombies need no special case: closer.wait() reaps the leader, and orphaned
+        # members are reaped by launchd/init within the grace. A zombie that lingers has
+        # a live parent in the group, and that parent is itself a leftover.
         grace = time.monotonic() + LEFTOVER_GRACE
         while time.monotonic() < grace:
             if not self._group_exists(pgid):
                 return
             time.sleep(.02)
-        self._killpg(pgid)
+        # Waking up late is not evidence that the group outlived the grace: look again.
+        if not self._group_exists(pgid) or not self._killpg(pgid):
+            return
         deadline = time.monotonic() + GENEROUS
         while self._group_exists(pgid):
             self.assertLess(time.monotonic(), deadline, f"process group {pgid} survived SIGKILL")
@@ -89,10 +103,12 @@ class CloseHolderVanishTests(unittest.TestCase):
 
     @staticmethod
     def _killpg(pgid):
+        """SIGKILL the group; False when it was already gone."""
         try:
             os.killpg(pgid, signal.SIGKILL)
         except ProcessLookupError:
-            pass
+            return False
+        return True
 
     def receipt_poller_running(self, closer, end):
         """Whether close's direct child polling for the exit receipt is in the process table now."""
@@ -131,8 +147,10 @@ class CloseHolderVanishTests(unittest.TestCase):
             receipt.write_text("0\n")
             os.replace(receipt, self.job / "exit")
             out, err = closer.communicate(timeout=GENEROUS)
-        finally:
-            self.reap(closer)
+        except BaseException:
+            self.reap(closer, body_failed=True)
+            raise
+        self.reap(closer)
         self.assertEqual((closer.returncode, out, err), (0, "already closed (exit 0)\n", ""))
 
     def test_holder_file_that_stays_invalid_fails_at_once(self):
@@ -149,8 +167,10 @@ class CloseHolderVanishTests(unittest.TestCase):
                 self.assertLess(time.monotonic(), end, "close with an invalid holder file hung")
                 time.sleep(.02)
             out, err = closer.communicate(timeout=GENEROUS)
-        finally:
-            self.reap(closer)
+        except BaseException:
+            self.reap(closer, body_failed=True)
+            raise
+        self.reap(closer)
         self.assertFalse(polled, "close waited for the exit receipt instead of failing at once")
         self.assertEqual((closer.returncode, out, err), (1, "", "live inbox holder is unavailable\n"))
         self.assertTrue(self.holder.exists())
