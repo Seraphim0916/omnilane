@@ -52,8 +52,9 @@ class QuotaDescriptorCleanupTests(unittest.TestCase):
                 call("synthetic-quota", flags | quota.os.O_DIRECTORY),
                 call("codex.json", flags, dir_fd=101),
             ])
-            closed.assert_called_once_with(101)
-            fdopen.assert_called_once_with(102, "rb")
+            # The leaf descriptor is closed by read_snapshot itself, not by the stream (C2-B373).
+            self.assertEqual(closed.call_args_list, [call(101), call(102)])
+            fdopen.assert_called_once_with(102, "rb", closefd=False)
             stream.__exit__.assert_called_once_with(None, None, None)
 
 
