@@ -56,6 +56,82 @@ sub terminate_group {
     waitpid($pid, 0) unless $reaped;
 }
 
+# Processes that call setsid leave the job's group, so group signals miss them.
+# Every job process inherits OMNILANE_JOB_ID from dispatch; after the group is
+# stopped, processes carrying exactly this marker and started after this
+# supervisor are stopped too, and the outcome is recorded for `jobs status`.
+my $JOB_MARKER = $ENV{OMNILANE_JOB_ID} // '';
+$JOB_MARKER = '' unless $JOB_MARKER =~ /\A[0-9A-Za-z][0-9A-Za-z._-]{0,127}\z/;
+my $LEFTOVERS_FILE = $ENV{OMNILANE_JOB_LEFTOVERS_FILE} // '';
+my $SUPERVISOR_STARTED = time();
+
+sub etime_seconds {
+    my ($etime) = @_;
+    $etime =~ /\A(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)\z/ or return undef;
+    return ((($1 // 0) * 24 + ($2 // 0)) * 60 + $3) * 60 + $4;
+}
+
+# Returns undef when the process list cannot be read, else the marked PIDs.
+sub marked_processes {
+    return [] if $JOB_MARKER eq '';
+    my $ps_pid = open(my $ps, '-|', '/bin/ps', '-E', '-axww', '-o', 'pid=,etime=,command=');
+    defined $ps_pid or return undef;
+    my $now = time();
+    my @found;
+    while (my $line = <$ps>) {
+        my ($pid, $etime, $rest) = $line =~ /\A\s*(\d+)\s+(\S+)\s(.*)\z/s or next;
+        next if $pid == $$ || $pid == $ps_pid;
+        next unless $rest =~ /(?:\A|\s)OMNILANE_JOB_ID=\Q$JOB_MARKER\E(?:\s|\z)/;
+        my $age = etime_seconds($etime);
+        # A PID that existed before this job started cannot belong to it.
+        next unless defined $age && $now - $age >= $SUPERVISOR_STARTED - 1;
+        push @found, $pid;
+    }
+    close($ps) or return undef;
+    return \@found;
+}
+
+sub record_leftovers {
+    my ($reaped, $remaining) = @_;
+    return if $LEFTOVERS_FILE eq '';
+    my $tmp = "$LEFTOVERS_FILE.tmp.$$";
+    open(my $out, '>', $tmp) or return;
+    print {$out} "reaped=$reaped remaining=$remaining\n";
+    close($out) or return;
+    rename($tmp, $LEFTOVERS_FILE);
+}
+
+sub reap_marked {
+    my ($stop) = @_;
+    my $found = marked_processes();
+    if (!defined $found) {
+        record_leftovers('unknown', 'unknown');
+        return;
+    }
+    if (!$stop) {
+        record_leftovers(0, scalar @$found);
+        return;
+    }
+    my @targets = @$found;
+    kill 'TERM', @targets if @targets;
+    my $grace_deadline = monotonic_now() + $TERM_GRACE_SECONDS;
+    while (@targets && monotonic_now() < $grace_deadline) {
+        @targets = grep { kill 0, $_ } @targets;
+        sleep($POLL_SECONDS) if @targets;
+    }
+    if (@targets) {
+        # Re-list before SIGKILL so a PID reused in the grace window is not hit.
+        my $again = marked_processes();
+        my %still = map { $_ => 1 } @{ $again // [] };
+        my @kill = grep { $still{$_} } @targets;
+        kill 'KILL', @kill if @kill;
+        sleep($POLL_SECONDS * 4) if @kill;
+    }
+    my $after = marked_processes();
+    my $remaining = defined $after ? scalar @$after : 'unknown';
+    record_leftovers(scalar @$found, $remaining);
+}
+
 my $forwarded_exit;
 $SIG{HUP}  = sub { $forwarded_exit = 129; };
 $SIG{INT}  = sub { $forwarded_exit = 130; };
@@ -85,6 +161,7 @@ my $worker_status;
 while (1) {
     if (defined $forwarded_exit) {
         terminate_group($pid, $pid, 0);
+        reap_marked(1);
         exit $forwarded_exit;
     }
 
@@ -97,6 +174,7 @@ while (1) {
     my $remaining = defined($deadline) ? $deadline - monotonic_now() : $POLL_SECONDS;
     if (defined($deadline) && $remaining <= 0) {
         terminate_group($pid, $pid, 0);
+        reap_marked(1);
         exit 124;
     }
     sleep($remaining < $POLL_SECONDS ? $remaining : $POLL_SECONDS);
@@ -106,6 +184,8 @@ while (1) {
 # process group belongs only to this job, so clean any such remainder before
 # reporting completion.
 terminate_group($pid, $pid, 1) if group_exists($pid);
+# A normal finish may leave a deliberate background helper; count it, do not stop it.
+reap_marked(0);
 
 defined $worker_status or exit 125;
 exit(($worker_status & 127) ? 128 + ($worker_status & 127) : ($worker_status >> 8));

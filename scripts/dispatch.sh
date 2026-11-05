@@ -1641,7 +1641,9 @@ run_job() {
     # No configured budget still means no deadline and job_timeout:null.
     OMNILANE_JOB_WORKER_REPO="$OMNILANE_REPO" \
       OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
-      OMNILANE_JOB_SUPERVISED=1 perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
+      OMNILANE_JOB_SUPERVISED=1 OMNILANE_JOB_ID="$JOB_ID" \
+      OMNILANE_JOB_LEFTOVERS_FILE="$JOB_DIR/leftovers" \
+      perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
       "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"
   else

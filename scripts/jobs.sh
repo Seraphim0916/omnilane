@@ -1429,11 +1429,23 @@ case "${1:-}" in
     read_cli_job_state "$JOB_DIR"
     [[ "$JOB_STATE" != "invalid" && "$JOB_STATE" != "removed" ]] || die 1 "$JOB_STATE_REASON"
     if [[ "$JOB_STATE" == "done" ]]; then
+      # The supervisor records processes found by the job marker after the group stopped.
+      leftovers_json="" leftovers_text=""
+      if [[ -f "$JOB_DIR/leftovers" && ! -L "$JOB_DIR/leftovers" ]]; then
+        leftovers_line="$(head -n 1 "$JOB_DIR/leftovers" 2>/dev/null || true)"
+        if [[ "$leftovers_line" =~ ^reaped=([0-9]+|unknown)\ remaining=([0-9]+|unknown)$ ]]; then
+          leftovers_reaped="${BASH_REMATCH[1]}" leftovers_remaining="${BASH_REMATCH[2]}"
+          [[ "$leftovers_reaped" == unknown ]] && leftovers_reaped='"unknown"'
+          [[ "$leftovers_remaining" == unknown ]] && leftovers_remaining='"unknown"'
+          leftovers_json=",\"leftovers\":{\"reaped\":$leftovers_reaped,\"remaining\":$leftovers_remaining}"
+          [[ "${BASH_REMATCH[2]}" == 0 ]] || leftovers_text=" leftovers=${BASH_REMATCH[2]}"
+        fi
+      fi
       if [[ "$JSON_MODE" -eq 1 ]]; then
-        printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s}}\n' \
-          "$(json_escape "$2")" "$JOB_STATE_EXIT"
+        printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s%s}}\n' \
+          "$(json_escape "$2")" "$JOB_STATE_EXIT" "$leftovers_json"
       else
-        echo "done exit=$JOB_STATE_EXIT"
+        echo "done exit=$JOB_STATE_EXIT$leftovers_text"
       fi
     else
       if [[ "$JSON_MODE" -eq 1 ]]; then
