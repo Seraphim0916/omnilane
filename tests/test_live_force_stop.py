@@ -42,8 +42,20 @@ class LiveForceStopTests(unittest.TestCase):
     def test_a_pid_reused_after_term_gets_no_kill_when_proc_lists_holders(self):
         self.assertIn("reused, not signalled", self.run_scenario("reuse-kill-proc"))
 
+    def test_a_job_whose_controller_exited_and_pid_was_reused_is_found_by_its_worker_log(self):
+        self.assertIn("reused, not signalled", self.run_scenario("early-exit-reused"))
+
     def test_a_job_without_a_pid_file_is_found_by_its_worker_log(self):
         self.run_scenario("no-pid")
+
+    def test_a_job_under_a_symbolic_link_is_found_by_lsof(self):
+        self.run_scenario("no-pid-link")
+
+    def test_a_job_under_a_symbolic_link_is_found_in_proc(self):
+        self.run_scenario("no-pid-link-proc")
+
+    def test_paths_are_resolved_or_kept_as_given(self):
+        self.run_scenario("canon")
 
     def test_the_proc_search_reports_holders(self):
         self.run_scenario("holders-proc")

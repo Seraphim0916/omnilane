@@ -148,6 +148,24 @@ take_process_table() {
   within "$2" "$3" env TZ=UTC LC_ALL=C ps -axo pid=,ppid=,pgid=,lstart= > "$1" 2>/dev/null || return 1
   [[ -s "$1" ]]
 }
+# Prints path $1 with the symbolic links of its directory resolved, as /proc and lsof
+# report it: pwd -P, since bash 3.2 has no realpath. Prints $1 unchanged when it names no
+# directory or its directory cannot be entered, so a file never turns into another one.
+canon_path() {
+  local path="$1" dir resolved=""
+  [[ "$path" == */* ]] || { printf '%s\n' "$path"; return 0; }
+  dir="${path%/*}"
+  # cd "" stays where it is, so "/name" would become "$PWD/name".
+  [[ -n "$dir" ]] || dir=/
+  resolved="$(CDPATH='' cd -- "$dir" 2>/dev/null && pwd -P)" || resolved=""
+  if [[ -z "$resolved" ]]; then
+    printf '%s\n' "$path"
+  elif [[ "$resolved" == / ]]; then
+    printf '/%s\n' "${path##*/}"
+  else
+    printf '%s/%s\n' "$resolved" "${path##*/}"
+  fi
+}
 # Prints "PID PATH" for each process holding one of the files $3... open, from /proc where
 # there is one, else with lsof. The whole search is one process limited to $1 seconds and
 # nothing after deadline $2, so running out of time ends it halfway through. The test
@@ -187,7 +205,7 @@ file_holders() {
 # and members $3 (earlier output of this function) and prints, for the processes that
 # are still the job's: "M job pid group start" for each and "G job group" for each group
 # to signal; "R job pid recorded-start listed-start" for each reused PID, and "X job
-# group" for a group not signalled because a reused PID is in it. A reused PID is never
+# group" for a group not signalled because a reused PID is in it, here or in $3. A reused PID is never
 # taken as the job's, whatever else names it (a holder root has no start time to compare,
 # so it must not bring one back), and neither are its descendants. $4 is the PID whose
 # group and whose ancestors' groups are never signalled. Gets at most $5 seconds and
@@ -215,6 +233,8 @@ job_processes() {
       n++; job_of[n] = $2; pid_of[n] = $3; start_of[n] = $5 " " $6 " " $7 " " $8 " " $9
       next
     }
+    # A group held back for a reused PID stays held back: its members were taken with it.
+    FILENAME == ARGV[3] && $1 == "X" { tainted[$3] = $2; next }
     END {
       # Every reused PID is known before anything is added.
       for (k = 1; k <= n; k++) {
@@ -238,17 +258,18 @@ job_processes() {
       for (g in tainted) if (g + 0 > 1 && !(g in mine)) printf "X\t%s\t%s\n", tainted[g], g
     }' "$1" "$2" "$3"
 }
-# Writes the roots of the jobs at indexes $3... of the arrays homes and ids to file $1:
-# each controller with its recorded start time, and, only for a job without one (no PID
-# file, or no start time beside it), the holders of its worker.log. A controller whose PID
-# turns out to be reused is not replaced by holders: the job's processes it had are known
-# from the members recorded before, with their own start times. The holder search runs
-# once for all of those jobs, at most 3s and not after deadline $2. Controllers without
-# a start time are printed.
+# Writes the roots of the jobs at indexes $4... of the arrays homes and ids to file $1:
+# each controller with its recorded start time, and the holders of worker.log for a job
+# without one (no PID file, or no start time beside it) and for a job whose controller
+# process table $3 does not list with that start time: it exited or its PID is reused, and
+# what it left running may be known only as a holder. The controller stays a root, so a
+# reused PID is still reported and never taken back through a holder (job_processes). The
+# holder search runs once for all of those jobs, at most 3s and not after deadline $2, on
+# paths resolved as /proc and lsof report them. Controllers without a start time are printed.
 write_roots() {
-  local out="$1" by="$2" i dir start line pid path j
-  local -a logs=() log_jobs=()
-  shift 2
+  local out="$1" by="$2" table="$3" i dir start line pid path j listed
+  local -a logs=() log_jobs=() words=()
+  shift 3
   : > "$out"
   for i in "$@"; do
     dir="${homes[i]}/jobs/${ids[i]}"
@@ -257,11 +278,14 @@ write_roots() {
     [[ ! -f "$dir/pid.start" ]] || read -r start < "$dir/pid.start" 2>/dev/null || true
     if [[ "$PID_READ" =~ ^[1-9][0-9]*$ && -n "$start" ]]; then
       printf '%s %s %s\n' "$i" "$PID_READ" "$start" >> "$out"
-      continue
-    fi
-    [[ ! "$PID_READ" =~ ^[1-9][0-9]*$ ]] ||
+      listed="$(awk -v p="$PID_READ" '$1 == p && NF >= 8 { print $4, $5, $6, $7, $8; exit }' "$table" 2>/dev/null)" ||
+        listed=""
+      read -r -a words <<< "$start"
+      [[ "$listed" != "${words[*]}" ]] || continue
+    elif [[ "$PID_READ" =~ ^[1-9][0-9]*$ ]]; then
       printf 'live job %s: PID %s has no recorded start time\n' "${ids[i]}" "$PID_READ" >&2
-    if [[ -e "$dir/worker.log" ]]; then logs+=("$dir/worker.log"); log_jobs+=("$i"); fi
+    fi
+    if [[ -e "$dir/worker.log" ]]; then logs+=("$(canon_path "$dir/worker.log")"); log_jobs+=("$i"); fi
   done
   [[ "${#logs[@]}" -gt 0 ]] || return 0
   line="$(file_holders 3 "$by" "${logs[@]}")" || {
@@ -308,7 +332,7 @@ force_stop_jobs() {
   : > "$decided"
   # TERM: PID files read once more, one table (3s), one holder search (3s), decide (1s).
   if take_process_table "$table" 3 "$((end - 14))"; then
-    write_roots "$roots" "$((end - 14))" "$@"
+    write_roots "$roots" "$((end - 14))" "$table" "$@"
     job_processes "$table" "$roots" "$recorded" "$$" 1 "$((end - 13))" > "$decided" ||
       printf 'live jobs: could not decide which groups to end in time\n' >&2
   else
@@ -401,7 +425,7 @@ stop_jobs() {
   if [[ "${#pending[@]}" -gt 0 ]]; then
     table="$recorded.table" roots="$recorded.roots"
     if take_process_table "$table" 3 "$snap_by"; then
-      write_roots "$roots" "$snap_by" "${pending[@]}"
+      write_roots "$roots" "$snap_by" "$table" "${pending[@]}"
       : > "$recorded.none"
       job_processes "$table" "$roots" "$recorded.none" "$$" 1 "$snap_by" > "$recorded" || : > "$recorded"
     fi
@@ -2428,7 +2452,8 @@ force_stop_alive_count() {
 }
 # A ps that answers like ps after FAKE_PS_DELAY seconds for process tables with start
 # times, and from call FAKE_PS_REUSE_FROM on lists PID FAKE_PS_REUSE_PID and every
-# process of its group with another start time, as reused PIDs would be.
+# process of its group with another start time, as reused PIDs would be. With
+# FAKE_PS_REUSE_ADD it lists that PID even when it has exited, as another process.
 force_stop_fake_ps() {
   local bin="$1"
   mkdir -p "$bin"
@@ -2444,8 +2469,10 @@ calls=$((calls + 1))
 printf '%s\n' "$calls" > "$FAKE_PS_DIR/calls"
 sleep "${FAKE_PS_DELAY:-0}"
 if [[ -n "${FAKE_PS_REUSE_PID:-}" && "$calls" -ge "${FAKE_PS_REUSE_FROM:-1}" ]]; then
-  "$FS_REAL_PS" "$@" | awk -v pid="$FAKE_PS_REUSE_PID" \
-    '$1 == pid || $3 == pid { print $1, $2, $3, "Thu Jan  1 00:00:00 1970"; next } { print }'
+  "$FS_REAL_PS" "$@" | awk -v pid="$FAKE_PS_REUSE_PID" -v add="${FAKE_PS_REUSE_ADD:-}" '
+    $1 == pid || $3 == pid { print $1, $2, $3, "Thu Jan  1 00:00:00 1970"; listed = 1; next }
+    { print }
+    END { if (add != "" && !listed) print pid, 1, pid, "Thu Jan  1 00:00:00 1970" }'
   exit "${PIPESTATUS[0]}"
 fi
 exec "$FS_REAL_PS" "$@"
@@ -2525,7 +2552,7 @@ case_force_stop() {
         mkdir -p "$dir/proc/self/fd"
         for i in $("$FS_REAL_PS" -axo pid=,pgid= | awk -v g="$pid" '$2 == g { print $1 }') $FS_SESSIONS; do
           mkdir -p "$dir/proc/$i/fd"
-          ln -s "$home/jobs/job0/worker.log" "$dir/proc/$i/fd/1"
+          ln -s "$(canon_path "$home/jobs/job0/worker.log")" "$dir/proc/$i/fd/1"
         done
         export LIVE_PROC_ROOT="$dir/proc"
         scenario="${scenario%-proc}"
@@ -2539,22 +2566,88 @@ case_force_stop() {
         fail "$scenario: the reused PID was not reported"
       if [[ "$scenario" == reuse-term ]]; then
         ! grep -q "TERM process group $pid\$" "$log" || fail "reuse-term: a reused PID's group got TERM"
+        # Not a member either, or the job would be named for another process still running.
+        ! awk -F '\t' -v p="$pid" '$1 == "M" && $3 == p { found = 1 } END { exit found ? 0 : 1 }' "$FORCE_LEFT" ||
+          fail "reuse-term: the reused PID was taken as one of the job's processes"
       else
         grep -q "TERM process group $pid\$" "$log" || fail "reuse-kill: the job's group got no TERM"
       fi
       ! grep -q "KILL process group $pid\$" "$log" || fail "$scenario: a reused PID's group got KILL"
       kill -0 "$pid" 2>/dev/null || fail "$scenario: the process listed as reused was signalled"
       ;;
-    no-pid)
-      # No PID file: the controller is found as the holder of the job's worker.log.
-      unset LIVE_LSOF
-      force_stop_fixture_job "$home" job0 ignore nopid; pid="$FS_LAST"
+    early-exit-reused)
+      # The controller exited before any table was taken and its PID now names another
+      # process; the grandchild in a session of its own still holds worker.log. It is
+      # found as a holder and ended, and the reused PID gets no signal.
+      force_stop_fixture_job "$home" job0 ignore; pid="$FS_LAST"
       homes+=("$home") ids+=("job0")
+      read -r i < "$home/jobs/job0/session" || fail "early-exit-reused: no grandchild recorded"
+      kill -KILL -- "-$pid" 2>/dev/null || true
+      start=0
+      while kill -0 -- "-$pid" 2>/dev/null && [[ "$start" -lt 50 ]]; do sleep 0.1; start=$((start + 1)); done
+      ! kill -0 -- "-$pid" 2>/dev/null || fail "early-exit-reused: the controller's group did not exit"
+      mkdir -p "$dir/proc/self/fd" "$dir/proc/$i/fd"
+      ln -s "$(canon_path "$home/jobs/job0/worker.log")" "$dir/proc/$i/fd/1"
+      export LIVE_PROC_ROOT="$dir/proc"
+      export FAKE_PS_REUSE_PID="$pid" FAKE_PS_REUSE_FROM=1 FAKE_PS_REUSE_ADD=1
       FORCE_BY=$((SECONDS + 20))
       force_stop_jobs "$recorded" 0 2> "$log"
       cat "$log" >&2
-      grep -q "KILL process group $pid\$" "$log" || fail "no-pid: the holder of worker.log was not ended"
-      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "no-pid: a job group is still running"
+      grep -q "PID $pid now started Thu Jan 1 00:00:00 1970, not .* as recorded; reused, not signalled" "$log" ||
+        fail "early-exit-reused: the reused PID was not reported"
+      grep -Eq "(TERM|KILL) process group $i\$" "$log" ||
+        fail "early-exit-reused: the grandchild $i holding worker.log was not ended"
+      ! kill -0 -- "-$i" 2>/dev/null || fail "early-exit-reused: the grandchild $i is still running"
+      ! grep -Eq "(TERM|KILL) process group $pid\$" "$log" || fail "early-exit-reused: the reused PID's group got a signal"
+      ! awk -F '\t' -v p="$pid" '$1 == "M" && $3 == p { found = 1 } END { exit found ? 0 : 1 }' "$FORCE_LEFT" ||
+        fail "early-exit-reused: the reused PID was taken as one of the job's processes"
+      ;;
+    no-pid | no-pid-link | no-pid-link-proc)
+      # No PID file: the controller is found as the holder of the job's worker.log. The
+      # -link variants keep the job under a symbolic link, while lsof and /proc name the
+      # file by its resolved path; -proc finds holders through a stand-in /proc.
+      unset LIVE_LSOF
+      if [[ "$scenario" == no-pid-link* ]]; then
+        mkdir -p "$dir/real"
+        ln -s "$dir/real" "$dir/link"
+        home="$dir/link/home"
+        mkdir -p "$home/jobs"
+      fi
+      force_stop_fixture_job "$home" job0 ignore nopid; pid="$FS_LAST"
+      homes+=("$home") ids+=("job0")
+      if [[ "$scenario" == *-proc ]]; then
+        mkdir -p "$dir/proc/self/fd"
+        for i in $("$FS_REAL_PS" -axo pid=,pgid= | awk -v g="$pid" '$2 == g { print $1 }') $FS_SESSIONS; do
+          mkdir -p "$dir/proc/$i/fd"
+          ln -s "$(canon_path "$home/jobs/job0/worker.log")" "$dir/proc/$i/fd/1"
+        done
+        export LIVE_PROC_ROOT="$dir/proc"
+      fi
+      FORCE_BY=$((SECONDS + 20))
+      force_stop_jobs "$recorded" 0 2> "$log"
+      cat "$log" >&2
+      grep -q "KILL process group $pid\$" "$log" || fail "$scenario: the holder of worker.log was not ended"
+      [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "$scenario: a job group is still running"
+      ;;
+    canon)
+      # canon_path resolves the directory's links and otherwise keeps the path as given:
+      # never empty, never "/name" for a file elsewhere, never one job's file for another's.
+      mkdir -p "$dir/real/a" "$dir/real/b"
+      ln -s "$dir/real" "$dir/link"
+      i="$(cd "$dir/real" && pwd -P)"
+      [[ "$(canon_path "$dir/link/a/worker.log")" == "$i/a/worker.log" ]] || fail "canon: a link was not resolved"
+      [[ "$(canon_path "$dir/missing/worker.log")" == "$dir/missing/worker.log" ]] ||
+        fail "canon: a path under a missing directory changed"
+      [[ "$(canon_path /worker.log)" == /worker.log ]] || fail "canon: /worker.log became $(canon_path /worker.log)"
+      [[ "$(cd "$dir/real/a" && canon_path /worker.log)" == /worker.log ]] ||
+        fail "canon: /worker.log depends on the current directory"
+      [[ "$(canon_path worker.log)" == worker.log ]] || fail "canon: a bare name changed"
+      [[ "$(canon_path "$dir/link/a/worker.log")" != "$(canon_path "$dir/link/b/worker.log")" ]] ||
+        fail "canon: two jobs' worker.log got one key"
+      chmod 000 "$dir/real/b"
+      [[ "$(canon_path "$dir/real/b/c/worker.log")" == "$dir/real/b/c/worker.log" ]] ||
+        fail "canon: a path whose directory cannot be entered changed"
+      chmod 755 "$dir/real/b"
       ;;
     tight)
       # FORCE_BY is 4s away and every process table takes 2s: force_stop_jobs keeps to
