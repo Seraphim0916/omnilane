@@ -20,6 +20,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
 import host_context  # noqa: E402
+import json_depth  # noqa: E402
 
 
 MAX_BYTES = 262144
@@ -79,8 +80,8 @@ def read_json(path):
         check(stat.S_ISREG(info.st_mode) and info.st_size <= MAX_BYTES, "invalid JSON file")
         raw = stream.read(MAX_BYTES + 1)
     check(len(raw.encode("utf-8")) <= MAX_BYTES, "JSON file too large")
-    return json.loads(raw, object_pairs_hook=unique_object,
-                      parse_constant=lambda _: (_ for _ in ()).throw(ValueError("invalid JSON number")))
+    return json_depth.loads(raw, object_pairs_hook=unique_object,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("invalid JSON number")))
 
 
 def canonical_dir(value):
@@ -480,7 +481,7 @@ def route(args):
 def publish_plan(args, plan, policy_decision, registry, caller):
     quota_decision = getattr(args, "quota_decision", None)
     if quota_decision:
-        plan["quota_preflight"] = json.loads(quota_decision)
+        plan["quota_preflight"] = json_depth.loads(quota_decision)
     if args.dry_run:
         print(json_text(plan), end="")
         return 0
@@ -675,7 +676,8 @@ def main():
         return route(args) if args.command == "route" else job_command(args)
     except (ValueError, OSError, RecursionError, TypeError, KeyError) as error:
         # Avoid echoing submitted JSON, task text, result text, or capability data.
-        if isinstance(error, (OSError, UnicodeError, json.JSONDecodeError, RecursionError, TypeError, KeyError)):
+        if isinstance(error, (OSError, UnicodeError, json.JSONDecodeError, json_depth.JSONDepthError, RecursionError,
+                              TypeError, KeyError)):
             message = "invalid or inaccessible native protocol input/state"
         else:
             message = str(error)

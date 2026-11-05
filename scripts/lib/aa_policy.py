@@ -67,11 +67,33 @@ def _read_bytes(path: str | Path) -> bytes:
     return data
 
 
+# This file is copied and loaded on its own (tests/run.sh make_fake_vote_repo,
+# tests/test_aa_policy.py), so it keeps a private copy of json_depth's check instead
+# of importing it; tests/test_json_depth_callers.py pins both to the same limit.
+JSON_MAX_DEPTH = 256
+_JSON_DEPTH_TOKENS = re.compile(r'"(?:[^"\\]|\\.)*"|[\[\]{}]', re.DOTALL)
+
+
+def _json_depth_within_limit(text: str) -> bool:
+    depth = 0
+    for match in _JSON_DEPTH_TOKENS.finditer(text):
+        token = match.group()
+        if token in "[{":
+            depth += 1
+            if depth > JSON_MAX_DEPTH:
+                return False
+        elif token in "]}":
+            depth -= 1
+    return True
+
+
 def _read_json(path: str | Path) -> tuple[dict[str, Any], str]:
     data = _read_bytes(path)
     try:
+        text = data.decode("utf-8")
+        _check(_json_depth_within_limit(text), "invalid JSON input")
         value = json.loads(
-            data.decode("utf-8"),
+            text,
             object_pairs_hook=_unique_object,
             parse_constant=lambda _: (_ for _ in ()).throw(PolicyError("invalid JSON number")),
         )

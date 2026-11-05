@@ -12,6 +12,9 @@ import stat
 import sys
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import json_depth  # noqa: E402
+
 
 def timestamp(value):
     if not isinstance(value, str):
@@ -106,7 +109,7 @@ def snapshot(vendor, home, now=None):
         return result
     try:
         raw = read_snapshot(directory)
-        value = json.loads(raw, object_pairs_hook=unique_object)
+        value = json_depth.loads(raw, object_pairs_hook=unique_object)
         if not isinstance(value, dict) or value["vendor"] != vendor or value["window"] != "weekly":
             raise ValueError("wrong vendor/window")
         used = number(value["used_percent"])
@@ -141,7 +144,7 @@ def candidate(values):
 
 def decision(args):
     if args.snapshot:
-        snap = json.loads(args.snapshot)
+        snap = json_depth.loads(args.snapshot)
     else:
         vendor = args.original[0]
         if vendor == "vote" and "codex" in args.original[1].split(","):
@@ -200,7 +203,7 @@ def main():
         print(json.dumps(decision(args), separators=(",", ":")))
     elif args.command == "persist":
         import native
-        native.atomic_json(Path(args.path), json.loads(args.decision))
+        native.atomic_json(Path(args.path), json_depth.loads(args.decision))
     else:
         try:
             return capability(args)

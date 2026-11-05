@@ -27,6 +27,7 @@ from typing import Callable, Mapping, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
+import json_depth  # noqa: E402
 
 try:
     import tomllib
@@ -390,7 +391,7 @@ def _rollout_selector(thread: str,
     try:
         with path.open(encoding="utf-8") as stream:
             for line in stream:
-                record = json.loads(line)
+                record = json_depth.loads(line)
                 if not isinstance(record, dict):
                     raise ValueError("invalid rollout record")
                 last_timestamp = record.get("timestamp")
@@ -420,7 +421,7 @@ def _rollout_selector(thread: str,
                             context_turn = None
                         if event_turn is None or context_turn is None or event_turn == context_turn:
                             ended = (event, context_turn or "unknown", event_turn or "unknown")
-    except (json.JSONDecodeError, UnicodeError):
+    except (json.JSONDecodeError, UnicodeError, json_depth.JSONDepthError):
         raise ValueError("rollout contains incomplete or invalid JSON") from None
     except OSError as error:
         raise ValueError(f"cannot read rollout (errno {error.errno})") from None
@@ -490,7 +491,7 @@ def _claude_tail_selector(path: Path) -> tuple[Selector | None, str]:
     unverified = None
     for line in reversed(tail.splitlines()):
         try:
-            record = json.loads(line)
+            record = json_depth.loads(line)
         except (ValueError, UnicodeError, RecursionError):
             continue
         if not isinstance(record, dict) or record.get("type") != "assistant":
@@ -547,7 +548,7 @@ def _claude_transcript_overlay(
             if environment.get("CLAUDE_CONFIG_DIR") else Path.home() / ".claude"
         )
         try:
-            session = json.loads((home / "sessions" / f"{launcher}.json").read_text(
+            session = json_depth.loads((home / "sessions" / f"{launcher}.json").read_text(
                 encoding="utf-8"))
         except FileNotFoundError:
             return fallback("sessions file missing")

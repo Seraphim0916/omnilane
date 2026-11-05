@@ -11,6 +11,7 @@ semantic version tags.
 
 ### Fixed
 - Python 3.14: host rows (`--host-rows`), the origin policy, overlay diagnostics and dispatch refusal evidence now refuse JSON nested deeper than 256 levels with an explicit depth check (`scripts/lib/json_depth.py`) instead of relying on `RecursionError`. Python 3.14 measures C stack use rather than counting calls, so `json.loads` decodes nesting that 3.9–3.13 refused; the messages and fallbacks are now the same on every supported version.
+- The same depth check now guards the AA registry and overlay reader, Codex rollout and Claude transcript/session reads used for caller identity, native protocol state files and the quota preview, and quota snapshots and decision/persist arguments. Over-deep input is reported as `invalid JSON input`, `rollout contains incomplete or invalid JSON`, a skipped transcript line, the launch-flag fallback, `invalid or inaccessible native protocol input/state` and `invalid-snapshot` respectively. `aa_retry` previously crashed with a traceback on deep input under 3.9–3.13 because it does not catch `RecursionError`; it now gets the policy error.
 
 ## [0.59.0] - 2026-11-05
 
