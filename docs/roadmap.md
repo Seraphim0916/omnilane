@@ -31,7 +31,7 @@ checked.
 | Vendor | Continuation primitives | Mid-run input | Evidence |
 |---|---|---|---|
 | claude | `--session-id <uuid>`, `-r/--resume`, `--fork-session`, `--no-session-persistence` | stdin NDJSON via `-p --input-format stream-json --output-format stream-json --verbose` | **VERIFIED** (below) |
-| codex | first JSON event `thread_id`; `exec resume <id>` | unknown; `app-server`/`exec-server` are the candidate surface | **VERIFIED**: three turns and cross-directory resume |
+| codex | provider supplies `thread_id` in its first JSON event; `exec resume <id>` (local selection rule below) | unknown; `app-server`/`exec-server` are the candidate surface | **VERIFIED**: three turns and cross-directory resume |
 | grok | `--session-id <uuid>`, `--resume <uuid>` | unknown; `leader` is the candidate surface | **VERIFIED**: three turns and cross-directory resume |
 | gemini (agy) | JSON `conversation_id`; `--conversation <id>` | unknown | **VERIFIED**: three turns and cross-directory resume |
 | kimi / qwen / opencode | — | — | UNVERIFIED: CLI not installed on this host |
@@ -42,8 +42,30 @@ Two facts worth carrying forward:
 
 - `run-grok.sh` passes `--no-memory`, actively disabling grok's own cross-session
   memory. Any grok threading work must decide whether that flag stays.
-- `run-codex.sh` already extracts `thread_id` from the first progress event and
-  locates `rollout-*-<thread_id>.jsonl`. Half of R1's codex plumbing exists.
+- Codex provider event order above is distinct from the local thread-state
+  parser's identifier selection below.
+
+### Local thread-event parsing (offline contract)
+
+`scripts/dispatch.sh:164–204` (`extract_claude_result_session_id` and
+`extract_codex_result_session_id`) scans the event file through the end and
+selects the **last legal identifier**, not necessarily the first event's value.
+Claude requires a `result` event with `session_id`; Codex accepts `thread_id`
+without an event-type filter. Both require 1–256 characters from
+`[A-Za-z0-9._:-]`.
+
+Malformed JSON lines (including a truncated final line), missing identifiers,
+and invalid identifiers are skipped; they do not erase an earlier legal value.
+If no legal identifier is found, extraction fails. `update_thread_state`
+(`scripts/dispatch.sh:271–308`) reports the missing resumable identifier and
+returns before writing thread state, preserving any prior state.
+
+Offline regression coverage: `bash tests/test_c2_thread_event_recovery.sh`
+(C2-B06). Its synthetic executors exercise last-legal selection and next-turn
+resume, malformed/truncated/empty input, prior-state preservation and recovery,
+and nonobject JSON input. These cases test local parsing and dispatch through
+fake executors; they are not provider probes and do not change the evidence
+levels or historical live-probe results below.
 
 ### Verified continuation evidence
 
