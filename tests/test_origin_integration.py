@@ -72,7 +72,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-exec.sh":
         "bd44a523b02884d8d350197516fb1ef2d7e5ae98fbd726bd6d04def00d32ef9a",
     "scripts/runners/run-gemini.sh":
-        "b3c69019e8d756fe4e9e5afc41ead18a567bff2c52a3083c718e2eb8705fff57",
+        "09188c48bd68fae91cda519dbf34ddbdcc428b16463de8430323e4af10d3748d",
     "scripts/runners/run-grok.sh":
         "3bb8018c38ca1c3ca5cdfc8a9c5cecdf8cedf5448408340069c44aab1488ae69",
     "scripts/runners/run-groq.sh":
