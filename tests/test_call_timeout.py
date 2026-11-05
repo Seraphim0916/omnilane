@@ -52,9 +52,10 @@ class CallTimeoutTests(unittest.TestCase):
                 self.assertEqual(code, result.returncode, result.stderr)
                 self.assertEqual("owned output\n", result.stdout)
 
-    def test_stopped_watchdog_rechecks_deadline_after_successful_child_exit(self):
+    def test_stopped_watchdog_keeps_child_status_when_it_never_saw_the_overrun(self):
         # Freeze only our watchdog after its owned child is ready. The child
-        # finishes normally while the watchdog cannot observe the deadline.
+        # finishes while the watchdog cannot observe the deadline, so the
+        # watchdog never sees it running past the deadline and keeps its status.
         child = self.root / "child.py"
         ready = self.root / "ready"
         child.write_text("import pathlib,sys,time\n"
@@ -73,7 +74,38 @@ class CallTimeoutTests(unittest.TestCase):
             time.sleep(1.6)
             process.send_signal(signal.SIGCONT)
             stdout, stderr = process.communicate(timeout=5)
-            self.assertEqual(142, process.returncode, stderr)
+            self.assertEqual(0, process.returncode, stderr)
+            self.assertEqual("complete\n", stdout)
+        finally:
+            if process.poll() is None:
+                process.send_signal(signal.SIGCONT)
+                process.kill()
+                process.communicate(timeout=5)
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_child_finishing_in_time_keeps_status_when_reaped_after_deadline(self):
+        # The child stops its own watchdog and exits well inside the deadline;
+        # the watchdog resumes only after the deadline and reaps it late.
+        child = self.root / "child.py"
+        child.write_text("import os,signal\nos.kill(os.getppid(), signal.SIGSTOP)\n"
+                         "print('complete', flush=True)\n")
+        process = subprocess.Popen(
+            ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "1", sys.executable, str(child)],
+            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                state = subprocess.run(["ps", "-o", "stat=", "-p", str(process.pid)], env=self.env,
+                                       text=True, capture_output=True, timeout=2).stdout.strip()
+                if state.startswith("T"):
+                    break
+                time.sleep(0.01)
+            self.assertTrue(state.startswith("T"), f"watchdog was not stopped: {state!r}")
+            time.sleep(1.5)
+            process.send_signal(signal.SIGCONT)
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertEqual(0, process.returncode, stderr)
             self.assertEqual("complete\n", stdout)
         finally:
             if process.poll() is None:

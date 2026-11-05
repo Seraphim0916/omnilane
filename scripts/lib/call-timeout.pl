@@ -77,9 +77,13 @@ while (1) {
     my ($done, $status) = reap();
     if ($done) {
         defined $status or exit 125;
-        # A stopped or delayed watchdog may first observe completion after
-        # the deadline. Late success must not bypass the per-call budget.
-        exit 142 if clock_gettime(CLOCK_MONOTONIC) >= $deadline;
+        # 142 is reserved for a child this watchdog saw running at or after the
+        # deadline (below). A child already reaped here may have finished in
+        # time while the watchdog was stopped or descheduled; the reap time
+        # cannot tell, so its own status stands. Known tradeoff: if the child
+        # really overran while this watchdog was stopped and exited before the
+        # watchdog resumed, the overrun is not seen and is not reported as 142.
+        # Reporting a finished-in-time child as 142 would discard its real result.
         exit(($status & 127) ? 128 + ($status & 127) : ($status >> 8));
     }
     if (clock_gettime(CLOCK_MONOTONIC) >= $deadline) {
