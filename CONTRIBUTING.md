@@ -53,6 +53,12 @@ Chromium with Playwright, sets `OMNILANE_TEST_USE_PLAYWRIGHT_BROWSER=1`, and run
 ShellCheck or a real browser is unavailable locally, say so in the pull request
 instead of treating the missing check as passed.
 
+For CI parity, use ShellCheck 0.11.0 (CI verifies the downloaded archive with
+SHA-256 before installation) and run `bash scripts/check.sh`. Run the Python
+unit suite with each CI matrix version: Python 3.9, 3.12, and 3.14, using
+`python3.X -m unittest discover -s tests -p 'test_*.py'` for each version.
+Unavailable checks are not passes.
+
 Shell test entrypoints run through `tests/offline_env.py`: a temporary HOME and
 an allowlisted utility PATH keep installed provider CLIs, credentials and local
 configuration outside the fixtures. A fixture must explicitly supply its fake
