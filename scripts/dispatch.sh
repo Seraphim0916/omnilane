@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# A dispatch never belongs to the job it was started from: drop that job's
+# markers before anything runs, so neither this controller nor an unsupervised
+# worker can be stopped by the parent's cleanup. A supervised job gets its own.
+if [[ -n "${OMNILANE_JOB_TOKEN:-}${OMNILANE_JOB_ID:-}" ]]; then
+  exec env -u OMNILANE_JOB_TOKEN -u OMNILANE_JOB_ID -u OMNILANE_JOB_LEFTOVERS_FILE \
+    -u OMNILANE_JOB_MARKER_HELPER "$BASH" "${BASH_SOURCE[0]}" "$@"
+fi
 # omnilane dispatch — one routing table, any harness.
 #
 # Usage:
@@ -1643,6 +1650,7 @@ run_job() {
       OMNILANE_JOB_WORKER_EXPECTED_SHA256="$JOB_WORKER_SHA256" \
       OMNILANE_JOB_SUPERVISED=1 OMNILANE_JOB_ID="$JOB_ID" \
       OMNILANE_JOB_LEFTOVERS_FILE="$JOB_DIR/leftovers" \
+      OMNILANE_JOB_MARKER_HELPER="$OMNILANE_REPO/scripts/lib/job_marker.py" \
       perl "$JOB_SUPERVISOR" "${JOB_TIMEOUT:---no-deadline}" \
       "$JOB_WORKER_BASH" "$JOB_WORKER" "$VENDOR" "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" \
       "$JOB_DIR/task.txt" "$JOB_DIR/out.txt"

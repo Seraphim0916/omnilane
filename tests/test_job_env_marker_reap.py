@@ -7,8 +7,10 @@ supervisor finds it by the OMNILANE_JOB_ID marker every job process inherits.
 import json
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -32,6 +34,19 @@ helper = subprocess.Popen([sys.executable, '-c', loop, str(root / 'helper.log')]
 time.sleep(0.2)
 ids = {'worker': [os.getpid(), os.getpgrp()], 'writer': [writer.pid, os.getpgid(writer.pid)],
        'helper': [helper.pid, os.getpgid(helper.pid)]}
+if os.environ.get('FIXTURE_NESTED'):
+    # A background job dispatched from inside this job: it must outlive this job's cancel.
+    child_env = dict(os.environ, FIXTURE_TAG=os.environ['FIXTURE_TAG'] + '-child')
+    child_env.pop('FIXTURE_NESTED')
+    # Workers refuse nested dispatch (OMNILANE_DEPTH=1); a process that resets the depth still
+    # inherits this job's environment, which is the case the marker must not follow.
+    child_env['OMNILANE_DEPTH'] = '0'
+    for key in [k for k in child_env if k.startswith('OMNILANE_AA_')]:
+        child_env.pop(key)
+    child = subprocess.run([os.environ['FIXTURE_BASH'], os.environ['FIXTURE_DISPATCH'], '--background', '--single-shot', '--operator-asserted-human',
+                            'fixture', 'nested background child'], env=child_env, text=True,
+                           capture_output=True, stdin=subprocess.DEVNULL, timeout=20)
+    (root / 'child-job').write_text(child.stdout.strip() + chr(10) + 'rc=' + str(child.returncode) + chr(10) + child.stderr[-800:])
 (root / 'ids.tmp').write_text(json.dumps(ids))
 (root / 'ids.tmp').replace(root / 'ids.json')
 signal.pause()
@@ -44,6 +59,8 @@ def alive(pid):
     return bool(state) and not state.startswith("Z")
 
 
+@unittest.skipUnless(sys.platform == "darwin" or sys.platform.startswith("linux"),
+                     "job_marker.py reads process environments only on macOS and Linux")
 class JobEnvMarkerReapTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="omnilane-marker-reap-")
@@ -62,6 +79,7 @@ class JobEnvMarkerReapTests(unittest.TestCase):
         (self.home / "routing.local.yaml").write_text(f'fixture: exec "{worker}" -\n')
         self.env.update(OMNILANE_HOME=str(self.home), FIXTURE_ROOT=str(self.fixtures), OMNILANE_INBOX="0")
         self.recorded = []
+        self.decoys = []
         self.addCleanup(self.stop_recorded)
 
     def stop_recorded(self):
@@ -74,9 +92,11 @@ class JobEnvMarkerReapTests(unittest.TestCase):
                 except ProcessLookupError:
                     pass
             time.sleep(0.2)
+        for proc in self.decoys:
+            proc.wait(timeout=5)
 
-    def dispatch(self, tag, *extra):
-        env = dict(self.env, FIXTURE_TAG=tag)
+    def dispatch(self, tag, *extra, env_extra=None):
+        env = dict(self.env, FIXTURE_TAG=tag, **(env_extra or {}))
         done = subprocess.run(["bash", str(ROOT / "scripts/dispatch.sh"), "--background", "--single-shot", *extra,
                                "fixture", "offline marker fixture " + tag],
                               env=env, text=True, capture_output=True, timeout=20)
@@ -151,6 +171,68 @@ class JobEnvMarkerReapTests(unittest.TestCase):
         self.assertEqual(self.jobs("cancel", control_id).returncode, 0)
         self.wait_exit(control_id)
         self.assert_reaped(control_id, control, 143)
+
+    def decoy(self, name, argv_text, env_extra):
+        log = self.root / f"{name}.log"
+        loop = "import sys, time\nwhile True:\n    open(sys.argv[1], 'a').write('x\\n')\n    time.sleep(0.1)\n"
+        env = dict(self.env, **env_extra)
+        proc = subprocess.Popen(["python3", "-c", loop, str(log), *argv_text.split()], env=env,
+                                start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.recorded.append((proc.pid, proc.pid))
+        self.decoys.append(proc)
+        return proc.pid
+
+    def test_marker_text_outside_the_environment_does_not_match(self):
+        job_id, ids = self.dispatch("target")
+        decoys = {
+            # The marker only as a command argument.
+            "argv": self.decoy("argv", f"--note OMNILANE_JOB_ID={job_id}", {}),
+            # A different real marker, with the target marker as argument text on the same line.
+            "two-markers": self.decoy("two", f"NOTE=hello OMNILANE_JOB_ID={job_id} world",
+                                      {"OMNILANE_JOB_ID": "other-job"}),
+            # A marker that only starts with the target ID (job-12 versus job-123).
+            "prefix": self.decoy("prefix", "x", {"OMNILANE_JOB_ID": job_id + "3"}),
+        }
+        time.sleep(0.3)
+        self.assertEqual(self.jobs("cancel", job_id).returncode, 0)
+        self.wait_exit(job_id)
+        self.assert_reaped(job_id, ids, 143)
+        killed = [name for name, pid in decoys.items() if not alive(pid)]
+        self.assertEqual(killed, [], "processes outside the job were stopped: " + ", ".join(killed))
+
+    def test_background_child_job_survives_parent_cancel(self):
+        # macOS hides the environment of platform binaries such as /bin/bash, so prefer a
+        # non-system bash there: only then would a leaked parent marker be visible at all.
+        bash = shutil.which("bash", path="/opt/homebrew/bin:/usr/local/bin") or shutil.which("bash")
+        parent_id, parent = self.dispatch("parent", env_extra={
+            "FIXTURE_NESTED": "1", "FIXTURE_DISPATCH": str(ROOT / "scripts/dispatch.sh"),
+            "FIXTURE_BASH": bash})
+        child_file = self.fixtures / "parent" / "child-job"
+        deadline = time.monotonic() + 20
+        while not child_file.exists():
+            self.assertLess(time.monotonic(), deadline, "nested dispatch did not report")
+            time.sleep(0.05)
+        child_id = child_file.read_text().split("\n", 1)[0]
+        self.assertRegex(child_id, r"^\d{8}-\d{6}-\d+-\d+$", child_file.read_text())
+        child_ids_path = self.fixtures / "parent-child" / "ids.json"
+        while not child_ids_path.exists():
+            self.assertLess(time.monotonic(), deadline, "nested child worker did not start")
+            time.sleep(0.05)
+        child = json.loads(child_ids_path.read_text())
+        self.recorded.extend(tuple(v) for v in child.values())
+        controller = int((self.home / "jobs" / child_id / "pid").read_text())
+        self.recorded.append((controller, controller))
+        self.assertEqual(self.jobs("cancel", parent_id).returncode, 0)
+        self.wait_exit(parent_id)
+        self.assert_reaped(parent_id, parent, 143)
+        stopped = [name for name in ("worker", "writer", "helper") if not alive(child[name][0])]
+        if not alive(controller):
+            stopped.append("controller")
+        self.assertEqual(stopped, [], "background child job lost: " + ", ".join(stopped))
+        self.assertEqual(self.status(child_id)["state"], "running")
+        self.assertEqual(self.jobs("cancel", child_id).returncode, 0)
+        self.wait_exit(child_id)
+        self.assert_reaped(child_id, child, 143)
 
     def test_helper_writes_stop_after_cancel(self):
         job_id, ids = self.dispatch("writes")

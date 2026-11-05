@@ -574,13 +574,15 @@ no job timeout applies, metadata remains `job_timeout: null`. The supervised
 per-call watchdog uses the separate `scripts/lib/call-timeout.pl` supervisor and
 returns 142 on expiry; whole-job deadline
 expiry returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
-Supervised job processes inherit `OMNILANE_JOB_ID`. After cancellation or
-whole-job expiry stops the group, the supervisor also stops processes that left
-the group (for example through `setsid`) when they carry exactly that marker and
-started after the job; a normal finish only counts them. `jobs --json status`
-then adds `"leftovers":{"reaped":N,"remaining":M}`, and plain `status` appends
-`leftovers=M` when any remain. A process that clears its environment cannot be
-found this way.
+Supervised job processes inherit a random `OMNILANE_JOB_TOKEN` (plus
+`OMNILANE_JOB_ID`). After cancellation or whole-job expiry stops the group, the
+supervisor also stops processes that left the group (for example through
+`setsid`) when their environment, read entry by entry, holds exactly that token
+and they started after the job; a normal finish only counts them. `jobs --json
+status` then adds `"leftovers":{"reaped":N,"remaining":M}`, and plain `status`
+appends `leftovers=M` when any remain. On macOS a helper that is a platform
+binary such as `/bin/bash` hides its environment and is not found, nor is a
+process that clears its environment.
 
 `--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
 single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical

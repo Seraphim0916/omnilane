@@ -57,38 +57,34 @@ sub terminate_group {
 }
 
 # Processes that call setsid leave the job's group, so group signals miss them.
-# Every job process inherits OMNILANE_JOB_ID from dispatch; after the group is
-# stopped, processes carrying exactly this marker and started after this
-# supervisor are stopped too, and the outcome is recorded for `jobs status`.
-my $JOB_MARKER = $ENV{OMNILANE_JOB_ID} // '';
-$JOB_MARKER = '' unless $JOB_MARKER =~ /\A[0-9A-Za-z][0-9A-Za-z._-]{0,127}\z/;
+# The supervisor gives its worker a random OMNILANE_JOB_TOKEN that only this
+# job's processes inherit. After the group is stopped, job_marker.py lists the
+# processes whose environment holds exactly that entry and that started after
+# this supervisor; they are stopped and the outcome is kept for `jobs status`.
 my $LEFTOVERS_FILE = $ENV{OMNILANE_JOB_LEFTOVERS_FILE} // '';
-my $SUPERVISOR_STARTED = time();
-
-sub etime_seconds {
-    my ($etime) = @_;
-    $etime =~ /\A(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)\z/ or return undef;
-    return ((($1 // 0) * 24 + ($2 // 0)) * 60 + $3) * 60 + $4;
+my $MARKER_HELPER = $ENV{OMNILANE_JOB_MARKER_HELPER} // '';
+delete @ENV{qw(OMNILANE_JOB_LEFTOVERS_FILE OMNILANE_JOB_MARKER_HELPER OMNILANE_JOB_TOKEN)};
+my $JOB_TOKEN = '';
+my $WORKER_NOT_BEFORE_US;  # wall clock, in microseconds, read just before the worker is forked
+if ($MARKER_HELPER ne '' && open(my $random, '<:raw', '/dev/urandom')) {
+    my $bytes = '';
+    $JOB_TOKEN = unpack('H*', $bytes) if read($random, $bytes, 16) == 16;
+    close($random);
 }
 
-# Returns undef when the process list cannot be read, else the marked PIDs.
+# Returns undef when processes cannot be listed, else {pid => start time}.
 sub marked_processes {
-    return [] if $JOB_MARKER eq '';
-    my $ps_pid = open(my $ps, '-|', '/bin/ps', '-E', '-axww', '-o', 'pid=,etime=,command=');
-    defined $ps_pid or return undef;
-    my $now = time();
-    my @found;
-    while (my $line = <$ps>) {
-        my ($pid, $etime, $rest) = $line =~ /\A\s*(\d+)\s+(\S+)\s(.*)\z/s or next;
-        next if $pid == $$ || $pid == $ps_pid;
-        next unless $rest =~ /(?:\A|\s)OMNILANE_JOB_ID=\Q$JOB_MARKER\E(?:\s|\z)/;
-        my $age = etime_seconds($etime);
-        # A PID that existed before this job started cannot belong to it.
-        next unless defined $age && $now - $age >= $SUPERVISOR_STARTED - 1;
-        push @found, $pid;
+    return {} if $JOB_TOKEN eq '';
+    my $helper_pid = open(my $scan, '-|', 'python3', '-I', $MARKER_HELPER, 'scan',
+                          '--token', $JOB_TOKEN, '--supervisor', $$, '--after', $WORKER_NOT_BEFORE_US);
+    defined $helper_pid or return undef;
+    my %found;
+    while (my $line = <$scan>) {
+        my ($pid, $start) = $line =~ /\A(\d+) (\d+)\n?\z/ or next;
+        $found{$pid} = $start;
     }
-    close($ps) or return undef;
-    return \@found;
+    close($scan) or return undef;
+    return \%found;
 }
 
 sub record_leftovers {
@@ -101,37 +97,42 @@ sub record_leftovers {
     rename($tmp, $LEFTOVERS_FILE);
 }
 
+sub same_process {  # pid => start time, as listed now and as listed before
+    my ($now, $before) = @_;
+    return grep { defined $now->{$_} && $now->{$_} eq $before->{$_} } keys %$before;
+}
+
 sub reap_marked {
     my ($stop) = @_;
+    return if $JOB_TOKEN eq '';
     my $found = marked_processes();
     if (!defined $found) {
         record_leftovers('unknown', 'unknown');
         return;
     }
+    my $count = scalar keys %$found;
     if (!$stop) {
-        record_leftovers(0, scalar @$found);
+        record_leftovers(0, $count);
         return;
     }
-    my @targets = @$found;
-    kill 'TERM', @targets if @targets;
+    kill 'TERM', keys %$found if $count;
     my $grace_deadline = monotonic_now() + $TERM_GRACE_SECONDS;
-    while (@targets && monotonic_now() < $grace_deadline) {
-        @targets = grep { kill 0, $_ } @targets;
-        sleep($POLL_SECONDS) if @targets;
+    my %pending = %$found;
+    while (%pending && monotonic_now() < $grace_deadline) {
+        delete @pending{ grep { !kill(0, $_) } keys %pending };
+        sleep($POLL_SECONDS) if %pending;
     }
-    if (@targets) {
-        # Re-list before SIGKILL so a PID reused in the grace window is not hit.
+    if (%pending) {
+        # SIGKILL only a PID listed again with the same start time; a reused PID is left alone.
         my $again = marked_processes();
-        my %still = map { $_ => 1 } @{ $again // [] };
-        my @kill = grep { $still{$_} } @targets;
+        my @kill = defined $again ? same_process($again, \%pending) : ();
         kill 'KILL', @kill if @kill;
         sleep($POLL_SECONDS * 4) if @kill;
     }
     my $after = marked_processes();
-    my $remaining = defined $after ? scalar @$after : 'unknown';
-    record_leftovers(scalar @$found, $remaining);
+    my $remaining = defined $after ? scalar(same_process($after, $found)) : 'unknown';
+    record_leftovers($count, $remaining);
 }
-
 my $forwarded_exit;
 $SIG{HUP}  = sub { $forwarded_exit = 129; };
 $SIG{INT}  = sub { $forwarded_exit = 130; };
@@ -139,6 +140,7 @@ $SIG{TERM} = sub { $forwarded_exit = 143; };
 
 # Background jobs still need group cleanup when no whole-job budget was set.
 my $deadline = $no_deadline ? undef : monotonic_now() + $seconds;
+$WORKER_NOT_BEFORE_US = int(Time::HiRes::time() * 1_000_000);
 my $pid = fork();
 if (!defined $pid) {
     print STDERR "omnilane: job supervisor could not fork: $!\n";
@@ -147,6 +149,7 @@ if (!defined $pid) {
 
 if ($pid == 0) {
     $SIG{HUP} = $SIG{INT} = $SIG{TERM} = 'DEFAULT';
+    $ENV{OMNILANE_JOB_TOKEN} = $JOB_TOKEN if $JOB_TOKEN ne '';
     setsid() or do {
         print STDERR "omnilane: job supervisor could not create process group: $!\n";
         exit 125;
