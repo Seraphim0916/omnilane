@@ -155,6 +155,7 @@ take_process_table() {
 # a slow system.
 file_holders() {
   local seconds="$1" by="$2" proc="${LIVE_PROC_ROOT:-/proc}" lsof="${LIVE_LSOF:-}" out rc=0
+  out="$TEST_ROOT/holders.$$"
   shift 2
   [[ "$#" -gt 0 ]] || return 0
   if [[ -d "$proc/self/fd" ]]; then
@@ -174,10 +175,13 @@ file_holders() {
     [[ -n "$lsof" || ! -x /usr/bin/lsof ]] || lsof=/usr/bin/lsof
   fi
   [[ -n "$lsof" ]] || return 3
-  out="$(within "$seconds" "$by" "$lsof" -n -P -w -F pn -- "$@" 2>/dev/null)" || rc=$?
+  # Into a file, not a command substitution: lsof forks helpers for calls that can block
+  # (see -O in lsof(1)), and a helper that outlives lsof would hold a substitution's pipe
+  # open past the limit. The shell waits only for lsof itself.
+  within "$seconds" "$by" "$lsof" -n -P -w -F pn -- "$@" > "$out" 2>/dev/null || rc=$?
   # lsof exits 1 when nobody holds the files: an answer, not a failure.
-  [[ "$rc" -eq 0 || ( "$rc" -eq 1 && -z "$out" ) ]] || return "$rc"
-  printf '%s\n' "$out" | awk '/^p[0-9]+$/ { pid = substr($0, 2) } /^n/ && pid != "" { print pid, substr($0, 2) }'
+  [[ "$rc" -eq 0 || ( "$rc" -eq 1 && ! -s "$out" ) ]] || return "$rc"
+  awk '/^p[0-9]+$/ { pid = substr($0, 2) } /^n/ && pid != "" { print pid, substr($0, 2) }' "$out"
 }
 # Reads process table $1, roots $2 ("job pid start", start "-" when none was recorded)
 # and members $3 (earlier output of this function) and prints, for the processes that
@@ -2523,6 +2527,20 @@ case_force_stop() {
       grep -q "KILL process group $pid\$" "$log" || fail "no-pid: the holder of worker.log was not ended"
       [[ "$(force_stop_alive_count)" -eq 0 ]] || fail "no-pid: a job group is still running"
       ;;
+    tight)
+      # FORCE_BY is 4s away and every process table takes 2s: force_stop_jobs keeps to
+      # FORCE_BY, not to its own 20s (which would take it to about 8s here), and gives up
+      # on what no longer fits.
+      for i in 0 1; do
+        force_stop_fixture_job "$home" "job$i" ignore
+        homes+=("$home") ids+=("job$i")
+      done
+      export FAKE_PS_DELAY=2
+      FORCE_BY=$((SECONDS + 4))
+      force_stop_jobs "$recorded" 0 1 2> "$log"
+      cat "$log" >&2
+      [[ "$SECONDS" -le $((FORCE_BY + 1)) ]] || fail "tight: returned at ${SECONDS}s, past FORCE_BY ${FORCE_BY}s + 1"
+      ;;
     stop-flow)
       # The whole stop: the exit is recorded but the controller keeps running and ignores
       # TERM. The job is named as not stopping, every process is gone, and it all ends
@@ -2559,12 +2577,14 @@ case_force_stop() {
         fail "interrupt: a /proc search that needs 31s finished within its 2s"
       fi
       [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: the /proc search ran past its limit"
-      printf '#!/bin/bash\nexec sleep 30\n' > "$dir/bin/lsof"
+      # A hung lsof whose helper outlives it, holding lsof's stdout open for 8s.
+      printf '#!/bin/bash\nsleep 8 &\nprintf "%%s\\n" "$!" > "%s/lsof-helper"\nexec sleep 30\n' "$dir" > "$dir/bin/lsof"
       start="$SECONDS"
       if LIVE_PROC_ROOT="$dir/no-proc" file_holders 2 "$((SECONDS + 30))" "$dir/worker.log"; then
         fail "interrupt: a hung lsof passed"
       fi
       [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: lsof ran past its limit"
+      read -r i < "$dir/lsof-helper" && kill "$i" 2>/dev/null || true
       start="$SECONDS"
       if within 2 "$((SECONDS + 30))" sleep 30; then fail "interrupt: a hung command passed"; fi
       [[ $((SECONDS - start)) -le 3 ]] || fail "interrupt: a command ran past its limit"
