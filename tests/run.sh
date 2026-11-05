@@ -4782,6 +4782,17 @@ test_c2_thread_dry_run() {
 }
 test_c2_thread_dry_run
 
+test_c2_thread_names() {
+  local name="thread names: refusal states the complete name rule (C2-B07)" out rc=0
+  out="$(/bin/bash "$ROOT/tests/test_c2_thread_names.sh" --omnilane-offline-child 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_c2_thread_names
+
 test_native_executor() {
   local name="native executor protocol (offline fixtures)" out rc=0
   out="$(python3 "$ROOT/tests/test_native_executor.py" 2>&1)" || rc=$?

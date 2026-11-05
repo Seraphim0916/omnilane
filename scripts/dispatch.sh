@@ -879,7 +879,7 @@ done
   exit 2
 }
 if [[ -n "$THREAD_NAME" ]] && ! omnilane_valid_thread_name "$THREAD_NAME"; then
-  thread_refuse "omnilane: invalid --thread name '$THREAD_NAME' (want 1-64 characters: A-Z, a-z, 0-9, dot, underscore, hyphen)"
+  thread_refuse "omnilane: invalid --thread name '$THREAD_NAME' (want 1-64 characters: A-Z, a-z, 0-9, dot, underscore, hyphen; first character must be alphanumeric)"
 fi
 if [[ -n "$THREAD_NAME" && "$SESSION_REQUEST" == "live" ]]; then
   thread_refuse "omnilane: --thread cannot be combined with --live; threads run single-shot and a live session is already a conversation"
