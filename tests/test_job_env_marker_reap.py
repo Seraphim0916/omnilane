@@ -30,7 +30,9 @@ loop = ("import sys, time\\n"
         "    open(sys.argv[1], 'a').write('x\\\\n')\\n"
         "    time.sleep(0.1)\\n")
 writer = subprocess.Popen([sys.executable, '-c', loop, str(root / 'writer.log')])
-helper = subprocess.Popen([sys.executable, '-c', loop, str(root / 'helper.log')], start_new_session=True)
+helper_args = ([os.environ['FIXTURE_HELPER_SCRIPT'], str(root / 'helper.log'), str(root)]
+               if os.environ.get('FIXTURE_HELPER_SCRIPT') else ['-c', loop, str(root / 'helper.log')])
+helper = subprocess.Popen([sys.executable, *helper_args], start_new_session=True)
 time.sleep(0.2)
 ids = {'worker': [os.getpid(), os.getpgrp()], 'writer': [writer.pid, os.getpgid(writer.pid)],
        'helper': [helper.pid, os.getpgid(helper.pid)]}
@@ -50,6 +52,26 @@ if os.environ.get('FIXTURE_NESTED'):
 (root / 'ids.tmp').write_text(json.dumps(ids))
 (root / 'ids.tmp').replace(root / 'ids.json')
 signal.pause()
+"""
+
+
+RESPAWN_HELPER = """import json, os, signal, subprocess, sys, time
+from pathlib import Path
+log, root = sys.argv[1], Path(sys.argv[2])
+loop = ("import sys, time\\n"
+        "while True:\\n"
+        "    open(sys.argv[1], 'a').write('x\\\\n')\\n"
+        "    time.sleep(0.1)\\n")
+def on_term(*_):
+    # Hand the work to a new marked process, then leave: the PID that got TERM is gone.
+    child = subprocess.Popen([sys.executable, '-c', loop, str(root / 'respawn.log')], start_new_session=True)
+    (root / 'respawn.tmp').write_text(json.dumps([child.pid, os.getpgid(child.pid)]))
+    (root / 'respawn.tmp').replace(root / 'respawn.json')
+    os._exit(0)
+signal.signal(signal.SIGTERM, on_term)
+while True:
+    open(log, 'a').write('x\\n')
+    time.sleep(0.1)
 """
 
 
@@ -233,6 +255,28 @@ class JobEnvMarkerReapTests(unittest.TestCase):
         self.assertEqual(self.jobs("cancel", child_id).returncode, 0)
         self.wait_exit(child_id)
         self.assert_reaped(child_id, child, 143)
+
+    def test_replacement_started_after_term_is_reported_as_remaining(self):
+        script = self.root / "respawn-helper.py"
+        script.write_text(RESPAWN_HELPER, encoding="utf-8")
+        job_id, ids = self.dispatch("respawn", env_extra={"FIXTURE_HELPER_SCRIPT": str(script)})
+        self.assertEqual(self.jobs("cancel", job_id).returncode, 0)
+        self.wait_exit(job_id)
+        replacement_path = self.fixtures / "respawn" / "respawn.json"
+        deadline = time.monotonic() + 10
+        while not replacement_path.exists():
+            self.assertLess(time.monotonic(), deadline, "helper did not start its replacement")
+            time.sleep(0.05)
+        replacement = json.loads(replacement_path.read_text())
+        self.recorded.append(tuple(replacement))
+        self.assertEqual(self.wait_gone([ids["helper"][0]]), [], "the helper that got TERM is still running")
+        self.assertTrue(alive(replacement[0]), "the replacement should still be running for this check")
+        job = self.status(job_id)
+        self.assertEqual(job["exit_code"], 143)
+        # The replacement was found by the last listing, so it must count as remaining.
+        self.assertEqual(job.get("leftovers"), {"reaped": 1, "remaining": 1}, job)
+        plain = self.jobs("status", job_id)
+        self.assertIn("leftovers=1", plain.stdout)
 
     def test_helper_writes_stop_after_cancel(self):
         job_id, ids = self.dispatch("writes")

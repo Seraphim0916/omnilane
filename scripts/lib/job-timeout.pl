@@ -129,8 +129,10 @@ sub reap_marked {
         kill 'KILL', @kill if @kill;
         sleep($POLL_SECONDS * 4) if @kill;
     }
+    # Count everything the last listing still finds, including processes started
+    # after the first listing (a helper can answer TERM by starting a replacement).
     my $after = marked_processes();
-    my $remaining = defined $after ? scalar(same_process($after, $found)) : 'unknown';
+    my $remaining = defined $after ? scalar(keys %$after) : 'unknown';
     record_leftovers($count, $remaining);
 }
 my $forwarded_exit;
