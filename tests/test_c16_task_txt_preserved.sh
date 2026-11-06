@@ -7,6 +7,15 @@ if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
     /bin/bash "$0" --omnilane-offline-child "$@"
 fi
 shift
+# A suite started in the background (bash "&", nohup) hands SIGINT down as
+# ignored, exec keeps it ignored, and bash cannot trap a signal ignored on
+# entry: every INT case below would hang or exit wrongly. Restore the default
+# once, before any worker starts, so all of them inherit it.
+if [[ -z "${OMNILANE_TEST_SIGINT_DEFAULT:-}" ]]; then
+  export OMNILANE_TEST_SIGINT_DEFAULT=1
+  exec python3 -c 'import os, signal, sys; signal.signal(signal.SIGINT, signal.SIG_DFL); os.execv(sys.argv[1], sys.argv[1:])' \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$ROOT/.test-scratch"

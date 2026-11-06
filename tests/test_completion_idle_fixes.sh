@@ -558,7 +558,11 @@ test_cleanup_after_forced_exit() {
   for mode in fail INT TERM; do
     audit="$TEST_ROOT/cleanup-$mode.pids"
     rc=0
-    /bin/bash "$0" --omnilane-offline-child --cleanup-probe "$mode" "$audit" \
+    # A suite started in the background (bash "&", nohup) hands SIGINT down as
+    # ignored, and bash cannot trap a signal ignored on entry, so the probe's
+    # INT trap would never run. Restore the default before exec.
+    python3 -c 'import os, signal, sys; signal.signal(signal.SIGINT, signal.SIG_DFL); os.execv(sys.argv[1], sys.argv[1:])' \
+      /bin/bash "$0" --omnilane-offline-child --cleanup-probe "$mode" "$audit" \
       > "$TEST_ROOT/cleanup-$mode.out" 2>&1 || rc=$?
     case "$mode" in
       fail)
