@@ -65,6 +65,9 @@ my $LEFTOVERS_FILE = $ENV{OMNILANE_JOB_LEFTOVERS_FILE} // '';
 my $MARKER_HELPER = $ENV{OMNILANE_JOB_MARKER_HELPER} // '';
 delete @ENV{qw(OMNILANE_JOB_LEFTOVERS_FILE OMNILANE_JOB_MARKER_HELPER OMNILANE_JOB_TOKEN)};
 my $JOB_TOKEN = '';
+# Read once: list arguments of a piped open are passed by alias, so a bare $$ there
+# would be read in the forked child and name the scanner instead of this supervisor.
+my $SUPERVISOR_PID = $$;
 my $WORKER_NOT_BEFORE_US;  # wall clock, in microseconds, read just before the worker is forked
 if ($MARKER_HELPER ne '' && open(my $random, '<:raw', '/dev/urandom')) {
     my $bytes = '';
@@ -76,7 +79,7 @@ if ($MARKER_HELPER ne '' && open(my $random, '<:raw', '/dev/urandom')) {
 sub marked_processes {
     return {} if $JOB_TOKEN eq '';
     my $helper_pid = open(my $scan, '-|', 'python3', '-I', $MARKER_HELPER, 'scan',
-                          '--token', $JOB_TOKEN, '--supervisor', $$, '--after', $WORKER_NOT_BEFORE_US);
+                          '--token', $JOB_TOKEN, '--supervisor', "$SUPERVISOR_PID", '--after', "$WORKER_NOT_BEFORE_US");
     defined $helper_pid or return undef;
     my %found;
     while (my $line = <$scan>) {
