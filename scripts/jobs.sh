@@ -588,6 +588,7 @@ fi
 if [[ "$JSON_MODE" -eq 1 ]]; then
   case "$COMMAND" in
     list|status|result|stats|recommend|audit|threads|cancel) ;;
+    wait) die 2 "jobs wait has no --json mode (in any position): run 'omnilane jobs wait ID [--timeout N]', which prints 'done exit=N' and exits with the job's status (124 timeout, 125 dead worker), or poll 'omnilane jobs --json status ID'" ;;
     *) usage ;;
   esac
 fi
@@ -1485,6 +1486,16 @@ case "${1:-}" in
       die 2 "invalid --timeout value (want 0..86400)"
     }
     select_job "$wait_id"
+    # A killed waiter used to exit silently, which a caller reading only its
+    # output took for "wait ended while the job still runs". Say what stopped.
+    wait_interrupted() {
+      printf 'wait interrupted by %s before job %s finished; only the wait stopped, the job was not cancelled (check: omnilane jobs status %s)\n' \
+        "$1" "$wait_id" "$wait_id" >&2
+      exit "$2"
+    }
+    trap 'wait_interrupted SIGTERM 143' TERM
+    trap 'wait_interrupted SIGHUP 129' HUP
+    trap 'wait_interrupted SIGINT 130' INT
     wait_started="$SECONDS"
     while true; do
       [[ -d "$JOB_DIR" && ! -L "$JOB_DIR" ]] || {

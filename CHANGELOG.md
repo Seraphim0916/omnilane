@@ -7,6 +7,8 @@ semantic version tags.
 ## [Unreleased]
 
 ### Fixed
+- `jobs wait` with `--json` (before or after `wait`) now says that wait has no JSON mode and names the supported forms (`omnilane jobs wait ID [--timeout N]`, or polling `omnilane jobs --json status ID`) instead of printing the generic usage line. The exit status stays 2.
+- `jobs wait` now reports when the waiter itself is stopped by SIGTERM, SIGHUP or SIGINT: `wait interrupted by SIGTERM before job ID finished; only the wait stopped, the job was not cancelled`. Before, a killed waiter exited with 143/129/130 and printed nothing, which looked like a wait that ended while the job was still running. Exit codes are unchanged. `wait` still prints nothing until the job reaches a terminal state or the timeout, so a background `wait ... | tail` produces no output while the job runs, and the pipeline reports `tail`'s exit status rather than the job's.
 - `jobs close` measures its 11-second wait for the exit receipt on the monotonic clock. A system clock step (NTP step, manual change, wake from sleep) could end the wait at once with a false timeout, or stretch it far past 11 seconds. The whole-job and per-call watchdogs already used the monotonic clock. `jobs wait` and the 5-second waits in `jobs.sh` still count bash `$SECONDS`.
 - The native JSON reader and refusal evidence own their file descriptor explicitly: the stream never closes it, the reader closes it exactly once, and a close error never hides the original failure. The origin policy reader closes its descriptor when the stream cannot be built.
 - A malformed probe manifest in overlay diagnostics gives a controlled failure instead of a traceback, and integers too large to convert in `--host-rows` files are reported as a host-rows error.
