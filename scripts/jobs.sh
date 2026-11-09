@@ -764,7 +764,9 @@ case "${1:-}" in
     # Include the supervisor's final 1s process-group cleanup after live close.
     # SECONDS ticks on wall-clock seconds, so SECONDS + 11 could give up after
     # barely 10s, and counting sleep 0.1 polls overshoots by a fork per poll.
-    # One Perl process waits on a sub-second clock for exactly 11s.
+    # One Perl process waits on the monotonic clock for exactly 11s, so a system
+    # clock adjustment (NTP step, manual change, wake from sleep) cannot end the
+    # wait early or stretch it, the same clock call-timeout.pl and job-timeout.pl use.
     # A close that lands before the worker has written its holder PID keeps
     # polling for it inside the same deadline and signals it once it appears
     # (same checks as read_job_pid); it prints "signaled" when it does. A PID
@@ -780,17 +782,18 @@ case "${1:-}" in
     late_signal=""
     [[ "$holder_rc" -ne 1 ]] || late_signal=1
     wait_rc=0
-    wait_out="$(perl -MTime::HiRes=time,sleep -e '
+    wait_out="$(perl -MTime::HiRes=clock_gettime,CLOCK_MONOTONIC,sleep -e '
       my ($exit, $limit, $holder, $poll_holder, $ps_limit) = @ARGV;
+      sub now { clock_gettime(CLOCK_MONOTONIC) }
       my $start_path = "$holder.start";
-      my $end = time + $limit;
+      my $end = now() + $limit;
       sub start_of {
         my ($pid) = @_;
         local $/;
         local $ENV{TZ} = "UTC";
         local $ENV{LC_ALL} = "C";
         # A hung ps must not carry this wait far past its deadline.
-        my $left = int($end - time + 1);
+        my $left = int($end - now() + 1);
         my $cap = $left > $ps_limit ? $ps_limit : $left < 2 ? 2 : $left;
         my $child = open(my $ps, "-|");
         return undef unless defined $child;
@@ -809,7 +812,7 @@ case "${1:-}" in
       }
       $| = 1;
       until (-e $exit || -l $exit) {
-        my $left = $end - time;
+        my $left = $end - now();
         exit 1 if $left <= 0;
         HOLDER: {
           last HOLDER unless $poll_holder && (-e $holder || -l $holder);
@@ -848,13 +851,13 @@ case "${1:-}" in
               # ps failing says nothing about the process. Only ESRCH shows that it is gone.
               unless (!kill(0, $pid) && $!{ESRCH}) { print "blocked $pid\n"; exit 4; }
             } elsif ($live eq $recorded) {
-              exit 1 if time >= $end;
+              exit 1 if now() >= $end;
               if (kill("USR1", $pid)) { print "signaled\n"; }
             }
             $poll_holder = 0;
           }
         }
-        $left = $end - time;
+        $left = $end - now();
         exit 1 if $left <= 0;
         sleep($left < 0.1 ? $left : 0.1);
       }
