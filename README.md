@@ -950,6 +950,15 @@ A live PID whose start time differs from the recorded one is treated as another 
 
 ## 📜 Release history
 
+## What's new in v0.60.0
+
+- No `omnilane resign` is needed for this release itself: the AA snapshot and routing lanes are unchanged. Redeploy the skill so every surface reads the new SKILL.md.
+- `jobs cancel` and whole-job `--job-timeout` also stop job processes that left the process group (for example through `setsid`), matched by the job's `OMNILANE_JOB_TOKEN` environment entry; `jobs --json status` reports `leftovers`. A dispatch started inside a job no longer carries that job's marker.
+- Every JSON reader refuses nesting deeper than 256 levels with an explicit check, so Python 3.9 through 3.14 give the same answers; `aa_retry` no longer crashes on deep input.
+- Runner fixes: the per-call watchdog keeps a child's own status unless it saw the child run past the deadline, Gemini (agy) calls are bounded by `--timeout`, and Grok stops retrying on exit 125.
+- SKILL.md says local overrides win when inspecting lane candidates. CI pins ShellCheck 0.11.0 and tests Python 3.9, 3.12 and 3.14.
+- Upgrade: `npm i -g omnilane@0.60.0`.
+
 ## What's new in v0.59.0
 
 - After upgrading, run `omnilane resign` on every host because the AA snapshot has changed.

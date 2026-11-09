@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-11-09
+
 ### Changed
 - Clarify that local overrides take precedence when inspecting current lane candidates; the skill keeps only lane names and purposes, with `omnilane list` for resolved targets and `omnilane route --explain <lane>` for ordered candidates.
 
@@ -14,6 +16,9 @@ semantic version tags.
 - The same depth check now guards the AA registry and overlay reader, Codex rollout and Claude transcript/session reads used for caller identity, native protocol state files and the quota preview, and quota snapshots and decision/persist arguments. Over-deep input is reported as `invalid JSON input`, `rollout contains incomplete or invalid JSON`, a skipped transcript line, the launch-flag fallback, `invalid or inaccessible native protocol input/state` and `invalid-snapshot` respectively. `aa_retry` previously crashed with a traceback on deep input under 3.9–3.13 because it does not catch `RecursionError`; it now gets the policy error.
 - `jobs cancel` and whole-job `--job-timeout` now also stop job processes that left the job's process group (for example a CLI helper started with `setsid`). Before, they kept running and writing after the job read `done`, and a `ps | grep <job id>` count of 0 did not show them. The job supervisor gives its worker a random `OMNILANE_JOB_TOKEN` (and `OMNILANE_JOB_ID` for people reading `ps`). After the group is stopped, `scripts/lib/job_marker.py` reads each process's environment as separate entries (macOS `KERN_PROCARGS2`, Linux `/proc/PID/environ`; never command text, so a marker that only appears as an argument, or a longer ID, does not match) and lists those holding exactly that token that started strictly after the job began (macOS: after the supervisor's microsecond clock reading taken before it forked the worker; Linux: after the supervisor's own start, in clock ticks), excluding the supervisor and all its ancestors. They get TERM; after a 1 s grace they are listed again and only a PID still listed with the same start time gets SIGKILL. A normal finish only counts such processes and leaves them running. The outcome is written to the job's `leftovers` file: `jobs --json status` adds `"leftovers":{"reaped":N,"remaining":M}` (`"unknown"` when processes could not be listed), and plain `status` appends `leftovers=M` only when M is not 0. `remaining` counts every marked process the last listing finds, including one started after the first listing (for example a replacement a helper starts when it gets TERM). When the marker scan fails, only the signals to marked candidates are skipped: the process group has already been stopped, and the job keeps its normal status (124 on whole-job timeout, 143 on cancel).
 - Behaviour change: `dispatch` started from inside a job (a process carrying `OMNILANE_JOB_TOKEN` or `OMNILANE_JOB_ID`) first re-executes itself without those variables. A dispatch, background or not, is therefore never stopped by the cleanup of the job it was started from, and a supervised child job gets its own token; an unsupervised foreground child no longer carries the parent's token, so it relies on the parent's process group as before. Workers still refuse nested dispatch through `OMNILANE_DEPTH`; this matters when a process resets that depth.
+- Runners: the per-call watchdog (`scripts/lib/call-timeout.pl`) returns 142 only when it saw the child still running at or after the deadline; a child that finished in time keeps its own status even when it is reaped late. Both non-live Gemini (agy) paths now run under the runner deadline, so a CLI that ignores `--timeout` cannot outlive it. Grok treats exit 125 as terminal instead of retrying, and the empty-output message reports the attempts actually made.
+- `dispatch --thread` with an invalid name now says the first character must be alphanumeric.
+- Completion wakeup shares one exit-code parser; the goal directory check closes its descriptor on failure; refusal evidence escapes lone surrogates; the quota preview owns its stream descriptor and a close error never hides the original failure.
 - Known limits: macOS does not show the environment of platform binaries (for example `/bin/bash` or `/bin/sleep`) to other processes, so a detached helper that is a platform binary is not found; nor is a process that clears its environment before exec. Other platforms record `unknown`, and the regression tests run only on macOS and Linux. `python3` must be on the supervisor's `PATH`, otherwise the outcome is `unknown`. A PID can still be reused between the last listing and SIGKILL; the start-time check narrows that window but cannot close it.
 
 ## [0.59.0] - 2026-11-05
@@ -1849,7 +1854,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.59.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.60.0...HEAD
+[0.60.0]: https://github.com/Seraphim0916/omnilane/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/Seraphim0916/omnilane/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/Seraphim0916/omnilane/compare/v0.57.0...v0.58.0
 [0.57.0]: https://github.com/Seraphim0916/omnilane/compare/v0.56.0...v0.57.0

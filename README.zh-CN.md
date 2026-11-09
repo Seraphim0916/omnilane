@@ -753,6 +753,15 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.60.0 新功能
+
+- 此版本本身无需执行 `omnilane resign`：AA 快照与通道均未改变。请重新部署技能，让每个运行面读到新的 SKILL.md。
+- `jobs cancel` 与整项任务的 `--job-timeout` 也会结束脱离进程组的任务进程（例如经 `setsid` 启动的），按环境变量 `OMNILANE_JOB_TOKEN` 逐项匹配；`jobs --json status` 会报告 `leftovers`。在任务内启动的派发不再带有该任务的标记。
+- 所有 JSON 读取都以显式检查拒绝超过 256 层的嵌套，Python 3.9 到 3.14 结果一致；`aa_retry` 遇到过深输入不再崩溃。
+- Runner 修复：单次调用的看门程序只有在看到子进程超过期限仍在运行时才返回 142，否则保留子进程自身的退出码；Gemini（agy）调用受 `--timeout` 限制；Grok 遇到退出码 125 不再重试。
+- SKILL.md 说明查看通道候选时以本地覆盖为准。CI 固定 ShellCheck 0.11.0，并测试 Python 3.9、3.12、3.14。
+- 升级：`npm i -g omnilane@0.60.0`。
+
 ## v0.59.0 新功能
 
 - 升级后，每台主机都要运行 `omnilane resign`，因为 AA 快照已更新。
