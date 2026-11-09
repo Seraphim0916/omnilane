@@ -112,7 +112,11 @@ def wait_for_receipt_waiter(closer, receipt, timeout=GENEROUS):
     end = time.monotonic() + timeout
     while True:
         if closer.poll() is not None:
-            out, err = closer.communicate()
+            try:
+                out, err = closer.communicate(timeout=GENEROUS)
+            except subprocess.TimeoutExpired:
+                # Something that left close's group still holds its pipes; report the early return anyway.
+                out, err = '', '(output pipes still held open after close returned)'
             raise AssertionError(('close returned before waiting for the exit receipt',
                                   closer.returncode, out, err))
         # -ww: unlimited width on procps and BSD ps, so the exit path is never cut.
@@ -197,7 +201,10 @@ def finish_close(closer):
         out, err = closer.communicate(timeout=GENEROUS)
     except subprocess.TimeoutExpired:
         os.killpg(closer.pid, signal.SIGKILL)
-        closer.communicate()
+        try:
+            closer.communicate(timeout=GENEROUS)
+        except subprocess.TimeoutExpired:
+            pass  # A process outside the killed group still holds the pipes; the hang is reported below.
         raise AssertionError(f'jobs close {closer.args} hung past {GENEROUS}s')
     # A finished close has already reaped its poller; 5s stays far below the 11s a left-over poller would live.
     if not group_gone(closer.pid, timeout=5):

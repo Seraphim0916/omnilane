@@ -139,7 +139,11 @@ class CloseHolderVanishTests(unittest.TestCase):
         end = time.monotonic() + timeout
         while True:
             if closer.poll() is not None:
-                out, err = closer.communicate()
+                try:
+                    out, err = closer.communicate(timeout=GENEROUS)
+                except subprocess.TimeoutExpired:
+                    # Something that left close's group still holds its pipes; report the early return anyway.
+                    out, err = "", "(output pipes still held open after close returned)"
                 self.fail(("close returned before waiting for the exit receipt", closer.returncode, out, err))
             if self.receipt_poller_running(closer, end):
                 return
