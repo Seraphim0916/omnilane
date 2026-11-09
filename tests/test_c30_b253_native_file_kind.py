@@ -39,13 +39,17 @@ class NativeFileKindTests(unittest.TestCase):
                 with mock.patch.object(native.os, "open", return_value=123) as opened, \
                         mock.patch.object(native.os, "fdopen", return_value=stream) as wrapped, \
                         mock.patch.object(native.os, "fstat", return_value=SimpleNamespace(
-                            st_mode=kind | 0o600, st_size=0)) as inspected:
+                            st_mode=kind | 0o600, st_size=0)) as inspected, \
+                        mock.patch.object(native.os, "close") as closed:
                     with self.assertRaisesRegex(ValueError, "^invalid JSON file$"):
                         native.read_json("descriptor-fixture.json")
                 opened.assert_called_once_with(
                     "descriptor-fixture.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                wrapped.assert_called_once_with(123, "r", encoding="utf-8")
+                # The stream never owns the descriptor (closefd=False); the reader
+                # closes descriptor 123 itself, exactly once, after rejecting it.
+                wrapped.assert_called_once_with(123, "r", encoding="utf-8", closefd=False)
                 inspected.assert_called_once_with(123)
+                closed.assert_called_once_with(123)
                 self.assertEqual(stream.reads, 0)
                 self.assertEqual(stream.closes, 1)
                 self.assertTrue(stream.closed)
