@@ -433,6 +433,9 @@ BEGIN {
     };
 }
 sub time () { return 1000 + $now / 1000 }
+# jobs.sh close reads CLOCK_MONOTONIC; it reads the same virtual clock as time().
+sub CLOCK_MONOTONIC () { 1 }
+sub clock_gettime { return Time::HiRes::time() }
 sub sleep {
     my ($seconds) = @_;
     my $step = int($seconds * 1000 + 0.5);

@@ -93,6 +93,9 @@ FAKE_HIRES = textwrap.dedent("""
     }
     # Whole milliseconds, so 110 sleeps of 0.1s land exactly on 11s.
     sub time () { $now //= 0; return 1000 + $now / 1000 }
+    # jobs.sh close reads CLOCK_MONOTONIC; it reads the same virtual clock as time().
+    sub CLOCK_MONOTONIC () { 1 }
+    sub clock_gettime { return Time::HiRes::time() }
     sub sleep {
         my ($seconds) = @_;
         $now //= 0;
