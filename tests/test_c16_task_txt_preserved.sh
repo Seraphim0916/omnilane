@@ -64,7 +64,11 @@ for vendor in codex claude; do
       source "$TEST_ROOT/runtime/scripts/lib/common.sh"
       printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES" > "$job/expected"
       cat "$job/original" >> "$job/expected"
-      python3 -B -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); cap=int(sys.argv[2]); data=p.read_bytes(); expected=data if len(data)<=cap else data[:cap*7//10]+("\n\n--- TRUNCATED (original: %s bytes) ---\n\n"%sys.argv[4]).encode()+data[-(cap//4):]; actual=pathlib.Path(sys.argv[3]).read_bytes(); assert actual==expected,"CLI truncation mismatch"' "$job/expected" "$cap" "$job/received" "$(wc -c < "$job/expected")" || exit 1
+      python3 -B -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); cap=int(sys.argv[2]); data=p.read_bytes()
+h=cap*7//10; t=len(data)-cap//4
+while len(data)>cap and h>0 and data[h]&0xC0==0x80: h-=1
+while len(data)>cap and t<len(data) and data[t]&0xC0==0x80: t+=1
+expected=data if len(data)<=cap else data[:h]+("\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n"%(len(data),cap,t-h)).encode()+data[t:]; actual=pathlib.Path(sys.argv[3]).read_bytes(); assert actual==expected,"CLI truncation mismatch"' "$job/expected" "$cap" "$job/received" "$(wc -c < "$job/expected")" || exit 1
       printf 'PASS %s %s bytes exit=%s\n' "$vendor" "$size" "$expected_rc"
     done
   done
@@ -358,8 +362,12 @@ def direct_api_case(vendor, size):
     assert (job / "out.txt").read_text() == "fixture result"
     assert not private_dirs(job), [sorted(p.name for p in d.iterdir()) for d in private_dirs(job)]
     sent = json.loads((job / "received").read_text())["messages"][0]["content"].encode()
-    original = subprocess.check_output(["wc", "-c"], input=data).decode().rstrip("\n")
-    expected = data if size <= cap else data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original).encode() + data[-(cap // 4):]
+    head, tail = cap * 7 // 10, len(data) - cap // 4
+    while size > cap and head > 0 and data[head] & 0xC0 == 0x80:
+        head -= 1
+    while size > cap and tail < len(data) and data[tail] & 0xC0 == 0x80:
+        tail += 1
+    expected = data if size <= cap else data[:head] + ("\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n" % (len(data), cap, tail - head)).encode() + data[tail:]
     assert sent == expected, "direct API truncation mismatch"
 for vendor in ("openrouter", "deepseek", "zai", "mistral", "groq", "cerebras"):
     check("direct API %s over the cap removes its copies" % vendor, direct_api_case, vendor, 200000)

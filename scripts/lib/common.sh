@@ -823,13 +823,30 @@ validate_gemini_task_size() {
 }
 
 # Cap payload so a runaway prompt cannot blow a worker's context.
+# Cut points move to UTF-8 character boundaries (head back, tail forward) so a
+# multibyte character is never split; job-worker.sh owned_prompt_operation
+# carries the same algorithm and must stay byte-identical with this one.
 truncate_payload() { # file, cap_bytes
   local f="$1" cap="${2:-140000}" size
   size=$(wc -c < "$f")
+  size=$((size))
   if [[ "$size" -gt "$cap" ]]; then
-    { head -c $((cap * 7 / 10)) "$f"
-      printf '\n\n--- TRUNCATED (original: %s bytes) ---\n\n' "$size"
-      tail -c $((cap / 4)) "$f"; } > "$f.tmp"
+    python3 -I -S -B -c '
+import sys
+path, cap = sys.argv[1], int(sys.argv[2])
+data = open(path, "rb").read()
+head = cap * 7 // 10
+while head > 0 and data[head] & 0xC0 == 0x80:
+    head -= 1
+tail = len(data) - cap // 4
+while tail < len(data) and data[tail] & 0xC0 == 0x80:
+    tail += 1
+dropped = tail - head
+marker = "\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n" % (len(data), cap, dropped)
+with open(path + ".tmp", "wb") as out:
+    out.write(data[:head] + marker.encode() + data[tail:])
+sys.stderr.write("omnilane: warning: prompt %s is %d bytes, over the %d-byte cap; dropped %d middle bytes\n" % (path, len(data), cap, dropped))
+' "$f" "$cap" || return 1
     mv "$f.tmp" "$f"
   fi
 }

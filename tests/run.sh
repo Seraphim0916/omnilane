@@ -4522,6 +4522,10 @@ c16_out="$(bash "$ROOT/tests/test_c16_task_txt_preserved.sh" --omnilane-offline-
   pass "all-runner boundary preserves task.txt and existing truncation" ||
   fail "all-runner boundary preserves task.txt and existing truncation" "$c16_out"
 
+utf8_trunc_out="$(bash "$ROOT/tests/test_utf8_safe_truncate.sh" 2>&1)" &&
+  pass "prompt truncation keeps valid UTF-8, marks and warns" ||
+  fail "prompt truncation keeps valid UTF-8, marks and warns" "$utf8_trunc_out"
+
 test_live_mailbox_case live-fail-fast "live mode rejects non-capable vendor"
 test_live_mailbox_case single-shot-claude "single-shot mode forces Claude one-shot"
 test_live_mailbox_case idle-cap "live mailbox idle cap closes session"

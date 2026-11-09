@@ -12,6 +12,8 @@ semantic version tags.
 - A malformed probe manifest in overlay diagnostics gives a controlled failure instead of a traceback, and integers too large to convert in `--host-rows` files are reported as a host-rows error.
 - A local verification status file whose `pending` map holds a non-object entry is rejected as invalid instead of crashing.
 - Tests: three `communicate()` calls in the `jobs close` tests are bounded, so a process that left close's group while holding its pipes fails the test instead of hanging it. Replayed regression tests C2-B361..B363, B381..B383, B399..B401, B408..B410, B417..B419, B426..B428 and B462..B464.
+- Prompt truncation no longer splits UTF-8 characters. Over-cap prompts (for example 140000 bytes for Codex, 102400 for Claude and the first live message) were cut at fixed byte offsets, so a large Chinese task could reach the CLI as invalid UTF-8 and Codex refused it (`input is not valid UTF-8 (invalid byte at offset 98048)`). The head cut now moves back and the tail cut forward to a character boundary, in both `truncate_payload` (`scripts/lib/common.sh`) and the owned prompt copy in `scripts/lib/job-worker.sh`, which produce identical bytes. Caps are unchanged.
+- Truncation is no longer silent: the marker now reads `--- TRUNCATED (original: N bytes, cap C, dropped D bytes) ---` (without the padding macOS `wc` added), and stderr gets `omnilane: warning: prompt FILE is N bytes, over the C-byte cap; dropped D middle bytes`.
 
 ## [0.60.0] - 2026-11-09
 

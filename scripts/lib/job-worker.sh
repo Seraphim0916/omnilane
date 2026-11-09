@@ -220,12 +220,21 @@ try:
                 sys.exit(125)
             data = argument.encode() + src.read_bytes()
         else:
-            cap, original_size = argument.split(":", 1)
-            cap = int(cap)
+            # Same UTF-8 boundary algorithm as truncate_payload in common.sh.
+            cap = int(argument.split(":", 1)[0])
             data = src.read_bytes()
             if len(data) <= cap:
                 sys.exit(0)
-            data = data[:cap * 7 // 10] + ("\n\n--- TRUNCATED (original: %s bytes) ---\n\n" % original_size).encode() + data[-(cap // 4):]
+            head = cap * 7 // 10
+            while head > 0 and data[head] & 0xC0 == 0x80:
+                head -= 1
+            tail = len(data) - cap // 4
+            while tail < len(data) and data[tail] & 0xC0 == 0x80:
+                tail += 1
+            dropped = tail - head
+            marker = "\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n" % (len(data), cap, dropped)
+            sys.stderr.write("omnilane: warning: prompt %s is %d bytes, over the %d-byte cap; dropped %d middle bytes\n" % (source, len(data), cap, dropped))
+            data = data[:head] + marker.encode() + data[tail:]
     fd = os.open(target.name, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=root_fd)
     with os.fdopen(fd, "wb") as out:
         info = os.fstat(out.fileno())
