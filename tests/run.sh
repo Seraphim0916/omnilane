@@ -3634,7 +3634,7 @@ test_jobs_stats_aggregates_only_public_metadata
 test_jobs_json_is_versioned_and_private_by_default
 test_jobs_wait_is_bounded_and_terminal
 
-jobs_wait_modes_out="$(bash "$ROOT/tests/test_jobs_wait_modes.sh" 2>&1)" &&
+jobs_wait_modes_out="$(bash "$ROOT/tests/test_jobs_wait_modes.sh" --omnilane-offline-child 2>&1)" &&
   pass "jobs wait blocks, explains --json and reports a killed waiter" ||
   fail "jobs wait blocks, explains --json and reports a killed waiter" "$jobs_wait_modes_out"
 test_jobs_wait_removal_after_pid_read

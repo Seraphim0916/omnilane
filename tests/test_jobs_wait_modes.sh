@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # jobs wait must block until the job is terminal or the caller's timeout, never
 # end silently while the job runs, and explain the unsupported --json form.
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
