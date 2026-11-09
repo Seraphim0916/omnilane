@@ -465,7 +465,12 @@ How you hear about a background job finishing:
   on Claude Code desktop 2.1.284; the terminal CLI was not tested). `jobs wait`
   gives up after 600 s by default (exit 124; the job keeps running), so make N at
   least the job's own timeout. Without such a waiter the completion inbox arrives
-  only with the next prompt.
+  only with the next prompt. Run the waiter bare, not as `jobs wait … | tail`:
+  a pipeline reports `tail`'s exit status instead of the job's. While the job
+  runs, the background waiter's output file stays empty, because `jobs wait`
+  prints only when the job ends or the wait times out. An empty file means the
+  waiter is still waiting, not that it returned early. `jobs wait` has no
+  `--json` mode; poll `omnilane jobs --json status JOB_ID` for JSON.
 - **Native sub-agents:** the host's own callback gives you the result; still
   ingest and verify it.
 
