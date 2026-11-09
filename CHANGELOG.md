@@ -6,6 +6,13 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+- `jobs close` measures its 11-second wait for the exit receipt on the monotonic clock. A system clock step (NTP step, manual change, wake from sleep) could end the wait at once with a false timeout, or stretch it far past 11 seconds. The whole-job and per-call watchdogs already used the monotonic clock. `jobs wait` and the 5-second waits in `jobs.sh` still count bash `$SECONDS`.
+- The native JSON reader and refusal evidence own their file descriptor explicitly: the stream never closes it, the reader closes it exactly once, and a close error never hides the original failure. The origin policy reader closes its descriptor when the stream cannot be built.
+- A malformed probe manifest in overlay diagnostics gives a controlled failure instead of a traceback, and integers too large to convert in `--host-rows` files are reported as a host-rows error.
+- A local verification status file whose `pending` map holds a non-object entry is rejected as invalid instead of crashing.
+- Tests: three `communicate()` calls in the `jobs close` tests are bounded, so a process that left close's group while holding its pipes fails the test instead of hanging it. Replayed regression tests C2-B361..B363, B381..B383, B399..B401, B408..B410, B417..B419, B426..B428 and B462..B464.
+
 ## [0.60.0] - 2026-11-09
 
 ### Changed
