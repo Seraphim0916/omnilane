@@ -36,12 +36,14 @@ class OriginReadCleanupTests(unittest.TestCase):
                 info = SimpleNamespace(st_mode=mode, st_uid=uid)
                 with patch.object(origin.os, "open", return_value=17), \
                         patch.object(origin.os, "fdopen", return_value=manager) as fdopen, \
+                        patch.object(origin.os, "close") as close, \
                         patch.object(origin.os, "fstat", return_value=info,
                                      side_effect=OSError("stat failed") if name == "stat-error" else None), \
                         patch.object(origin.os, "getuid", return_value=42):
                     with self.assertRaisesRegex(error_type, "^" + message + "$") as caught:
                         origin._read(Path("policy.json"))
-                fdopen.assert_called_once_with(17, "rb")
+                fdopen.assert_called_once_with(17, "rb", closefd=False)
+                close.assert_called_once_with(17)
                 manager.__enter__.assert_called_once_with()
                 manager.__exit__.assert_called_once()
                 exit_args = manager.__exit__.call_args[0]
@@ -59,10 +61,13 @@ class OriginReadCleanupTests(unittest.TestCase):
         stream.read.return_value = b"{}"
         info = SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_uid=42)
         with patch.object(origin.os, "open", return_value=17), \
-                patch.object(origin.os, "fdopen", return_value=manager), \
+                patch.object(origin.os, "fdopen", return_value=manager) as fdopen, \
+                patch.object(origin.os, "close") as close, \
                 patch.object(origin.os, "fstat", return_value=info), \
                 patch.object(origin.os, "getuid", return_value=42):
             self.assertEqual(origin._read(Path("policy.json")), b"{}")
+        fdopen.assert_called_once_with(17, "rb", closefd=False)
+        close.assert_called_once_with(17)
         stream.read.assert_called_once_with(origin.MAX_BYTES + 1)
         manager.__exit__.assert_called_once_with(None, None, None)
 

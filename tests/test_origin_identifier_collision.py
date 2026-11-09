@@ -179,12 +179,13 @@ class DoubleFailureTests(unittest.TestCase):
             data = op.load(path)
             op._save(path, data)
             before = path.read_bytes()
-            real_fdopen, real_close, opened, closes = os.fdopen, os.close, [], []
+            real_fdopen, real_close, opened, closes, live = os.fdopen, os.close, [], [], set()
 
             def fdopen(fd, mode="r", *args, **kwargs):
                 if mode != "wb":
                     return real_fdopen(fd, mode, *args, **kwargs)
                 opened.append(fd)
+                live.add(fd)
                 if len(opened) != target:
                     return real_fdopen(fd, mode, *args, **kwargs)
                 if fdopen_error:
@@ -193,9 +194,13 @@ class DoubleFailureTests(unittest.TestCase):
                                      body and body[1], stream_close)
 
             def close(fd):
-                closes.append(fd)
+                # _read closes its own descriptor, which can reuse a write descriptor's number.
+                write = fd in live
+                live.discard(fd)
+                if write:
+                    closes.append(fd)
                 real_close(fd)
-                if close_error and len(opened) == target:
+                if write and close_error and len(opened) == target:
                     raise close_error
             sync = body[1] if body and body[0] == "fsync" else None
 
@@ -274,22 +279,35 @@ class BackupDescriptorTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), self.before)
         self.assertEqual(list(self.directory.glob("policy.json.tmp-*")), [])
 
+    def write_closes(self, opened):
+        # _read closes its own descriptor, which can reuse a write descriptor's number.
+        live, closes, real_close = set(), [], os.close
+
+        def close(fd):
+            if fd in live:
+                live.discard(fd)
+                closes.append(fd)
+            real_close(fd)
+        return live, closes, close
+
     def test_backup_fdopen_failure_closes_descriptor_once_and_keeps_the_policy(self):
         error = OSError("FDOPEN_FAIL")
         real_fdopen, opened = os.fdopen, []
+        live, closes, close = self.write_closes(opened)
 
         def fdopen(fd, mode="r", *args, **kwargs):
             if mode == "wb":
                 opened.append(fd)
+                live.add(fd)
                 raise error
             return real_fdopen(fd, mode, *args, **kwargs)
         with patch.object(op.os, "fdopen", side_effect=fdopen), \
-                patch.object(op.os, "close", wraps=os.close) as close:
+                patch.object(op.os, "close", side_effect=close):
             with self.assertRaises(OSError) as caught:
                 op._save(self.path, self.data)
             self.assertIs(caught.exception, error)
             self.assertEqual(len(opened), 1)
-            close.assert_called_once_with(opened[0])
+            self.assertEqual(closes, [opened[0]])
         self.assert_closed(opened[0])
         self.assert_policy_kept()
 
@@ -298,36 +316,40 @@ class BackupDescriptorTests(unittest.TestCase):
             with self.subTest(failure=failure):
                 error = OSError("BACKUP_FAIL")
                 real_fdopen, opened = os.fdopen, []
+                live, closes, close = self.write_closes(opened)
 
                 def fdopen(fd, mode="r", *args, **kwargs):
                     stream = real_fdopen(fd, mode, *args, **kwargs)
                     if mode != "wb":
                         return stream
                     opened.append(fd)
+                    live.add(fd)
                     return FailingStream(stream, failure, error)
                 with patch.object(op.os, "fdopen", side_effect=fdopen), \
                         patch.object(op.os, "fsync", side_effect=error if failure == "fsync" else None), \
-                        patch.object(op.os, "close", wraps=os.close) as close:
+                        patch.object(op.os, "close", side_effect=close):
                     with self.assertRaises(OSError) as caught:
                         op._save(self.path, self.data)
                     self.assertIs(caught.exception, error)
                     self.assertEqual(len(opened), 1)
-                    close.assert_called_once_with(opened[0])
+                    self.assertEqual(closes, [opened[0]])
                 self.assert_closed(opened[0])
                 self.assert_policy_kept()
 
     def test_a_successful_backup_closes_each_descriptor_once_and_keeps_the_previous_policy(self):
         real_fdopen, opened = os.fdopen, []
+        live, closes, close = self.write_closes(opened)
 
         def fdopen(fd, mode="r", *args, **kwargs):
             if mode == "wb":
                 opened.append(fd)
+                live.add(fd)
             return real_fdopen(fd, mode, *args, **kwargs)
         with patch.object(op.os, "fdopen", side_effect=fdopen), \
-                patch.object(op.os, "close", wraps=os.close) as close:
+                patch.object(op.os, "close", side_effect=close):
             op._save(self.path, self.data)
             self.assertEqual(len(opened), 2)
-            self.assertEqual([c.args[0] for c in close.call_args_list], opened)
+            self.assertEqual(closes, opened)
         for fd in opened:
             self.assert_closed(fd)
         backups = list(self.directory.glob("policy.json.before-*"))

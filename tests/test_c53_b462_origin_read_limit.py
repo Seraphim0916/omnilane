@@ -25,13 +25,15 @@ class OriginReadLimitTests(unittest.TestCase):
                         patch.object(stream, "fileno", return_value=17), \
                         patch.object(stream, "read", read), \
                         patch.object(origin.os, "fstat", return_value=info), \
-                        patch.object(origin.os, "getuid", return_value=42):
+                        patch.object(origin.os, "getuid", return_value=42), \
+                        patch.object(origin.os, "close") as close:
                     if size == 131072:
                         self.assertEqual(origin._read(Path("policy.json")), raw)
                     else:
                         with self.assertRaisesRegex(origin.OriginError, "^origin policy too large$"):
                             origin._read(Path("policy.json"))
                 read.assert_called_once_with(131073)
+                close.assert_called_once_with(17)
 
 
 if __name__ == "__main__":

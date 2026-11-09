@@ -113,18 +113,23 @@ def _read(path):
     except OSError:
         raise OriginError("cannot open origin policy") from None
     try:
-        handle = os.fdopen(fd, "rb")
+        # Retain raw-fd ownership even if stream construction partly succeeds.
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            info = os.fstat(stream.fileno())
+            if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
+                raise OriginError("origin policy must be an owned regular 0600 file")
+            raw = stream.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise OriginError("origin policy too large")
     except BaseException:
-        os.close(fd)
+        try:
+            os.close(fd)
+        except OSError:
+            pass  # Preserve the original construction, validation, or read error.
         raise
-    with handle as stream:
-        info = os.fstat(stream.fileno())
-        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid():
-            raise OriginError("origin policy must be an owned regular 0600 file")
-        raw = stream.read(MAX_BYTES + 1)
-        if len(raw) > MAX_BYTES:
-            raise OriginError("origin policy too large")
-        return raw
+    else:
+        os.close(fd)
+    return raw
 
 
 def load(path=None):
