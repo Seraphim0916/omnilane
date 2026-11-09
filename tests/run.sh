@@ -4522,7 +4522,7 @@ c16_out="$(bash "$ROOT/tests/test_c16_task_txt_preserved.sh" --omnilane-offline-
   pass "all-runner boundary preserves task.txt and existing truncation" ||
   fail "all-runner boundary preserves task.txt and existing truncation" "$c16_out"
 
-utf8_trunc_out="$(bash "$ROOT/tests/test_utf8_safe_truncate.sh" 2>&1)" &&
+utf8_trunc_out="$(bash "$ROOT/tests/test_utf8_safe_truncate.sh" --omnilane-offline-child 2>&1)" &&
   pass "prompt truncation keeps valid UTF-8, marks and warns" ||
   fail "prompt truncation keeps valid UTF-8, marks and warns" "$utf8_trunc_out"
 

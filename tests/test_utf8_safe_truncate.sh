@@ -2,6 +2,13 @@
 # Prompt truncation must keep valid UTF-8, say how much it dropped, and warn on
 # stderr. Covers truncate_payload in common.sh and the owned prompt copy path in
 # job-worker.sh, which must stay byte-identical.
+# Only an explicit child invocation from an isolated parent keeps fixture state.
+# A stale environment marker alone must never bypass standalone isolation.
+if [[ "${1:-}" != "--omnilane-offline-child" ]]; then
+  exec python3 -I "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/offline_env.py" \
+    /bin/bash "$0" --omnilane-offline-child "$@"
+fi
+shift
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
