@@ -753,6 +753,15 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 
 ## 📜 版本历程
 
+## v0.60.1 新功能
+
+- 此版本无需执行 `omnilane resign`：AA 快照、策略文件与通道均未改变。SKILL.md 有改动（说明如何在 Claude Code 后台运行 `jobs wait`），请重新部署技能到每个运行面。
+- 提示截断不再切断 UTF-8 字符：头尾两个切点都移到字符边界，大型中文任务仍是合法的 UTF-8。截断标记改为列出 `original`、`cap`、`dropped` 字节数，截断时 stderr 会输出警告。上限不变。
+- `jobs wait --json` 会说明 wait 没有 JSON 模式并列出支持的写法；等待进程被 SIGTERM、SIGHUP、SIGINT 中断时会说明是等待被中断、任务仍在运行。退出码不变。
+- `jobs close` 等待退出回执改用单调时钟计时，系统时钟跳变不会让等待提前结束或延长。
+- origin 策略读取显式管理自己的文件描述符：只关闭一次，关闭错误不会掩盖原本的失败。
+- 升级：`npm i -g omnilane@0.60.1`。
+
 ## v0.60.0 新功能
 
 - 此版本本身无需执行 `omnilane resign`：AA 快照与通道均未改变。请重新部署技能，让每个运行面读到新的 SKILL.md。

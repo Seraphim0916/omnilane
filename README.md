@@ -950,6 +950,15 @@ A live PID whose start time differs from the recorded one is treated as another 
 
 ## 📜 Release history
 
+## What's new in v0.60.1
+
+- No `omnilane resign` is needed: the AA snapshot, policy file and routing lanes are unchanged. SKILL.md changed (how to run a background `jobs wait` from Claude Code), so redeploy the skill to every surface.
+- Prompt truncation no longer splits UTF-8 characters: the head and tail cuts move to character boundaries, so a large Chinese task stays valid UTF-8. The marker now gives `original`, `cap` and `dropped` byte counts, and stderr warns when a prompt is truncated. Caps are unchanged.
+- `jobs wait --json` explains that wait has no JSON mode and names the supported forms; a waiter stopped by SIGTERM, SIGHUP or SIGINT now says it was interrupted and that the job keeps running. Exit codes are unchanged.
+- `jobs close` measures its wait for the exit receipt on the monotonic clock, so a system clock step no longer ends it early or stretches it.
+- The origin policy reader owns its file descriptor explicitly: it closes it exactly once and a close error never hides the original failure.
+- Upgrade: `npm i -g omnilane@0.60.1`.
+
 ## What's new in v0.60.0
 
 - No `omnilane resign` is needed for this release itself: the AA snapshot and routing lanes are unchanged. Redeploy the skill so every surface reads the new SKILL.md.

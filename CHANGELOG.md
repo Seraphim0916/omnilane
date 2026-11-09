@@ -6,6 +6,8 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.60.1] - 2026-11-09
+
 ### Fixed
 - `jobs wait` with `--json` (before or after `wait`) now says that wait has no JSON mode and names the supported forms (`omnilane jobs wait ID [--timeout N]`, or polling `omnilane jobs --json status ID`) instead of printing the generic usage line. The exit status stays 2.
 - `jobs wait` now reports when the waiter itself is stopped by SIGTERM, SIGHUP or SIGINT: `wait interrupted by SIGTERM before job ID finished; only the wait stopped, the job was not cancelled`. Before, a killed waiter exited with 143/129/130 and printed nothing, which looked like a wait that ended while the job was still running. Exit codes are unchanged. `wait` still prints nothing until the job reaches a terminal state or the timeout, so a background `wait ... | tail` produces no output while the job runs, and the pipeline reports `tail`'s exit status rather than the job's.
@@ -1866,7 +1868,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.60.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.60.1...HEAD
+[0.60.1]: https://github.com/Seraphim0916/omnilane/compare/v0.60.0...v0.60.1
 [0.60.0]: https://github.com/Seraphim0916/omnilane/compare/v0.59.0...v0.60.0
 [0.59.0]: https://github.com/Seraphim0916/omnilane/compare/v0.58.0...v0.59.0
 [0.58.0]: https://github.com/Seraphim0916/omnilane/compare/v0.57.0...v0.58.0
