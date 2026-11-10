@@ -2,13 +2,6 @@
 
 # omnilane
 
-### 라우팅 테이블 하나로, 모든 하네스를.
-
-*메인 루프가 더 이상 어떤 모델을 쓸지 고민하지 않습니다.*<br/>
-**Claude Code · Codex · Grok Build · Antigravity** 어디서 운전하든, 모든 서브태스크를<br/>
-그 일을 정말 잘하는 모델에게——Codex, Claude, Grok, Gemini, Kimi, Qwen, OpenCode,<br/>
-그리고 OpenRouter 를 통한 모든 호스팅 모델까지——이미 내고 있는 구독 그대로, 또는 API 키 하나로.
-
 <img src="docs/hero.ko.png" alt="omnilane 이 각 서브태스크를 Claude Code·Codex·Grok·Antigravity 중 가장 잘하는 모델로 보냅니다" width="820"/>
 
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
@@ -19,765 +12,70 @@
 
 </div>
 
-## 현재 버전의 업그레이드와 검증
+## omnilane이란?
 
-평가표만 바뀌면 호출 인수와 실행 파일 식별 정보가 같은 행의 검증 증거를 자동으로 재사용합니다. 점수나 날짜 변경은 새 상한에 즉시 반영되며 `omnilane resign`, GUI 로그인, 네트워크 호출이나 오버레이 수정이 필요 없습니다. 추가되거나 호출 계약 또는 실행 파일이 바뀐 행만 `omnilane resign --vendor VENDOR`로 검증하세요. 거부 메시지에 대상 행과 GUI 터미널 필요 여부가 표시됩니다. 신뢰된 원본 스냅샷이 패키지에 있으면 기존 형식 1도 바로 사용합니다. 알 수 없는 이전 원본은 `omnilane resign --check`로 확인하세요. 최초 설정에는 `omnilane resign --init`를 사용합니다. 서명자 승인 규칙은 그대로입니다. 일일 작업에는 `omnilane resign --daily` 또는 `bash scripts/resign-daily.sh`를 사용하세요. 실패는 0이 아닌 종료 코드를 유지하고 Telegram 없이도 `omnilane doctor`에 로컬 비공개 기록이 표시됩니다. 예약 작업은 자동 설치하지 않습니다.
+omnilane은 Claude Code, Codex, Grok Build, Antigravity의 작업을 작업 종류에 따라 레인에 지정된 모델로 보냅니다. 기존 모델 구독이나 지원 API를 하나의 명령 체계로 사용하면서 권한과 결과를 직접 확인하려는 사용자와 AI 어시스턴트를 위한 도구입니다. 별도의 호스팅 서비스 대신 로컬 라우팅 표와 검증된 모델 선택자를 사용해 호환되는 네이티브 하위 에이전트 또는 벤더 CLI를 실행합니다.
 
-API 오류, 시간 초과, 로그인, 할당량 또는 연결 문제로 실패한 행은 `omnilane resign --vendor VENDOR`로 다시 검증할 수 있습니다. 비대화형 실행은 각 행의 실패 후 20시간을 기다립니다. 대화형 실행이나 `omnilane resign --retry-failed --vendor VENDOR`는 즉시 재시도합니다. 이 옵션은 서명자 승인을 대신하지 않습니다. 실패 증거와 시간 필드의 존재 여부를 해시로 보호하며, 변경되거나 삭제된 기록은 보고하고 재시도를 거부합니다.
+## 설치와 첫 실행
 
-만료된 증거는 누락된 행과 같은 경로로 갱신하며 정상 행은 다시 검증하지 않습니다. 실제 모델/강도가 선언과 다르면 확정된 실패이므로 `--retry-failed`를 지정해도 자동으로 재시도하지 않습니다. `omnilane doctor`로 원래 요청과 CLI/공급자 모델 연결을 확인하고 원인을 수정한 뒤 새 검증을 준비하세요. 아래 버전별 기록은 출시 당시 동작을 설명합니다. 현재 설치에서는 이 절을 따르세요.
-
----
-
-## 🤔 omnilane 이란?
-
-**무엇이 문제인가.** 이미 AI 코딩 어시스턴트——**Claude Code, Codex, Cursor,
-Gemini CLI** 같은——를 쓰고 계시죠. 각각은 하나의 모델 계열하고만 대화합니다.
-그래서 맡기는 모든 일이 그 한 모델에서 돌아갑니다, 적합하든 아니든——일회성 파일
-이름 변경이 가장 비싼 모델을 소모하고, 정작 어려운 설계 문제는 마침 열어 둔
-모델에 걸립니다.
-
-**omnilane 이 하는 일.** 어시스턴트에게 라우팅 표를 줍니다. 작업은 **레인**——
-가장 어려운 코딩, 기계적인 물량, 분류, 어려운 판단, 최종 다듬기——으로 나뉘고,
-각 레인에는 그 일에 가장 강하고(그리고 가장 저렴한) 모델이 지정됩니다.
-어시스턴트는 자신이 잘하는 레인을 직접 처리하고, 나머지는 이미 가진 로그인으로
-다른 벤더의 CLI 에 백그라운드로 넘깁니다.
-
-**omnilane 이 아닌 것.** 프록시도, 새 구독도, 계속 돌봐야 할 서비스도 아닙니다.
-표 한 장과 디스패치 스크립트 하나가 기존 도구 뒤에서 돌아갈 뿐입니다.
-`./install.sh --uninstall` 로 흔적 없이 제거됩니다.
-
-**모든 구독이 필요하지는 않습니다.** 각 레인은 대체 체인이며, 실제로 설치된 첫
-후보가 선택됩니다. CLI 가 하나든 일곱이든 동작하고, 아무것도 없는 레인은 실패
-대신 그냥 꺼집니다. 구독이 하나여도 기본 표는 그 벤더로 수렴합니다.
-
-**[⬇ 60초 시작으로](#-60초-시작)** · **[❓ FAQ 보기](#-faq)**
-
-## ⚡ 60초 시작
-
-터미널 앞에 앉은 사람이라면 지금 바로 디스패치할 수 있습니다.
-
-**1. 설치.**
+지원 벤더 CLI(`codex`, `claude`, `grok`, `agy`)를 하나 이상 설치하고 로그인한 뒤, Python 3.9+와 npm을 준비하세요. 아래 블록은 로그인 정보에 접근할 수 있는 데스크톱 터미널에서 사람이 직접 실행하는 절차입니다. 초기화는 벤더를 탐색하고 실제 작업을 보내 검증하므로 벤더 사용량을 소비합니다. 작업 문구는 바꿔도 되며, 첫 작업은 읽기 전용입니다.
 
 ```bash
-npm i -g omnilane
+npm i -g omnilane &&
+omnilane resign --init &&
+omnilane doctor &&
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
+omnilane route --mode advise --workdir "$PWD" triage "파일을 변경하지 말고 이 프로젝트의 용도를 요약하세요"
 ```
 
-또는 저장소를 클론합니다. 사용자 정의할 수 있는 라우팅 테이블과 스킬도 함께 얻습니다.
+초기화가 성공하고 doctor에서 필요한 대상이 사용 가능하다고 확인된 뒤 디스패치를 계속하세요. `--init`은 최초 로컬 오버레이(CLI 선택자가 실제로 어떤 모델에 도달하는지 보여 주는 검증 기록)를 만들고 검증한 다음, 최초 신뢰 서명자를 기록하고 `local.sh`를 백업한 후 등록합니다. 기존 오버레이가 있으면 거절하므로 업그레이드 시에는 `omnilane resign`을 사용하세요. 초기화에는 대화형 터미널이 필요하며, 변경되었거나 안전하지 않은 서명자를 승인할 수 없습니다. 로컬 자체 서명 CLI는 사람이 별도로 검토해야 합니다.
+
+이 환경 변수는 **터미널을 직접 조작하는 사람이라는 선언**입니다. AI 어시스턴트는 자신의 호출자 정보를 사용해야 하며, 이 변수나 `--operator-asserted-human`을 스스로 지정하면 안 됩니다. 설정 방법은 뒤의 참고 자료에 있습니다. 모든 벤더가 필요한 것은 아닙니다. 사용할 수 없는 후보는 건너뛰며, 호출자의 점수 상한과 로컬 검증도 적용됩니다.
+
+## 일상적인 사용
+
+`omnilane list`로 현재 적용되는 레인을 확인하세요. 초기 조사에는 `triage`, 반복 구현에는 `bulk-mechanical`, 어려운 코드 문제에는 `hardest-coding`, 다른 관점의 검토에는 `hard-judgment`를 사용합니다. 전체 레인 표는 참고 자료에 있습니다. 레인은 후보의 순서이며, 모든 모델의 설치나 프로바이더 호출 실패 후 다른 벤더로 자동 재시도하는 동작을 보장하지 않습니다.
 
 ```bash
-git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # finds your CLIs, links the skill, speaks your language
+omnilane list
+omnilane route --mode advise --workdir "$PWD" triage "프로젝트를 검토하고 주요 위험을 나열하세요"
+omnilane route --mode work --workdir "$PWD" bulk-mechanical "README.md에서 지적된 오타를 수정하세요"
+omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "테스트를 실행하고 실패 항목을 수정하세요"
+omnilane jobs list
+omnilane jobs wait JOB_ID --timeout 60
+omnilane jobs result JOB_ID
 ```
 
-**2. 무엇이 있는지 확인.** `doctor` 는 omnilane 이 닿을 수 있는 모델 CLI 와 API 키를 나열해 실제로 무엇이 실행될지 알려 줍니다. 아무것도 바꾸지 않습니다.
+`JOB_ID`를 백그라운드 디스패치가 출력한 작업 ID로 바꾸세요. `advise`는 읽기 전용이고, `work`는 지정한 작업 디렉터리의 변경을 허용하면서 에이전트 도구의 네트워크 접근을 제한합니다. 모델 연결은 유지됩니다. `jobs wait`는 종료를 기다리고 `jobs result`는 답변을 읽습니다. 종료된 작업도 출력, 변경 파일, 관련 테스트를 검토한 뒤 받아들여야 합니다. 어시스턴트 자체 네이티브 워커는 참고 자료에 있는 별도의 인계 및 완료 보고 절차를 따릅니다.
 
-```bash
-omnilane doctor
-omnilane list         # the routing table this machine resolves
-```
+## 거절되거나 재서명이 멈췄을 때
 
-**3. 자신이 운영자임을 밝히고 디스패치.**
+거절 메시지는 이제 `omnilane: refused (...)`, 이해하기 쉬운 이유, `Next:`를 먼저 보여 주고 기존 JSON을 이어서 출력합니다. 이전 출력 형식이 필요한 스크립트는 `OMNILANE_REFUSAL_JSON_ONLY=1`을 설정하세요. 먼저 `failed_gate`, `reason`, `next_command`, `eligible_lanes`를 읽으세요. 재서명 요약에는 조치가 필요한 벤더별 이유와 다음 명령을 담은 `attention` 목록도 있습니다. `installed: true`는 검증된 변경이 설치되었다는 뜻이며 모든 행이 준비되었다는 뜻은 아닙니다.
 
-```bash
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
-omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane ui start     # optional: watch jobs live in your browser
-```
+표의 `VENDOR`와 `MODEL`은 진단에 표시된 이름으로 바꾸세요. `whoami`는 하나의 도구 호출에서 단독으로 실행하고, 파이프나 `&&`, 뒤에 붙인 명령을 사용하지 마세요.
 
-> **왜 export 가 필요한가?** omnilane 은 디스패치할 때마다 "요청하는 쪽의 능력 점수"와 대조하므로, 누가 요청하는지 밝혀야 합니다. 사람은 `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`(또는 호출마다 `--operator-asserted-human`)로 한 번만 밝히면 됩니다. 모델은 스스로 이렇게 선언할 수 없습니다. 모델의 신원은 그것을 실행한 CLI 에서 읽습니다. 둘 다 없으면 작업이 만들어지기 전에 `missing-caller-context` 로 거부됩니다.
-
-사람이 쓰기에는 여기까지면 충분합니다. 다음 절은 더 유용한 구성, 즉 AI 어시스턴트가 스스로 디스패치하게 하는 방법입니다.
-
-## 🤖 AI 어시스턴트가 omnilane 을 운전하게 하기
-
-어시스턴트(Claude Code, Codex, Grok Build, Antigravity)는 스킬 파일을 읽고 레인을 고르는 법과 디스패치하는 법을 배웁니다. 머신마다 한 번, 네 단계입니다.
-
-### 1단계: 어시스턴트에게 스킬 주기
-
-`./install.sh` 는 찾은 모든 CLI 에 링크를 만듭니다. 수동으로 할 때:
-
-| 어시스턴트 | 방법 |
-|---|---|
-| Claude Code | `claude plugin marketplace add <이 저장소>` 다음 `claude plugin install omnilane@omnilane`(`/route`, `/route-jobs`, 완료 인박스 포함). 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 링크 |
-| Codex | `skills/omnilane` 을 `~/.codex/skills/` 에 링크 |
-| Grok Build | `grok plugin install <이 저장소> --trust` |
-| Antigravity | `agy plugin install <이 저장소>`(먼저 `agy plugin validate <이 저장소>` 로 확인) |
-
-### 2단계: "각 CLI 가 지정한 모델을 정말로 선택한다"는 것을 한 번 증명하기
-
-모델이 호출자일 때는 이 머신이 **증명한** 대상으로만 디스패치할 수 있습니다. 예를 들어 `codex -m gpt-6.1-sol` 이 정말로 Sol 을 실행한다는 것입니다. 이 증명은 로컬 파일이며 **트랜스포트 오버레이(transport overlay)** 라고 부릅니다. 패키지에는 들어 있지 않습니다. 이것이 없으면 모든 레인이 모델 호출자를 `runtime-mapping-unverified` 로 거부하고, `omnilane doctor` 는 `no overlay configured` 라고 경고합니다.
-
-일반 데스크톱 터미널에서 만드세요. (ssh 로그인 세션은 CLI 가 로그인에 쓰는 키체인을 읽지 못해 모두 로그인되지 않았다고 보고합니다.)
-
-```bash
-omnilane resign --init
-```
-
-최초 설치는 대화형 터미널에서 실행하세요. 기존 오버레이가 있거나 `--daily`와 함께 사용하면 거부됩니다. 프로브와 실제 디스패치를 검증하고 최초 신뢰 서명자를 기록한 다음, `local.sh`를 백업하고 기존 설정을 보존하면서 경로를 등록합니다. 안전하지 않은 서명이나 서명자 변경은 승인하지 않습니다. [수동 대체 절차](docs/transport-overlay.md#first-installation).
-
-로그인하지 않은 벤더는 `unprobeable` 로 보고되고 미검증 상태로 남을 뿐입니다. 나머지는 동작합니다.
-
-### 3단계: 증명을 손대지 않고 최신으로 유지하기
-
-오버레이는 각 CLI 실행 파일을 해시로 고정합니다. 그리고 **CLI 는 스스로 업데이트됩니다**. 일주일에 한 번인 경우도 흔합니다. 업데이트 뒤에는 오버레이가 다시 서명될 때까지 그 벤더의 레인이 거부됩니다. `omnilane resign` 이 이 일을 전부 합니다. 바뀐 것을 찾고, 그 벤더만 다시 프로브하고, 결과를 확인하고, 교체하고, 실제 디스패치 한 건으로 확인하고, 실패하면 이전 파일로 되돌립니다. 출처 채널은 프로브만 허용하며 디스패치를 직접 허용하지 않습니다.
-
-`--init`가 최초 신뢰 서명자를 자동으로 기록합니다. 이전 오버레이에만 사람이 별도로 `omnilane resign --record-signers`를 실행하세요. 기존 팀 기록은 Developer ID 채널이 되지만 현재 파일은 Apple 인증서 체인, 팀, 식별자와 실제 설치 위치를 통과해야 합니다. 명시적인 신뢰가 없는 기존 adhoc 기록에는 업그레이드로 신뢰가 추가되지 않습니다.
-
-```bash
-omnilane resign --record-signers # 이전 오버레이만, 사람이 실행
-```
-
-직접 패치하고 adhoc 서명한다면 `omnilane resign --trust-adhoc claude`를 사용합니다. 또 **각 호스트에서 따로** 유효한 공식 서명 샘플을 설치한 상태로 `omnilane resign --trust-origin claude`를 실행합니다. 현재 파일이 adhoc이면 `omnilane resign --trust-origin claude --team TEAMID`에 독립적으로 확인한 10자리 팀 ID를 넣습니다. 터미널에서 화면에 나온 정확한 확인 문구를 입력해야 합니다. 확인 생략 옵션이나 기본 팀은 없습니다. 공식 업데이트와 이후 adhoc 업데이트는 각각 검증이 필요합니다. 같은 위치를 신뢰해도 파일의 제작자를 증명하지는 못합니다. adhoc 샘플에는 공식 식별자가 없으므로 `--team`은 그 위치의 팀 전체를 승인합니다. 교체하기 전까지는 이 CLI뿐 아니라 그 팀이 서명해 그 위치에 둔 어떤 프로그램도 출처 검사를 통과해 재검증 대상이 됩니다. `omnilane resign --check`와 `omnilane doctor`에는 `"identifier_family": ""`로 표시됩니다. 제품에 묶으려면 유효한 공식 서명 샘플을 설치한 상태에서 `--team` 없이 `omnilane resign --trust-origin claude`를 다시 실행합니다. 팀 단위 승인이 교체됩니다.
-
-```bash
-omnilane resign --trust-adhoc claude   # 직접 claude 를 adhoc 서명하는 경우에만
-```
-
-고정된 스크립트나 macOS 이외의 네이티브 파일은 `omnilane resign --trust-location VENDOR`로 신뢰합니다. 새 위치나 스크립트는 확인 뒤 `omnilane resign --approve VENDOR`로 이번 시도만 승인하고 검증 성공 후 새 위치를 신뢰할 수 있습니다. 일회성 승인은 채널을 만들지 않습니다.`omnilane resign --revoke-origin VENDOR KIND`로 취소합니다. `KIND`는 `developer-id`, `adhoc`, `script`, `no-platform-signature` 또는 모든 위치 채널을 뜻하는 `location`입니다. 취소 후 빈 목록도 이전 오버레이 신뢰보다 우선합니다.
-
-`omnilane resign --check`와 `omnilane doctor`는 종류와 채널, 차단 시 관측된 팀과 식별자를 보여 줍니다. 손상된 서명, 검증 불가, 서명 없는 macOS 네이티브 파일, 손상되거나 다른 호스트의 정책은 항상 멈추며 승인으로 고칠 수 없습니다. 출처 실패와 로그인 실패는 별도 안내를 제공합니다. 유효한 설치나 이 호스트의 백업을 복원한 뒤 재시도하세요. 출처로 인한 중단은 실행 파일이 바뀐 경우에 적용됩니다. 고정된 실행 파일이 바뀌지 않았다면 누락된 행의 프로브, 재시도, 증거 갱신에 기존 규칙을 유지합니다.
-
-채널은 호스트에 묶인 `$OMNILANE_HOME/transport-origins.local.json`에 0600 권한, 원자적 쓰기와 변경 전 백업으로 저장됩니다. 호스트 간 복사하지 마세요. 최초 사용 정책은 Developer ID와 설치 위치에 묶인 자체 서명, 스크립트, 플랫폼 서명이 없는 도구를 포함합니다. 2단계 최초 프로브에서 적용되며, 현재 운영 코드는 아직 이 인터페이스를 호출하지 않습니다. 현재 첫 사용 신뢰는 기록된 식별 정보, 경로 또는 정책 항목이 없는 공급업체별로 판단하며 호스트별로 판단하지 않습니다. 다른 공급업체의 기존 기록이 있으면 차단할지는 2단계 연결 때 결정합니다. 어시스턴트는 신뢰, 승인, 기록, 취소 명령을 직접 실행하면 안 됩니다.
-
-그다음 매일 실행되게 합니다. 스케줄러는 무엇이든 좋지만 반드시 **데스크톱 로그인 세션 안에서** 실행되어야 합니다(CLI 에 키체인이 필요합니다). macOS 에서는 LaunchAgent 를 쓸 수 있습니다.
-
-```bash
-cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
-  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
-</dict></plist>
-EOF
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
-```
-
-이번 릴리스는 데스크톱 터미널에서의 `omnilane resign` 을 실제로 검증했습니다. Codex 의 실제 자체 업데이트에 대한 무인 재서명도 포함합니다. 위의 LaunchAgent 는 예시이며 그 자체는 검증하지 않았습니다. `launchctl kickstart gui/$(id -u)/dev.omnilane.resign` 으로 여러분의 머신에서 확인하세요.
-
-`omnilane resign` 의 종료 코드:
-
-| 종료 코드 | 의미 | 할 일 |
+| 표시 내용 | 의미 | 다음 명령 |
 |---|---|---|
-| 0 | 바뀐 것이 없거나, 바뀐 것이 모두 재서명됨 | 없음 |
-| 10 | `--check` 전용: 무언가 바뀜 | `omnilane resign` 실행 |
-| 20 | 출처, 로그인 또는 검증에 조치 필요 | 해당 안내를 따른다. 승인으로 손상된 서명, 미서명 또는 검증 불가를 우회할 수 없다 |
-| 30 | 재서명한 오버레이가 실제 디스패치에 실패해 이전 것으로 복원됨 | 망가진 것은 없다. 로그를 읽는다 |
-| 2 | 오버레이가 설정되지 않음 | 2단계를 한다 |
-| 40 (`EXIT_HOST_CONFIG`) | 호스트 설정 로드 실패 또는 설정된 오버레이를 읽을 수 없거나 JSON 이 잘못됨; 변경 없음 | stderr 의 경로와 원인을 수정; 일일 작업 알림 정책은 관리자가 결정 |
-| 50 (`EXIT_BUSY`) | 이 호스트에서 다른 `omnilane resign`이 실행 중; 읽기·쓰기 없음 | 그것이 끝난 뒤 실행 |
-| 60 | 검증된 선택자는 반영되었고, 나머지 유지된 선택자는 재검증 대기 중 | `omnilane doctor`로 원인을 확인하고 해결 후 `omnilane resign` 실행 |
-
-argparse 사용법 오류도 2 를 반환합니다. 설정되었지만 읽을 수 없는 오버레이는 2 가 아니라 40 입니다.
-
-### 4단계: 어시스턴트 안에서 시험하기
-
-어시스턴트에게 `omnilane whoami` 를 실행하게 하세요. 자신이 어떤 모델과 어떤 effort 로 실행 중인지, 그리고 점수를 답해야 합니다. 이어서 작은 일을 위임하게 합니다. "omnilane 으로 triage 레인에게 이 저장소의 TODO 주석 수를 세게 해 줘".
-
-거부되면 어느 확인에서 실패했는지, 무엇을 해야 하는지가 거부 메시지에 있습니다.
-
-| `failed_gate` | 쉽게 말하면 | 고치는 법 |
-|---|---|---|
-| `caller-identity` | 어떤 모델이 요청하는지 omnilane 이 알 수 없음 | `omnilane whoami` 를 그 도구 호출의 **유일한 명령**으로 실행하게 한다. 특히 Codex 는 `; echo $?`, `&&`, 파이프 뒤에서는 읽을 수 없다 |
-| `target-transport` | 이 머신이 그 대상을 증명하지 않았거나, 그 뒤 CLI 가 업데이트됨 | `omnilane resign`(3단계) |
-| `downward-ceiling` | 대상 모델의 점수가 요청하는 모델보다 높음. 모델은 옆이나 아래로만 위임할 수 있음 | 거부 메시지의 `eligible_lanes` 중 하나를 고르거나, 더 높은 effort 로 어시스턴트를 시작한다 |
-
-기존 스레드를 깨우는 Codex 자동화는 effort 를 기록하지 않습니다. omnilane 은 그 호출자를 거부하는 대신 해당 모델의 최저 점수로 제한합니다. 저렴한 레인은 계속 동작하고, 비싼 레인은 어떤 effort 면 닿는지 알려 줍니다.
-
-## 🧭 동작 방식
-
-omnilane 은 **어떤** agentic CLI 든 메인 루프가 서브태스크를 레인으로 분류하고,
-각 레인을 그 작업에 가장 강한 벤더로 헤드리스 디스패치하게 해 줍니다.
-기존 구독 로그인을 그대로 사용합니다(`openrouter` vendor 는 예외: CLI 없이
-API 키 하나로 직접 연결):
-
-```mermaid
-flowchart LR
-    M["메인 루프<br/><i>아무 CLI</i>"] --> T{{"routing.yaml<br/>공유 테이블 하나"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
-    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
-    T -->|taste-final| C3["Claude — Sonnet 5.5"]
-    T -->|long-context| C4["Codex — GPT-6 Astra"]
-    T -->|live-search| C5["Grok — 4.7"]
-    T -->|"arbitrate(옵트인)"| C6["vote — 1-4 모델 패널"]
-```
-
-- **`routing.yaml`** — 레인 → 벤더+모델+추론 강도. 파일 하나를 네 하네스가 공유.
-- **폴백 체인** — 한 레인에 후보를 여러 개 나열할 수 있습니다
-  (`codex … | claude … | off`). 실제로 설치된 첫 번째 벤더 CLI 가 선택되므로
-  한두 개 구독만 있어도 같은 테이블이 동작합니다.
-- **`scripts/dispatch.sh [--vendor V] <레인> "<태스크>"`** — 테이블을 해석해
-  해당 벤더 CLI 를 헤드리스로 실행합니다. `--vendor` 는 지정한 벤더로
-  고정하며 폴백하지 않습니다.
-- **`skills/omnilane/SKILL.md`** — 네 하네스 공용 스킬: 자기 모델을 파악하고,
-  자기 레인은 직접 수행, 나머지는 디스패치.
-- **`omnilane mcp`** — 같은 라우팅을 MCP stdio 서버로 제공.
-  스킬 대신 MCP 로 통합하는 호스트용.
-
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **테이블 하나**<br/>네 개 하네스가 공유 | 🪂 **폴백 체인**<br/>가진 CLI 로 자동 강등 | 🗳️ **의견 패널**<br/>중대한 결정은 멀티모델 투표 |
-| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치 프로그램이 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
-
-</div>
-
-## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
-
-AA `aa-v5.0.1-2026-11-10-v1`: **approved (2026-11-10 운영자 승인)**. AA Intelligence Index v5.0.1로 바꾸고 점수가 있는 구성은 68개입니다. Claude Fable 5.2(max 65, xhigh 62, high 62, medium 56, low 54. Claude Code 2.1.321 이상 필요)를 추가하고 v5.0.1에서 점수가 없어진 구성은 뺐습니다. 아래 표는 이미 이를 따릅니다: Fable 5.2 xhigh가 hardest-coding과 hard-judgment의 1순위가 되고, Claude Opus 5가 점수를 잃어 long-context는 GPT-6 Astra (medium)이 맨 앞입니다. Gemini 4 Carbon은 점수는 있지만 디스패치 가능한 ID가 없어 어느 레인에도 없습니다. 모든 호스트에서 `omnilane resign`을 한 번 실행해 새 표에 맞춰 overlay를 다시 검증해야 합니다. [근거](docs/reports/aa-rebaseline-2026-11-10.md). `aa-v4.3.2-2026-10-28-v1`(2026-10-28 승인)을 대체합니다.
-
-AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는 같은 날 운영자 지시에 따라 컨트롤러가 승인)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)을 대체합니다.
-
-AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
-
-| 레인 | 1순위 모델 | 백업 | 용도 |
-|---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
-| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
-| 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
-
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
-
-**백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
-디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
-설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
-
-> **Claude Fable 5.2 가 이제 hardest-coding 과 hard-judgment 의 맨 앞입니다 (AA v5.0.1 스냅샷, 2026-11-10 승인).** 점수와 재정렬은 [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-10.md) 에 있고, 레인별 비교는 [FAQ](#-faq) 에 있습니다.
-
-### 자연어 상담
-
-`omnilane` 스킬이나 `/route` 에서
-**“Opus에게 이 아키텍처를 비판적으로 검토해 달라고 해줘.”** 처럼 평범하게
-요청할 수 있습니다. 자연어는 Agent Skill 이 해석하며, `dispatch.sh` 에 자유
-형식 shell 파서를 추가하는 방식이 아닙니다.
-
-- 모델의 기능만 묻는 질문에는 해당 레인에서 현재 첫 번째로 사용 가능한 모델을
-  답하고 모델 호출은 하지 않습니다.
-- 일반 벤더명은 그 벤더에 대해 `consult` 에 설정된 후보를 사용합니다.
-- Opus 같은 표준 모델 별칭은 스킬 표의 정확한 모델 제품군으로 고정합니다.
-  명시한 대상이 없거나 CLI 를 사용할 수 없으면 명확히 실패하며 다른 벤더나
-  모델 제품군으로 폴백하지 않습니다.
-
-<details>
-<summary><b>모델 역할 가이드(그래도 위임은 필요)</b></summary>
-
-<br/>
-
-레인에 가장 맞는 모델은 누가 컨트롤러인지에 따라 바뀌지 않습니다. 아래는 역할
-안내일 뿐, 직접 실행해도 된다는 예외가 아닙니다. 같은 모델이라도 위임합니다.
-네이티브 에이전트는 호출자가 모델, effort, 모드, 작업 디렉터리, 도구, 격리 방식,
-수명 주기가 모두 일치한다고 명시했을 때만 쓸 수 있고, 그 밖에는 CLI 를 씁니다.
-컨트롤러는 조율과 검증을 맡고, 워커는 다시 위임하지 않습니다.
-아래 시작 위치는 점수 상한만으로 계산한 것입니다(AA v5.0.1 스냅샷, 2026-11-10 승인). 상속된
-상한, 호스트 프로브 실패, 쿼터 때문에 체인이 더 아래로 내려갈 수 있습니다.
-
-- **Claude Code · Fable 5.2**——상한이 가장 높은 프롬프트 수준 컨트롤러(Claude Code 2.1.321 이상 필요). max, xhigh, high 에서는 hardest-coding 과 hard-judgment 의 1순위가 Fable 5.2 자신이지만 그래도 디스패치합니다. medium 에서 처음 닿는 행은 Astra xhigh(hardest-coding)와 Fable 5.2 medium(hard-judgment), low 에서는 Opus 5.5 high 와 Fable 5.2 low 입니다.
-- **Claude Code · Fable 5.1**——xhigh(50)에서는 hard-judgment 가 Fable 5.1 xhigh 자신부터 시작합니다(그래도 위임합니다). hardest-coding 과 taste-final 은 Sonnet 5.5 xhigh 부터, bulk-mechanical, fast-agentic, long-context 는 GPT-6.1 Sol medium 부터 시작합니다.
-- **Claude Code · Opus 5.5**——ui-draft 는 Opus 5.5 high 가 맨 앞입니다. xhigh(57)에서는 hardest-coding 이 Astra xhigh 부터, hard-judgment 가 Fable 5.2 medium 부터 시작합니다. medium(48)에서는 hardest-coding 과 hard-judgment 가 Opus 5.5 medium 자신부터, ui-draft 와 long-context 가 GPT-6.1 Sol medium 부터 시작합니다.
-- **Claude Code · Opus 5**——점수가 남은 것은 max(44)뿐이라, `max` 로 명시해서 부르는 독립 리뷰어이고 어느 레인의 기본값도 아닙니다. 이 상한에서는 hardest-coding 이 Sonnet 5.5 high 부터, hard-judgment 가 Fable 5.1 medium 부터, long-context 가 Astra low 부터 시작합니다.
-- **Codex · GPT-6.1 Sol**——bulk-mechanical 과 fast-agentic 은 GPT-6.1 Sol medium 이 맨 앞입니다. xhigh(52)에서는 hardest-coding 이 Opus 5.5 high 부터, hard-judgment 가 Fable 5.1 xhigh 부터, long-context 가 Astra medium 부터 시작합니다. high(50)에서는 hardest-coding 이 Sonnet 5.5 xhigh 부터 시작합니다.
-- **Codex · Astra**——consult(xhigh)와 long-context(medium)의 1순위이며, xhigh 는 hardest-coding 과 taste-final 의 2순위이기도 합니다. xhigh(55)에서는 hard-judgment 가 Fable 5.2 low 부터 시작합니다. 필요하면 `--vendor codex --effort max` 를 명시하세요. 명시한 model／effort 가 항상 우선합니다.
-- **Codex · GPT-6.1 Terra**——Codex 의 가성비 행입니다. fast-agentic 2·3순위(medium, low), bulk-mechanical 3순위(high). xhigh(45)에서는 hardest-coding 이 Terra xhigh 자신부터, hard-judgment 가 Fable 5.1 medium 부터, long-context 가 Astra low 부터 시작합니다. GPT-5.6 Terra 는 max 만 점수가 있고 어느 레인에도 없습니다.
-- **Grok Build · Grok 4.7**——live-search 와 coding-overflow 의 1순위, consult 3순위이고, hardest-coding, hard-judgment, taste-final 에서는 Grok 꼬리를 맡습니다. 상한이 35 라 어려운 레인은 대부분 Opus 5.5 low 부터 시작합니다. Grok 4.6 은 어느 레인에도 없습니다. API 시그니처와 인용한 사실은 반드시 검증하세요.
-- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High(50)는 모든 레인에서 Gemini 자리를 차지하며 Flash 보다 앞에 섭니다. Flash 는 그 뒤의 벤더 교차 폴백으로, consult, ui-draft, hard-judgment, live-search, coding-overflow 에서는 High, hardest-coding, bulk-mechanical, taste-final, long-context, fast-agentic 에서는 Medium, triage 에서는 Low 를 씁니다. 에이전트／코딩 벤치마크로 시각적 감각이나 컨트롤러 적합성을 추정하지 마세요.
-
-</details>
-
-## 어시스턴트 자신의 서브에이전트 사용하기
-
-omnilane 은 기본적으로 벤더의 명령줄 도구에 일을 넘깁니다. 일을 해야 할 모델이 어시스턴트 **자신의 벤더** 것일 때 다른 CLI 를 거치는 것은 돌아가는 길입니다. 로그인이 하나 더, 프로세스가 하나 더, 그 CLI 가 업데이트되면 망가질 곳이 하나 더 생깁니다. 대부분의 어시스턴트는 스스로 서브에이전트를 시작할 수 있고, omnilane 은 그에 맞춰 일을 계획할 수 있습니다. 방법은 두 가지입니다.
-
-**어시스턴트와 정확히 같은 것을 실행하는 워커(`--inherit`).** 어시스턴트는 *모델도 effort 도 지정하지 않고* 서브에이전트를 시작하므로 워커는 호출자의 복제입니다. 복제가 원본보다 강할 수는 없고, omnilane 의 점수 확인이 막으려는 것은 그것뿐입니다. 그래서 이 경로에는 벤더 CLI 도 트랜스포트 오버레이도 필요 없고, 호출자의 effort 를 알 수 없거나 오버레이가 오래되었을 때도 동작합니다.
-
-```sh
-omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
-omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
-# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
-#    model argument, checks the result, and records it:
-omnilane jobs --json complete-native JOB_ID /absolute/completion.json
-omnilane jobs --json status JOB_ID
-```
-
-정직한 부분: 핸드오프에는 `satisfies_lane_target: false` 가 표시됩니다. 여기서 레인은 일의 종류를 나타내는 라벨일 뿐입니다. 이렇게 얻은 결과는 "어시스턴트 자신의 서브에이전트"가 만든 것이지 결코 "hardest-coding 모델"이 만든 것이 아닙니다. 호출자보다 강한 모델이 필요한 레인은 여전히 거부됩니다. `--inherits-caller-runtime` 은 "내 서브에이전트 도구는 이렇게 동작한다"는 어시스턴트 자신의 진술이며 omnilane 은 이를 관찰할 수 없습니다. 어시스턴트별로 알려진 사항:
-
-| 어시스턴트 | 모델 인자 없는 서브에이전트 |
-|---|---|
-| Claude Code | 메인 대화의 모델을 사용하고 effort 는 세션 것을 이어받는다고 공식 문서에 명시(에이전트 정의가 지정하는 경우 제외). 내장 general-purpose 에이전트이고 `CLAUDE_CODE_SUBAGENT_MODEL` 이 설정되지 않았을 때 성립. 이번 릴리스에서 끝까지 실행함 |
-| Codex | 모델도 effort 도 없는 `collaboration.spawn_agent`. 이번 릴리스에서 끝까지 실행함 |
-| Grok Build | 부모의 모델을 상속한다고 문서에 명시(번들된 `general-purpose` 는 `model: inherit`). effort 는 문서에 없음. 이번 릴리스에서 실행하지 않음 |
-| Antigravity | `agy` 1.2.7 에서 서브에이전트 도구를 찾지 못함. 사용 불가 |
-
-**어시스턴트의 도구가 선택할 수 있는 특정 모델.** 도구가 실제로 받아들이는 것을 capability 파일에 적고(`omnilane native-context` 의 출력에서 시작해 정확한 모델과 effort 쌍마다 행을 추가) 일반 `omnilane route` 에 `--native-context FILE` 을 넘깁니다. omnilane 은 어떤 행이 정확히 일치할 때만 서브에이전트를 사용합니다. 모델, effort, 모드, workdir, 도구, 격리 방식, 수명 주기 모두입니다. 같은 벤더가 같은 모델은 아니며, 설치된 CLI 로부터 추측하지도 않습니다. `--executor native` 는 폴백하지 않고 실패하고, `--executor cli` 는 외부 CLI 를 강제합니다. 파일이 없다는 이유만으로 같은 벤더의 대상이 CLI 를 거친 경우, 디스패치가 이제 그 사실을 알려 줍니다.
-
-어느 쪽이든 서브에이전트는 어시스턴트의 도구와 파일 시스템을 공유합니다. 운영체제 수준의 샌드박스는 없으며 `advise`/`work` 는 의도이지 강제가 아닙니다. 백그라운드, 상주, 이름 있는 스레드, 다중 라운드, 투표, `sysops` 작업은 CLI 경로에 남습니다. 프로토콜 처리에는 Python 3.9 이상이 필요합니다. 스키마, 완료 파일, 에이전트 재사용과 취소: [docs/native-executor.md](docs/native-executor.md).
-
-## 🖥️ Live Board
-
-모든 디스패치는——포그라운드든 `--background` 든——디스크에 잡으로 기록됩니다.
-Live Board 는 그 잡 저장소 위에 놓인 선택형 읽기 전용 로컬 워크벤치입니다:
-각 모델에게 무엇을 물었고, 무엇을 답했고, 어떻게 라우팅됐고, 아직 실행 중인지
-한눈에 봅니다.
-
-<div align="center">
-
-<img src="docs/live-board.png" alt="Omnilane Live Board 데스크톱 화면——왼쪽은 잡 목록, 오른쪽은 선택한 잡의 태스크·공개 결과·모델 경로" width="820"/>
-
-<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 모바일 화면——검색 가능한 잡 목록과 상태 필터" width="280"/>
-
-</div>
-
-```bash
-omnilane ui start    # 서버를 시작하거나 재사용하고 인증 URL 출력
-omnilane ui status   # 로컬 서버 상태 확인
-omnilane ui url      # 현재 인증 URL 출력
-omnilane ui stop     # 정상 중지
-```
-
-데스크톱에서는 잡 목록과 상세 패널을 따로 스크롤할 수 있고, 모바일에서는 목록／상세
-전환과 뒤로 가기, Esc 를 지원합니다. Server-Sent Events(SSE)는 포커스된 행을
-다시 만들지 않고 갱신하며, 짧은 연결 끊김에는 마지막 스냅샷을 유지한 채 재연결합니다.
-불러온 잡을 참조로 고정한 뒤 다른 잡을 선택하면 모델 경로와 공개 결과를 나란히
-비교할 수 있습니다. 참조 스냅샷은 브라우저 메모리에만 남고 페이지를 닫으면 사라집니다.
-`127.0.0.1` 에만 바인딩하고 무작위 토큰으로 보호하는 읽기 전용 화면입니다.
-`task.txt` 와 공개용 `out.txt` 만 표시하며 워커나 벤더 원시 로그는 표시하지 않습니다.
-
-화면은 영어, 일본어, 한국어, 번체 중국어, 간체 중국어로 볼 수 있습니다. 처음에는
-브라우저 언어를 따르고, 헤더의 선택기로 바꿀 수 있으며 선택은 로컬에 기억됩니다.
-
-핵심 라우팅에는 Python 이 필요 없고, 이 UI 에만 Python 3.9 이상이 필요합니다.
-
-## 📦 설치
-
-전제: 라우팅할 벤더 CLI(`codex`, `claude`, `grok`, `agy`, 선택적으로
-`kimi`, `qwen`, `opencode`)가 로그인된 채 `PATH` 에 있을 것——**가진 것만
-있으면 됩니다**, 없는 레인은 자동 강등. `openrouter` vendor 는 예외로 CLI 가
-필요 없습니다——`curl` 과 환경 변수의 `OPENROUTER_API_KEY` 만 있으면 됩니다.
-
-가장 빠른 방법: `./install.sh` — 로컬 CLI 를 감지해 스킬을 연결하고, 나머지
-플러그인 명령을 안내하며, 실효 라우팅을 출력한 뒤 대화형 설정 메뉴를
-제안합니다(`--uninstall` 로 되돌리기). 설치 프로그램은 시스템 언어에 따라
-영/번체/간체/일/한을 자동 선택합니다(`OMNILANE_LANG=ko` 로 강제 가능).
-또한 각 CLI 지침 파일(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
-`~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — 경로는 CLI 버전에 따라 다를
-수 있음)에 마커로 감싼 가역적 **상시 라우팅 리마인더**를 선택 설치할 수
-있습니다. 비대화형 설치는 `OMNILANE_HOOKS=all|none|claude,codex`. 수동 연결:
-
-`./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
-`--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
-설치 프로그램이 소유한 링크와 표시된 알림을 되돌리려면
-`./install.sh --uninstall` 을 실행합니다.
-
-- **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령과 함께
-  세션 시작 시 라우팅 리마인더를 자동 주입하는 `SessionStart` 훅 포함,
-  CLAUDE.md 수정 불필요), 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
-- **Codex**: `skills/omnilane` 을 `~/.codex/skills/` 에 배치/링크.
-- **Grok Build**: `grok plugin install <이 저장소> --trust`
-- **Antigravity**: `agy plugin install <이 저장소>`(먼저
-  `agy plugin validate` 로 확인)
-
-### MCP 서버
-
-`omnilane mcp` 는 의존성 없이 로컬에서 실행되는 MCP stdio 서버를 시작하여,
-MCP 지원 호스트가 스킬 설치나 라우팅 리마인더 없이 omnilane 을 발견하고
-호출할 수 있게 합니다. 호스트 설정에서 설치된 CLI 를 지정하면 됩니다:
-
-```json
-{
-  "mcpServers": {
-    "omnilane": {
-      "command": "omnilane",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-서버는 `route` 와 함께 읽기 전용 조회 도구 `list_lanes`, `explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`, `jobs_stats`, `jobs_audit`, `doctor` 를 제공합니다.
-`route` 의 기본값은 읽기 전용 `advise` 모드이며, `work` 를 선택한 호출은
-명시적 `workdir` 을 함께 제공해야 합니다.
-
-실행에 필요한 것은 Node.js 뿐입니다(npm 패키지 없음). npm 을 선호하면
-`npm install -g omnilane` 으로 MCP 서버가 포함된 CLI 를 설치할 수 있습니다.
-
-## ⚙️ 사용자 설정
-
-세 계층, 모두 선택 사항:
-
-1. **대화형 메뉴** — `scripts/configure.sh` 가 설정 가능한 레인을 보여 주고, 레인마다
-   벤더 → 모델 → 추론 강도를 고르게 한 뒤(추천 목록+자유 입력) 결과를
-   `~/.omnilane/routing.local.yaml` 에 기록합니다. 다중 벤더 `consult` 는
-   의도적으로 제외되며, 바꾸려면 수동으로 편집합니다.
-2. **`~/.omnilane/routing.local.yaml`** — 수동 오버라이드. 형식은
-   `routing.yaml` 과 동일, 로컬 우선.
-3. **`~/.omnilane/local.sh`** — 머신 전용 바이너리 경로, 프록시, 인증 래퍼.
-   모든 러너가 로드하며 커밋되지 않습니다.
-
-언제든 확인:
-
-```
-scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
-```
-
-## 📖 명령 레퍼런스
-
-```
-eval "$(omnilane completion bash)"             # 현재 Bash 에서 완성 활성화
-source <(omnilane completion zsh)               # 현재 Zsh 에서 완성 활성화
-omnilane completion fish | source              # 현재 Fish 에서 완성 활성화
-omnilane mcp                                   # MCP stdio 서버(Node.js 필요)
-omnilane release-audit [--target VERSION] [--json] # 오프라인 읽기 전용 릴리스 게이트
-omnilane ui start                              # 로컬 Live UI 를 시작하거나 재사용하고 URL 표시
-omnilane ui status                             # Live UI 실행 상태 표시
-omnilane ui url                                # 현재 인증된 로컬 URL 표시
-omnilane ui stop                               # Live UI 중지
-omnilane doctor [--json]                       # 라우팅과 로컬 실행 환경을 읽기 전용으로 진단
-# transport-overlay: 실행 파일 경로 불일치는 FAIL, 공급업체 해시 또는 실행기 변경은 기존대로 WARN
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
-            [--caller-context FILE | --operator-asserted-human]   # who is asking
-            LANE "TASK"                              # "-" 는 stdin 에서 읽기
-dispatch.sh [--json] --list [--json]
-dispatch.sh [--json] --explain LANE [--json]       # 후보별 라우팅 결정을 오프라인 설명
-dispatch.sh [--json] --validate [--json]           # 공급자 호출 없이 실효 라우팅 검사
-jobs.sh [--json] {list | status ID | result ID}    # JSON은 본문 없이 메타데이터만 반환
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 목록 필터
-jobs.sh wait ID [--timeout N]                     # 작업 종료값, 124 시간 초과, 125 작업자 소실
-jobs.sh cancel ID                                 # 실행 중 작업 중지: 그룹 SIGTERM 후 SIGKILL
-jobs.sh rm ID                                     # 완료/종료 작업 1건을 ~/.Trash로 이동(실행 중이면 거부)
-jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 로컬 성공률과 라우팅 집계
-jobs.sh audit [--last N] [--json]                  # 읽기 전용 작업 무결성/개인정보 검사
-jobs.sh prune [--keep N] [--apply]                # 기본은 미리보기이며 완료된 작업만 정리; --apply는 ~/.Trash로 이동
-configure.sh                                        # 대화형 레인 메뉴
-configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml 비대화식 편집/확인
-```
-
-`configure diff`는 두 보기 모두에서 `local.sh`의 동일한 머신별 가용성 설정을 유지하므로, 로컬 바이너리 설정 누락이 아니라 라우팅 재정의의 차이를 비교합니다. 어느 한 조회라도 실패하면 비교 결과를 출력하지 않고 해당 종료 상태와 실패한 단계를 알립니다.
-
-`configure get`은 조회가 실패하면 해당 종료 상태를 전달하며, 부분 데이터를 반환하거나 레인을 찾을 수 없다고 잘못 보고하지 않습니다. `configure list`는 존재 확인 오류를 보고하며, 실제로 재정의가 없거나 비어 있는 경우는 기존처럼 성공합니다.
-
-`configure set`은 임시 후보를 검증한 뒤 반영하며 기존 파일의 권한 모드를 유지합니다. 기존 라우팅 내용의 읽기 실패, 예상치 못한 검증기 실패, 대상 레인의 구조 오류가 발생하면 기존 설정은 바뀌지 않습니다. 가용성 경고와 다른 레인의 오류는 기존 방식대로 처리합니다.
-
-`configure unset`은 읽기와 필터링을 마친 뒤 기존처럼 같은 대상에 내용을 씁니다. 읽기나 필터링 오류가 나면 원래 내용은 바뀌지 않습니다. 쓰기 오류는 보고하지만 롤백은 보장하지 않습니다.
-
-Bash, Zsh, Fish 자동 완성에는 문서화된 최상위, 목표, 작업 명령 그룹이 포함됩니다. 자동 완성을 선택하면 명령 텍스트만 입력되며 작업 동작을 실행하지 않습니다.
-
-`--vendor`를 지정하지 않으면 `benchmark`는 유효한 라우팅 목록에서 벤더를 찾고 표시용 `unavailable` 항목은 제외합니다. 벤치마크 대상 벤더가 없으면 설정된 벤더가 없다는 진단과 종료 코드 2를 반환합니다. 기본값은 여전히 프로바이더를 호출하지 않는 드라이런입니다.
-
-작업 `list`와 `status`는 같은 관측 상태를 사용합니다. `dead`는 종료 코드가 기록되지 않았고 작업자 PID가 유효하지 않거나 더 이상 존재하지 않는 상태입니다. `--status running`에서 제외되며 `--status dead`로 선택할 수 있습니다. `result`는 실행 중이라고 표시하는 대신 종료 코드가 기록되지 않았다고 알립니다. PID가 아직 없는 시작 단계는 기존처럼 `running`이며 종료 코드를 추정하지 않습니다.
-
-백그라운드 작업에는 Perl 감독이 필요하며, 취소 시 감독 중인 프로세스 그룹을 종료합니다.
-감독 자체는 전체 작업 기한을 추가하지 않습니다. 적용되는 시간 제한이 없으면 메타데이터는 `job_timeout: null`을 유지합니다.
-감독 중인 개별 호출은 Perl alarm을 사용하므로 시간 초과 시 142를 반환할 수 있으며, 전체 작업 기한이 만료되면 124를 반환합니다.
-`jobs close`는 프로세스 그룹 정리를 포함해 최대 11초 동안 기다립니다.
-
-`--thread NAME`은 단발 디스패치 사이에서 이름이 있는 Claude, Codex, Grok,
-Gemini 대화를 이어갑니다. 0.33.0에서는 벤더, 모델, effort, 실제 workdir를
-고정합니다. 로컬 상태는 `jobs.sh threads`, `threads show NAME`,
-`threads rm NAME`으로 관리하며, 상태를 삭제해도 벤더 세션은 남습니다.
-
-종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
-`3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
-CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라운드 반박 전부 실패,
-`86` 중첩 디스패치 거부, `87` 락 대기 타임아웃, `124` 전체 잡 타임아웃.
-그 외에는 워커 자신의 종료 코드를 그대로 전달.
-
-## 🎭 모드
-
-- **advise(기본)**: 로컬 읽기 전용 분석입니다. 지원 벤더의 기본 검색 도구와 모델 연결은 유지하고 변경 도구는 제한합니다. 모든 벤더의 X／웹 검색 기능이 동등하다는 뜻은 아닙니다.
-- **work**: 파일 및 명령 작업은 명시한 `--workdir` 내부로 제한하고 에이전트 도구의 네트워크 접근을 끕니다. 모델 연결은 유지합니다. 강제 경계가 지원되지 않으면 모델 시작 전에 중단하며 sysops 로 조용히 전환하지 않습니다.
-- **sysops**: 매번 명시적으로 선택하여 도구, 파일, 네트워크 제한을 해제합니다. 레인 기본값으로 설정하지 않으며 작업에 허용된 동작을 명시해야 합니다.
-
-CLI 에서 `--workdir` 를 생략하면 호출자의 현재 디렉터리를 사용하지만 작업 지시에는 명시하십시오. MCP `route`／`dry_run` 의 work 인터페이스는 별도로 명시적인 `workdir` 를 요구합니다.
-
-Codex 와 Claude 는 세 모드에 서로 다른 정책을 적용합니다. Agy advise／sysops 는 구독 인증을 교체하지 않고 독립 세션 설정을 사용합니다. Agy 1.1.27 work 는 검증된 네 도구와 기본 터미널 샌드박스로 신규／재개 범위를 검증했으며 작업 영역 내 읽기·쓰기·편집·빌드와 영역 밖 쓰기 거부를 확인했습니다. 외부 임시 파일／캐시 읽기도 제한됩니다. 설정은 시작할 때마다 명시적으로 다시 생성하며 불변이라고 주장하지 않습니다. 별도의 실제 work 라이브／FIFO 두 턴 검증에서 이전 턴 읽기, 영역 밖 쓰기 거부, 정상 종료 및 소스 불변을 확인했습니다. Grok advise 는 기본 도구 허용／거부 규칙을 사용합니다. 자식 프로세스 네트워크 격리는 Linux 전용이므로 macOS Grok work 는 기본적으로 시작 전에 중단됩니다. Grok 라이브는 명시적 sysops 가 필요합니다. 검색 가용성과 사용자 훅 영향은 실제 도구 이벤트로 검증하며 성공 종료 코드만으로 입증하지 않습니다. OpenRouter 는 advise 전용이며 다른 벤더는 이 네 벤더 계약에 자동 포함되지 않습니다.
-
-macOS Grok work: 운영자는 `routing.local.yaml` 에만 `option.grok-macos-work: unconfined` 를 추가하여 **격리 없는** 단발 work 를 활성화할 수 있습니다. 기본값은 꺼짐이며, 꺼져 있을 때 macOS work 체인은 Grok 을 건너뜁니다. 켜져 있으면 `doctor --strict` 가 실패합니다. 자세한 내용은 [옵션, 위험, Grok 워커 필수 작업 지시서](docs/grok-unconfined-work.md)를 참고하세요.
-
-Grok 1.0.13의 단발 `plain` advise는 전체 도구 집합으로 실제 검색, 페이지 조회, 쓰기 거부를 검증했습니다. 내부 웹 도구 ID와 작업별 MCP 준비 상태를 사용하며 훅은 끄지 않습니다. 기존의 비어 있지 않은 `CONTEXT_MODE_MCP_SENTINEL_DIR`은 덮어쓰지 않고 충돌로 모델 시작 전에 중단합니다. 이 결과를 라이브나 macOS work 검증으로 확장하지 않습니다. 자세한 범위는 [날짜별 런타임 게이트](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)를 참조하십시오.
-
-## 🔒 안전 장치
-
-- **중첩 디스패치 금지** — 워커의 재디스패치를 거부(`OMNILANE_DEPTH` 가드,
-  종료 코드 86). AI 가 AI 를 부르는 쿼터 연쇄 소진을 차단.
-- **Codex 직렬화 락** — 같은 대상 디렉터리로의 codex 디스패치는 큐잉.
-  크래시로 남은 락은 소유자 PID 로 감지해 안전하게 회수.
-- **워치독** — 모든 워커는 `timeout`/`gtimeout`, 둘 다 없으면 perl-alarm
-  폴백 아래에서 실행(순정 macOS 가 이 경우). 상한은 **CLI 호출마다** 적용되며
-  우선순위는 `--timeout SECONDS` > 레인별 `OMNILANE_TIMEOUT_<LANE>`(예:
-  `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 전역 `OMNILANE_TIMEOUT`(기본 600 초)
-  순입니다. 이것은 호출 단위 행 방지 장치이지 작업 전체 예산이 아닙니다.
-  재시도하는 벤더(grok)나 vote 패널(투표자 × 라운드)은 여러 번 호출하므로
-  전체 소요 시간은 이 값의 몇 배가 될 수 있습니다.
-- **전체 잡 퓨즈** — 선택형 `--job-timeout SECONDS` 는 락 대기, 재시도,
-  모든 투표자와 라운드를 하나의 process group 감독 아래 제한합니다. 우선순위는
-  플래그 > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 비활성입니다.
-  단, Git worktree 밖에서 Codex `work` 를 실행하며 전체 상한이 설정되지 않은 경우에는
-  결정된 호출별 워치독을 전체 잡 퓨즈로 자동 사용하며 감독기의 상한은 999999999초입니다.
-  이 자동 퓨즈에는 번들 Perl 감독기가 필요합니다. 사용할 수 없으면 경고한 뒤 비 Git
-  work를 기존 호출별 워치독 경로로 계속합니다. 그 경로에도 워치독 도구가 없으면 별도로
-  경고합니다. 만료 시 감독 중인 process group을
-  정리하고 124를 반환합니다. 대규모 저장소 심층 검사는
-  2–4시간(7200–14400초), 호출별 워치독은 30분부터 시작하는 것을 권장합니다.
-  하드코딩된 기본값은 아닙니다.
-- **백그라운드 잡 수명주기** — `--background` 워커는 독립 process group 에서
-  돌며 호출자가 종료해도 살아남습니다. kill 되면 종료 코드를 기록하고
-  `jobs.sh status` 가 `dead` 를 보고.
-- **페이로드 상한** — 과대한 태스크 텍스트는 머리/꼬리만 남기고 자동 절단.
-
-## 📬 라이브 메일함
-
-라이브 메일함은 일회성 dispatch와 다른 지원 모드의 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 유휴 상한 또는 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
-
-```bash
-scripts/dispatch.sh --background --vendor claude hard-judgment "시간 제한 테스트 실패를 확인해 주세요"
-# dispatch가 출력한 작업 ID를 $ID로 저장
-scripts/jobs.sh send "$ID" "재시도 경로도 확인해 주세요."
-scripts/jobs.sh watch "$ID"
-scripts/jobs.sh tail "$ID" --lines 20
-scripts/jobs.sh close "$ID"
-scripts/jobs.sh retry "$ID" --background
-```
-
-포그라운드 dispatch와 `jobs retry`는 작업이 실패해도 저장된 공개 출력을 표시한 뒤 해당 작업의 0이 아닌 종료 코드를 반환합니다. 백그라운드 dispatch는 기존처럼 작업 ID를 출력합니다.
-
-`watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. Grok 은 추가로 `--mode sysops --workdir DIR` 가 필요합니다. ACP 가 제한 모드 경계를 강제하지 않으므로 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
-
-유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
-
-## 🎯 목표 오케스트레이션
-
-`omnilane goal`은 포어맨이 진행하는 작업 원장입니다. 루프는 목표를 연 에이전트 세션이나 터미널 사용자가 담당합니다. 작업을 디스패치하고 완료 수신함 또는 `omnilane jobs wait`로 결과를 받은 뒤 다음 작업을 판단하여 반복합니다. 작업 수와 경과 시간 예산은 기본적으로 무제한입니다. `--budget-jobs N` 또는 `--budget-seconds S`를 지정한 경우에만 해당 상한이 활성화됩니다. omnilane은 기록만 담당하며, 각 goal dispatch 전에 호출자가 지정한 상한과 기본적으로 활성화된 동일 실패 퓨즈를 검사하고 포어맨이 목표를 닫을 때 보고서를 작성합니다.
-
-```bash
-GOAL_ID="$(omnilane goal open "불안정한 결제 통합 수정" \
-  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
-  "결제 오류를 재현하고 최소 수정 후 검증")"
-omnilane jobs wait "$JOB_ID" --timeout 900
-omnilane goal note "$GOAL_ID" "결제 통합 테스트 통과"
-omnilane goal close "$GOAL_ID" --summary "결제 통합이 안정화됨"
-```
-
-갱신이 중단되면 저장된 작업 기록에서 실패 횟수를 다시 계산하며 중복 집계하지 않습니다. `goal close`는 보고서 저장이 성공한 뒤에만 목표를 닫습니다. 저장에 실패하면 원인을 해결한 뒤 다시 닫기를 시도할 수 있습니다.
-
-목표가 사용 중이면 읽기 전용 잠금 소유자 진단을 표시하고 종료 코드 75를 유지합니다. 잠금은 자동으로 삭제하지 않습니다. 기록된 PID만으로 소유권을 증명할 수 없으므로 복구 전에 수동 확인이 필요합니다.
-
-목표 상태와 보고서는 `dead`와 `missing`을 실행 중으로 표시하지 않습니다. 상태 근거가 없거나 일치하지 않으면 `unknown`으로 표시하며 종료 코드나 실패 횟수를 만들어내지 않습니다. 작업별 초는 제출 후 경과 시간이며 실제 실행 시간이 아닙니다. 목표 예산은 바뀌지 않으며 미완료 작업마다 최대 두 초의 로컬 상태 조회를 한 번 수행합니다.
-
-완료된 작업 파일을 정상적으로 정리해도 목표에는 검증된 종료 코드, 완료 시각, 완료까지의 경과 시간이 남습니다. 상태와 보고서는 별도로 `artifacts=missing`을 표시합니다. 완료 기록이 없는 작업은 missing 또는 unknown으로 유지되며, 파일 정리로 종료 결과를 만들어내지 않습니다.
-
-목표 디스패치는 먼저 의도를 기록하고 작업 슬롯 하나를 예약합니다. 시작 전에 일회성 점유 기록으로 의도와 생성된 작업 ID를 연결합니다. `spent_jobs`는 기록된 작업 수를, `reserved_jobs`는 확인되지 않은 제출 수를 나타냅니다. 미확인 또는 손상된 기록이 있으면 새 디스패치와 목표 닫기를 막습니다. 대조 작업은 기록만 복구하며 작업 시작, 종료 코드 추측, 불확실한 제출 재실행은 하지 않습니다.
-
-스레드를 사용하는 목표 디스패치의 stdout에는 정확한 작업 ID만 나옵니다. ID를 검증한 뒤 일치하는 스레드 알림을 stderr에 표시합니다. 직접 백그라운드 디스패치는 기존처럼 알림과 ID를 stdout에 출력합니다.
-
-`goal dispatch`는 백그라운드 작업을 시작하며 `--dry-run`을 지원하지 않습니다. 이 옵션은 목표 상태를 변경하기 전에 거부됩니다. 라우팅을 미리 보려면 `omnilane dispatch --dry-run [options] LANE "TASK"`를 직접 사용하세요. 직접 미리 보기는 목표의 작업 디렉터리를 상속하지 않으므로 필요하면 `--workdir DIR`를 지정하세요.
-
-저장된 목표 예산은 JSON 정수여야 하며 불리언이나 숫자 문자열은 받지 않습니다. 선택적 한도는 계속 `null` 또는 1..999999999이고 카운터는 지원 범위의 음이 아닌 정수여야 합니다. 잘못된 필드는 기록 갱신이나 디스패치 전에 거부합니다. 작업 디렉터리 경로의 탭, 캐리지 리턴, 줄바꿈, NUL은 지원하지 않으며 일반 공백과 Unicode는 지원합니다.
-
-디스패치가 오류를 내거나 결과가 사라지면 다시 제출하기 전에 `goal status`를 확인하세요. 동일한 명령도 새로 제출하면 새 의도가 되므로, 보장은 의도별 최대 한 번의 시작이며 모든 동일 명령의 자동 중복 제거가 아닙니다. 대조에는 유효한 기존 작업자 PID 또는 종료 코드 근거가 필요합니다. 대조 전에 근거를 정리하면 예약은 미확인 상태로 남습니다. 이미 대조된 목표 기록은 작업 파일 정리 후에도 유지되며 기존 목표도 읽을 수 있습니다. 오래된 잠금이나 불확실한 의도를 자동 복구하지 않습니다.
-
-백그라운드 작업의 마무리가 시작되면 HUP/TERM이 이미 선택한 종료 상태를 바꾸지 않습니다. 완료 훅은 이미 소비한 기록을 건너뛰며, 읽을 수 없는 기록 알림을 포함해 프롬프트마다 최대 열 건을 전달합니다.
-
-목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. `goal status`로 예산 사용량, 퓨즈 작동 횟수, 각 작업에서 순차적으로 도착하는 메타데이터와 종료 상태를 확인할 수 있습니다. `goal close`는 `report.md`를 기록하고 경로를 출력합니다. 절차가 명확한 단일 작업은 바로 디스패치하십시오. 예산 플래그를 지정한 경우 해당 상한은 엄격한 제한이며 완료를 보장하지 않습니다.
-
-## ❓ FAQ
-
-<details>
-<summary><b>이 구독들이 전부 필요한가요?</b></summary>
-
-<br/>
-
-아닙니다. 각 레인은 대체 체인이며 실제로 설치된 첫 후보가 사용됩니다. 구독이
-하나면 표 전체가 그 벤더로 수렴하고, 체인에 아무것도 없는 레인은 오류 대신 그냥
-꺼집니다. `omnilane doctor` 로 이 머신이 지금 실제로 닿을 수 있는 곳을 확인할 수
-있고, `routing.local.yaml.example` 에는 흔한 상황별 시작 프로필(Claude 만,
-Codex 중심, Codex 없음)이 들어 있습니다.
-
-</details>
-
-<details>
-<summary><b>omnilane 이 제 코드를 새로운 곳으로 보내나요?</b></summary>
-
-<br/>
-
-새로운 목적지는 생기지 않습니다. 디스패치는 이미 설치하고 로그인해 둔 벤더 CLI 를
-호출할 뿐이라, 코드가 도달하는 곳은 원래 쓰던 벤더뿐입니다. 러너는 구독형 CLI 를
-호출하기 전에 API 키 환경 변수를 제거하므로, 남아 있던 키 때문에 토큰 종량제로
-조용히 전환되는 일도 없습니다. 유일한 예외는 direct-API 벤더군(`openrouter`,
-`deepseek`, `zai`, `mistral`, `groq`, `cerebras`)으로, 이들은 정의상 당신이 설정한
-키로 해당 제공자의 API 를 호출합니다——모두 advise 전용이며 파일을 수정하지 않습니다.
-
-</details>
-
-<details>
-<summary><b>왜 이제 Fable 5.2 가 어려운 작업의 맨 앞인가요?</b></summary>
-
-<br/>
-
-2026-11-10 스냅샷(AA Intelligence Index v5.0.1, 같은 날 승인)에서 Fable 5.2 xhigh 는
-62점으로, 레인이 디스패치할 수 있는 다른 모든 행보다 높습니다(Opus 5.5 xhigh 57,
-Astra xhigh 55). `hardest-coding` 에서는 Terminal-Bench 4.0 도 가장 높고(0.616.
-Astra 와 Opus 5.5 xhigh 는 둘 다 0.596), SciCode 는 0.656 입니다(나머지 둘은
-0.557, 0.650). `hard-judgment` 에서는 HLE(0.689), Briefcase analytical
-Elo(1927), CritPt(0.357)가 모두 체인에서 가장 높고, 첫 Codex 행인 GPT-6.1 Sol
-xhigh 는 각각 0.526, 1691, 0.317 입니다. 대신 가장 비싼 행이기도 해서, AA 인덱스를
-한 번 돌리는 비용이 Fable 5.2 xhigh 약 $11,742, Opus 5.5 xhigh 약 $4,766, Astra
-xhigh 약 $3,746 입니다.
-
-Astra xhigh 는 여전히 `hardest-coding` 2순위이자 `consult` 1순위이고, `ui-draft`
-는 Opus 5.5 high 가 맨 앞입니다. Fable 5.2 에는 Claude Code 2.1.321 이상이
-필요합니다. 이 스냅샷은 2026-11-10 운영자가 승인했습니다. 레인별 전체 수치는
-[`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) 에 있습니다.
-
-</details>
-
-<details>
-<summary><b>왜 어느 레인도 <code>max</code> 를 쓰지 않나요?</b></summary>
-
-<br/>
-
-effort 는 작업마다 고르는 것이지, 높을수록 좋다고 가정하지 않습니다. 2026-11-10
-재정렬 이후에는 `hardest-coding` 을 포함해 어느 레인의 체인에도 `max` 행이 없습니다.
-모든 레인이 가성비 우선으로 정렬되고, `max` 는 가장 비싸면서 얻는 것이 적기
-때문입니다(Fable 5.2 는 max 65점, xhigh 62점). `--effort max` 로 명시하면 지금도
-쓸 수 있고, 명시한 `--model` 과 `--effort` 는 항상 이 기본값보다 우선합니다.
-
-</details>
-
-<details>
-<summary><b>레인의 1순위 CLI 가 없으면 어떻게 되나요?</b></summary>
-
-<br/>
-
-디스패치가 체인을 따라 내려가며 보유한 첫 벤더를 사용합니다. 호출을 쓰지 않고도
-결정을 먼저 확인할 수 있습니다:
-
-```bash
-scripts/dispatch.sh --explain hardest-coding   # 후보별 추적
-scripts/dispatch.sh --list                     # 전체 유효 테이블
-scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계획, 제공자 호출 없음
-```
-
-</details>
-
-<details>
-<summary><b>디스패치된 워커가 제 파일을 수정할 수 있나요?</b></summary>
-
-<br/>
-
-요청했을 때만 가능합니다. 디스패치의 기본값은 읽기 전용 `advise` 이며 벤더별로
-구현되어 있습니다(읽기 전용 샌드박스 또는 기본 도구 권한).
-범위를 제한한 수정에는 `--mode work` 와 명시적인 `--workdir` 를 지정하십시오.
-work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 유지하고 도구 네트워크를 끕니다.
-`--mode sysops` 는 Codex, Claude, Grok, Agy 각각의 독립적인 전체 접근 정책이며 work 의 별칭이 아닙니다.
-서비스 관리처럼 work 경계를 넘는 동작을 작업에서 명시적으로 허용할 때마다 선택하며 레인 기본값이 될 수 없습니다. 워커는 다시
-디스패치할 수도 없습니다——깊이 가드가 종료 코드 86 으로 중첩 팬아웃을 거부하므로,
-명령 하나가 에이전트 연쇄로 번져 할당량을 태우는 일은 없습니다.
-
-</details>
-
-<details>
-<summary><b>디스패치가 거부되었습니다. 어떤 거부인가요?</b></summary>
-
-<br/>
-
-세 가지 코드에는 각각 다른 해결책이 있습니다. 먼저 `omnilane doctor`를 실행하세요.
-`transport-overlay` 검사가 문제의 원인이 이 머신의 설정인지 요청인지 바로
-알려줍니다.
-
-`missing-caller-context` — 게이트에 신원이 전달되지 않았습니다. 사람은
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 또는 `--operator-asserted-human`을
-사용합니다. 모델은 보통 아무것도 할 필요가 없으며, dispatch 가 실행한 CLI 에서 신원을
-읽습니다. 읽지 못하면 `omnilane whoami` 를 실행하세요. 전달할 `--caller-context FILE`
-을 출력하거나, 읽지 못한 정확한 이유(`--effort` 누락, 모델 별칭, 점수 행 없음)를 알려줍니다.
-모델은 사람용 면제를 스스로 주장해서는 안 됩니다.
-
-`runtime-mapping-unverified` — 신원은 정상이지만 **대상**에 검증된 호스트 로컬
-요청 셀렉터가 없습니다. 프로브를 한 적이 없거나 프로브가 실패한 경우입니다.
-`omnilane doctor`와 `--json`은 미검증 행을 `WARN`으로 표시하며 ID, 요청·관측 모델과 강도
-(기록된 경우), 실패 분류와 이유, 마지막 검사 시각, 증거 경로(내용 제외), 다음 단계를 제공합니다.
-환경 문제에는 `omnilane resign --retry-failed --vendor VENDOR`를 안내합니다. 확정적 실패는
-자동 재시도하지 않으며 요청·CLI·공급자 모델 대응을 확인해야 합니다. 증거 손상 시 해당 경로와
-정상 백업 복원 또는 새 디렉터리에서 명시적으로 증거를 다시 만드는 명령을 안내합니다.
-공급자 할당량 제한으로 인한 거부는 그 할당량이 회복될 때까지 해소되지 않습니다.
-
-`invalid-policy-input`과 "transport contract evidence changed" — 위 둘 다
-아닙니다. overlay 자체가 로드되지 않아 **모든 벤더**가 거부됩니다. 흔한 원인은
-벤더 CLI 업그레이드입니다. overlay는 각 벤더의 실행 파일과 러너 스크립트 해시를
-고정하며, Codex와 Claude의 증거 경로에는 버전 디렉터리가 포함되어 업그레이드 시
-다이제스트가 바뀌는 대신 파일이 사라집니다. 태그가 있는 증거는 해당 벤더만
-강등시키고, 프로브 매니페스트처럼 태그가 없는 증거는 게이트 전체를 닫습니다.
-doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스킬에 있습니다.
-
-`target-above-effective-ceiling`——고장 난 곳은 없습니다. 타깃의 점수가 호출자보다
-높을 뿐입니다. `required_caller_effort` 에는 호출한 세션에 필요한 effort 가
-나옵니다. `caller_degraded` 가 붙은 호출자는 effort 를 기록하지 않는 하네스(Codex
-하트비트 자동화가 그렇습니다)에서 시작된 것이라, 그 모델의 최저선으로 계산됩니다.
-
-</details>
-
-<details>
-<summary><b>매핑의 증거 등급은 무슨 뜻인가요?</b></summary>
-
-<br/>
-
-프로브가 "누가 응답했는지"를 얼마나 확실히 짚었는지를 나타냅니다. 디스패치할 수
-있는지에는 영향을 주지 않습니다.
-
-`billed-model`——프로바이더가 과금한 모델 이름을 알려 준 경우입니다. Claude 는
-`modelUsage` 에, grok 은 `--output-format json` 에서 같은 방식으로 보고합니다.
-프로바이더가 발행한 영수증에 해당합니다.
-
-`client-echo`——CLI 가 요청한 모델을 기록해 두었고, 그 기록이 요청과 일치하는
-경우입니다. Codex 는 세션 롤아웃에, agy 는 `cli.log` 에 씁니다. 이것은 CLI 쪽
-주문서 사본이지 프로바이더의 영수증이 아닙니다. 요청이 의도대로 나갔다는 것은
-증명하지만, 누가 응답했는지는 증명하지 못합니다.
-
-`selector-only`——CLI 가 셀렉터를 받아들였을 뿐 그 이상은 보고하지 않은 경우입니다.
-v0.42.6 이전에 프로브한 매핑은 모두 이 등급입니다. 디스패치는 되지만 셋 중 가장
-약하며, `omnilane doctor` 가 다시 프로브할 만한 벤더를 알려 줍니다.
-
-세 등급 모두 상위 프로바이더의 신원을 보증하지 않으며, 어느 것도 레인을 거부하지
-않습니다. 등급은 벤더가 아니라 프로브 결과에서 정해지므로, CLI 가 과금 모델을
-보고하기 시작하면 omnilane 을 바꾸지 않아도 다음 스윕에서 등급이 올라갑니다.
-
-</details>
-
-## 📊 기본값과 출처
-
-기본 레인 배치는 Artificial Analysis Intelligence Index v5.0.1 스냅샷
-`aa-v5.0.1-2026-11-10-v1`(2026-11-10, 같은 날 운영자 승인)에 근거합니다.
-AA 모델 페이지 85개를 합친 것으로, 각 레인은 이 점수와 레인별 측정값으로 가성비
-우선 정렬하며, v5.0.1 에서 점수가 없어진 행은 이전 점수를 이어받지 않고 뺐습니다
-([근거](docs/reports/aa-rebaseline-2026-11-10.md)).
-이는 의견이지 법칙이 아닙니다——설정 메뉴와 `routing.local.yaml` 이
-그래서 존재합니다. 벤치마크별 단서를 포함한 작업 노트는
-[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) 에 있습니다.
-
-## ⚠️ 알려진 제한
-
-- **Antigravity print 모드의 툴 호출은 현행 CLI 빌드에서 불안정**
-  (거부 또는 invalid-argument). 본문을 태스크에 붙여 넣는 장문 통합이라는
-  long-context 레인 본연의 용도에는 영향이 없습니다.
-- **Grok 에는 추론 강도 조절이 없습니다**. effort 필드는 인터페이스 호환용.
-- **Git 저장소가 아닌 디렉터리에서도 Codex work 를 지원합니다.** 일부 Codex CLI 는
-  Git worktree 밖에서 멈출 수 있으므로 위 자동 퓨즈가 이 경우를 제한하고 감독 중인
-  process group을 정리합니다. Omnilane 은 `git init` 을 자동 실행하지 않으며 저장소
-  생성을 요구하지도 않습니다.
+| `missing-caller-context` / `caller-identity` | 어시스턴트를 시작한 모델 또는 추론 강도를 읽을 수 없습니다. | `omnilane whoami` |
+| 호출자 모델／강도의 점수 행이 없음 | 일반 레인 라우팅에는 정확히 일치하는 점수 쌍이 필요합니다. 지원되는 네이티브 워커는 실제 호출자 실행 환경을 상속할 수 있지만, 레인의 모델 목표를 충족한 것으로 보지는 않습니다. | `omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir "$PWD"` 후 참고 자료의 `--inherit` 인계 사용 |
+| `target-above-effective-ceiling` | 대상이 호출자의 허용 점수를 초과합니다. 거절 메시지의 사용 가능한 레인을 확인하세요. | `omnilane route --explain hardest-coding` |
+| `runtime-mapping-unverified` 또는 CLI 증거 변경 | 이 호스트에서 선택자가 검증되지 않았거나 실행 파일이 바뀌었습니다. | `omnilane resign --vendor VENDOR` |
+| 종료 코드 2: 오버레이 미설정 | 최초 설정이 끝나지 않았습니다. | `omnilane resign --init` — 사람이 대화형 데스크톱 터미널에서 실행 |
+| 종료 코드 20: `needs-login-session` | CLI가 로그인되지 않았거나 프로세스가 데스크톱 로그인에 접근할 수 없습니다. 먼저 데스크톱 터미널에서 로그인하세요. | `omnilane resign --vendor VENDOR` — 해당 로그인된 터미널에서 실행 |
+| 종료 코드 20: `cli-not-installed` / `review-executable-source` | CLI가 없거나 실행 파일 출처／서명 검토가 필요합니다. 승인으로 잘못된 서명을 복구할 수는 없습니다. | `omnilane doctor` 후 벤더별 안내 따르기 |
+| 종료 코드 20: `provider-verification-incomplete` / `verification-needed` | 검증이 미완료입니다. 표시된 API, 할당량, 네트워크 또는 미탐색 행의 원인을 먼저 해결하세요. | `omnilane resign --vendor VENDOR` |
+| 환경 오류가 대기 시간／리셋 시각까지 보류됨 | 일반 실패 행은 명시적으로 재시도할 수 있습니다. 무인 재확인 대기 행에는 횟수 제한과 리셋 시각이 계속 적용됩니다. | `omnilane resign --retry-failed --vendor VENDOR` — 원인을 해결한 뒤 실행 |
+| `deterministic-probe-failure`／모델 또는 강도 불일치 | 요청과 관측 결과가 다릅니다. `--retry-failed`를 사용해도 자동 재시도하지 않습니다. | `omnilane doctor`로 조사하고 CLI／프로바이더 매핑을 수정한 뒤 새로 검증 |
+| 종료 코드 60: `partially-re-signed` | 통과한 선택자는 설치되었습니다. 보존된 행은 재확인 대기 중이며 디스패치할 수 없습니다. 종료 코드 20에 해당하는 보류가 우선합니다. | `omnilane resign --vendor VENDOR` — 대기 원인이 해결된 뒤 실행 |
+| 종료 코드 20: `operator-or-login-needed`, 또는 다음 단계에 `--approve`, `--allow-shrink`, `--record-signers` 또는 신뢰／철회 플래그가 있음 | 운영자의 판단 사항이며 어시스턴트가 자신을 승인할 수 있다는 뜻이 아닙니다. | `omnilane doctor` — 사람이 증거를 검토하고 지정된 동작을 터미널에서 실행 |
+
+## v0.61.0 새 기능
+
+- **업그레이드 후 각 호스트에서 `omnilane resign`을 한 번 실행하세요.** 변경되지 않은 선택자 증거는 이어서 사용하며, 새 행과 변경된 행은 검증이 필요합니다. 종료 코드 **60**은 통과한 행은 설치되었고 나머지는 재확인 대기 중이라는 뜻입니다. `omnilane doctor`로 확인하고 원인이 해결된 뒤 재시도하세요.
+- 승인된 AA Intelligence Index **v5.0.1** 스냅샷에 **Claude Fable 5.2**(Claude Code **2.1.321+** 필요)가 추가되어 `hardest-coding`과 `hard-judgment`의 첫 후보가 되었습니다. `long-context`는 GPT-6 Astra medium으로 시작합니다. 명시적인 네이티브 모델／강도 행도 현재 점수가 있어야 합니다. 철회된 쌍을 `native-rows.json`에서 제거하거나 지원되는 상속 워커를 사용하세요.
+- 최초 설정은 `omnilane resign --init`으로 수행합니다. 거절에는 쉬운 다음 단계가, 종료 코드 20에는 벤더별 `attention` 안내가 제공됩니다. doctor／overlay-health는 이어서 사용하는 행과 신규／미탐색 행의 수를 보여 줍니다.
+- 일부 프로바이더 검증이 실패해도 통과한 선택자는 사용할 수 있습니다. 무인 재확인은 횟수 제한과 리셋 시각을 지키며, 모델 불일치는 확정 실패로 처리합니다. 전체가 미인증인 스윕은 첫 탐색에서 멈춰 같은 로그인 실패를 반복하지 않습니다.
+- 업그레이드: `npm i -g omnilane@0.61.0`.
 
 ## 📜 릴리스 기록
 
@@ -1380,6 +678,729 @@ AA 모델 페이지 85개를 합친 것으로, 각 레인은 이 점수와 레�
   plugin manifest 를 통일하며 CI 가 변경 기록과 5개 언어 README 를 검사합니다.
 
 </details>
+
+## 참고 자료
+
+## 오버레이 검증과 재시도 세부 사항
+
+평가표만 바뀌면 호출 인수와 실행 파일 식별 정보가 같은 행의 검증 증거를 자동으로 재사용합니다. 점수나 날짜 변경은 새 상한에 즉시 반영되며 `omnilane resign`, GUI 로그인, 네트워크 호출이나 오버레이 수정이 필요 없습니다. 추가되거나 호출 계약 또는 실행 파일이 바뀐 행만 `omnilane resign --vendor VENDOR`로 검증하세요. 거부 메시지에 대상 행과 GUI 터미널 필요 여부가 표시됩니다. 신뢰된 원본 스냅샷이 패키지에 있으면 기존 형식 1도 바로 사용합니다. 알 수 없는 이전 원본은 `omnilane resign --check`로 확인하세요. 최초 설정에는 `omnilane resign --init`를 사용합니다. 서명자 승인 규칙은 그대로입니다. 일일 작업에는 `omnilane resign --daily` 또는 `bash scripts/resign-daily.sh`를 사용하세요. 실패는 0이 아닌 종료 코드를 유지하고 Telegram 없이도 `omnilane doctor`에 로컬 비공개 기록이 표시됩니다. 예약 작업은 자동 설치하지 않습니다.
+
+API 오류, 시간 초과, 로그인, 할당량 또는 연결 문제로 실패한 행은 `omnilane resign --vendor VENDOR`로 다시 검증할 수 있습니다. 비대화형 실행은 각 행의 실패 후 20시간을 기다립니다. 대화형 실행이나 `omnilane resign --retry-failed --vendor VENDOR`는 즉시 재시도합니다. 이 옵션은 서명자 승인을 대신하지 않습니다. 실패 증거와 시간 필드의 존재 여부를 해시로 보호하며, 변경되거나 삭제된 기록은 보고하고 재시도를 거부합니다.
+
+만료된 증거는 누락된 행과 같은 경로로 갱신하며 정상 행은 다시 검증하지 않습니다. 실제 모델/강도가 선언과 다르면 확정된 실패이므로 `--retry-failed`를 지정해도 자동으로 재시도하지 않습니다. `omnilane doctor`로 원래 요청과 CLI/공급자 모델 연결을 확인하고 원인을 수정한 뒤 새 검증을 준비하세요. 아래 버전별 기록은 출시 당시 동작을 설명합니다. 현재 설치에서는 이 절을 따르세요.
+
+## 🤖 AI 어시스턴트가 omnilane 을 운전하게 하기
+
+어시스턴트(Claude Code, Codex, Grok Build, Antigravity)는 스킬 파일을 읽고 레인을 고르는 법과 디스패치하는 법을 배웁니다. 머신마다 한 번, 네 단계입니다.
+
+### 1단계: 어시스턴트에게 스킬 주기
+
+`./install.sh` 는 찾은 모든 CLI 에 링크를 만듭니다. 수동으로 할 때:
+
+| 어시스턴트 | 방법 |
+|---|---|
+| Claude Code | `claude plugin marketplace add <이 저장소>` 다음 `claude plugin install omnilane@omnilane`(`/route`, `/route-jobs`, 완료 인박스 포함). 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 링크 |
+| Codex | `skills/omnilane` 을 `~/.codex/skills/` 에 링크 |
+| Grok Build | `grok plugin install <이 저장소> --trust` |
+| Antigravity | `agy plugin install <이 저장소>`(먼저 `agy plugin validate <이 저장소>` 로 확인) |
+
+### 2단계: "각 CLI 가 지정한 모델을 정말로 선택한다"는 것을 한 번 증명하기
+
+모델이 호출자일 때는 이 머신이 **증명한** 대상으로만 디스패치할 수 있습니다. 예를 들어 `codex -m gpt-6.1-sol` 이 정말로 Sol 을 실행한다는 것입니다. 이 증명은 로컬 파일이며 **트랜스포트 오버레이(transport overlay)** 라고 부릅니다. 패키지에는 들어 있지 않습니다. 이것이 없으면 모든 레인이 모델 호출자를 `runtime-mapping-unverified` 로 거부하고, `omnilane doctor` 는 `no overlay configured` 라고 경고합니다.
+
+일반 데스크톱 터미널에서 만드세요. (ssh 로그인 세션은 CLI 가 로그인에 쓰는 키체인을 읽지 못해 모두 로그인되지 않았다고 보고합니다.)
+
+```bash
+omnilane resign --init
+```
+
+최초 설치는 대화형 터미널에서 실행하세요. 기존 오버레이가 있거나 `--daily`와 함께 사용하면 거부됩니다. 프로브와 실제 디스패치를 검증하고 최초 신뢰 서명자를 기록한 다음, `local.sh`를 백업하고 기존 설정을 보존하면서 경로를 등록합니다. 안전하지 않은 서명이나 서명자 변경은 승인하지 않습니다. [수동 대체 절차](docs/transport-overlay.md#first-installation).
+
+로그인하지 않은 벤더는 `unprobeable` 로 보고되고 미검증 상태로 남을 뿐입니다. 나머지는 동작합니다.
+
+### 3단계: 증명을 손대지 않고 최신으로 유지하기
+
+오버레이는 각 CLI 실행 파일을 해시로 고정합니다. 그리고 **CLI 는 스스로 업데이트됩니다**. 일주일에 한 번인 경우도 흔합니다. 업데이트 뒤에는 오버레이가 다시 서명될 때까지 그 벤더의 레인이 거부됩니다. `omnilane resign` 이 이 일을 전부 합니다. 바뀐 것을 찾고, 그 벤더만 다시 프로브하고, 결과를 확인하고, 교체하고, 실제 디스패치 한 건으로 확인하고, 실패하면 이전 파일로 되돌립니다. 출처 채널은 프로브만 허용하며 디스패치를 직접 허용하지 않습니다.
+
+`--init`가 최초 신뢰 서명자를 자동으로 기록합니다. 이전 오버레이에만 사람이 별도로 `omnilane resign --record-signers`를 실행하세요. 기존 팀 기록은 Developer ID 채널이 되지만 현재 파일은 Apple 인증서 체인, 팀, 식별자와 실제 설치 위치를 통과해야 합니다. 명시적인 신뢰가 없는 기존 adhoc 기록에는 업그레이드로 신뢰가 추가되지 않습니다.
+
+```bash
+omnilane resign --record-signers # 이전 오버레이만, 사람이 실행
+```
+
+직접 패치하고 adhoc 서명한다면 `omnilane resign --trust-adhoc claude`를 사용합니다. 또 **각 호스트에서 따로** 유효한 공식 서명 샘플을 설치한 상태로 `omnilane resign --trust-origin claude`를 실행합니다. 현재 파일이 adhoc이면 `omnilane resign --trust-origin claude --team TEAMID`에 독립적으로 확인한 10자리 팀 ID를 넣습니다. 터미널에서 화면에 나온 정확한 확인 문구를 입력해야 합니다. 확인 생략 옵션이나 기본 팀은 없습니다. 공식 업데이트와 이후 adhoc 업데이트는 각각 검증이 필요합니다. 같은 위치를 신뢰해도 파일의 제작자를 증명하지는 못합니다. adhoc 샘플에는 공식 식별자가 없으므로 `--team`은 그 위치의 팀 전체를 승인합니다. 교체하기 전까지는 이 CLI뿐 아니라 그 팀이 서명해 그 위치에 둔 어떤 프로그램도 출처 검사를 통과해 재검증 대상이 됩니다. `omnilane resign --check`와 `omnilane doctor`에는 `"identifier_family": ""`로 표시됩니다. 제품에 묶으려면 유효한 공식 서명 샘플을 설치한 상태에서 `--team` 없이 `omnilane resign --trust-origin claude`를 다시 실행합니다. 팀 단위 승인이 교체됩니다.
+
+```bash
+omnilane resign --trust-adhoc claude   # 직접 claude 를 adhoc 서명하는 경우에만
+```
+
+고정된 스크립트나 macOS 이외의 네이티브 파일은 `omnilane resign --trust-location VENDOR`로 신뢰합니다. 새 위치나 스크립트는 확인 뒤 `omnilane resign --approve VENDOR`로 이번 시도만 승인하고 검증 성공 후 새 위치를 신뢰할 수 있습니다. 일회성 승인은 채널을 만들지 않습니다.`omnilane resign --revoke-origin VENDOR KIND`로 취소합니다. `KIND`는 `developer-id`, `adhoc`, `script`, `no-platform-signature` 또는 모든 위치 채널을 뜻하는 `location`입니다. 취소 후 빈 목록도 이전 오버레이 신뢰보다 우선합니다.
+
+`omnilane resign --check`와 `omnilane doctor`는 종류와 채널, 차단 시 관측된 팀과 식별자를 보여 줍니다. 손상된 서명, 검증 불가, 서명 없는 macOS 네이티브 파일, 손상되거나 다른 호스트의 정책은 항상 멈추며 승인으로 고칠 수 없습니다. 출처 실패와 로그인 실패는 별도 안내를 제공합니다. 유효한 설치나 이 호스트의 백업을 복원한 뒤 재시도하세요. 출처로 인한 중단은 실행 파일이 바뀐 경우에 적용됩니다. 고정된 실행 파일이 바뀌지 않았다면 누락된 행의 프로브, 재시도, 증거 갱신에 기존 규칙을 유지합니다.
+
+채널은 호스트에 묶인 `$OMNILANE_HOME/transport-origins.local.json`에 0600 권한, 원자적 쓰기와 변경 전 백업으로 저장됩니다. 호스트 간에 복사하지 마세요. `resign --init`은 이제 기록된 식별 정보, 경로 또는 정책 항목이 없는 벤더별로 임시 정책에서 최초 신뢰 등록을 호출합니다. 적격 실행 파일의 출처를 확인하고 로컬 adhoc 서명을 거절하며, 설정과 검증에 성공했을 때만 신뢰를 저장합니다. 기존 신뢰를 덮어쓰지 않고 업그레이드만으로 스크립트나 비 macOS 바이너리를 자동 신뢰하지도 않습니다. 어시스턴트는 신뢰, 승인, 서명자 기록, 철회 명령을 직접 실행하면 안 됩니다.
+
+그다음 매일 실행되게 합니다. 스케줄러는 무엇이든 좋지만 반드시 **데스크톱 로그인 세션 안에서** 실행되어야 합니다(CLI 에 키체인이 필요합니다). macOS 에서는 LaunchAgent 를 쓸 수 있습니다.
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+위 LaunchAgent는 선택적인 예시이며 스케줄러가 자동 설치되지는 않습니다. 자신의 데스크톱 로그인 환경에서 `launchctl kickstart gui/$(id -u)/dev.omnilane.resign`을 실행한 뒤 `omnilane doctor`로 결과를 확인하세요.
+
+`omnilane resign` 의 종료 코드:
+
+| 종료 코드 | 의미 | 할 일 |
+|---|---|---|
+| 0 | 바뀐 것이 없거나, 바뀐 것이 모두 재서명됨 | 없음 |
+| 10 | `--check` 전용: 무언가 바뀜 | `omnilane resign` 실행 |
+| 20 | 출처, 로그인 또는 검증에 조치 필요 | 해당 안내를 따른다. 승인으로 손상된 서명, 미서명 또는 검증 불가를 우회할 수 없다 |
+| 30 | 재서명한 오버레이가 실제 디스패치에 실패해 이전 것으로 복원됨 | 망가진 것은 없다. 로그를 읽는다 |
+| 2 | 오버레이가 설정되지 않음 | 2단계를 한다 |
+| 40 (`EXIT_HOST_CONFIG`) | 호스트 설정 로드 실패 또는 설정된 오버레이를 읽을 수 없거나 JSON 이 잘못됨; 변경 없음 | stderr 의 경로와 원인을 수정; 일일 작업 알림 정책은 관리자가 결정 |
+| 50 (`EXIT_BUSY`) | 이 호스트에서 다른 `omnilane resign`이 실행 중; 읽기·쓰기 없음 | 그것이 끝난 뒤 실행 |
+| 60 | 검증된 선택자는 반영되었고, 나머지 유지된 선택자는 재검증 대기 중 | `omnilane doctor`로 원인을 확인하고 해결 후 `omnilane resign` 실행 |
+
+argparse 사용법 오류도 2 를 반환합니다. 설정되었지만 읽을 수 없는 오버레이는 2 가 아니라 40 입니다.
+
+### 4단계: 어시스턴트 안에서 시험하기
+
+어시스턴트에게 `omnilane whoami` 를 실행하게 하세요. 자신이 어떤 모델과 어떤 effort 로 실행 중인지, 그리고 점수를 답해야 합니다. 이어서 작은 일을 위임하게 합니다. "omnilane 으로 triage 레인에게 이 저장소의 TODO 주석 수를 세게 해 줘".
+
+거부되면 어느 확인에서 실패했는지, 무엇을 해야 하는지가 거부 메시지에 있습니다.
+
+| `failed_gate` | 쉽게 말하면 | 고치는 법 |
+|---|---|---|
+| `caller-identity` | 어떤 모델이 요청하는지 omnilane 이 알 수 없음 | `omnilane whoami` 를 그 도구 호출의 **유일한 명령**으로 실행하게 한다. 특히 Codex 는 `; echo $?`, `&&`, 파이프 뒤에서는 읽을 수 없다 |
+| `target-transport` | 이 머신이 그 대상을 증명하지 않았거나, 그 뒤 CLI 가 업데이트됨 | `omnilane resign`(3단계) |
+| `downward-ceiling` | 대상 모델의 점수가 요청하는 모델보다 높음. 모델은 옆이나 아래로만 위임할 수 있음 | 거부 메시지의 `eligible_lanes` 중 하나를 고르거나, 더 높은 effort 로 어시스턴트를 시작한다 |
+
+기존 스레드를 깨우는 Codex 자동화는 effort 를 기록하지 않습니다. omnilane 은 그 호출자를 거부하는 대신 해당 모델의 최저 점수로 제한합니다. 저렴한 레인은 계속 동작하고, 비싼 레인은 어떤 effort 면 닿는지 알려 줍니다.
+
+완료된 디스패치는 `$OMNILANE_HOME/inbox/`에 비공개 완료 기록을 저장합니다. Claude Code 플러그인의 `SessionStart`는 훅이 제공한 컨트롤러 세션 ID를 실행 중인 프로세스 조상에 연결합니다. `UserPromptSubmit`은 다음 프롬프트에서 해당 세션 소유의 기록을 최대 열 개까지 원자적으로 전달합니다. 세션 ID가 없는 이전 기록은 원래 디스패치의 `workdir` 범위를 사용하며, 가져온 기록은 `inbox/consumed/`로 이동합니다. 디스패치에 `OMNILANE_INBOX=0`을 지정하면 기록 생성을 끌 수 있고 기본값은 활성화입니다. 스킬 링크만으로는 플러그인 알림 기능이 설치되지 않습니다.
+
+## 🧭 동작 방식
+
+omnilane 은 **어떤** agentic CLI 든 메인 루프가 서브태스크를 레인으로 분류하고,
+각 레인을 그 작업에 가장 강한 벤더로 헤드리스 디스패치하게 해 줍니다.
+기존 구독 로그인을 그대로 사용합니다(`openrouter` vendor 는 예외: CLI 없이
+API 키 하나로 직접 연결):
+
+```mermaid
+flowchart LR
+    M["메인 루프<br/><i>아무 CLI</i>"] --> T{{"routing.yaml<br/>공유 테이블 하나"}}
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
+    T -->|"arbitrate(옵트인)"| C6["vote — 1-4 모델 패널"]
+```
+
+- **`routing.yaml`** — 레인 → 벤더+모델+추론 강도. 파일 하나를 네 하네스가 공유.
+- **폴백 체인** — 한 레인에 후보를 여러 개 나열할 수 있습니다
+  (`codex … | claude … | off`). 실제로 설치된 첫 번째 벤더 CLI 가 선택되므로
+  한두 개 구독만 있어도 같은 테이블이 동작합니다.
+- **`scripts/dispatch.sh [--vendor V] <레인> "<태스크>"`** — 테이블을 해석해
+  해당 벤더 CLI 를 헤드리스로 실행합니다. `--vendor` 는 지정한 벤더로
+  고정하며 폴백하지 않습니다.
+- **`skills/omnilane/SKILL.md`** — 네 하네스 공용 스킬: 자기 모델을 파악하고,
+  자기 레인은 직접 수행, 나머지는 디스패치.
+- **`omnilane mcp`** — 같은 라우팅을 MCP stdio 서버로 제공.
+  스킬 대신 MCP 로 통합하는 호스트용.
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **테이블 하나**<br/>네 개 하네스가 공유 | 🪂 **폴백 체인**<br/>가진 CLI 로 자동 강등 | 🗳️ **의견 패널**<br/>중대한 결정은 멀티모델 투표 |
+| 🔒 **안전 장치**<br/>락 · 워치독 · 중첩 금지 | 🌏 **5개 언어**<br/>설치 프로그램이 모국어로 대화 | ↩️ **완전 가역**<br/>`--uninstall` 로 원상복구 |
+
+</div>
+
+## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
+
+AA `aa-v5.0.1-2026-11-10-v1`: **approved (2026-11-10 운영자 승인)**. AA Intelligence Index v5.0.1로 바꾸고 점수가 있는 구성은 68개입니다. Claude Fable 5.2(max 65, xhigh 62, high 62, medium 56, low 54. Claude Code 2.1.321 이상 필요)를 추가하고 v5.0.1에서 점수가 없어진 구성은 뺐습니다. 아래 표는 이미 이를 따릅니다: Fable 5.2 xhigh가 hardest-coding과 hard-judgment의 1순위가 되고, Claude Opus 5가 점수를 잃어 long-context는 GPT-6 Astra (medium)이 맨 앞입니다. Gemini 4 Carbon은 점수는 있지만 디스패치 가능한 ID가 없어 어느 레인에도 없습니다. 모든 호스트에서 `omnilane resign`을 한 번 실행해 새 표에 맞춰 overlay를 다시 검증해야 합니다. [근거](docs/reports/aa-rebaseline-2026-11-10.md). `aa-v4.3.2-2026-10-28-v1`(2026-10-28 승인)을 대체합니다.
+
+AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는 같은 날 운영자 지시에 따라 컨트롤러가 승인)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)을 대체합니다.
+
+AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
+
+| 레인 | 1순위 모델 | 백업 | 용도 |
+|---|---|---|---|
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
+| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
+
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+
+**백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
+디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
+설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
+
+> **Claude Fable 5.2 가 이제 hardest-coding 과 hard-judgment 의 맨 앞입니다 (AA v5.0.1 스냅샷, 2026-11-10 승인).** 점수와 재정렬은 [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-10.md) 에 있고, 레인별 비교는 [FAQ](#-faq) 에 있습니다.
+
+### 자연어 상담
+
+`omnilane` 스킬이나 `/route` 에서
+**“Opus에게 이 아키텍처를 비판적으로 검토해 달라고 해줘.”** 처럼 평범하게
+요청할 수 있습니다. 자연어는 Agent Skill 이 해석하며, `dispatch.sh` 에 자유
+형식 shell 파서를 추가하는 방식이 아닙니다.
+
+- 모델의 기능만 묻는 질문에는 해당 레인에서 현재 첫 번째로 사용 가능한 모델을
+  답하고 모델 호출은 하지 않습니다.
+- 일반 벤더명은 그 벤더에 대해 `consult` 에 설정된 후보를 사용합니다.
+- Opus 같은 표준 모델 별칭은 스킬 표의 정확한 모델 제품군으로 고정합니다.
+  명시한 대상이 없거나 CLI 를 사용할 수 없으면 명확히 실패하며 다른 벤더나
+  모델 제품군으로 폴백하지 않습니다.
+
+<details>
+<summary><b>모델 역할 가이드(그래도 위임은 필요)</b></summary>
+
+<br/>
+
+레인에 가장 맞는 모델은 누가 컨트롤러인지에 따라 바뀌지 않습니다. 아래는 역할
+안내일 뿐, 직접 실행해도 된다는 예외가 아닙니다. 같은 모델이라도 위임합니다.
+네이티브 에이전트는 호출자가 모델, effort, 모드, 작업 디렉터리, 도구, 격리 방식,
+수명 주기가 모두 일치한다고 명시했을 때만 쓸 수 있고, 그 밖에는 CLI 를 씁니다.
+컨트롤러는 조율과 검증을 맡고, 워커는 다시 위임하지 않습니다.
+아래 시작 위치는 점수 상한만으로 계산한 것입니다(AA v5.0.1 스냅샷, 2026-11-10 승인). 상속된
+상한, 호스트 프로브 실패, 쿼터 때문에 체인이 더 아래로 내려갈 수 있습니다.
+
+- **Claude Code · Fable 5.2**——상한이 가장 높은 프롬프트 수준 컨트롤러(Claude Code 2.1.321 이상 필요). max, xhigh, high 에서는 hardest-coding 과 hard-judgment 의 1순위가 Fable 5.2 자신이지만 그래도 디스패치합니다. medium 에서 처음 닿는 행은 Astra xhigh(hardest-coding)와 Fable 5.2 medium(hard-judgment), low 에서는 Opus 5.5 high 와 Fable 5.2 low 입니다.
+- **Claude Code · Fable 5.1**——xhigh(50)에서는 hard-judgment 가 Fable 5.1 xhigh 자신부터 시작합니다(그래도 위임합니다). hardest-coding 과 taste-final 은 Sonnet 5.5 xhigh 부터, bulk-mechanical, fast-agentic, long-context 는 GPT-6.1 Sol medium 부터 시작합니다.
+- **Claude Code · Opus 5.5**——ui-draft 는 Opus 5.5 high 가 맨 앞입니다. xhigh(57)에서는 hardest-coding 이 Astra xhigh 부터, hard-judgment 가 Fable 5.2 medium 부터 시작합니다. medium(48)에서는 hardest-coding 과 hard-judgment 가 Opus 5.5 medium 자신부터, ui-draft 와 long-context 가 GPT-6.1 Sol medium 부터 시작합니다.
+- **Claude Code · Opus 5**——점수가 남은 것은 max(44)뿐이라, `max` 로 명시해서 부르는 독립 리뷰어이고 어느 레인의 기본값도 아닙니다. 이 상한에서는 hardest-coding 이 Sonnet 5.5 high 부터, hard-judgment 가 Fable 5.1 medium 부터, long-context 가 Astra low 부터 시작합니다.
+- **Codex · GPT-6.1 Sol**——bulk-mechanical 과 fast-agentic 은 GPT-6.1 Sol medium 이 맨 앞입니다. xhigh(52)에서는 hardest-coding 이 Opus 5.5 high 부터, hard-judgment 가 Fable 5.1 xhigh 부터, long-context 가 Astra medium 부터 시작합니다. high(50)에서는 hardest-coding 이 Sonnet 5.5 xhigh 부터 시작합니다.
+- **Codex · Astra**——consult(xhigh)와 long-context(medium)의 1순위이며, xhigh 는 hardest-coding 과 taste-final 의 2순위이기도 합니다. xhigh(55)에서는 hard-judgment 가 Fable 5.2 low 부터 시작합니다. 필요하면 `--vendor codex --effort max` 를 명시하세요. 명시한 model／effort 가 항상 우선합니다.
+- **Codex · GPT-6.1 Terra**——Codex 의 가성비 행입니다. fast-agentic 2·3순위(medium, low), bulk-mechanical 3순위(high). xhigh(45)에서는 hardest-coding 이 Terra xhigh 자신부터, hard-judgment 가 Fable 5.1 medium 부터, long-context 가 Astra low 부터 시작합니다. GPT-5.6 Terra 는 max 만 점수가 있고 어느 레인에도 없습니다.
+- **Grok Build · Grok 4.7**——live-search 와 coding-overflow 의 1순위, consult 3순위이고, hardest-coding, hard-judgment, taste-final 에서는 Grok 꼬리를 맡습니다. 상한이 35 라 어려운 레인은 대부분 Opus 5.5 low 부터 시작합니다. Grok 4.6 은 어느 레인에도 없습니다. API 시그니처와 인용한 사실은 반드시 검증하세요.
+- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High(50)는 모든 레인에서 Gemini 자리를 차지하며 Flash 보다 앞에 섭니다. Flash 는 그 뒤의 벤더 교차 폴백으로, consult, ui-draft, hard-judgment, live-search, coding-overflow 에서는 High, hardest-coding, bulk-mechanical, taste-final, long-context, fast-agentic 에서는 Medium, triage 에서는 Low 를 씁니다. 에이전트／코딩 벤치마크로 시각적 감각이나 컨트롤러 적합성을 추정하지 마세요.
+
+</details>
+
+## 어시스턴트 자신의 서브에이전트 사용하기
+
+omnilane 은 기본적으로 벤더의 명령줄 도구에 일을 넘깁니다. 일을 해야 할 모델이 어시스턴트 **자신의 벤더** 것일 때 다른 CLI 를 거치는 것은 돌아가는 길입니다. 로그인이 하나 더, 프로세스가 하나 더, 그 CLI 가 업데이트되면 망가질 곳이 하나 더 생깁니다. 대부분의 어시스턴트는 스스로 서브에이전트를 시작할 수 있고, omnilane 은 그에 맞춰 일을 계획할 수 있습니다. 방법은 두 가지입니다.
+
+**어시스턴트와 정확히 같은 것을 실행하는 워커(`--inherit`).** 어시스턴트는 *모델도 effort 도 지정하지 않고* 서브에이전트를 시작하므로 워커는 호출자의 복제입니다. 복제가 원본보다 강할 수는 없고, omnilane 의 점수 확인이 막으려는 것은 그것뿐입니다. 그래서 이 경로에는 벤더 CLI 도 트랜스포트 오버레이도 필요 없고, 호출자의 effort 를 알 수 없거나 오버레이가 오래되었을 때도 동작합니다.
+
+```sh
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+```
+
+정직한 부분: 핸드오프에는 `satisfies_lane_target: false` 가 표시됩니다. 여기서 레인은 일의 종류를 나타내는 라벨일 뿐입니다. 이렇게 얻은 결과는 "어시스턴트 자신의 서브에이전트"가 만든 것이지 결코 "hardest-coding 모델"이 만든 것이 아닙니다. 호출자보다 강한 모델이 필요한 레인은 여전히 거부됩니다. `--inherits-caller-runtime` 은 "내 서브에이전트 도구는 이렇게 동작한다"는 어시스턴트 자신의 진술이며 omnilane 은 이를 관찰할 수 없습니다. 어시스턴트별로 알려진 사항:
+
+| 어시스턴트 | 모델 인자 없는 서브에이전트 |
+|---|---|
+| Claude Code | 메인 대화의 모델을 사용하고 effort 는 세션 것을 이어받는다고 공식 문서에 명시(에이전트 정의가 지정하는 경우 제외). 내장 general-purpose 에이전트이고 `CLAUDE_CODE_SUBAGENT_MODEL` 이 설정되지 않았을 때 성립. 자신의 호스트에서 상속 동작을 확인하세요 |
+| Codex | 모델도 effort 도 없는 `collaboration.spawn_agent`. 자신의 호스트에서 상속 동작을 확인하세요 |
+| Grok Build | 부모의 모델을 상속한다고 문서에 명시(번들된 `general-purpose` 는 `model: inherit`). effort 는 문서에 없음. 자신의 호스트에서 지원 여부를 확인하세요 |
+| Antigravity | `agy` 1.2.7 에서 서브에이전트 도구를 찾지 못함. 사용 불가 |
+
+**어시스턴트의 도구가 선택할 수 있는 특정 모델.** 도구가 실제로 받아들이는 것을 capability 파일에 적고(`omnilane native-context` 의 출력에서 시작해 정확한 모델과 effort 쌍마다 행을 추가) 일반 `omnilane route` 에 `--native-context FILE` 을 넘깁니다. omnilane 은 어떤 행이 정확히 일치할 때만 서브에이전트를 사용합니다. 모델, effort, 모드, workdir, 도구, 격리 방식, 수명 주기 모두입니다. 같은 벤더가 같은 모델은 아니며, 설치된 CLI 로부터 추측하지도 않습니다. `--executor native` 는 폴백하지 않고 실패하고, `--executor cli` 는 외부 CLI 를 강제합니다. 파일이 없다는 이유만으로 같은 벤더의 대상이 CLI 를 거친 경우, 디스패치가 이제 그 사실을 알려 줍니다.
+
+어느 쪽이든 서브에이전트는 어시스턴트의 도구와 파일 시스템을 공유합니다. 운영체제 수준의 샌드박스는 없으며 `advise`/`work` 는 의도이지 강제가 아닙니다. 백그라운드, 상주, 이름 있는 스레드, 다중 라운드, 투표, `sysops` 작업은 CLI 경로에 남습니다. 프로토콜 처리에는 Python 3.9 이상이 필요합니다. 스키마, 완료 파일, 에이전트 재사용과 취소: [docs/native-executor.md](docs/native-executor.md).
+
+## 🖥️ Live Board
+
+모든 디스패치는——포그라운드든 `--background` 든——디스크에 잡으로 기록됩니다.
+Live Board 는 그 잡 저장소 위에 놓인 선택형 읽기 전용 로컬 워크벤치입니다:
+각 모델에게 무엇을 물었고, 무엇을 답했고, 어떻게 라우팅됐고, 아직 실행 중인지
+한눈에 봅니다.
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board 데스크톱 화면——왼쪽은 잡 목록, 오른쪽은 선택한 잡의 태스크·공개 결과·모델 경로" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 모바일 화면——검색 가능한 잡 목록과 상태 필터" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # 서버를 시작하거나 재사용하고 인증 URL 출력
+omnilane ui status   # 로컬 서버 상태 확인
+omnilane ui url      # 현재 인증 URL 출력
+omnilane ui stop     # 정상 중지
+```
+
+데스크톱에서는 잡 목록과 상세 패널을 따로 스크롤할 수 있고, 모바일에서는 목록／상세
+전환과 뒤로 가기, Esc 를 지원합니다. Server-Sent Events(SSE)는 포커스된 행을
+다시 만들지 않고 갱신하며, 짧은 연결 끊김에는 마지막 스냅샷을 유지한 채 재연결합니다.
+불러온 잡을 참조로 고정한 뒤 다른 잡을 선택하면 모델 경로와 공개 결과를 나란히
+비교할 수 있습니다. 참조 스냅샷은 브라우저 메모리에만 남고 페이지를 닫으면 사라집니다.
+`127.0.0.1` 에만 바인딩하고 무작위 토큰으로 보호하는 읽기 전용 화면입니다.
+`task.txt` 와 공개용 `out.txt` 만 표시하며 워커나 벤더 원시 로그는 표시하지 않습니다.
+
+화면은 영어, 일본어, 한국어, 번체 중국어, 간체 중국어로 볼 수 있습니다. 처음에는
+브라우저 언어를 따르고, 헤더의 선택기로 바꿀 수 있으며 선택은 로컬에 기억됩니다.
+
+핵심 라우팅에는 Python 이 필요 없고, 이 UI 에만 Python 3.9 이상이 필요합니다.
+
+## 📦 설치
+
+전제: 라우팅할 벤더 CLI(`codex`, `claude`, `grok`, `agy`, 선택적으로
+`kimi`, `qwen`, `opencode`)가 로그인된 채 `PATH` 에 있을 것——**가진 것만
+있으면 됩니다**, 없는 레인은 자동 강등. `openrouter` vendor 는 예외로 CLI 가
+필요 없습니다——`curl` 과 환경 변수의 `OPENROUTER_API_KEY` 만 있으면 됩니다.
+
+가장 빠른 방법: `./install.sh` — 로컬 CLI 를 감지해 스킬을 연결하고, 나머지
+플러그인 명령을 안내하며, 실효 라우팅을 출력한 뒤 대화형 설정 메뉴를
+제안합니다(`--uninstall` 로 되돌리기). 설치 프로그램은 시스템 언어에 따라
+영/번체/간체/일/한을 자동 선택합니다(`OMNILANE_LANG=ko` 로 강제 가능).
+또한 각 CLI 지침 파일(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
+`~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — 경로는 CLI 버전에 따라 다를
+수 있음)에 마커로 감싼 가역적 **상시 라우팅 리마인더**를 선택 설치할 수
+있습니다. 비대화형 설치는 `OMNILANE_HOOKS=all|none|claude,codex`. 수동 연결:
+
+`./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
+`--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
+설치 프로그램이 소유한 링크와 표시된 알림을 되돌리려면
+`./install.sh --uninstall` 을 실행합니다.
+
+- **Claude Code**: 플러그인으로 설치(`/route`, `/route-jobs` 명령과 함께
+  세션 시작 시 라우팅 리마인더를 자동 주입하는 `SessionStart` 훅 포함,
+  CLAUDE.md 수정 불필요), 또는 `skills/omnilane` 을 `~/.claude/skills/` 에 배치.
+- **Codex**: `skills/omnilane` 을 `~/.codex/skills/` 에 배치/링크.
+- **Grok Build**: `grok plugin install <이 저장소> --trust`
+- **Antigravity**: `agy plugin install <이 저장소>`(먼저
+  `agy plugin validate` 로 확인)
+
+### MCP 서버
+
+`omnilane mcp` 는 의존성 없이 로컬에서 실행되는 MCP stdio 서버를 시작하여,
+MCP 지원 호스트가 스킬 설치나 라우팅 리마인더 없이 omnilane 을 발견하고
+호출할 수 있게 합니다. 호스트 설정에서 설치된 CLI 를 지정하면 됩니다:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+서버는 `route` 와 함께 읽기 전용 조회 도구 `list_lanes`, `explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`, `jobs_stats`, `jobs_recommend`, `jobs_audit`, `doctor` 를 제공합니다.
+`route` 의 기본값은 읽기 전용 `advise` 모드이며, `work` 를 선택한 호출은
+명시적 `workdir` 을 함께 제공해야 합니다.
+
+실행에 필요한 것은 Node.js 뿐입니다(npm 패키지 없음). npm 을 선호하면
+`npm install -g omnilane` 으로 MCP 서버가 포함된 CLI 를 설치할 수 있습니다.
+
+## ⚙️ 사용자 설정
+
+세 계층, 모두 선택 사항:
+
+1. **대화형 메뉴** — `scripts/configure.sh` 가 설정 가능한 레인을 보여 주고, 레인마다
+   벤더 → 모델 → 추론 강도를 고르게 한 뒤(추천 목록+자유 입력) 결과를
+   `~/.omnilane/routing.local.yaml` 에 기록합니다. 다중 벤더 `consult` 는
+   의도적으로 제외되며, 바꾸려면 수동으로 편집합니다.
+2. **`~/.omnilane/routing.local.yaml`** — 수동 오버라이드. 형식은
+   `routing.yaml` 과 동일, 로컬 우선.
+3. **`~/.omnilane/local.sh`** — 머신 전용 바이너리 경로, 프록시, 인증 래퍼.
+   모든 러너가 로드하며 커밋되지 않습니다.
+
+언제든 확인:
+
+```
+scripts/dispatch.sh --list     # 실효 테이블(폴백 해석 주석 포함)
+```
+
+## 📖 명령 레퍼런스
+
+```
+omnilane list | route … | jobs … | configure
+eval "$(omnilane completion bash)"
+source <(omnilane completion zsh)
+omnilane completion fish | source
+omnilane mcp
+omnilane release-audit [--target VERSION] [--json]
+omnilane ui start
+omnilane ui status
+omnilane ui url
+omnilane ui stop
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]
+            LANE "TASK"
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]
+dispatch.sh [--json] --validate [--json]
+jobs.sh [--json] {list | status ID | result ID}
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]
+jobs.sh wait ID [--timeout N]
+jobs.sh cancel ID
+jobs.sh rm ID
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
+jobs.sh audit [--last N] [--json]
+jobs.sh prune [--keep N] [--apply]
+configure.sh
+configure.sh set|get|unset|list|diff LANE [SPEC]
+```
+
+`configure diff`는 두 보기 모두에서 `local.sh`의 동일한 머신별 가용성 설정을 유지하므로, 로컬 바이너리 설정 누락이 아니라 라우팅 재정의의 차이를 비교합니다. 어느 한 조회라도 실패하면 비교 결과를 출력하지 않고 해당 종료 상태와 실패한 단계를 알립니다.
+
+`configure get`은 조회가 실패하면 해당 종료 상태를 전달하며, 부분 데이터를 반환하거나 레인을 찾을 수 없다고 잘못 보고하지 않습니다. `configure list`는 존재 확인 오류를 보고하며, 실제로 재정의가 없거나 비어 있는 경우는 기존처럼 성공합니다.
+
+`configure set`은 임시 후보를 검증한 뒤 반영하며 기존 파일의 권한 모드를 유지합니다. 기존 라우팅 내용의 읽기 실패, 예상치 못한 검증기 실패, 대상 레인의 구조 오류가 발생하면 기존 설정은 바뀌지 않습니다. 가용성 경고와 다른 레인의 오류는 기존 방식대로 처리합니다.
+
+`configure unset`은 읽기와 필터링을 마친 뒤 기존처럼 같은 대상에 내용을 씁니다. 읽기나 필터링 오류가 나면 원래 내용은 바뀌지 않습니다. 쓰기 오류는 보고하지만 롤백은 보장하지 않습니다.
+
+Bash, Zsh, Fish 자동 완성에는 문서화된 최상위, 목표, 작업 명령 그룹이 포함됩니다. 자동 완성을 선택하면 명령 텍스트만 입력되며 작업 동작을 실행하지 않습니다.
+
+`--vendor`를 지정하지 않으면 `benchmark`는 유효한 라우팅 목록에서 벤더를 찾고 표시용 `unavailable` 항목은 제외합니다. 벤치마크 대상 벤더가 없으면 설정된 벤더가 없다는 진단과 종료 코드 2를 반환합니다. 기본값은 여전히 프로바이더를 호출하지 않는 드라이런입니다.
+
+작업 `list`와 `status`는 같은 관측 상태를 사용합니다. `dead`는 종료 코드가 기록되지 않았고 작업자 PID가 유효하지 않거나 더 이상 존재하지 않는 상태입니다. `--status running`에서 제외되며 `--status dead`로 선택할 수 있습니다. `result`는 실행 중이라고 표시하는 대신 종료 코드가 기록되지 않았다고 알립니다. PID가 아직 없는 시작 단계는 기존처럼 `running`이며 종료 코드를 추정하지 않습니다.
+
+백그라운드 작업에는 Perl 감독이 필요하며, 취소 시 감독 중인 프로세스 그룹을 종료합니다.
+감독 자체는 전체 작업 기한을 추가하지 않습니다. 적용되는 시간 제한이 없으면 메타데이터는 `job_timeout: null`을 유지합니다.
+감독 중인 개별 호출은 Perl alarm을 사용하므로 시간 초과 시 142를 반환할 수 있으며, 전체 작업 기한이 만료되면 124를 반환합니다.
+`jobs close`는 프로세스 그룹 정리를 포함해 최대 11초 동안 기다립니다.
+
+`--thread NAME`은 단발 디스패치 사이에서 이름이 있는 Claude, Codex, Grok,
+Gemini 대화를 이어갑니다. 0.33.0에서는 벤더, 모델, effort, 실제 workdir를
+고정합니다. 로컬 상태는 `jobs.sh threads`, `threads show NAME`,
+`threads rm NAME`으로 관리하며, 상태를 삭제해도 벤더 세션은 남습니다.
+
+종료 코드: `2` 사용법 오류(잘못된 벤더 또는 지정 벤더가 레인에 없는 경우 포함),
+`3` 레인 비활성(off), `4` 체인에 사용 가능한 CLI 가 없거나 설정된 지정 벤더
+CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라운드 반박 전부 실패,
+`86` 중첩 디스패치 거부, `87` 락 대기 타임아웃, `124` 전체 잡 타임아웃.
+그 외에는 워커 자신의 종료 코드를 그대로 전달.
+
+백그라운드 작업에는 프로세스 그룹 전체를 취소하기 위한 Perl 감독 프로세스가 필요합니다. 감독만으로 전체 작업 기한이 추가되지는 않으며, 미설정 `job_timeout`은 `null`입니다. 호출별 제한은 별도 `scripts/lib/call-timeout.pl`이 관리하며 만료 시 142, 전체 작업 만료 시 124를 반환합니다. `jobs close`는 그룹 정리를 포함해 최대 11초 기다립니다.
+
+감독 대상 작업은 무작위 `OMNILANE_JOB_TOKEN`과 `OMNILANE_JOB_ID`를 상속합니다. 취소 또는 전체 작업 만료 후에는 정확히 일치하는 토큰을 가지고 작업보다 늦게 시작한 프로세스도 확인하여 `setsid` 등으로 그룹을 벗어난 잔여 프로세스를 처리합니다. 정상 종료 시에는 수만 셉니다. `jobs --json status`는 `"leftovers":{"reaped":N,"remaining":M}`를 반환하며, 일반 상태에도 잔여 프로세스가 있으면 `leftovers=M`을 붙입니다. 환경을 숨기는 macOS `/bin/bash` 같은 플랫폼 바이너리나 환경을 지운 프로세스는 이 방법으로 찾지 못합니다.
+
+`jobs recommend`는 검증된 공개 메타데이터와 종료 코드만 읽고 성공률, 표본 수, 이름 순서로 정렬합니다. 기본값은 완료 작업 최소 세 개이며 작업／결과 본문을 읽거나 라우팅을 바꾸지 않습니다. `doctor --probe V`만 시간 제한이 있는 advise 호출을 한 번 보내며 가용성, 모델, 소요 시간, 응답 바이트 수만 반환합니다. `--probe`가 없으면 오프라인입니다. `benchmark`는 `benchmarks/workloads.tsv`를 사용하고 기본값은 예행 실행입니다. `--run`에서만 벤더를 호출하며 비용은 제공한 `--cost-per-call`만으로 추정합니다.
+
+`arbitrate`는 기본적으로 꺼져 있습니다. `routing.local.yaml`에 `arbitrate: vote codex,claude,grok -`를 설정하거나 메뉴에서 codex／claude／grok／gemini 중 1–4명의 투표자를 고릅니다. 라운드마다 각 투표자를 한 번 호출하고 호출자가 의견을 종합합니다. 강도 필드를 `2`로 설정하면 이견을 논의하는 라운드를 추가합니다. `arbitrate: exec /path/to/script -`도 사용할 수 있으며, 스크립트는 `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE`을 받아 `OUTPUT_FILE`에 결론을 씁니다. 인터페이스는 `scripts/runners/run-exec.sh`를 참고하세요.
+
+## 🎭 모드
+
+- **advise(기본)**: 로컬 읽기 전용 분석입니다. 지원 벤더의 기본 검색 도구와 모델 연결은 유지하고 변경 도구는 제한합니다. 모든 벤더의 X／웹 검색 기능이 동등하다는 뜻은 아닙니다.
+- **work**: 파일 및 명령 작업은 명시한 `--workdir` 내부로 제한하고 에이전트 도구의 네트워크 접근을 끕니다. 모델 연결은 유지합니다. 강제 경계가 지원되지 않으면 모델 시작 전에 중단하며 sysops 로 조용히 전환하지 않습니다.
+- **sysops**: 매번 명시적으로 선택하여 도구, 파일, 네트워크 제한을 해제합니다. 레인 기본값으로 설정하지 않으며 작업에 허용된 동작을 명시해야 합니다.
+
+CLI 에서 `--workdir` 를 생략하면 호출자의 현재 디렉터리를 사용하지만 작업 지시에는 명시하십시오. MCP `route`／`dry_run` 의 work 인터페이스는 별도로 명시적인 `workdir` 를 요구합니다.
+
+Codex 와 Claude 는 세 모드에 서로 다른 정책을 적용합니다. Agy advise／sysops 는 구독 인증을 교체하지 않고 독립 세션 설정을 사용합니다. Agy 1.1.27 work 는 검증된 네 도구와 기본 터미널 샌드박스로 신규／재개 범위를 검증했으며 작업 영역 내 읽기·쓰기·편집·빌드와 영역 밖 쓰기 거부를 확인했습니다. 외부 임시 파일／캐시 읽기도 제한됩니다. 설정은 시작할 때마다 명시적으로 다시 생성하며 불변이라고 주장하지 않습니다. 별도의 실제 work 라이브／FIFO 두 턴 검증에서 이전 턴 읽기, 영역 밖 쓰기 거부, 정상 종료 및 소스 불변을 확인했습니다. Grok advise 는 기본 도구 허용／거부 규칙을 사용합니다. 자식 프로세스 네트워크 격리는 Linux 전용이므로 macOS Grok work 는 기본적으로 시작 전에 중단됩니다. Grok 라이브는 명시적 sysops 가 필요합니다. 검색 가용성과 사용자 훅 영향은 실제 도구 이벤트로 검증하며 성공 종료 코드만으로 입증하지 않습니다. OpenRouter 는 advise 전용이며 다른 벤더는 이 네 벤더 계약에 자동 포함되지 않습니다.
+
+macOS Grok work: 운영자는 `routing.local.yaml` 에만 `option.grok-macos-work: unconfined` 를 추가하여 **격리 없는** 단발 work 를 활성화할 수 있습니다. 기본값은 꺼짐이며, 꺼져 있을 때 macOS work 체인은 Grok 을 건너뜁니다. 켜져 있으면 `doctor --strict` 가 실패합니다. 자세한 내용은 [옵션, 위험, Grok 워커 필수 작업 지시서](docs/grok-unconfined-work.md)를 참고하세요.
+
+Grok 1.0.13의 단발 `plain` advise는 전체 도구 집합으로 실제 검색, 페이지 조회, 쓰기 거부를 검증했습니다. 내부 웹 도구 ID와 작업별 MCP 준비 상태를 사용하며 훅은 끄지 않습니다. 기존의 비어 있지 않은 `CONTEXT_MODE_MCP_SENTINEL_DIR`은 덮어쓰지 않고 충돌로 모델 시작 전에 중단합니다. 이 결과를 라이브나 macOS work 검증으로 확장하지 않습니다. 자세한 범위는 [날짜별 런타임 게이트](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)를 참조하십시오.
+
+## 🔒 안전 장치
+
+- **중첩 디스패치 금지** — 워커의 재디스패치를 거부(`OMNILANE_DEPTH` 가드,
+  종료 코드 86). AI 가 AI 를 부르는 쿼터 연쇄 소진을 차단.
+- **Codex 직렬화 락** — 같은 대상 디렉터리로의 codex 디스패치는 큐잉.
+  크래시로 남은 락은 소유자 PID 로 감지해 안전하게 회수.
+- **워치독** — 모든 워커는 `timeout`/`gtimeout`, 둘 다 없으면 perl-alarm
+  폴백 아래에서 실행(순정 macOS 가 이 경우). 상한은 **CLI 호출마다** 적용되며
+  우선순위는 `--timeout SECONDS` > 레인별 `OMNILANE_TIMEOUT_<LANE>`(예:
+  `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 전역 `OMNILANE_TIMEOUT`(기본 600 초)
+  순입니다. 이것은 호출 단위 행 방지 장치이지 작업 전체 예산이 아닙니다.
+  재시도하는 벤더(grok)나 vote 패널(투표자 × 라운드)은 여러 번 호출하므로
+  전체 소요 시간은 이 값의 몇 배가 될 수 있습니다.
+- **전체 잡 퓨즈** — 선택형 `--job-timeout SECONDS` 는 락 대기, 재시도,
+  모든 투표자와 라운드를 하나의 process group 감독 아래 제한합니다. 우선순위는
+  플래그 > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 비활성입니다.
+  단, Git worktree 밖에서 Codex `work` 를 실행하며 전체 상한이 설정되지 않은 경우에는
+  결정된 호출별 워치독을 전체 잡 퓨즈로 자동 사용하며 감독기의 상한은 999999999초입니다.
+  이 자동 퓨즈에는 번들 Perl 감독기가 필요합니다. 사용할 수 없으면 경고한 뒤 비 Git
+  work를 기존 호출별 워치독 경로로 계속합니다. 그 경로에도 워치독 도구가 없으면 별도로
+  경고합니다. 만료 시 감독 중인 process group을
+  정리하고 124를 반환합니다. 대규모 저장소 심층 검사는
+  2–4시간(7200–14400초), 호출별 워치독은 30분부터 시작하는 것을 권장합니다.
+  하드코딩된 기본값은 아닙니다.
+- **백그라운드 잡 수명주기** — `--background` 워커는 독립 process group 에서
+  돌며 호출자가 종료해도 살아남습니다. kill 되면 종료 코드를 기록하고
+  `jobs.sh status` 가 `dead` 를 보고.
+- **페이로드 상한** — 과대한 태스크 텍스트는 머리/꼬리만 남기고 자동 절단.
+
+## 📬 라이브 메일함
+
+호출별 `--timeout`은 상주 세션 전체에 적용되며 턴 완료로 시계가 멈추거나 재설정되지 않습니다. Claude와 Gemini는 보낸 모든 턴이 벤더 SUCCESS 결과를 얻고 사용 가능한 출력이 있을 때만, 답변 후의 만료를 성공으로 봅니다. 출력 끝에 `closed by per-call timeout after Ns; last turn completed`가 붙으며 Gemini의 마지막 취소 오류가 완료된 턴을 뒤집지는 않습니다. 미응답 턴이 있으면 종료 코드 142와 `CALL_TIMEOUT`을 유지하고 `jobs.sh stats`는 `failed`와 `call_timed_out`에 모두 셉니다. 답변을 읽은 뒤에는 `jobs close ID`로 빨리 닫거나, 일회성 백그라운드 작업에 `--single-shot`을 사용하세요.
+
+라이브 메일함은 일회성 dispatch와 다른 지원 모드의 상주 백그라운드 실행입니다. 포어맨이 `--background`로 열고, 실행 중에도 추가 지시를 보낼 수 있으며, 끝나면 `jobs.sh close ID`로 닫을 책임이 있습니다. 방치해도 영구히 남아 있지는 않습니다. 유휴 상한 또는 설정된 전체 작업 시간 제한(`--job-timeout`)에 도달하면 종료됩니다.
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "시간 제한 테스트 실패를 확인해 주세요"
+# dispatch가 출력한 작업 ID를 $ID로 저장
+scripts/jobs.sh send "$ID" "재시도 경로도 확인해 주세요."
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+포그라운드 dispatch와 `jobs retry`는 작업이 실패해도 저장된 공개 출력을 표시한 뒤 해당 작업의 0이 아닌 종료 코드를 반환합니다. 백그라운드 dispatch는 기존처럼 작업 ID를 출력합니다.
+
+`watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. Grok 은 추가로 `--mode sysops --workdir DIR` 가 필요합니다. ACP 가 제한 모드 경계를 강제하지 않으므로 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
+
+유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
+
+## 🎯 목표 오케스트레이션
+
+`omnilane goal`은 포어맨이 진행하는 작업 원장입니다. 루프는 목표를 연 에이전트 세션이나 터미널 사용자가 담당합니다. 작업을 디스패치하고 완료 수신함 또는 `omnilane jobs wait`로 결과를 받은 뒤 다음 작업을 판단하여 반복합니다. 작업 수와 경과 시간 예산은 기본적으로 무제한입니다. `--budget-jobs N` 또는 `--budget-seconds S`를 지정한 경우에만 해당 상한이 활성화됩니다. omnilane은 기록만 담당하며, 각 goal dispatch 전에 호출자가 지정한 상한과 기본적으로 활성화된 동일 실패 퓨즈를 검사하고 포어맨이 목표를 닫을 때 보고서를 작성합니다.
+
+```bash
+GOAL_ID="$(omnilane goal open "불안정한 결제 통합 수정" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "결제 오류를 재현하고 최소 수정 후 검증")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "결제 통합 테스트 통과"
+omnilane goal close "$GOAL_ID" --summary "결제 통합이 안정화됨"
+```
+
+갱신이 중단되면 저장된 작업 기록에서 실패 횟수를 다시 계산하며 중복 집계하지 않습니다. `goal close`는 보고서 저장이 성공한 뒤에만 목표를 닫습니다. 저장에 실패하면 원인을 해결한 뒤 다시 닫기를 시도할 수 있습니다.
+
+목표가 사용 중이면 읽기 전용 잠금 소유자 진단을 표시하고 종료 코드 75를 유지합니다. 잠금은 자동으로 삭제하지 않습니다. 기록된 PID만으로 소유권을 증명할 수 없으므로 복구 전에 수동 확인이 필요합니다.
+
+목표 상태와 보고서는 `dead`와 `missing`을 실행 중으로 표시하지 않습니다. 상태 근거가 없거나 일치하지 않으면 `unknown`으로 표시하며 종료 코드나 실패 횟수를 만들어내지 않습니다. 작업별 초는 제출 후 경과 시간이며 실제 실행 시간이 아닙니다. 목표 예산은 바뀌지 않으며 미완료 작업마다 최대 두 초의 로컬 상태 조회를 한 번 수행합니다.
+
+완료된 작업 파일을 정상적으로 정리해도 목표에는 검증된 종료 코드, 완료 시각, 완료까지의 경과 시간이 남습니다. 상태와 보고서는 별도로 `artifacts=missing`을 표시합니다. 완료 기록이 없는 작업은 missing 또는 unknown으로 유지되며, 파일 정리로 종료 결과를 만들어내지 않습니다.
+
+목표 디스패치는 먼저 의도를 기록하고 작업 슬롯 하나를 예약합니다. 시작 전에 일회성 점유 기록으로 의도와 생성된 작업 ID를 연결합니다. `spent_jobs`는 기록된 작업 수를, `reserved_jobs`는 확인되지 않은 제출 수를 나타냅니다. 미확인 또는 손상된 기록이 있으면 새 디스패치와 목표 닫기를 막습니다. 대조 작업은 기록만 복구하며 작업 시작, 종료 코드 추측, 불확실한 제출 재실행은 하지 않습니다.
+
+스레드를 사용하는 목표 디스패치의 stdout에는 정확한 작업 ID만 나옵니다. ID를 검증한 뒤 일치하는 스레드 알림을 stderr에 표시합니다. 직접 백그라운드 디스패치는 기존처럼 알림과 ID를 stdout에 출력합니다.
+
+`goal dispatch`는 백그라운드 작업을 시작하며 `--dry-run`을 지원하지 않습니다. 이 옵션은 목표 상태를 변경하기 전에 거부됩니다. 라우팅을 미리 보려면 `omnilane dispatch --dry-run [options] LANE "TASK"`를 직접 사용하세요. 직접 미리 보기는 목표의 작업 디렉터리를 상속하지 않으므로 필요하면 `--workdir DIR`를 지정하세요.
+
+저장된 목표 예산은 JSON 정수여야 하며 불리언이나 숫자 문자열은 받지 않습니다. 선택적 한도는 계속 `null` 또는 1..999999999이고 카운터는 지원 범위의 음이 아닌 정수여야 합니다. 잘못된 필드는 기록 갱신이나 디스패치 전에 거부합니다. 작업 디렉터리 경로의 탭, 캐리지 리턴, 줄바꿈, NUL은 지원하지 않으며 일반 공백과 Unicode는 지원합니다.
+
+디스패치가 오류를 내거나 결과가 사라지면 다시 제출하기 전에 `goal status`를 확인하세요. 동일한 명령도 새로 제출하면 새 의도가 되므로, 보장은 의도별 최대 한 번의 시작이며 모든 동일 명령의 자동 중복 제거가 아닙니다. 대조에는 유효한 기존 작업자 PID 또는 종료 코드 근거가 필요합니다. 대조 전에 근거를 정리하면 예약은 미확인 상태로 남습니다. 이미 대조된 목표 기록은 작업 파일 정리 후에도 유지되며 기존 목표도 읽을 수 있습니다. 오래된 잠금이나 불확실한 의도를 자동 복구하지 않습니다.
+
+백그라운드 작업의 마무리가 시작되면 HUP/TERM이 이미 선택한 종료 상태를 바꾸지 않습니다. 완료 훅은 이미 소비한 기록을 건너뛰며, 읽을 수 없는 기록 알림을 포함해 프롬프트마다 최대 열 건을 전달합니다.
+
+목표 상태는 `$OMNILANE_HOME/goals/<goal-id>/`에 저장됩니다. `goal status`로 예산 사용량, 퓨즈 작동 횟수, 각 작업에서 순차적으로 도착하는 메타데이터와 종료 상태를 확인할 수 있습니다. `goal close`는 `report.md`를 기록하고 경로를 출력합니다. 절차가 명확한 단일 작업은 바로 디스패치하십시오. 예산 플래그를 지정한 경우 해당 상한은 엄격한 제한이며 완료를 보장하지 않습니다.
+
+## ❓ FAQ
+
+<details>
+<summary><b>이 구독들이 전부 필요한가요?</b></summary>
+
+<br/>
+
+아닙니다. 각 레인은 대체 체인이며 실제로 설치된 첫 후보가 사용됩니다. 구독이
+하나면 표 전체가 그 벤더로 수렴하고, 체인에 아무것도 없는 레인은 오류 대신 그냥
+꺼집니다. `omnilane doctor` 로 이 머신이 지금 실제로 닿을 수 있는 곳을 확인할 수
+있고, `routing.local.yaml.example` 에는 흔한 상황별 시작 프로필(Claude 만,
+Codex 중심, Codex 없음)이 들어 있습니다.
+
+</details>
+
+<details>
+<summary><b>omnilane 이 제 코드를 새로운 곳으로 보내나요?</b></summary>
+
+<br/>
+
+새로운 목적지는 생기지 않습니다. 디스패치는 이미 설치하고 로그인해 둔 벤더 CLI 를
+호출할 뿐이라, 코드가 도달하는 곳은 원래 쓰던 벤더뿐입니다. 러너는 구독형 CLI 를
+호출하기 전에 API 키 환경 변수를 제거하므로, 남아 있던 키 때문에 토큰 종량제로
+조용히 전환되는 일도 없습니다. 유일한 예외는 direct-API 벤더군(`openrouter`,
+`deepseek`, `zai`, `mistral`, `groq`, `cerebras`)으로, 이들은 정의상 당신이 설정한
+키로 해당 제공자의 API 를 호출합니다——모두 advise 전용이며 파일을 수정하지 않습니다.
+
+</details>
+
+<details>
+<summary><b>왜 이제 Fable 5.2 가 어려운 작업의 맨 앞인가요?</b></summary>
+
+<br/>
+
+2026-11-10 스냅샷(AA Intelligence Index v5.0.1, 같은 날 승인)에서 Fable 5.2 xhigh 는
+62점으로, 레인이 디스패치할 수 있는 다른 모든 행보다 높습니다(Opus 5.5 xhigh 57,
+Astra xhigh 55). `hardest-coding` 에서는 Terminal-Bench 4.0 도 가장 높고(0.616.
+Astra 와 Opus 5.5 xhigh 는 둘 다 0.596), SciCode 는 0.656 입니다(나머지 둘은
+0.557, 0.650). `hard-judgment` 에서는 HLE(0.689), Briefcase analytical
+Elo(1927), CritPt(0.357)가 모두 체인에서 가장 높고, 첫 Codex 행인 GPT-6.1 Sol
+xhigh 는 각각 0.526, 1691, 0.317 입니다. 대신 가장 비싼 행이기도 해서, AA 인덱스를
+한 번 돌리는 비용이 Fable 5.2 xhigh 약 $11,742, Opus 5.5 xhigh 약 $4,766, Astra
+xhigh 약 $3,746 입니다.
+
+Astra xhigh 는 여전히 `hardest-coding` 2순위이자 `consult` 1순위이고, `ui-draft`
+는 Opus 5.5 high 가 맨 앞입니다. Fable 5.2 에는 Claude Code 2.1.321 이상이
+필요합니다. 이 스냅샷은 2026-11-10 운영자가 승인했습니다. 레인별 전체 수치는
+[`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) 에 있습니다.
+
+</details>
+
+<details>
+<summary><b>왜 어느 레인도 <code>max</code> 를 쓰지 않나요?</b></summary>
+
+<br/>
+
+effort 는 작업마다 고르는 것이지, 높을수록 좋다고 가정하지 않습니다. 2026-11-10
+재정렬 이후에는 `hardest-coding` 을 포함해 어느 레인의 체인에도 `max` 행이 없습니다.
+모든 레인이 가성비 우선으로 정렬되고, `max` 는 가장 비싸면서 얻는 것이 적기
+때문입니다(Fable 5.2 는 max 65점, xhigh 62점). `--effort max` 로 명시하면 지금도
+쓸 수 있고, 명시한 `--model` 과 `--effort` 는 항상 이 기본값보다 우선합니다.
+
+</details>
+
+<details>
+<summary><b>레인의 1순위 CLI 가 없으면 어떻게 되나요?</b></summary>
+
+<br/>
+
+디스패치가 체인을 따라 내려가며 보유한 첫 벤더를 사용합니다. 호출을 쓰지 않고도
+결정을 먼저 확인할 수 있습니다:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # 후보별 추적
+scripts/dispatch.sh --list                     # 전체 유효 테이블
+scripts/dispatch.sh --dry-run hardest-coding "…"   # 완전히 해석된 계획, 제공자 호출 없음
+```
+
+</details>
+
+<details>
+<summary><b>디스패치된 워커가 제 파일을 수정할 수 있나요?</b></summary>
+
+<br/>
+
+요청했을 때만 가능합니다. 디스패치의 기본값은 읽기 전용 `advise` 이며 벤더별로
+구현되어 있습니다(읽기 전용 샌드박스 또는 기본 도구 권한).
+범위를 제한한 수정에는 `--mode work` 와 명시적인 `--workdir` 를 지정하십시오.
+work 는 지정한 디렉터리 안의 변경만 허용하며 모델 연결은 유지하고 도구 네트워크를 끕니다.
+`--mode sysops` 는 Codex, Claude, Grok, Agy 각각의 독립적인 전체 접근 정책이며 work 의 별칭이 아닙니다.
+서비스 관리처럼 work 경계를 넘는 동작을 작업에서 명시적으로 허용할 때마다 선택하며 레인 기본값이 될 수 없습니다. 워커는 다시
+디스패치할 수도 없습니다——깊이 가드가 종료 코드 86 으로 중첩 팬아웃을 거부하므로,
+명령 하나가 에이전트 연쇄로 번져 할당량을 태우는 일은 없습니다.
+
+</details>
+
+<details>
+<summary><b>디스패치가 거부되었습니다. 어떤 거부인가요?</b></summary>
+
+<br/>
+
+세 가지 코드에는 각각 다른 해결책이 있습니다. 먼저 `omnilane doctor`를 실행하세요.
+`transport-overlay` 검사가 문제의 원인이 이 머신의 설정인지 요청인지 바로
+알려줍니다.
+
+`missing-caller-context` — 게이트에 신원이 전달되지 않았습니다. 사람은
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 또는 `--operator-asserted-human`을
+사용합니다. 모델은 보통 아무것도 할 필요가 없으며, dispatch 가 실행한 CLI 에서 신원을
+읽습니다. 읽지 못하면 `omnilane whoami` 를 실행하세요. 전달할 `--caller-context FILE`
+을 출력하거나, 읽지 못한 정확한 이유(`--effort` 누락, 모델 별칭, 점수 행 없음)를 알려줍니다.
+모델은 사람용 면제를 스스로 주장해서는 안 됩니다.
+
+`runtime-mapping-unverified` — 신원은 정상이지만 **대상**에 검증된 호스트 로컬
+요청 셀렉터가 없습니다. 프로브를 한 적이 없거나 프로브가 실패한 경우입니다.
+`omnilane doctor`와 `--json`은 미검증 행을 `WARN`으로 표시하며 ID, 요청·관측 모델과 강도
+(기록된 경우), 실패 분류와 이유, 마지막 검사 시각, 증거 경로(내용 제외), 다음 단계를 제공합니다.
+환경 문제에는 `omnilane resign --retry-failed --vendor VENDOR`를 안내합니다. 확정적 실패는
+자동 재시도하지 않으며 요청·CLI·공급자 모델 대응을 확인해야 합니다. 증거 손상 시 해당 경로와
+정상 백업 복원 또는 새 디렉터리에서 명시적으로 증거를 다시 만드는 명령을 안내합니다.
+공급자 할당량 제한으로 인한 거부는 그 할당량이 회복될 때까지 해소되지 않습니다.
+
+`invalid-policy-input`과 "transport contract evidence changed" — 위 둘 다
+아닙니다. overlay 자체가 로드되지 않아 **모든 벤더**가 거부됩니다. 흔한 원인은
+벤더 CLI 업그레이드입니다. overlay는 각 벤더의 실행 파일과 러너 스크립트 해시를
+고정하며, Codex와 Claude의 증거 경로에는 버전 디렉터리가 포함되어 업그레이드 시
+다이제스트가 바뀌는 대신 파일이 사라집니다. 태그가 있는 증거는 해당 벤더만
+강등시키고, 프로브 매니페스트처럼 태그가 없는 증거는 게이트 전체를 닫습니다.
+doctor가 파일과 벤더를 지목하며, 재서명 절차는 디스패치 스킬에 있습니다.
+
+`target-above-effective-ceiling`——고장 난 곳은 없습니다. 타깃의 점수가 호출자보다
+높을 뿐입니다. `required_caller_effort` 에는 호출한 세션에 필요한 effort 가
+나옵니다. `caller_degraded` 가 붙은 호출자는 effort 를 기록하지 않는 하네스(Codex
+하트비트 자동화가 그렇습니다)에서 시작된 것이라, 그 모델의 최저선으로 계산됩니다.
+
+</details>
+
+<details>
+<summary><b>매핑의 증거 등급은 무슨 뜻인가요?</b></summary>
+
+<br/>
+
+프로브가 "누가 응답했는지"를 얼마나 확실히 짚었는지를 나타냅니다. 디스패치할 수
+있는지에는 영향을 주지 않습니다.
+
+`billed-model`——프로바이더가 과금한 모델 이름을 알려 준 경우입니다. Claude 는
+`modelUsage` 에, grok 은 `--output-format json` 에서 같은 방식으로 보고합니다.
+프로바이더가 발행한 영수증에 해당합니다.
+
+`client-echo`——CLI 가 요청한 모델을 기록해 두었고, 그 기록이 요청과 일치하는
+경우입니다. Codex 는 세션 롤아웃에, agy 는 `cli.log` 에 씁니다. 이것은 CLI 쪽
+주문서 사본이지 프로바이더의 영수증이 아닙니다. 요청이 의도대로 나갔다는 것은
+증명하지만, 누가 응답했는지는 증명하지 못합니다.
+
+`selector-only`——CLI 가 셀렉터를 받아들였을 뿐 그 이상은 보고하지 않은 경우입니다.
+v0.42.6 이전에 프로브한 매핑은 모두 이 등급입니다. 디스패치는 되지만 셋 중 가장
+약하며, `omnilane doctor` 가 다시 프로브할 만한 벤더를 알려 줍니다.
+
+세 등급 모두 상위 프로바이더의 신원을 보증하지 않으며, 어느 것도 레인을 거부하지
+않습니다. 등급은 벤더가 아니라 프로브 결과에서 정해지므로, CLI 가 과금 모델을
+보고하기 시작하면 omnilane 을 바꾸지 않아도 다음 스윕에서 등급이 올라갑니다.
+
+</details>
+
+## 📊 기본값과 출처
+
+기본 레인 배치는 Artificial Analysis Intelligence Index v5.0.1 스냅샷
+`aa-v5.0.1-2026-11-10-v1`(2026-11-10, 같은 날 운영자 승인)에 근거합니다.
+AA 모델 페이지 85개를 합친 것으로, 각 레인은 이 점수와 레인별 측정값으로 가성비
+우선 정렬하며, v5.0.1 에서 점수가 없어진 행은 이전 점수를 이어받지 않고 뺐습니다
+([근거](docs/reports/aa-rebaseline-2026-11-10.md)).
+이는 의견이지 법칙이 아닙니다——설정 메뉴와 `routing.local.yaml` 이
+그래서 존재합니다. 벤치마크별 단서를 포함한 작업 노트는
+[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) 에 있습니다.
+
+## ⚠️ 알려진 제한
+
+- **Antigravity print 모드의 툴 호출은 현행 CLI 빌드에서 불안정**
+  (거부 또는 invalid-argument). 본문을 태스크에 붙여 넣는 장문 통합이라는
+  long-context 레인 본연의 용도에는 영향이 없습니다.
+- **Grok 추론 강도:** 명시적 `low`, `medium`, `high`, `xhigh`를 `--reasoning-effort`로 CLI에 전달하며, `-`는 CLI 기본값을 사용합니다. 요청한 쌍에는 정확히 일치하는 점수 행과 로컬 전송 검증이 필요합니다.
+
+- **Git 저장소가 아닌 디렉터리에서도 Codex work 를 지원합니다.** 일부 Codex CLI 는
+  Git worktree 밖에서 멈출 수 있으므로 위 자동 퓨즈가 이 경우를 제한하고 감독 중인
+  process group을 정리합니다. Omnilane 은 `git init` 을 자동 실행하지 않으며 저장소
+  생성을 요구하지도 않습니다.
+
+## ⬆️ 업그레이드 참고: 이전 버전에서 시작한 작업
+
+`jobs close`와 `jobs cancel`은 `ps` 시작 시각이 `pid.start` 또는 `inbox.holder.pid.start`와 일치해야 신호를 보냅니다. 이전 버전 작업에는 해당 파일이 없으므로 PID가 사용 중이면 신호를 보내지 않고 1을 반환합니다. `ps -o lstart=,command= -p PID`로 확인하고 실제 해당 워커일 때만 사람이 `kill -USR1 PID`로 닫거나 `kill -TERM PID`로 취소하세요. 다른 프로세스라면 그대로 두고, 원래 워커가 사라졌다면 작업 디렉터리를 수동으로 휴지통에 옮길 수 있습니다. PID가 사라졌다면 기존 동작을 유지하며 이전 작업의 `status`, `wait`, `rm`은 `kill -0` 결과를 사용합니다. 업그레이드 후 시작한 작업은 영향이 없습니다.
+
+위 작업과 `jobs wait`, `jobs rm`, `dispatch`에는 동작하는 `ps`가 필요합니다. macOS 샌드박스가 `/bin/ps`를 금지하면 거절되며, `--caller-context`가 있어도 작업을 시작하지 않습니다. 종료 코드가 기록되었거나 기록된 PID가 `kill -0`으로 사라졌음이 확인되면 응답할 수 있습니다. 일반 터미널에서 실행하거나 사용 환경의 권한 절차로 샌드박스 밖 실행을 승인하세요. PID를 확인하지 못했다고 프로세스가 죽은 것은 아닙니다.
+
+시작 시각 파일이 잘못되었고 PID가 살아 있으면 `status`는 `unknown (invalid start time file)`을 표시하며 `wait`, `cancel`, `close`, `rm`은 거절합니다. 먼저 위 `ps` 명령으로 확인하세요. 살아 있는 PID의 시작 시각이 기록과 다르면 다른 프로세스로 처리합니다. `status`는 `dead (worker gone, no exit recorded)`, `cancel`은 `not running`을 표시하고 해당 프로세스는 건드리지 않습니다. 표준 오류로 비교 명령도 안내합니다.
 
 ## 🌱 상태
 

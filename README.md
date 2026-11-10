@@ -2,13 +2,6 @@
 
 # omnilane
 
-### One routing table, every harness.
-
-*Your main loop stops guessing which model to use.*<br/>
-Drive it from **Claude Code · Codex · Grok Build · Antigravity**, and every subtask goes<br/>
-to the model that is actually best at it — Codex, Claude, Grok, Gemini, Kimi, Qwen, OpenCode,<br/>
-or any hosted model via OpenRouter — on the subscriptions you already pay for, or a single API key.
-
 <img src="docs/hero.png" alt="omnilane routes each subtask to the best model across Claude Code, Codex, Grok and Antigravity" width="820"/>
 
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
@@ -19,945 +12,70 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 </div>
 
-## Current upgrade and verification
+## What is omnilane?
 
-Snapshot-only upgrades now reuse unchanged request-selector proofs automatically: score/date changes use the new ceiling immediately, without `omnilane resign`, GUI login, network calls, or rewriting the overlay. Only new/changed request contracts or executable identities need `omnilane resign --vendor VENDOR`; the refusal names the affected row and whether a desktop terminal is needed. Legacy format 1 works for release-pinned source snapshots; unknown older sources need inspection with `omnilane resign --check`. Use `omnilane resign --init` for first-time setup; signer approval rules are unchanged. Run scheduled verification as `omnilane resign --daily` (or `bash scripts/resign-daily.sh`): failures stay nonzero and appear in `omnilane doctor` from private local status, without Telegram. No scheduler is installed automatically.
+omnilane routes tasks from Claude Code, Codex, Grok Build or Antigravity to the model selected for each kind of work. It is for people and AI assistants who want to use their existing model subscriptions or supported APIs through one command, with explicit permissions and inspectable results. It runs compatible native sub-agents or vendor CLIs, using a local routing table and verified model selectors rather than a new hosted service.
 
-Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. If previously verified selectors fail for these reasons, passing selectors still get the current executable pin and snapshot. Failed selectors are retained individually under `unproven[].pending_recheck`, with their prior mapping for audit only, and dispatch refuses them with their own failure reason. The first two consecutive pending runs may retry without a cooldown; starting with the third pending run, unattended invocations (including `--daily`) use the 20-hour cooldown. A recorded reset hint always defers unattended retries until that time. Interactive resign retries retained selectors immediately; other environment-failed rows keep the 20-hour non-interactive cooldown. For those ordinary environment-failed rows, interactive runs or `omnilane resign --retry-failed --vendor VENDOR` bypass the cooldown. Retained pending selectors still honor unattended bounds and reset hints even with `--retry-failed`. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
+## Install and first run
 
-`resign` exits **60** when a vendor has verified selectors and retained pending selectors, **0** when fully re-signed or already current, and **20** when no selector could be re-signed or an operator must resolve a hold. Operator holds and still-unprobed daily gaps take precedence over partial success. `resign --check` reports **60** for a current pin with partial verification, **10** for other drift, and names the pending selectors; `doctor` and `resign --daily` report the same counts and names. Interactive retries also refresh an existing daily-status record so recovered rows and deterministic findings do not retain stale quota/login status. A wrong-model/contract finding or evidence-tier regression in a currently verified mapping still holds the vendor's old pin. A retained pending selector that fails deterministically becomes an ordinary unproven finding and stops automatic retries, while recovered siblings are installed. A full sweep whose first selector is not authenticated stops immediately and holds the vendor with login guidance; per-selector login handling starts only after a selector authenticated in that run. `--allow-shrink` discards retained mappings for failed selectors instead; it does not approve lower-tier passing evidence, an origin change, or an unsigned executable. Smoke dispatch chooses from verified mappings only.
-
-Expired proofs are refreshed through the same missing-row path, without re-probing healthy rows. A model/effort mismatch is a conclusive finding and will not retry automatically, even with `--retry-failed`. Run `omnilane doctor`, inspect the recorded request and CLI/provider routing, and correct the cause before arranging fresh verification. Release notes below describe behavior at the time of each release; current installations follow this section.
-
----
-
-## 🤔 What is omnilane?
-
-**The problem.** You already drive an AI coding assistant — Claude Code, Codex,
-Cursor, Gemini CLI. Each one talks to a single model family. So every task you
-give it runs on that one model, whether or not it is the right tool: a
-throwaway file rename burns your most expensive model, and a genuinely hard
-architecture question runs on whatever you happened to open.
-
-**What omnilane does.** It gives your assistant a routing table. Work gets
-sorted into **lanes** — hardest coding, bulk mechanical, triage, hard judgment,
-final polish — and each lane names the model that is best (and cheapest) for
-it. The assistant delegates each lane through a compatible caller-owned native
-agent or the existing vendor CLI, even when the worker uses the same model.
-
-**What it is not.** Not a proxy, not a new subscription, not another service to
-keep alive. It is a table plus a dispatch script that runs behind the tool you
-already use. `./install.sh --uninstall` removes every trace.
-
-**You do not need every vendor.** Each lane is a fallback chain. Install one
-CLI or seven — dispatch picks the first candidate you actually have, and a lane
-with nothing available simply turns off. The default table works on a single
-subscription.
-
-**[⬇ 60-second start](#-60-second-start)** · **[🤖 Let your AI assistant drive it](#-let-your-ai-assistant-drive-omnilane)** · **[❓ FAQ](#-faq)**
-
-## ⚡ 60-second start
-
-You, a person at a terminal, can dispatch right away.
-
-**1. Install.**
+Install and sign in to at least one supported vendor CLI (`codex`, `claude`, `grok` or `agy`), and have Python 3.9+ and npm available. Run this block yourself in a desktop terminal with access to that login; initialization probes the providers and sends a smoke-test dispatch, so it uses your provider quota. Replace the task text if needed; the first task is read-only.
 
 ```bash
-npm i -g omnilane
+npm i -g omnilane &&
+omnilane resign --init &&
+omnilane doctor &&
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
+omnilane route --mode advise --workdir "$PWD" triage "Summarize this project without changing files"
 ```
 
-Or clone it, which also gives you the routing table and the skill to customise:
+Continue to dispatch only after initialization succeeds and doctor reports the targets you need as ready. `--init` creates the first local transport overlay (proof of which model each CLI selector reaches), verifies it, records first-trust signers and backs up `local.sh` before registering it; it refuses an existing overlay. If you are upgrading, use `omnilane resign` instead. Initialization requires an interactive terminal; it cannot approve changed or unsafe signers, and locally self-signed CLIs require separate human review.
+
+The export identifies **you, a human at the terminal**. An AI assistant must use its own caller identity, never that export or `--operator-asserted-human`; see the assistant setup in the reference below. You do not need every vendor: unavailable candidates are skipped, subject to the caller's score ceiling and local verification.
+
+## Everyday use
+
+Run `omnilane list` to see your effective lanes. Use `triage` for a first look, `bulk-mechanical` for repetitive implementation, `hardest-coding` for difficult code and `hard-judgment` for a second opinion; the full lane table is in the reference. A lane is a fallback chain, not a promise that every model is installed or that a failed provider call will be retried elsewhere.
 
 ```bash
-git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # finds your CLIs, links the skill, speaks your language
+omnilane list
+omnilane route --mode advise --workdir "$PWD" triage "Review the project and list the main risks"
+omnilane route --mode work --workdir "$PWD" bulk-mechanical "Fix the documented typo in README.md"
+omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "Run the tests and fix the failing cases"
+omnilane jobs list
+omnilane jobs wait JOB_ID --timeout 60
+omnilane jobs result JOB_ID
 ```
 
-**2. See what you have.** `doctor` lists which model CLIs and API keys omnilane
-can reach, so you know what will actually run. It changes nothing.
+Replace `JOB_ID` with the ID printed by the background dispatch. `advise` is read-only; `work` permits changes in the selected work directory and restricts agent-tool network access, while the model connection remains available. `jobs wait` waits for an exit; `jobs result` reads the answer. A finished job still needs review of its output, changed files and relevant tests before you accept the work. Assistant-owned native workers have a separate handoff/completion flow described in the reference.
 
-```bash
-omnilane doctor
-omnilane list         # the routing table this machine resolves
-```
+## When a request is refused or re-signing stops
 
-**3. Say you are the operator, then dispatch.**
+A refusal now starts with `omnilane: refused (...)`, a readable reason and `Next:`, followed by the existing JSON. For scripts that require the previous output, set `OMNILANE_REFUSAL_JSON_ONLY=1`. Read `failed_gate`, `reason`, `next_command` and `eligible_lanes`; re-sign summaries also include an `attention` list with a reason and next command for each vendor that needs action. `installed: true` means the verified changes were installed, not that every row is ready.
 
-```bash
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
-omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane ui start     # optional: watch jobs live in your browser
-```
+In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. Run `whoami` by itself in one tool call, without a pipe, `&&` or an appended command.
 
-> **Why the export?** omnilane checks every delegation against the capability
-> score of whoever is asking, so a dispatch has to say who that is. A human says
-> it once with `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` (or `--operator-asserted-human`
-> per call). A model cannot say it for itself: its identity is read from the CLI
-> that launched it. With neither, the dispatch is refused with
-> `missing-caller-context` before any job exists.
-
-That is all a human needs. The rest of this section is for the more useful
-setup: your AI assistant dispatching on its own.
-
-## 🤖 Let your AI assistant drive omnilane
-
-The assistant (Claude Code, Codex, Grok Build or Antigravity) reads a skill file
-that tells it how to pick a lane and dispatch. Four steps, once per machine.
-
-### Step 1 — Give the assistant the skill
-
-`./install.sh` links it for every CLI it finds. By hand:
-
-| Assistant | How |
-|---|---|
-| Claude Code | `claude plugin marketplace add <this repo>` then `claude plugin install omnilane@omnilane` (also gives `/route`, `/route-jobs` and the completion inbox), or link `skills/omnilane` into `~/.claude/skills/` |
-| Codex | link `skills/omnilane` into `~/.codex/skills/` |
-| Grok Build | `grok plugin install <this repo> --trust` |
-| Antigravity | `agy plugin install <this repo>` (check first with `agy plugin validate <this repo>`) |
-
-### Step 2 — Prove, once, that each CLI selects the model it is asked for
-
-A model caller is only allowed to dispatch to a target this machine has *proven*:
-that `codex -m gpt-6.1-sol` really runs Sol, and so on. The proof is a local file,
-the **transport overlay**. Nothing ships with one. Without it every lane refuses
-a model caller with `runtime-mapping-unverified`, and `omnilane doctor` warns
-`no overlay configured`.
-
-Build it from a normal desktop terminal. (An ssh login cannot read the keychain
-the CLIs log in with, so it would report them all as not logged in.)
-
-```bash
-omnilane resign --init
-```
-
-This first-install command requires an interactive terminal and refuses an existing overlay or `--daily`. It verifies the probes and a real dispatch, records first-trust signers, and backs up `local.sh` before adding the overlay assignment while preserving your settings. Unsafe or changed signers remain blocked. [Manual fallback](docs/transport-overlay.md#first-installation).
-
-A vendor you are not logged in to is reported `unprobeable` and simply stays
-unverified; the others work.
-
-### Step 3 — Keep the proof current without doing it by hand
-
-The overlay pins each CLI executable by hash, and **the CLIs update themselves**,
-often weekly. After an update that vendor's lanes are refused until the overlay
-is re-signed. `omnilane resign` does the whole job: finds what changed, re-probes
-only that vendor, checks the result, swaps it in, sends one real dispatch to
-confirm, and restores the old file if that fails. A source channel only permits probing; it never authorizes dispatch by itself.
-
-`--init` already records first-trust signers; only older overlays need the separate human-operator `omnilane resign --record-signers` step. Existing team records imply a Developer ID channel, now requiring Apple's certificate chain as well as the team, product identifier and resolved installation location. An old adhoc record without explicit operator trust grants no channel.
-
-```bash
-omnilane resign --record-signers # older overlays only; human operator
-```
-
-For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement. An adhoc sample shows no factory identifier, so the `--team` form approves the whole team at that location: until you replace it, any program that team signed there can pass the source check and be probed, not only this CLI. `omnilane resign --check` and `omnilane doctor` show this as `"identifier_family": ""`. To bind the approval to the product, run `omnilane resign --trust-origin claude` again, without `--team`, while a verified factory sample is installed; it replaces the team-wide entry.
-
-```bash
-omnilane resign --trust-adhoc claude   # only if you re-sign claude adhoc yourself
-```
-
-For a pinned script or native non-macOS executable, use `omnilane resign --trust-location VENDOR`. After reviewing a changed location or a new script, `omnilane resign --approve VENDOR` permits only this attempt; after successful probing you can trust the new pinned location. It does not create a channel. Revoke with `omnilane resign --revoke-origin VENDOR KIND`, where `KIND` is `developer-id`, `adhoc`, `script`, `no-platform-signature` or `location` (all location channels). An empty revoked list stays authoritative over old overlay trust.
-
-`omnilane resign --check` and `omnilane doctor` show executable kind and approved channels, and observed team/identifier when blocked. Invalid signatures, unavailable signature verification, unsigned macOS native files and damaged or foreign-host policy files always stop; approval cannot repair them. Source failures and login failures have different instructions. Restore a valid installation or local policy backup before retrying. Source blocking applies when the executable changes. An unchanged pinned executable keeps the existing missing-row, retry and evidence-refresh behavior.
-
-Channels live in host-bound, atomic, backed-up, 0600 `$OMNILANE_HOME/transport-origins.local.json`; do not copy them between hosts. The first-use policy now covers Developer ID plus self-signed, script and no-platform-signature tools at their installation location; it takes effect with the phase-2 first probe, and no production code calls the interface yet. First-use trust is currently per vendor with no recorded identity, path or policy entry, not per host; phase-2 wiring will decide whether other vendors' existing records should block it. Scripts and non-macOS binaries are not silently trusted on upgrade. AI assistants must never run trust, approval, recording or revocation commands themselves.
-
-Then let it run every day. Any scheduler works as long as it runs **inside your
-desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:
-
-```bash
-cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
-  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
-</dict></plist>
-EOF
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
-```
-
-This release verified `omnilane resign` from a desktop terminal session, including
-a real unattended re-sign of a Codex self-update; the LaunchAgent wrapper above is
-an example and was not itself exercised. Check it on your machine with
-`launchctl kickstart gui/$(id -u)/dev.omnilane.resign`.
-
-What `omnilane resign` exits with:
-
-| Exit | Meaning | You do |
+| What you see | What it means | One next command |
 |---|---|---|
-| 0 | nothing had changed, or everything that changed was re-signed | nothing |
-| 10 | `--check` only: something changed | run `omnilane resign` |
-| 20 | source review, login or verification needs attention | follow the source-specific or login-specific message; approval cannot waive invalid, unsigned or unverifiable signatures |
-| 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
-| 2 | no overlay is configured | do Step 2 |
-| 40 (`EXIT_HOST_CONFIG`) | dispatch's host configuration could not load, or the configured overlay is unreadable or invalid JSON; nothing read/staged/written after a shell failure | fix the path/error on stderr; daily-job owners decide notification policy |
-| 50 (`EXIT_BUSY`) | another `omnilane resign` is already running on this host; nothing read or written | let it finish, then run this one |
-| 60 | verified selectors are installed; only retained selectors remain pending re-check | inspect `omnilane doctor`; retry with `omnilane resign` after the cause clears |
-
-Exit 2 also covers argparse usage errors; a configured but unreadable overlay is exit 40, not 2.
-
-### Step 4 — Try it from inside the assistant
-
-Ask your assistant to run `omnilane whoami`. It should answer with the model and
-effort it is running as, and a score. Then ask it to delegate something small:
-"use omnilane to have the triage lane count the TODO comments in this repo".
-
-If it is refused, the refusal says which check failed and what to do:
-
-| `failed_gate` | In plain words | Fix |
-|---|---|---|
-| `caller-identity` | omnilane could not tell which model is asking | have it run `omnilane whoami` **as the only command** in that tool call. Codex in particular is unreadable behind `; echo $?`, `&&` or a pipe |
-| `target-transport` | this machine has not proven that target, or a CLI updated since | `omnilane resign` (Step 3) |
-| `downward-ceiling` | the target model scores higher than the model asking; a model may only delegate sideways or down | pick one of the `eligible_lanes` the refusal lists, or start the assistant at a higher effort |
-
-A Codex automation that wakes an existing thread records no effort. omnilane
-then holds that caller to its model's lowest score instead of refusing it: cheap
-lanes keep working, expensive ones say which effort would reach them.
-
-## 🧭 How it works
-
-omnilane lets the main loop of **any** agentic CLI classify subtasks into
-lanes and dispatch each lane to the best vendor — headlessly, using your
-existing subscription logins (or, for the `openrouter` vendor, a direct API
-key with no extra CLI at all):
-
-```mermaid
-flowchart LR
-    M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
-    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
-    T -->|taste-final| C3["Claude — Sonnet 5.5"]
-    T -->|long-context| C4["Codex — GPT-6 Astra"]
-    T -->|live-search| C5["Grok — 4.7"]
-    T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
-```
-
-- **`routing.yaml`** — lane → vendor + model + effort. One file, read by every
-  harness.
-- **Fallback chains** — a lane can list candidates
-  (`codex … | claude … | off`); dispatch picks the first vendor CLI you actually
-  have, so the default table works even with a single subscription.
-- **`scripts/dispatch.sh [--vendor V] <lane> "<task>"`** — resolves the lane
-  and shells out to the vendor's CLI headlessly. `--vendor` selects one named
-  vendor without fallback.
-- **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
-  identify the lane's model and delegate through a compatible native agent or CLI.
-- **`omnilane mcp`** — the same routing surface as an MCP stdio server,
-  for hosts that integrate via MCP instead of skills.
-
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **One table**<br/>four harnesses share it | 🪂 **Fallback chains**<br/>degrades to the CLIs you have | 🗳️ **Opinion panel**<br/>multi-model vote for big calls |
-| 🔒 **Safety rails**<br/>locks · watchdogs · no nesting | 🌏 **Five languages**<br/>the installer speaks your locale | ↩️ **Reversible**<br/>`--uninstall` undoes everything |
-
-</div>
-
-## 🛤️ Lanes
-
-Defaults below — run `scripts/dispatch.sh --list` for the table your machine
-actually resolves.
-
-AA `aa-v5.0.1-2026-11-10-v1`: **approved by the operator on 2026-11-10**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` once to re-prove its overlay against the new table. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md). It replaces `aa-v4.3.2-2026-10-28-v1` (approved 2026-10-28).
-
-AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
-
-AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
-
-| Lane | First choice | Backup | When |
-|---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
-| 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
-
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
-
-The **backup** is the next candidate in the lane's `routing.yaml` chain — what
-dispatch falls back to when the first-choice vendor CLI is not installed. Every
-lane is such a chain; when nothing in it is installed the lane degrades to `off`.
-
-> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (AA v5.0.1 snapshot, approved 2026-11-10).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
-
-### Natural-language consultation
-
-With the `omnilane` skill or `/route`, you can ask normally:
-**“Ask Opus to challenge this architecture.”** The Agent Skill interprets the
-request; this is not a free-form shell parser in `dispatch.sh`.
-
-- A capability-only question recommends the first available model for the
-  matching lane and makes no model call.
-- A generic vendor name uses that vendor's configured candidate in `consult`.
-- A canonical alias such as Opus pins its exact model family from the skill
-  table. If an explicit target is absent or unavailable, the command fails
-  clearly instead of falling back to another vendor or family.
-
-## Using the assistant's own sub-agents
-
-By default omnilane hands work to a vendor's command-line tool. When the model
-that should do the work belongs to the assistant's **own** vendor, going out
-through a second CLI is a detour: another login, another process, another thing
-that breaks when that CLI updates. Most assistants can start a sub-agent
-themselves, and omnilane can plan the work for that instead. Two ways.
-
-**A worker that runs exactly what the assistant runs (`--inherit`).** The
-assistant starts its sub-agent *without choosing a model or an effort*, so the
-worker is a copy of the caller. A copy cannot be stronger than the original,
-which is the only thing omnilane's score check is there to prevent, so this path
-needs no vendor CLI and no transport overlay, and it keeps working when the
-caller's effort is unknown or an overlay has gone stale.
-
-```sh
-omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
-omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
-# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
-#    model argument, checks the result, and records it:
-omnilane jobs --json complete-native JOB_ID /absolute/completion.json
-omnilane jobs --json status JOB_ID
-```
-
-The honest part: the handoff is marked `satisfies_lane_target: false`. The lane
-is only a label for the kind of work. A result produced this way was made by
-"the assistant's own sub-agent", never by "the hardest-coding model", and a lane
-that needs a stronger model than the caller is still refused.
-`--inherits-caller-runtime` is the assistant's own statement that its sub-agent
-tool behaves this way; omnilane cannot observe it. What is known per assistant:
-
-| Assistant | Sub-agent without a model argument |
-|---|---|
-| Claude Code | documented to use the main conversation's model, and the session's effort unless the agent definition sets one. True for the built-in general-purpose agent with `CLAUDE_CODE_SUBAGENT_MODEL` unset. Run end to end in this release |
-| Codex | `collaboration.spawn_agent` with no model and no effort. Run end to end in this release |
-| Grok Build | documented to inherit the parent's model (the bundled `general-purpose` agent is `model: inherit`); effort not documented. Not run in this release |
-| Antigravity | no sub-agent tool found in `agy` 1.2.7. Not available |
-
-**A specific model the assistant's tool can select.** Describe what the tool
-really accepts in a capability file (start from `omnilane native-context`, add a
-row per exact model and effort) and pass `--native-context FILE` to an ordinary
-`omnilane route`. omnilane uses the sub-agent only when a row matches exactly:
-model, effort, mode, workdir, tools, isolation and lifecycle. Same vendor is not
-same model, and nothing is guessed from the CLIs you have installed.
-`--executor native` fails instead of falling back; `--executor cli` forces the
-external CLI. When a same-vendor target goes out through the CLI only because no
-file was given, dispatch now says so.
-
-Either way the sub-agent shares the assistant's tools and filesystem: there is no
-operating-system sandbox, and `advise`/`work` are intent, not enforcement.
-Background, live, named-thread, multi-round, vote and `sysops` work stays on the
-CLI path. Protocol handling needs Python 3.9+. Schemas, the completion file,
-agent reuse and cancellation: [docs/native-executor.md](docs/native-executor.md).
-
-<details>
-<summary><b>Model-role guidance (delegation still required)</b></summary>
-
-<br/>
-
-The best model for a lane does not change with the commander. These are role
-hints, not self-execution exemptions: even a same-model task is delegated.
-A native agent is eligible only when the caller explicitly confirms the exact
-model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
-The commander orchestrates and validates; workers do not delegate again.
-Starting rows below come from the score ceiling alone (AA v5.0.1 snapshot,
-approved 2026-11-10); an inherited ceiling, a failed host probe or a quota can move the
-chain further down.
-
-- **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later). At max, xhigh or high, hardest-coding and hard-judgment start on Fable 5.2 itself; still delegate. At medium the first reachable rows are Astra xhigh (hardest-coding) and Fable 5.2 medium (hard-judgment); at low, Opus 5.5 high and Fable 5.2 low.
-- **Claude Code · Fable 5.1** — at xhigh (50), hard-judgment starts on Fable 5.1 xhigh itself (still delegate); hardest-coding and taste-final start at Sonnet 5.5 xhigh; bulk-mechanical, fast-agentic and long-context at GPT-6.1 Sol medium.
-- **Claude Code · Opus 5.5** — leads ui-draft at high. At xhigh (57), hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium; at medium (48), hardest-coding and hard-judgment start on Opus 5.5 medium itself, and ui-draft and long-context at GPT-6.1 Sol medium.
-- **Claude Code · Opus 5** — only max is still scored (44), so it is an explicitly selected independent reviewer at `max`, not a lane default. At that ceiling hardest-coding starts at Sonnet 5.5 high, hard-judgment at Fable 5.1 medium and long-context at Astra low.
-- **Codex · GPT-6.1 Sol** — leads bulk-mechanical and fast-agentic at medium. At xhigh (52), hardest-coding starts at Opus 5.5 high, hard-judgment at Fable 5.1 xhigh and long-context at Astra medium; at high (50), hardest-coding starts at Sonnet 5.5 xhigh.
-- **Codex · Astra** — leads consult (xhigh) and long-context (medium), and xhigh is second in hardest-coding and taste-final. At xhigh (55), hard-judgment starts at Fable 5.2 low. Select `--vendor codex --effort max` explicitly when needed; explicit model/effort always win.
-- **Codex · GPT-6.1 Terra** — the value Codex rows: second and third in fast-agentic (medium, low), third in bulk-mechanical (high). At xhigh (45), hardest-coding starts on Terra xhigh itself, hard-judgment at Fable 5.1 medium and long-context at Astra low. GPT-5.6 Terra is scored only at max and is in no lane.
-- **Grok Build · Grok 4.7** — leads live-search and coding-overflow, is third in consult, and is the Grok tail of hardest-coding, hard-judgment and taste-final. Its ceiling is 35, so most hard lanes start at Opus 5.5 low. Grok 4.6 is in no lane. Verify API signatures and cited facts.
-- **Antigravity · Gemini 4 Argon / 3.8 Flash** — Argon High (50) holds the Gemini slot in every lane, ahead of Flash. Flash is the cross-vendor fallback after it: High in consult, ui-draft, hard-judgment, live-search and coding-overflow; Medium in hardest-coding, bulk-mechanical, taste-final, long-context and fast-agentic; Low in triage. Do not infer visual taste or controller authority from agent/coding benchmarks.
-
-</details>
-
-## 🖥️ Live Board
-
-Every dispatch — foreground or `--background` — is a job on disk. The Live
-Board is an optional, read-only local workbench over that job store: what each
-model was asked, what it answered, how it was routed, and whether it is still
-running.
-
-<div align="center">
-
-<img src="docs/live-board.png" alt="Omnilane Live Board on desktop — job list on the left, task, public result and model path for the selected job on the right" width="820"/>
-
-<img src="docs/live-board-mobile.png" alt="Omnilane Live Board on mobile — searchable job list with status filters" width="280"/>
-
-</div>
-
-```bash
-omnilane ui start    # start or reuse the server and print its authenticated URL
-omnilane ui status   # inspect the local server
-omnilane ui url      # print the current authenticated URL
-omnilane ui stop     # stop it cleanly
-```
-
-The desktop view keeps the job list and detail pane independently scrollable;
-mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
-stream updates without replacing focused rows, and a short disconnect keeps the
-last snapshot while reconnecting. Pin any loaded task as a reference, then
-select another task to compare both model paths and public results side by side.
-The reference is memory-only and disappears when the page closes. The board
-binds only to `127.0.0.1`, uses a random token, and is read-only. It shows
-`task.txt` and the public `out.txt`, but never raw worker or vendor logs.
-
-Search and state filters apply to the latest 50 retained jobs. **Export visible**
-downloads only the currently visible public metadata as local JSON; it excludes
-tokens, task text, result bodies, workdirs, and raw logs.
-
-The board reads in English, Japanese, Korean, Traditional Chinese and Simplified
-Chinese. It follows the browser language on first load; the switcher in the
-header overrides that and the choice is remembered locally.
-
-Core routing does not need Python; only this UI requires Python 3.9 or newer.
-
-### Foreman completion inbox
-
-Finished dispatches write a private completion record under `$OMNILANE_HOME/inbox/`. A Claude Code `SessionStart` hook binds each foreman's hook-provided session ID to its live process ancestry, and the bundled `UserPromptSubmit` hook atomically delivers up to ten records owned by that session on the foreman's next prompt. Older records without a session ID still use the original dispatch `workdir` scope; claimed records move to `inbox/consumed/`. Set `OMNILANE_INBOX=0` on a dispatch to disable record creation; the default is enabled.
-
-## 📦 Install
-
-Requirements: the vendor CLIs you want to route to, logged in (`codex`,
-`claude`, `grok`, `agy`, and optionally `kimi`, `qwen`, `opencode`) and on
-`PATH` — install only the ones you have; the rest of the table degrades
-automatically. The `openrouter` vendor is the exception: it needs no CLI,
-only `curl` and an `OPENROUTER_API_KEY` in your environment.
-
-Quickest: `./install.sh` — symlinks the skill for the CLIs it finds, prints
-the plugin commands for the rest, shows your effective routing, and offers the
-interactive lane configurator (`--uninstall` reverses it). The installer
-speaks English, 繁體中文, 简体中文, 日本語 and 한국어 (auto-detected from
-your locale; force with `OMNILANE_LANG=zh-TW` etc.). It also offers an
-optional per-CLI **routing reminder**: a marked, reversible block appended to
-each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
-`~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
-versions) so the main loop remembers to consult the table; non-interactive
-installs can pass `OMNILANE_HOOKS=all|none|claude,codex`.
-
-The foreman completion notice requires the Claude Code plugin install; the
-skill-only symlink path does not deliver completion notices. Install the plugin
-from this checkout with:
-
-```bash
-claude plugin marketplace add <path to this repo>
-claude plugin install omnilane@omnilane
-```
-
-Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
-install or `--uninstall` to preview every checkout-owned file action.
-Rollback the installer-owned links and marked reminders with
-`./install.sh --uninstall`.
-
-Manual wiring:
-
-- **Claude Code**: install as a plugin (ships the skill + `/route`,
-  `/route-jobs` commands, and a `SessionStart` hook that auto-injects the
-  routing reminder at session open — no CLAUDE.md edit needed), or drop
-  `skills/omnilane` into `~/.claude/skills/`.
-- **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.
-- **Grok Build**: `grok plugin install <this repo> --trust`
-- **Antigravity**: `agy plugin install <this repo>` (check first with
-  `agy plugin validate <this repo>`)
-
-### MCP server
-
-`omnilane mcp` starts a zero-dependency, local MCP stdio server so any
-MCP-capable host can discover and call omnilane without installing the skill or
-adding a routing reminder. Configure the host to launch the installed CLI:
-
-```json
-{
-  "mcpServers": {
-    "omnilane": {
-      "command": "omnilane",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-The server exposes `route` plus read-only introspection: `list_lanes`,
-`explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`,
-`jobs_stats`, `jobs_recommend`, `jobs_audit`, `doctor`, and the explicitly opt-in
-`provider_probe`. `route` defaults to read-only `advise` mode. Calls that select `work` must also
-provide an explicit `workdir`.
-
-Node.js is the only runtime requirement (no npm packages). If you prefer
-npm, `npm install -g omnilane` installs the CLI with the MCP server
-included.
-
-## ⚙️ Configure
-
-Three layers, all optional:
-
-1. **Interactive menu** — `scripts/configure.sh` lists configurable lanes, lets you
-   pick vendor → model → effort per lane from suggestions (or free text for
-   future models), and writes the result to `~/.omnilane/routing.local.yaml`.
-   It intentionally skips the multi-vendor `consult` lane; edit that one by
-   hand if needed. `install.sh` offers to run the menu at the end of a normal install.
-   For scripting, `configure set|get|unset|list|diff LANE [SPEC]` edits or inspects the same file
-   without a tty — `set` validates the lane and rejects an unsafe or structurally
-   invalid spec, rolling back on failure.
-2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
-   as `routing.yaml`; local lines win. See `routing.local.yaml.example`.
-3. **`~/.omnilane/local.sh`** — per-machine binaries, proxies, auth wrappers;
-   sourced by every runner, never committed. See `local.sh.example`.
-
-Check the result any time:
-
-```
-scripts/dispatch.sh --list     # effective table, fallback resolution annotated
-```
-
-## 📖 Command reference
-
-```
-omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
-                                               # (install.sh links it into ~/.local/bin)
-eval "$(omnilane completion bash)"             # enable Bash completion for this shell
-source <(omnilane completion zsh)               # enable Zsh completion for this shell
-omnilane completion fish | source              # enable Fish completion for this shell
-omnilane mcp                                   # MCP stdio server (needs Node.js)
-omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
-omnilane ui start                              # start/reuse the local Live UI; print its URL
-omnilane ui status                             # report whether the Live UI is running
-omnilane ui url                                # print the current authenticated local URL
-omnilane ui stop                               # stop the Live UI
-omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
-                                               # transport-overlay: path mismatch FAIL; vendor hash or runner drift WARN
-omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
-            [--caller-context FILE | --operator-asserted-human]   # who is asking
-            LANE "TASK"                              # "-" reads task from stdin
-dispatch.sh [--json] --list [--json]
-dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
-dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
-jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # filter the listing
-jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
-jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
-jobs.sh rm ID                                     # move one finished/dead job to ~/.Trash (refuses a running job)
-jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
-jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # evidence-gated vendor suggestion
-jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
-jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only; --apply moves them to ~/.Trash
-configure.sh                                        # interactive lane menu
-configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
-```
-
-`configure diff` keeps the same machine-specific availability settings from `local.sh` in both views, so its comparison reflects routing overrides rather than missing local binaries. If either inspection fails, it returns that exit status and names the failed stage instead of printing a comparison.
-
-`configure get` propagates a failed inspection’s status instead of returning partial data or calling the lane unknown. `configure list` reports presence-check errors; genuinely missing or empty overrides still succeed.
-
-`configure set` validates a temporary candidate before publishing it and preserves an existing file’s permission mode. Failures reading existing routing content, unexpected validator failures, or structural errors in the target lane leave the previous configuration untouched; availability warnings and unrelated-lane errors retain their existing handling.
-
-`configure unset` finishes reading and filtering before changing the destination, then retains its existing in-place write behavior. Read/filter errors leave the original content unchanged; write errors are reported without a rollback guarantee.
-
-Bash, Zsh and Fish completion include the documented top-level, goal and job command groups. Choosing a completion only fills command text; it does not run a job action.
-
-Without `--vendor`, `benchmark` discovers vendors from the effective routing list and ignores its `unavailable` display markers. If no benchmark vendor remains, it exits 2 with a no-configured-vendors diagnostic; the default remains a dry-run without provider calls.
-
-Job `list` and `status` use the same observed state. `dead` means the worker PID is invalid or no longer exists and no exit was recorded; it is excluded from `--status running` and selectable with `--status dead`. `result` reports that no exit was recorded instead of calling the dead worker running. A missing PID still uses the existing startup `running` state; no exit code is invented.
-
-Background jobs require Perl supervision so cancellation can terminate the
-supervised process group. Supervision alone adds no whole-job deadline; when
-no job timeout applies, metadata remains `job_timeout: null`. The supervised
-per-call watchdog uses the separate `scripts/lib/call-timeout.pl` supervisor and
-returns 142 on expiry; whole-job deadline
-expiry returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
-Supervised job processes inherit a random `OMNILANE_JOB_TOKEN` (plus
-`OMNILANE_JOB_ID`). After cancellation or whole-job expiry stops the group, the
-supervisor also stops processes that left the group (for example through
-`setsid`) when their environment, read entry by entry, holds exactly that token
-and they started after the job; a normal finish only counts them. `jobs --json
-status` then adds `"leftovers":{"reaped":N,"remaining":M}`, and plain `status`
-appends `leftovers=M` when any remain. On macOS a helper that is a platform
-binary such as `/bin/bash` hides its environment and is not found, nor is a
-process that clears its environment.
-
-`--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
-single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
-workdir; use `jobs.sh threads`, `threads show NAME`, or `threads rm NAME` to
-manage local state without deleting the vendor session.
-
-`jobs recommend` reads only validated public metadata and exit codes. It ranks
-eligible vendors by success rate, sample count, then name; the default minimum
-is three completed jobs. It never reads task/result bodies or changes routing.
-
-`doctor --probe V` makes one bounded advise-mode provider call and returns only
-availability, selected model, timing, and response byte count—not the response
-body. Without `--probe`, doctor remains offline. `benchmark` uses the fixed TSV
-suite in `benchmarks/workloads.tsv`; its default dry-run resolves every route
-without provider calls. `--run` is the explicit call gate, and cost totals are
-estimates based only on values supplied with `--cost-per-call`.
-
-**Big decisions can get a panel, not a person.** The `arbitrate` lane ships
-**disabled** — a panel costs one call per voter per round, so it is opt-in.
-Enable it with `arbitrate: vote codex,claude,grok -` in `routing.local.yaml`,
-or through the configurator, which lets you pick any 1-4 voters from
-codex/claude/grok/gemini. The same question then goes to every voter, the
-opinions come back side by side, and the calling model chairs the verdict.
-Set the effort field to `2` for a debate round — every voter sees the whole
-panel and rebuts only the disagreements. Power users can swap in their own
-gate via the `exec` vendor:
-`arbitrate: exec /path/to/script -` — the script receives
-`MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict to
-`OUTPUT_FILE` (see `scripts/runners/run-exec.sh`).
-
-Exit codes: `2` bad usage (including an invalid vendor or a requested vendor
-absent from the lane), `3` lane disabled (off), `4` no vendor CLI available in
-the chain or the requested vendor is configured but its CLI is unavailable,
-`5` too few successful Round 1
-voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
-lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
-code passes through.
-
-## 🎭 Modes
-
-- **advise** (default): read-only local analysis with native web/search tools where the vendor supports them. Model/provider traffic stays available; agent mutation tools are restricted. This is not a promise of identical X/web capabilities across vendors.
-- **work**: local file and command work confined to the explicit `--workdir`, with agent-tool network access disabled. This does not disable the model/provider connection. Unsupported enforcement fails before provider startup rather than silently becoming sysops.
-- **sysops**: explicit per-dispatch opt-in to unrestricted agent tools and filesystem/network access. It is never a lane default; the task must state the allowed operations.
-
-The CLI defaults `--workdir` to the caller’s current directory when omitted; task briefs should still specify it explicitly. The MCP `route`/`dry_run` work interface separately requires an explicit `workdir`.
-
-Codex and Claude have distinct policies for all three modes. Agy advise/sysops use isolated per-session native app settings without replacing subscription authentication; Agy 1.1.27 work has bounded new/resume acceptance using four validated tools and the native terminal sandbox: workspace read/write/edit/build and policy-denied outside writes passed. External temp/cache reads are also restricted; settings are explicitly regenerated at each start rather than claimed immutable. A separate real two-turn work live/FIFO check passed readback, outside-write denial and normal close with unchanged sources. Grok advise uses native tool allow/deny rules; its complete single-shot `plain` path has verified native keyword search, page fetching, and a denied write on Grok 1.0.13. It uses internal web-tool IDs and job-local MCP readiness without disabling hooks. An existing nonempty `CONTEXT_MODE_MCP_SENTINEL_DIR` conflicts with this advise scope and stops before provider startup rather than being overwritten. Grok work remains gated by default on macOS because native child-network isolation is Linux-only, and Grok live requires explicit sysops; the advise result does not validate these other paths. OpenRouter remains advise-only; other vendors are not implicitly covered by this four-vendor contract. See the [dated runtime gate](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06) for evidence boundaries.
-
-macOS Grok work: the operator may enable single-shot work **without isolation** using `option.grok-macos-work: unconfined` in `routing.local.yaml` only. Off by default; chains skip Grok for macOS work when off. `doctor --strict` fails when on. See [the option, risks, and required Grok worker brief](docs/grok-unconfined-work.md).
-
-## 🔒 Safety rails
-
-- **No nested dispatch** — workers cannot fan out again (`OMNILANE_DEPTH`
-  guard, exit 86): no runaway agent-calls-agent quota chains.
-- **Serialized codex** — same-target-directory codex dispatches queue behind a
-  lock keyed on the normalized workdir; stale locks from crashed jobs are
-  detected by owner PID and stolen safely.
-- **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
-  fallback when neither exists (stock macOS), so a hung CLI cannot block
-  forever. The cap applies to **each CLI invocation**, highest priority first:
-  `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
-  upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
-  global `OMNILANE_TIMEOUT`, default 600s. For a live mailbox, it bounds the whole
-  resident CLI session; completing a turn does not stop or reset that clock.
-  It is a per-call hang-guard, not a
-  whole-job budget: a retrying vendor (grok) or the `vote` panel (voters ×
-  rounds) makes several calls, so total wall-clock can be a multiple of this
-  value.
-- **Whole-job fuse** — optional `--job-timeout SECONDS` caps lock wait plus all
-  retries, voters, and rounds under one process-group supervisor. Priority is
-  flag > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > disabled,
-  with one automatic exception: Codex `work` outside a Git worktree uses the
-  resolved per-call watchdog as its whole-job fuse when none was configured,
-  capped at the supervisor's 999999999-second maximum. This automatic guard
-  needs the bundled Perl supervisor; if unavailable, dispatch warns and keeps
-  non-Git work running through the existing per-call watchdog path, which emits
-  its own warning if no watchdog tool exists.
-  Expiry cleans the supervised process group and returns 124. For a deep audit
-  of a large repository, start around 2–4 hours (7200–14400s)
-  with a 30-minute per-call watchdog; these are recommendations, not defaults.
-- **Background lifecycle** — `--background` workers run in their own process
-  group and survive the caller's exit; killed workers record an exit code, and
-  `jobs.sh status` reports `dead` instead of `running` forever.
-- **Payload caps** — oversized task text is truncated head+tail before it can
-  blow a worker's context.
-
-## 📬 Live mailbox
-
-The per-call `--timeout` bounds the whole resident session. Completing a turn
-does not stop or reset that clock. For Claude and Gemini, an answered session
-that reaches this timeout is classified as success only when every sent turn
-has a vendor SUCCESS result and usable output is available. Its output ends
-with `closed by per-call timeout after Ns; last turn completed`. A trailing
-Gemini cancellation error does not undo completed turns. An unanswered turn
-keeps exit 142, reported as `CALL_TIMEOUT`; `jobs.sh stats` includes it in both
-`failed` and the `call_timed_out` sub-count. Read the answer and use
-`jobs close ID` promptly, or use `--single-shot` for one-shot background work.
-
-A live mailbox is a resident background dispatch, not a one-shot dispatch. Claude and Gemini retain their existing automatic live behavior with `--background`. Codex and Grok default to single-shot; opt in with `--background --live` (Grok additionally requires `--mode sysops --workdir DIR`). The foreman can send another instruction while it is running and is responsible for closing it with `jobs.sh close ID`. The idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
-
-```bash
-scripts/dispatch.sh --background --vendor claude hard-judgment "Review the timeout failure"
-# save the printed job ID as $ID
-scripts/jobs.sh send "$ID" "Also inspect the retry path."
-scripts/jobs.sh watch "$ID"
-scripts/jobs.sh tail "$ID" --lines 20
-scripts/jobs.sh close "$ID"
-scripts/jobs.sh retry "$ID" --background
-```
-
-Foreground dispatch and foreground `jobs retry` print the stored public output even when the job fails, then return its nonzero exit code. Background dispatch keeps its job-ID output.
-
-`watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude, Gemini, Codex, and Grok. Automatic selection remains single-shot for Codex/Grok; only explicit `--live` opts them in. Grok advise rejects `--live` because ACP does not enforce its read-only boundary; normal advise uses single-shot native tool allow/deny rules. `--live` fails fast for unsupported vendors. `--single-shot` forces one-shot execution for every vendor. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
-
-An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
-
-## 🎯 Goal orchestration
-
-`omnilane goal` is a foreman-driven ledger for exploratory work. The caller—an agent session or a human terminal—owns the loop: dispatch a job, receive its result through the completion inbox or `omnilane jobs wait`, decide the next job, and repeat. Job and elapsed-time budgets are unlimited by default; `--budget-jobs N` and `--budget-seconds S` opt in to each hard cap. omnilane supplies bookkeeping only, enforces any caller-supplied caps plus the always-on repeated-failure fuse before each goal dispatch, then assembles the report when the foreman closes the goal.
-
-```bash
-GOAL_ID="$(omnilane goal open "Fix the flaky checkout integration" \
-  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
-  "Reproduce the checkout failure and implement the smallest verified fix")"
-omnilane jobs wait "$JOB_ID" --timeout 900
-omnilane goal note "$GOAL_ID" "Fix verified by the checkout integration test"
-omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
-```
-
-Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly. When budget flags are supplied, those caps are hard bounds, not completion promises.
-
-Failure counts are rebuilt from durable job records after an interrupted refresh, without counting a failure twice. `goal close` seals the goal only after publishing its report; if publication fails, correct the error and retry close.
-
-A busy goal prints read-only lock-owner diagnostics and keeps exit code 75. Locks are never automatically removed; a recorded PID is not proof of ownership, so manual verification is required before recovery.
-
-Goal status and reports preserve `dead` and `missing` states instead of calling them running. Unavailable or inconsistent job-status evidence is `unknown`, with no invented exit or failure count. Per-job seconds remain elapsed time since submission, not measured active runtime; goal budgets are unchanged. Incomplete jobs each require one local status check, bounded to two seconds.
-
-After normal cleanup of completed job artifacts, the goal retains its validated exit, completion time and elapsed-to-finish duration. Status and reports mark `artifacts=missing` separately. A job with no recorded completion remains missing or unknown; cleanup never creates a terminal result.
-
-Goal dispatch first journals an intent and reserves one job slot. A one-time claim binds that intent to the generated job ID before launch. `spent_jobs` still counts recorded jobs; `reserved_jobs` covers unresolved submissions. An unresolved or corrupt journal blocks new dispatch and close. Reconciliation repairs records without launching work; it never invents an exit or retries an ambiguous submission.
-
-For threaded goal dispatch, stdout is the exact job ID; the matching thread notice is shown on stderr after the ID is verified. Direct background dispatch keeps its existing notice-and-ID stdout format.
-
-`goal dispatch` launches a background job and does not support `--dry-run`; the option is rejected before goal state changes. To preview routing, use `omnilane dispatch --dry-run [options] LANE "TASK"` directly. Direct previews do not inherit the goal’s working directory; pass `--workdir DIR` when needed.
-
-Persisted goal budgets require JSON integers, not booleans or numeric strings. Optional limits remain `null` or 1..999999999; counters must be nonnegative and fit the supported numeric range. Invalid fields are rejected before ledger updates or dispatch. Workdir paths containing tabs, carriage returns, newlines or NUL are unsupported; ordinary spaces and Unicode remain supported.
-
-If dispatch errors or its result is lost, inspect `goal status` before submitting again: a fresh identical command creates a new intent, so the guarantee is one launch per intent, not global command deduplication. Valid existing worker PID/exit evidence is needed to reconcile a claim; pruning that evidence before reconciliation leaves the reservation unresolved. Already-reconciled goal history survives pruning. Old goals remain readable. No automatic stale-lock or ambiguous-intent recovery is performed.
-
-Background finalization preserves its chosen exit status when HUP/TERM arrives. Completion hooks skip already-consumed records and deliver at most ten records per prompt, including unreadable-record notices.
-
-Do not use goal orchestration for a single obvious task; dispatch that task directly. The default unlimited budgets let the caller keep exploring without omnilane imposing a cap; pass either budget flag only when that limit is wanted.
-
-## ❓ FAQ
-
-<details>
-<summary><b>Do I need all of these subscriptions?</b></summary>
-
-<br/>
-
-No. Every lane is a fallback chain, and dispatch picks the first candidate
-whose CLI is actually installed. With one subscription the whole table collapses
-onto that vendor; lanes with nothing available turn off rather than failing.
-`omnilane doctor` shows exactly what your machine can reach today, and
-`routing.local.yaml.example` ships starter profiles for common situations
-(Claude-focused, Codex-heavy, no-Codex).
-
-</details>
-
-<details>
-<summary><b>Does omnilane send my code somewhere new?</b></summary>
-
-<br/>
-
-No new destination. Dispatch shells out to vendor CLIs you already installed
-and logged into, so your code reaches exactly the vendors you already use.
-Runners strip API-key environment variables before invoking a subscription CLI,
-so a stray key cannot silently switch you onto pay-per-token billing. The one
-exception is the direct-API vendor family (`openrouter`, `deepseek`, `zai`,
-`mistral`, `groq`, `cerebras`), which by definition calls that provider's API
-with the key you set — those are advise-only and never edit files.
-
-</details>
-
-<details>
-<summary><b>Why does Fable 5.2 now lead hard work?</b></summary>
-
-<br/>
-
-The 2026-11-10 snapshot (AA Intelligence Index v5.0.1, approved that day) scores Fable
-5.2 xhigh at 62, above every other row a lane can dispatch (Opus 5.5 xhigh 57,
-Astra xhigh 55). In `hardest-coding` it also leads Terminal-Bench 4.0 (0.616
-against 0.596 for both Astra and Opus 5.5 xhigh) and SciCode (0.656 against
-0.557 and 0.650). In `hard-judgment` it leads every row in the chain on HLE
-(0.689), Briefcase analytical Elo (1927) and CritPt (0.357); the first Codex
-row, GPT-6.1 Sol xhigh, has 0.526, 1691 and 0.317. It is also the most
-expensive row: an AA index run costs about $11,742 at Fable 5.2 xhigh, against
-$4,766 for Opus 5.5 xhigh and $3,746 for Astra xhigh.
-
-Astra xhigh stays second in `hardest-coding` and first in `consult`; Opus 5.5
-high leads `ui-draft`. Fable 5.2 needs Claude Code 2.1.321 or later. The
-operator approved the snapshot on 2026-11-10; the full per-lane
-tables are in [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt).
-
-</details>
-
-<details>
-<summary><b>Why do the lanes never use <code>max</code>?</b></summary>
-
-<br/>
-
-Effort is selected per task, not assumed to improve monotonically. Since the
-2026-11-10 re-rank no lane chain contains a `max` row, `hardest-coding`
-included: every lane is ordered value-first, and `max` costs the most for a
-small gain (Fable 5.2 scores 65 at max, 62 at xhigh). `max` is still available
-when you select it with `--effort max`; explicit `--model` and `--effort`
-always override these route defaults.
-
-</details>
-
-<details>
-<summary><b>What happens when a lane's first-choice CLI is missing?</b></summary>
-
-<br/>
-
-Dispatch walks the chain and uses the first vendor you have. Inspect the
-decision without spending a call:
-
-```bash
-scripts/dispatch.sh --explain hardest-coding   # candidate-by-candidate trace
-scripts/dispatch.sh --list                     # whole effective table
-scripts/dispatch.sh --dry-run hardest-coding "…"   # fully resolved plan, no provider call
-```
-
-</details>
-
-<details>
-<summary><b>Can a dispatched worker edit my files?</b></summary>
-
-<br/>
-
-Only if you ask for it. Dispatch defaults to `advise`, with per-vendor read-only
-sandbox or native tool permissions and supported web search. For bounded edits,
-use `--mode work` with an explicit `--workdir`; agent-tool networking is disabled
-while the model connection remains available. `--mode sysops` is a separate,
-explicit full-access policy for Codex, Claude, Grok, and Agy, not an alias for
-work. Use it only when the task explicitly permits operations outside work's
-boundary, such as service management. It is never a lane default. Workers
-also cannot dispatch again — the depth guard refuses nested fan-out with exit 86,
-so one command can never spiral into a chain of agents spending your quota.
-
-</details>
-
-<details>
-<summary><b>My dispatch was refused. Which refusal is it?</b></summary>
-
-<br/>
-
-Three codes, three different fixes. Run `omnilane doctor` first — its
-`transport-overlay` check tells you immediately whether the problem is your
-machine's configuration or your request.
-
-`missing-caller-context` — no identity reached the gate. A human adds
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`. A model
-normally needs nothing: dispatch reads its identity from the nearest launching
-CLI, using a bound current-turn rollout for Codex app-server/no-model launches.
-When that fails, run `omnilane whoami` — it either prints a
-`--caller-context FILE` to pass, or says exactly why it cannot (a missing
-`--effort`, a model alias, no scored row). A model must not assert the human
-exemption for itself.
-
-Every refusal is one JSON line on stderr. Read `failed_gate`, `reason` and
-`next_command` first; `eligible_lanes` lists what you can still dispatch.
-
-`runtime-mapping-unverified` — your identity is fine, but the *target* has no
-proven host-local request selector. Either it was never probed, or its probe
-failed. `omnilane doctor` and `--json` show each unproven row as `WARN`: its ID,
-requested and observed model/effort (when recorded), failure class and reason,
-last probe time, evidence paths (not contents), and next step. Environment
-failures name `omnilane resign --retry-failed --vendor VENDOR`; conclusive
-failures never auto-retry and name the request/CLI/provider mapping to inspect.
-Damaged evidence diagnostics name the affected path and explain restoration
-from a known-good backup or explicit fresh probing into a new directory.
-A provider quota refusal will not clear until that quota does.
-
-`invalid-policy-input` with "transport contract evidence changed" — neither of
-the above. The overlay itself will not load, so *every* vendor is refused. The
-usual cause is a vendor CLI upgrade: the overlay pins each vendor's executable
-and runner-script hash, and Codex and Claude evidence paths embed version
-directories, so an upgrade removes the file rather than changing its digest.
-Tagged evidence degrades only its own vendor; untagged evidence, such as the
-probe manifest, still closes the whole gate. Doctor names the file and the
-vendor; `omnilane resign` re-probes and re-signs it, and the dispatch skill
-carries the runbook behind that command.
-
-`target-above-effective-ceiling` — nothing is broken. The target scores above the
-caller. `required_caller_effort` names the effort the calling session would need;
-a caller marked `caller_degraded` was launched by a harness that recorded no
-effort (a Codex heartbeat automation does this) and is held to its model's floor.
-
-</details>
-
-<details>
-<summary><b>What does my mapping's evidence tier mean?</b></summary>
-
-<br/>
-
-It says how strongly the probe pinned down who answered. It does not affect
-whether you can dispatch.
-
-`billed-model` — the provider named the model it charged for. Claude reports it
-in `modelUsage`; grok reports it the same way under `--output-format json`. This
-is the provider's receipt.
-
-`client-echo` — the CLI wrote down the model it asked for, and that record
-matches your request. Codex keeps it in the session rollout; agy writes it to
-`cli.log`. This is the CLI's copy of your order, not the provider's receipt: it
-proves the request left as intended, not who served it.
-
-`selector-only` — the CLI accepted the selector and reported nothing further.
-Every mapping probed before v0.42.6 reads this way. It still dispatches; it is
-simply the weakest of the three, and `omnilane doctor` names the vendors worth
-re-probing.
-
-None of the three certifies upstream provider identity, and none of them can
-refuse a lane. The tier is derived from what a probe produced rather than from
-the vendor, so a CLI that starts reporting a billed model is promoted on its
-next sweep with no change to omnilane.
-
-</details>
-
-## 📊 Defaults and provenance
-
-Default lane assignments follow the Artificial Analysis Intelligence Index
-v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the
-operator on 2026-11-10), merged from 85 AA model pages; each lane is ordered
-value-first on those scores and its own measures, and rows v5.0.1 no longer
-scores are left out rather than carried over
-([evidence](docs/reports/aa-rebaseline-2026-11-10.md)). They are opinions, not laws — the
-configurator and `routing.local.yaml` exist so you can disagree. The full
-working notes, including per-benchmark caveats, live in
-[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
-
-## ⚠️ Known limitations
-
-- **Antigravity tool calls in print mode are unstable** in current CLI builds
-  (tool calls may be denied or rejected with invalid-argument errors). The
-  long-context lane is designed for content-you-paste-in synthesis, which is
-  unaffected; for repo *inspection* prefer the claude/codex candidates.
-- **Grok has no reasoning-effort knob**; the effort field is accepted for
-  interface parity and ignored.
-- **Non-Git Codex work is supported.** Some Codex CLI builds may stall outside
-  a Git worktree, so the automatic fuse above bounds that case and cleans the
-  supervised process group. Omnilane neither initializes nor requires a repository.
-
-## ⬆️ Upgrade note: jobs started by an older version
-
-`jobs close` and `jobs cancel` now signal a worker only after `ps` confirms that its start time matches the one recorded in `pid.start` or `inbox.holder.pid.start`. A job started by an older version has no such file, so its PID cannot be confirmed:
-
-- While that PID is in use, `jobs close` and `jobs cancel` send no signal and exit 1, naming the PID. Check it with `ps -o lstart=,command= -p PID`. If it is the job's worker, stop it by hand (`kill -USR1 PID` for `close`, `kill -TERM PID` for `cancel`). If it is not, leave that process alone: the worker is gone, and you can move the job directory to the trash.
-- A dead PID behaves as before, and `status`, `wait` and `rm` keep their `kill -0` answer for such a job.
-- Jobs started after the upgrade are not affected.
-
-These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Two cases need no `ps` and are still answered there: a job with a recorded exit, and a recorded PID that `kill -0` reports as gone. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
-
-A live PID whose start time file is invalid is not treated as finished either: `status` reads `unknown (invalid start time file)`, and `wait`, `cancel`, `close` and `rm` refuse. Check it with `ps -o lstart=,command= -p PID`. If that PID is not the job's worker, the worker is gone and you can move the job directory to the trash by hand.
-
-A live PID whose start time differs from the recorded one is treated as another process: `status` answers `dead (worker gone, no exit recorded)` and `cancel` answers `not running` while that process keeps running. A note on stderr says so, with the command to compare the two.
+| `missing-caller-context` / `caller-identity` | The assistant's launching model or effort could not be read. | `omnilane whoami` |
+| Caller model/effort has no scored row | Normal lane routing needs an exact scored pair. A supported native worker can inherit the caller's actual runtime; it does not satisfy the lane's model target. | `omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir "$PWD"`, then use the reference's `--inherit` handoff |
+| `target-above-effective-ceiling` | The requested target is above the caller's allowed score. Inspect the refusal's eligible lanes. | `omnilane route --explain hardest-coding` |
+| `runtime-mapping-unverified` or changed CLI proof | This host has not verified the requested selector, or its executable changed. | `omnilane resign --vendor VENDOR` |
+| Exit 2: no overlay configured | First-time setup has not finished. | `omnilane resign --init` — human, interactive desktop terminal |
+| Exit 20: `needs-login-session` | The CLI is not signed in or this process cannot access its desktop login. Sign in in a desktop terminal first. | `omnilane resign --vendor VENDOR` — in that signed-in terminal |
+| Exit 20: `cli-not-installed` or `review-executable-source` | A CLI is missing, or its executable source/signature needs review. Approval cannot repair an invalid signature. | `omnilane doctor`, then follow its vendor-specific guidance |
+| Exit 20: `provider-verification-incomplete` or `verification-needed` | Verification is incomplete; inspect the API, quota, network or unprobed-row reason and resolve it first. | `omnilane resign --vendor VENDOR` |
+| Environment failure held by cooldown/reset time | Ordinary failed rows can be retried explicitly. Unattended pending re-checks still obey their retry bounds and reset hints. | `omnilane resign --retry-failed --vendor VENDOR` — after resolving the cause |
+| `deterministic-probe-failure` / wrong model or effort | The request and observed result disagree; this does not automatically retry, even with `--retry-failed`. | `omnilane doctor`, then correct the CLI/provider mapping before fresh verification |
+| Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
+| Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
+
+## What's new in v0.61.0
+
+- **After upgrading, run `omnilane resign` once on each host.** Unchanged selector proofs carry over; new or changed selectors need verification. Exit **60** means passing selectors were installed and others remain pending re-check; inspect `omnilane doctor` and retry after the cause clears.
+- The approved AA Intelligence Index **v5.0.1** snapshot adds **Claude Fable 5.2** (Claude Code **2.1.321+**) and makes it the first choice for `hardest-coding` and `hard-judgment`; `long-context` starts with GPT-6 Astra medium. Explicit native model/effort rows must also be scored in the new snapshot; remove withdrawn pairs from `native-rows.json` or use a supported inherited worker.
+- First-time setup is `omnilane resign --init`. Refusals explain the next step in plain language; exit 20 has vendor-specific `attention` guidance, and doctor/overlay-health show carried-over versus new/unprobed rows.
+- Re-signing keeps verified selectors usable during partial provider failures, bounds unattended pending retries, honors reset hints, and treats wrong-model findings as conclusive. A fully unauthenticated sweep stops after its first probe instead of repeating the same login failure.
+- Upgrade: `npm i -g omnilane@0.61.0`.
 
 ## 📜 Release history
 
@@ -1689,6 +807,876 @@ These are historical release notes. The current three-mode contract is defined i
   and both plugin manifests, with CI checking the changelog and all five READMEs.
 
 </details>
+
+## Reference
+
+## Overlay verification and retry details
+
+Snapshot-only upgrades now reuse unchanged request-selector proofs automatically: score/date changes use the new ceiling immediately, without `omnilane resign`, GUI login, network calls, or rewriting the overlay. Only new/changed request contracts or executable identities need `omnilane resign --vendor VENDOR`; the refusal names the affected row and whether a desktop terminal is needed. Legacy format 1 works for release-pinned source snapshots; unknown older sources need inspection with `omnilane resign --check`. Use `omnilane resign --init` for first-time setup; signer approval rules are unchanged. Run scheduled verification as `omnilane resign --daily` (or `bash scripts/resign-daily.sh`): failures stay nonzero and appear in `omnilane doctor` from private local status, without Telegram. No scheduler is installed automatically.
+
+Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. If previously verified selectors fail for these reasons, passing selectors still get the current executable pin and snapshot. Failed selectors are retained individually under `unproven[].pending_recheck`, with their prior mapping for audit only, and dispatch refuses them with their own failure reason. The first two consecutive pending runs may retry without a cooldown; starting with the third pending run, unattended invocations (including `--daily`) use the 20-hour cooldown. A recorded reset hint always defers unattended retries until that time. Interactive resign retries retained selectors immediately; other environment-failed rows keep the 20-hour non-interactive cooldown. For those ordinary environment-failed rows, interactive runs or `omnilane resign --retry-failed --vendor VENDOR` bypass the cooldown. Retained pending selectors still honor unattended bounds and reset hints even with `--retry-failed`. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
+
+`resign` exits **60** when a vendor has verified selectors and retained pending selectors, **0** when fully re-signed or already current, and **20** when no selector could be re-signed or an operator must resolve a hold. Operator holds and still-unprobed daily gaps take precedence over partial success. `resign --check` reports **60** for a current pin with partial verification, **10** for other drift, and names the pending selectors; `doctor` and `resign --daily` report the same counts and names. Interactive retries also refresh an existing daily-status record so recovered rows and deterministic findings do not retain stale quota/login status. A wrong-model/contract finding or evidence-tier regression in a currently verified mapping still holds the vendor's old pin. A retained pending selector that fails deterministically becomes an ordinary unproven finding and stops automatic retries, while recovered siblings are installed. A full sweep whose first selector is not authenticated stops immediately and holds the vendor with login guidance; per-selector login handling starts only after a selector authenticated in that run. `--allow-shrink` discards retained mappings for failed selectors instead; it does not approve lower-tier passing evidence, an origin change, or an unsigned executable. Smoke dispatch chooses from verified mappings only.
+
+Expired proofs are refreshed through the same missing-row path, without re-probing healthy rows. A model/effort mismatch is a conclusive finding and will not retry automatically, even with `--retry-failed`. Run `omnilane doctor`, inspect the recorded request and CLI/provider routing, and correct the cause before arranging fresh verification. Release notes below describe behavior at the time of each release; current installations follow this section.
+
+## 🤖 Let your AI assistant drive omnilane
+
+The assistant (Claude Code, Codex, Grok Build or Antigravity) reads a skill file
+that tells it how to pick a lane and dispatch. Four steps, once per machine.
+
+### Step 1 — Give the assistant the skill
+
+`./install.sh` links it for every CLI it finds. By hand:
+
+| Assistant | How |
+|---|---|
+| Claude Code | `claude plugin marketplace add <this repo>` then `claude plugin install omnilane@omnilane` (also gives `/route`, `/route-jobs` and the completion inbox), or link `skills/omnilane` into `~/.claude/skills/` |
+| Codex | link `skills/omnilane` into `~/.codex/skills/` |
+| Grok Build | `grok plugin install <this repo> --trust` |
+| Antigravity | `agy plugin install <this repo>` (check first with `agy plugin validate <this repo>`) |
+
+### Step 2 — Prove, once, that each CLI selects the model it is asked for
+
+A model caller is only allowed to dispatch to a target this machine has *proven*:
+that `codex -m gpt-6.1-sol` really runs Sol, and so on. The proof is a local file,
+the **transport overlay**. Nothing ships with one. Without it every lane refuses
+a model caller with `runtime-mapping-unverified`, and `omnilane doctor` warns
+`no overlay configured`.
+
+Build it from a normal desktop terminal. (An ssh login cannot read the keychain
+the CLIs log in with, so it would report them all as not logged in.)
+
+```bash
+omnilane resign --init
+```
+
+This first-install command requires an interactive terminal and refuses an existing overlay or `--daily`. It verifies the probes and a real dispatch, records first-trust signers, and backs up `local.sh` before adding the overlay assignment while preserving your settings. Unsafe or changed signers remain blocked. [Manual fallback](docs/transport-overlay.md#first-installation).
+
+A vendor you are not logged in to is reported `unprobeable` and simply stays
+unverified; the others work.
+
+### Step 3 — Keep the proof current without doing it by hand
+
+The overlay pins each CLI executable by hash, and **the CLIs update themselves**,
+often weekly. After an update that vendor's lanes are refused until the overlay
+is re-signed. `omnilane resign` does the whole job: finds what changed, re-probes
+only that vendor, checks the result, swaps it in, sends one real dispatch to
+confirm, and restores the old file if that fails. A source channel only permits probing; it never authorizes dispatch by itself.
+
+`--init` already records first-trust signers; only older overlays need the separate human-operator `omnilane resign --record-signers` step. Existing team records imply a Developer ID channel, now requiring Apple's certificate chain as well as the team, product identifier and resolved installation location. An old adhoc record without explicit operator trust grants no channel.
+
+```bash
+omnilane resign --record-signers # older overlays only; human operator
+```
+
+For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement. An adhoc sample shows no factory identifier, so the `--team` form approves the whole team at that location: until you replace it, any program that team signed there can pass the source check and be probed, not only this CLI. `omnilane resign --check` and `omnilane doctor` show this as `"identifier_family": ""`. To bind the approval to the product, run `omnilane resign --trust-origin claude` again, without `--team`, while a verified factory sample is installed; it replaces the team-wide entry.
+
+```bash
+omnilane resign --trust-adhoc claude   # only if you re-sign claude adhoc yourself
+```
+
+For a pinned script or native non-macOS executable, use `omnilane resign --trust-location VENDOR`. After reviewing a changed location or a new script, `omnilane resign --approve VENDOR` permits only this attempt; after successful probing you can trust the new pinned location. It does not create a channel. Revoke with `omnilane resign --revoke-origin VENDOR KIND`, where `KIND` is `developer-id`, `adhoc`, `script`, `no-platform-signature` or `location` (all location channels). An empty revoked list stays authoritative over old overlay trust.
+
+`omnilane resign --check` and `omnilane doctor` show executable kind and approved channels, and observed team/identifier when blocked. Invalid signatures, unavailable signature verification, unsigned macOS native files and damaged or foreign-host policy files always stop; approval cannot repair them. Source failures and login failures have different instructions. Restore a valid installation or local policy backup before retrying. Source blocking applies when the executable changes. An unchanged pinned executable keeps the existing missing-row, retry and evidence-refresh behavior.
+
+Channels live in host-bound, atomic, backed-up, 0600 `$OMNILANE_HOME/transport-origins.local.json`; do not copy them between hosts. `resign --init` now calls first-use enrollment on a staged policy, per vendor with no recorded identity, path or policy entry. It checks eligible executable sources, refuses locally adhoc-signed samples and publishes trust only with successful verified setup. Existing trust is not overwritten, and an upgrade does not silently trust scripts or non-macOS binaries. AI assistants must never run trust, approval, signer-recording or revocation commands themselves.
+
+Then let it run every day. Any scheduler works as long as it runs **inside your
+desktop login session** (the CLIs need the keychain). On macOS, a LaunchAgent:
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+The LaunchAgent above is an optional example, not an automatically installed scheduler. Check it in your own desktop session with `launchctl kickstart gui/$(id -u)/dev.omnilane.resign`, then inspect `omnilane doctor`.
+
+What `omnilane resign` exits with:
+
+| Exit | Meaning | You do |
+|---|---|---|
+| 0 | nothing had changed, or everything that changed was re-signed | nothing |
+| 10 | `--check` only: something changed | run `omnilane resign` |
+| 20 | source review, login or verification needs attention | follow the source-specific or login-specific message; approval cannot waive invalid, unsigned or unverifiable signatures |
+| 30 | the re-signed overlay failed its real dispatch and the previous one was restored | nothing is broken; read the log |
+| 2 | no overlay is configured | do Step 2 |
+| 40 (`EXIT_HOST_CONFIG`) | dispatch's host configuration could not load, or the configured overlay is unreadable or invalid JSON; nothing read/staged/written after a shell failure | fix the path/error on stderr; daily-job owners decide notification policy |
+| 50 (`EXIT_BUSY`) | another `omnilane resign` is already running on this host; nothing read or written | let it finish, then run this one |
+| 60 | verified selectors are installed; only retained selectors remain pending re-check | inspect `omnilane doctor`; retry with `omnilane resign` after the cause clears |
+
+Exit 2 also covers argparse usage errors; a configured but unreadable overlay is exit 40, not 2.
+
+### Step 4 — Try it from inside the assistant
+
+Ask your assistant to run `omnilane whoami`. It should answer with the model and
+effort it is running as, and a score. Then ask it to delegate something small:
+"use omnilane to have the triage lane count the TODO comments in this repo".
+
+If it is refused, the refusal says which check failed and what to do:
+
+| `failed_gate` | In plain words | Fix |
+|---|---|---|
+| `caller-identity` | omnilane could not tell which model is asking | have it run `omnilane whoami` **as the only command** in that tool call. Codex in particular is unreadable behind `; echo $?`, `&&` or a pipe |
+| `target-transport` | this machine has not proven that target, or a CLI updated since | `omnilane resign` (Step 3) |
+| `downward-ceiling` | the target model scores higher than the model asking; a model may only delegate sideways or down | pick one of the `eligible_lanes` the refusal lists, or start the assistant at a higher effort |
+
+A Codex automation that wakes an existing thread records no effort. omnilane
+then holds that caller to its model's lowest score instead of refusing it: cheap
+lanes keep working, expensive ones say which effort would reach them.
+
+## 🧭 How it works
+
+omnilane lets the main loop of **any** agentic CLI classify subtasks into
+lanes and dispatch each lane to the best vendor — headlessly, using your
+existing subscription logins (or, for the `openrouter` vendor, a direct API
+key with no extra CLI at all):
+
+```mermaid
+flowchart LR
+    M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
+    T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
+```
+
+- **`routing.yaml`** — lane → vendor + model + effort. One file, read by every
+  harness.
+- **Fallback chains** — a lane can list candidates
+  (`codex … | claude … | off`); dispatch picks the first vendor CLI you actually
+  have, so the default table works even with a single subscription.
+- **`scripts/dispatch.sh [--vendor V] <lane> "<task>"`** — resolves the lane
+  and shells out to the vendor's CLI headlessly. `--vendor` selects one named
+  vendor without fallback.
+- **`skills/omnilane/SKILL.md`** — a single skill every harness can load:
+  identify the lane's model and delegate through a compatible native agent or CLI.
+- **`omnilane mcp`** — the same routing surface as an MCP stdio server,
+  for hosts that integrate via MCP instead of skills.
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **One table**<br/>four harnesses share it | 🪂 **Fallback chains**<br/>degrades to the CLIs you have | 🗳️ **Opinion panel**<br/>multi-model vote for big calls |
+| 🔒 **Safety rails**<br/>locks · watchdogs · no nesting | 🌏 **Five languages**<br/>the installer speaks your locale | ↩️ **Reversible**<br/>`--uninstall` undoes everything |
+
+</div>
+
+## 🛤️ Lanes
+
+Defaults below — run `scripts/dispatch.sh --list` for the table your machine
+actually resolves.
+
+AA `aa-v5.0.1-2026-11-10-v1`: **approved by the operator on 2026-11-10**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` once to re-prove its overlay against the new table. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md). It replaces `aa-v4.3.2-2026-10-28-v1` (approved 2026-10-28).
+
+AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
+
+AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
+
+| Lane | First choice | Backup | When |
+|---|---|---|---|
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
+| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
+
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+
+The **backup** is the next candidate in the lane's `routing.yaml` chain — what
+dispatch falls back to when the first-choice vendor CLI is not installed. Every
+lane is such a chain; when nothing in it is installed the lane degrades to `off`.
+
+> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (AA v5.0.1 snapshot, approved 2026-11-10).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
+
+### Natural-language consultation
+
+With the `omnilane` skill or `/route`, you can ask normally:
+**“Ask Opus to challenge this architecture.”** The Agent Skill interprets the
+request; this is not a free-form shell parser in `dispatch.sh`.
+
+- A capability-only question recommends the first available model for the
+  matching lane and makes no model call.
+- A generic vendor name uses that vendor's configured candidate in `consult`.
+- A canonical alias such as Opus pins its exact model family from the skill
+  table. If an explicit target is absent or unavailable, the command fails
+  clearly instead of falling back to another vendor or family.
+
+## Using the assistant's own sub-agents
+
+By default omnilane hands work to a vendor's command-line tool. When the model
+that should do the work belongs to the assistant's **own** vendor, going out
+through a second CLI is a detour: another login, another process, another thing
+that breaks when that CLI updates. Most assistants can start a sub-agent
+themselves, and omnilane can plan the work for that instead. Two ways.
+
+**A worker that runs exactly what the assistant runs (`--inherit`).** The
+assistant starts its sub-agent *without choosing a model or an effort*, so the
+worker is a copy of the caller. A copy cannot be stronger than the original,
+which is the only thing omnilane's score check is there to prevent, so this path
+needs no vendor CLI and no transport overlay, and it keeps working when the
+caller's effort is unknown or an overlay has gone stale.
+
+```sh
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+```
+
+The honest part: the handoff is marked `satisfies_lane_target: false`. The lane
+is only a label for the kind of work. A result produced this way was made by
+"the assistant's own sub-agent", never by "the hardest-coding model", and a lane
+that needs a stronger model than the caller is still refused.
+`--inherits-caller-runtime` is the assistant's own statement that its sub-agent
+tool behaves this way; omnilane cannot observe it. What is known per assistant:
+
+| Assistant | Sub-agent without a model argument |
+|---|---|
+| Claude Code | documented to use the main conversation's model, and the session's effort unless the agent definition sets one. True for the built-in general-purpose agent with `CLAUDE_CODE_SUBAGENT_MODEL` unset. Verify inheritance on your host |
+| Codex | `collaboration.spawn_agent` with no model and no effort. Verify inheritance on your host |
+| Grok Build | documented to inherit the parent's model (the bundled `general-purpose` agent is `model: inherit`); effort not documented. Verify support on your host |
+| Antigravity | no sub-agent tool found in `agy` 1.2.7. Not available |
+
+**A specific model the assistant's tool can select.** Describe what the tool
+really accepts in a capability file (start from `omnilane native-context`, add a
+row per exact model and effort) and pass `--native-context FILE` to an ordinary
+`omnilane route`. omnilane uses the sub-agent only when a row matches exactly:
+model, effort, mode, workdir, tools, isolation and lifecycle. Same vendor is not
+same model, and nothing is guessed from the CLIs you have installed.
+`--executor native` fails instead of falling back; `--executor cli` forces the
+external CLI. When a same-vendor target goes out through the CLI only because no
+file was given, dispatch now says so.
+
+Either way the sub-agent shares the assistant's tools and filesystem: there is no
+operating-system sandbox, and `advise`/`work` are intent, not enforcement.
+Background, live, named-thread, multi-round, vote and `sysops` work stays on the
+CLI path. Protocol handling needs Python 3.9+. Schemas, the completion file,
+agent reuse and cancellation: [docs/native-executor.md](docs/native-executor.md).
+
+<details>
+<summary><b>Model-role guidance (delegation still required)</b></summary>
+
+<br/>
+
+The best model for a lane does not change with the commander. These are role
+hints, not self-execution exemptions: even a same-model task is delegated.
+A native agent is eligible only when the caller explicitly confirms the exact
+model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
+The commander orchestrates and validates; workers do not delegate again.
+Starting rows below come from the score ceiling alone (AA v5.0.1 snapshot,
+approved 2026-11-10); an inherited ceiling, a failed host probe or a quota can move the
+chain further down.
+
+- **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later). At max, xhigh or high, hardest-coding and hard-judgment start on Fable 5.2 itself; still delegate. At medium the first reachable rows are Astra xhigh (hardest-coding) and Fable 5.2 medium (hard-judgment); at low, Opus 5.5 high and Fable 5.2 low.
+- **Claude Code · Fable 5.1** — at xhigh (50), hard-judgment starts on Fable 5.1 xhigh itself (still delegate); hardest-coding and taste-final start at Sonnet 5.5 xhigh; bulk-mechanical, fast-agentic and long-context at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5.5** — leads ui-draft at high. At xhigh (57), hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium; at medium (48), hardest-coding and hard-judgment start on Opus 5.5 medium itself, and ui-draft and long-context at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5** — only max is still scored (44), so it is an explicitly selected independent reviewer at `max`, not a lane default. At that ceiling hardest-coding starts at Sonnet 5.5 high, hard-judgment at Fable 5.1 medium and long-context at Astra low.
+- **Codex · GPT-6.1 Sol** — leads bulk-mechanical and fast-agentic at medium. At xhigh (52), hardest-coding starts at Opus 5.5 high, hard-judgment at Fable 5.1 xhigh and long-context at Astra medium; at high (50), hardest-coding starts at Sonnet 5.5 xhigh.
+- **Codex · Astra** — leads consult (xhigh) and long-context (medium), and xhigh is second in hardest-coding and taste-final. At xhigh (55), hard-judgment starts at Fable 5.2 low. Select `--vendor codex --effort max` explicitly when needed; explicit model/effort always win.
+- **Codex · GPT-6.1 Terra** — the value Codex rows: second and third in fast-agentic (medium, low), third in bulk-mechanical (high). At xhigh (45), hardest-coding starts on Terra xhigh itself, hard-judgment at Fable 5.1 medium and long-context at Astra low. GPT-5.6 Terra is scored only at max and is in no lane.
+- **Grok Build · Grok 4.7** — leads live-search and coding-overflow, is third in consult, and is the Grok tail of hardest-coding, hard-judgment and taste-final. Its ceiling is 35, so most hard lanes start at Opus 5.5 low. Grok 4.6 is in no lane. Verify API signatures and cited facts.
+- **Antigravity · Gemini 4 Argon / 3.8 Flash** — Argon High (50) holds the Gemini slot in every lane, ahead of Flash. Flash is the cross-vendor fallback after it: High in consult, ui-draft, hard-judgment, live-search and coding-overflow; Medium in hardest-coding, bulk-mechanical, taste-final, long-context and fast-agentic; Low in triage. Do not infer visual taste or controller authority from agent/coding benchmarks.
+
+</details>
+
+## 🖥️ Live Board
+
+Every dispatch — foreground or `--background` — is a job on disk. The Live
+Board is an optional, read-only local workbench over that job store: what each
+model was asked, what it answered, how it was routed, and whether it is still
+running.
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board on desktop — job list on the left, task, public result and model path for the selected job on the right" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board on mobile — searchable job list with status filters" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # start or reuse the server and print its authenticated URL
+omnilane ui status   # inspect the local server
+omnilane ui url      # print the current authenticated URL
+omnilane ui stop     # stop it cleanly
+```
+
+The desktop view keeps the job list and detail pane independently scrollable;
+mobile uses a list/detail flow with Back and Esc navigation. Server-sent events
+stream updates without replacing focused rows, and a short disconnect keeps the
+last snapshot while reconnecting. Pin any loaded task as a reference, then
+select another task to compare both model paths and public results side by side.
+The reference is memory-only and disappears when the page closes. The board
+binds only to `127.0.0.1`, uses a random token, and is read-only. It shows
+`task.txt` and the public `out.txt`, but never raw worker or vendor logs.
+
+Search and state filters apply to the latest 50 retained jobs. **Export visible**
+downloads only the currently visible public metadata as local JSON; it excludes
+tokens, task text, result bodies, workdirs, and raw logs.
+
+The board reads in English, Japanese, Korean, Traditional Chinese and Simplified
+Chinese. It follows the browser language on first load; the switcher in the
+header overrides that and the choice is remembered locally.
+
+Core routing does not need Python; only this UI requires Python 3.9 or newer.
+
+### Foreman completion inbox
+
+Finished dispatches write a private completion record under `$OMNILANE_HOME/inbox/`. A Claude Code `SessionStart` hook binds each foreman's hook-provided session ID to its live process ancestry, and the bundled `UserPromptSubmit` hook atomically delivers up to ten records owned by that session on the foreman's next prompt. Older records without a session ID still use the original dispatch `workdir` scope; claimed records move to `inbox/consumed/`. Set `OMNILANE_INBOX=0` on a dispatch to disable record creation; the default is enabled.
+
+## 📦 Install
+
+Requirements: the vendor CLIs you want to route to, logged in (`codex`,
+`claude`, `grok`, `agy`, and optionally `kimi`, `qwen`, `opencode`) and on
+`PATH` — install only the ones you have; the rest of the table degrades
+automatically. The `openrouter` vendor is the exception: it needs no CLI,
+only `curl` and an `OPENROUTER_API_KEY` in your environment.
+
+Quickest: `./install.sh` — symlinks the skill for the CLIs it finds, prints
+the plugin commands for the rest, shows your effective routing, and offers the
+interactive lane configurator (`--uninstall` reverses it). The installer
+speaks English, 繁體中文, 简体中文, 日本語 and 한국어 (auto-detected from
+your locale; force with `OMNILANE_LANG=zh-TW` etc.). It also offers an
+optional per-CLI **routing reminder**: a marked, reversible block appended to
+each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
+`~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
+versions) so the main loop remembers to consult the table; non-interactive
+installs can pass `OMNILANE_HOOKS=all|none|claude,codex`.
+
+The foreman completion notice requires the Claude Code plugin install; the
+skill-only symlink path does not deliver completion notices. Install the plugin
+from this checkout with:
+
+```bash
+claude plugin marketplace add <path to this repo>
+claude plugin install omnilane@omnilane
+```
+
+Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
+install or `--uninstall` to preview every checkout-owned file action.
+Rollback the installer-owned links and marked reminders with
+`./install.sh --uninstall`.
+
+Manual wiring:
+
+- **Claude Code**: install as a plugin (ships the skill + `/route`,
+  `/route-jobs` commands, and a `SessionStart` hook that auto-injects the
+  routing reminder at session open — no CLAUDE.md edit needed), or drop
+  `skills/omnilane` into `~/.claude/skills/`.
+- **Codex**: drop/symlink `skills/omnilane` into `~/.codex/skills/`.
+- **Grok Build**: `grok plugin install <this repo> --trust`
+- **Antigravity**: `agy plugin install <this repo>` (check first with
+  `agy plugin validate <this repo>`)
+
+### MCP server
+
+`omnilane mcp` starts a zero-dependency, local MCP stdio server so any
+MCP-capable host can discover and call omnilane without installing the skill or
+adding a routing reminder. Configure the host to launch the installed CLI:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+The server exposes `route` plus read-only introspection: `list_lanes`,
+`explain`, `validate`, `dry_run`, `jobs_list`, `jobs_status`, `jobs_result`,
+`jobs_stats`, `jobs_recommend`, `jobs_audit`, `doctor`, and the explicitly opt-in
+`provider_probe`. `route` defaults to read-only `advise` mode. Calls that select `work` must also
+provide an explicit `workdir`.
+
+Node.js is the only runtime requirement (no npm packages). If you prefer
+npm, `npm install -g omnilane` installs the CLI with the MCP server
+included.
+
+## ⚙️ Configure
+
+Three layers, all optional:
+
+1. **Interactive menu** — `scripts/configure.sh` lists configurable lanes, lets you
+   pick vendor → model → effort per lane from suggestions (or free text for
+   future models), and writes the result to `~/.omnilane/routing.local.yaml`.
+   It intentionally skips the multi-vendor `consult` lane; edit that one by
+   hand if needed. `install.sh` offers to run the menu at the end of a normal install.
+   For scripting, `configure set|get|unset|list|diff LANE [SPEC]` edits or inspects the same file
+   without a tty — `set` validates the lane and rejects an unsafe or structurally
+   invalid spec, rolling back on failure.
+2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
+   as `routing.yaml`; local lines win. See `routing.local.yaml.example`.
+3. **`~/.omnilane/local.sh`** — per-machine binaries, proxies, auth wrappers;
+   sourced by every runner, never committed. See `local.sh.example`.
+
+Check the result any time:
+
+```
+scripts/dispatch.sh --list     # effective table, fallback resolution annotated
+```
+
+## 📖 Command reference
+
+```
+omnilane list | route … | jobs … | configure   # global wrapper, works anywhere
+                                               # (install.sh links it into ~/.local/bin)
+eval "$(omnilane completion bash)"             # enable Bash completion for this shell
+source <(omnilane completion zsh)               # enable Zsh completion for this shell
+omnilane completion fish | source              # enable Fish completion for this shell
+omnilane mcp                                   # MCP stdio server (needs Node.js)
+omnilane release-audit [--target VERSION] [--json] # offline, read-only release gate
+omnilane ui start                              # start/reuse the local Live UI; print its URL
+omnilane ui status                             # report whether the Live UI is running
+omnilane ui url                                # print the current authenticated local URL
+omnilane ui stop                               # stop the Live UI
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
+                                               # transport-overlay: path mismatch FAIL; vendor hash or runner drift WARN
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]   # who is asking
+            LANE "TASK"                              # "-" reads task from stdin
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]       # offline candidate-by-candidate decision trace
+dispatch.sh [--json] --validate [--json]           # lint effective routing; no provider calls
+jobs.sh [--json] {list | status ID | result ID}    # JSON result reports metadata, never bodies
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # filter the listing
+jobs.sh wait ID [--timeout N]                     # job exit; 124 timeout; 125 dead worker
+jobs.sh cancel ID                                 # stop a running job: group SIGTERM, then SIGKILL
+jobs.sh rm ID                                     # move one finished/dead job to ~/.Trash (refuses a running job)
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # evidence-gated vendor suggestion
+jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
+jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only; --apply moves them to ~/.Trash
+configure.sh                                        # interactive lane menu
+configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
+```
+
+`configure diff` keeps the same machine-specific availability settings from `local.sh` in both views, so its comparison reflects routing overrides rather than missing local binaries. If either inspection fails, it returns that exit status and names the failed stage instead of printing a comparison.
+
+`configure get` propagates a failed inspection’s status instead of returning partial data or calling the lane unknown. `configure list` reports presence-check errors; genuinely missing or empty overrides still succeed.
+
+`configure set` validates a temporary candidate before publishing it and preserves an existing file’s permission mode. Failures reading existing routing content, unexpected validator failures, or structural errors in the target lane leave the previous configuration untouched; availability warnings and unrelated-lane errors retain their existing handling.
+
+`configure unset` finishes reading and filtering before changing the destination, then retains its existing in-place write behavior. Read/filter errors leave the original content unchanged; write errors are reported without a rollback guarantee.
+
+Bash, Zsh and Fish completion include the documented top-level, goal and job command groups. Choosing a completion only fills command text; it does not run a job action.
+
+Without `--vendor`, `benchmark` discovers vendors from the effective routing list and ignores its `unavailable` display markers. If no benchmark vendor remains, it exits 2 with a no-configured-vendors diagnostic; the default remains a dry-run without provider calls.
+
+Job `list` and `status` use the same observed state. `dead` means the worker PID is invalid or no longer exists and no exit was recorded; it is excluded from `--status running` and selectable with `--status dead`. `result` reports that no exit was recorded instead of calling the dead worker running. A missing PID still uses the existing startup `running` state; no exit code is invented.
+
+Background jobs require Perl supervision so cancellation can terminate the
+supervised process group. Supervision alone adds no whole-job deadline; when
+no job timeout applies, metadata remains `job_timeout: null`. The supervised
+per-call watchdog uses the separate `scripts/lib/call-timeout.pl` supervisor and
+returns 142 on expiry; whole-job deadline
+expiry returns 124. `jobs close` waits up to 11 seconds, including group cleanup.
+Supervised job processes inherit a random `OMNILANE_JOB_TOKEN` (plus
+`OMNILANE_JOB_ID`). After cancellation or whole-job expiry stops the group, the
+supervisor also stops processes that left the group (for example through
+`setsid`) when their environment, read entry by entry, holds exactly that token
+and they started after the job; a normal finish only counts them. `jobs --json
+status` then adds `"leftovers":{"reaped":N,"remaining":M}`, and plain `status`
+appends `leftovers=M` when any remain. On macOS a helper that is a platform
+binary such as `/bin/bash` hides its environment and is not found, nor is a
+process that clears its environment.
+
+`--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
+single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
+workdir; use `jobs.sh threads`, `threads show NAME`, or `threads rm NAME` to
+manage local state without deleting the vendor session.
+
+`jobs recommend` reads only validated public metadata and exit codes. It ranks
+eligible vendors by success rate, sample count, then name; the default minimum
+is three completed jobs. It never reads task/result bodies or changes routing.
+
+`doctor --probe V` makes one bounded advise-mode provider call and returns only
+availability, selected model, timing, and response byte count—not the response
+body. Without `--probe`, doctor remains offline. `benchmark` uses the fixed TSV
+suite in `benchmarks/workloads.tsv`; its default dry-run resolves every route
+without provider calls. `--run` is the explicit call gate, and cost totals are
+estimates based only on values supplied with `--cost-per-call`.
+
+**Big decisions can get a panel, not a person.** The `arbitrate` lane ships
+**disabled** — a panel costs one call per voter per round, so it is opt-in.
+Enable it with `arbitrate: vote codex,claude,grok -` in `routing.local.yaml`,
+or through the configurator, which lets you pick any 1-4 voters from
+codex/claude/grok/gemini. The same question then goes to every voter, the
+opinions come back side by side, and the calling model chairs the verdict.
+Set the effort field to `2` for a debate round — every voter sees the whole
+panel and rebuts only the disagreements. Power users can swap in their own
+gate via the `exec` vendor:
+`arbitrate: exec /path/to/script -` — the script receives
+`MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` and writes its verdict to
+`OUTPUT_FILE` (see `scripts/runners/run-exec.sh`).
+
+Exit codes: `2` bad usage (including an invalid vendor or a requested vendor
+absent from the lane), `3` lane disabled (off), `4` no vendor CLI available in
+the chain or the requested vendor is configured but its CLI is unavailable,
+`5` too few successful Round 1
+voters, `6` no Round 2 rebuttal succeeded, `86` nested dispatch refused, `87`
+lock timeout, `124` whole-job timeout expired; otherwise the worker's own exit
+code passes through.
+
+## 🎭 Modes
+
+- **advise** (default): read-only local analysis with native web/search tools where the vendor supports them. Model/provider traffic stays available; agent mutation tools are restricted. This is not a promise of identical X/web capabilities across vendors.
+- **work**: local file and command work confined to the explicit `--workdir`, with agent-tool network access disabled. This does not disable the model/provider connection. Unsupported enforcement fails before provider startup rather than silently becoming sysops.
+- **sysops**: explicit per-dispatch opt-in to unrestricted agent tools and filesystem/network access. It is never a lane default; the task must state the allowed operations.
+
+The CLI defaults `--workdir` to the caller’s current directory when omitted; task briefs should still specify it explicitly. The MCP `route`/`dry_run` work interface separately requires an explicit `workdir`.
+
+Codex and Claude have distinct policies for all three modes. Agy advise/sysops use isolated per-session native app settings without replacing subscription authentication; Agy 1.1.27 work has bounded new/resume acceptance using four validated tools and the native terminal sandbox: workspace read/write/edit/build and policy-denied outside writes passed. External temp/cache reads are also restricted; settings are explicitly regenerated at each start rather than claimed immutable. A separate real two-turn work live/FIFO check passed readback, outside-write denial and normal close with unchanged sources. Grok advise uses native tool allow/deny rules; its complete single-shot `plain` path has verified native keyword search, page fetching, and a denied write on Grok 1.0.13. It uses internal web-tool IDs and job-local MCP readiness without disabling hooks. An existing nonempty `CONTEXT_MODE_MCP_SENTINEL_DIR` conflicts with this advise scope and stops before provider startup rather than being overwritten. Grok work remains gated by default on macOS because native child-network isolation is Linux-only, and Grok live requires explicit sysops; the advise result does not validate these other paths. OpenRouter remains advise-only; other vendors are not implicitly covered by this four-vendor contract. See the [dated runtime gate](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06) for evidence boundaries.
+
+macOS Grok work: the operator may enable single-shot work **without isolation** using `option.grok-macos-work: unconfined` in `routing.local.yaml` only. Off by default; chains skip Grok for macOS work when off. `doctor --strict` fails when on. See [the option, risks, and required Grok worker brief](docs/grok-unconfined-work.md).
+
+## 🔒 Safety rails
+
+- **No nested dispatch** — workers cannot fan out again (`OMNILANE_DEPTH`
+  guard, exit 86): no runaway agent-calls-agent quota chains.
+- **Serialized codex** — same-target-directory codex dispatches queue behind a
+  lock keyed on the normalized workdir; stale locks from crashed jobs are
+  detected by owner PID and stolen safely.
+- **Watchdog** — every worker runs under `timeout`/`gtimeout`, or a perl-alarm
+  fallback when neither exists (stock macOS), so a hung CLI cannot block
+  forever. The cap applies to **each CLI invocation**, highest priority first:
+  `--timeout SECONDS` beats a per-lane `OMNILANE_TIMEOUT_<LANE>` (the lane
+  upper-cased with `-`→`_`, e.g. `OMNILANE_TIMEOUT_HARD_JUDGMENT`) beats the
+  global `OMNILANE_TIMEOUT`, default 600s. For a live mailbox, it bounds the whole
+  resident CLI session; completing a turn does not stop or reset that clock.
+  It is a per-call hang-guard, not a
+  whole-job budget: a retrying vendor (grok) or the `vote` panel (voters ×
+  rounds) makes several calls, so total wall-clock can be a multiple of this
+  value.
+- **Whole-job fuse** — optional `--job-timeout SECONDS` caps lock wait plus all
+  retries, voters, and rounds under one process-group supervisor. Priority is
+  flag > `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > disabled,
+  with one automatic exception: Codex `work` outside a Git worktree uses the
+  resolved per-call watchdog as its whole-job fuse when none was configured,
+  capped at the supervisor's 999999999-second maximum. This automatic guard
+  needs the bundled Perl supervisor; if unavailable, dispatch warns and keeps
+  non-Git work running through the existing per-call watchdog path, which emits
+  its own warning if no watchdog tool exists.
+  Expiry cleans the supervised process group and returns 124. For a deep audit
+  of a large repository, start around 2–4 hours (7200–14400s)
+  with a 30-minute per-call watchdog; these are recommendations, not defaults.
+- **Background lifecycle** — `--background` workers run in their own process
+  group and survive the caller's exit; killed workers record an exit code, and
+  `jobs.sh status` reports `dead` instead of `running` forever.
+- **Payload caps** — oversized task text is truncated head+tail before it can
+  blow a worker's context.
+
+## 📬 Live mailbox
+
+The per-call `--timeout` bounds the whole resident session. Completing a turn
+does not stop or reset that clock. For Claude and Gemini, an answered session
+that reaches this timeout is classified as success only when every sent turn
+has a vendor SUCCESS result and usable output is available. Its output ends
+with `closed by per-call timeout after Ns; last turn completed`. A trailing
+Gemini cancellation error does not undo completed turns. An unanswered turn
+keeps exit 142, reported as `CALL_TIMEOUT`; `jobs.sh stats` includes it in both
+`failed` and the `call_timed_out` sub-count. Read the answer and use
+`jobs close ID` promptly, or use `--single-shot` for one-shot background work.
+
+A live mailbox is a resident background dispatch, not a one-shot dispatch. Claude and Gemini retain their existing automatic live behavior with `--background`. Codex and Grok default to single-shot; opt in with `--background --live` (Grok additionally requires `--mode sysops --workdir DIR`). The foreman can send another instruction while it is running and is responsible for closing it with `jobs.sh close ID`. The idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "Review the timeout failure"
+# save the printed job ID as $ID
+scripts/jobs.sh send "$ID" "Also inspect the retry path."
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+Foreground dispatch and foreground `jobs retry` print the stored public output even when the job fails, then return its nonzero exit code. Background dispatch keeps its job-ID output.
+
+`watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude, Gemini, Codex, and Grok. Automatic selection remains single-shot for Codex/Grok; only explicit `--live` opts them in. Grok advise rejects `--live` because ACP does not enforce its read-only boundary; normal advise uses single-shot native tool allow/deny rules. `--live` fails fast for unsupported vendors. `--single-shot` forces one-shot execution for every vendor. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
+
+An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
+
+## 🎯 Goal orchestration
+
+`omnilane goal` is a foreman-driven ledger for exploratory work. The caller—an agent session or a human terminal—owns the loop: dispatch a job, receive its result through the completion inbox or `omnilane jobs wait`, decide the next job, and repeat. Job and elapsed-time budgets are unlimited by default; `--budget-jobs N` and `--budget-seconds S` opt in to each hard cap. omnilane supplies bookkeeping only, enforces any caller-supplied caps plus the always-on repeated-failure fuse before each goal dispatch, then assembles the report when the foreman closes the goal.
+
+```bash
+GOAL_ID="$(omnilane goal open "Fix the flaky checkout integration" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "Reproduce the checkout failure and implement the smallest verified fix")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "Fix verified by the checkout integration test"
+omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
+```
+
+Goal state lives under `$OMNILANE_HOME/goals/<goal-id>/`. Use `goal status` to inspect budget usage, fuse trips, and each recorded job as its metadata and exit status land. `goal close` writes `report.md` and prints its path. For one obvious task, dispatch directly. When budget flags are supplied, those caps are hard bounds, not completion promises.
+
+Failure counts are rebuilt from durable job records after an interrupted refresh, without counting a failure twice. `goal close` seals the goal only after publishing its report; if publication fails, correct the error and retry close.
+
+A busy goal prints read-only lock-owner diagnostics and keeps exit code 75. Locks are never automatically removed; a recorded PID is not proof of ownership, so manual verification is required before recovery.
+
+Goal status and reports preserve `dead` and `missing` states instead of calling them running. Unavailable or inconsistent job-status evidence is `unknown`, with no invented exit or failure count. Per-job seconds remain elapsed time since submission, not measured active runtime; goal budgets are unchanged. Incomplete jobs each require one local status check, bounded to two seconds.
+
+After normal cleanup of completed job artifacts, the goal retains its validated exit, completion time and elapsed-to-finish duration. Status and reports mark `artifacts=missing` separately. A job with no recorded completion remains missing or unknown; cleanup never creates a terminal result.
+
+Goal dispatch first journals an intent and reserves one job slot. A one-time claim binds that intent to the generated job ID before launch. `spent_jobs` still counts recorded jobs; `reserved_jobs` covers unresolved submissions. An unresolved or corrupt journal blocks new dispatch and close. Reconciliation repairs records without launching work; it never invents an exit or retries an ambiguous submission.
+
+For threaded goal dispatch, stdout is the exact job ID; the matching thread notice is shown on stderr after the ID is verified. Direct background dispatch keeps its existing notice-and-ID stdout format.
+
+`goal dispatch` launches a background job and does not support `--dry-run`; the option is rejected before goal state changes. To preview routing, use `omnilane dispatch --dry-run [options] LANE "TASK"` directly. Direct previews do not inherit the goal’s working directory; pass `--workdir DIR` when needed.
+
+Persisted goal budgets require JSON integers, not booleans or numeric strings. Optional limits remain `null` or 1..999999999; counters must be nonnegative and fit the supported numeric range. Invalid fields are rejected before ledger updates or dispatch. Workdir paths containing tabs, carriage returns, newlines or NUL are unsupported; ordinary spaces and Unicode remain supported.
+
+If dispatch errors or its result is lost, inspect `goal status` before submitting again: a fresh identical command creates a new intent, so the guarantee is one launch per intent, not global command deduplication. Valid existing worker PID/exit evidence is needed to reconcile a claim; pruning that evidence before reconciliation leaves the reservation unresolved. Already-reconciled goal history survives pruning. Old goals remain readable. No automatic stale-lock or ambiguous-intent recovery is performed.
+
+Background finalization preserves its chosen exit status when HUP/TERM arrives. Completion hooks skip already-consumed records and deliver at most ten records per prompt, including unreadable-record notices.
+
+Do not use goal orchestration for a single obvious task; dispatch that task directly. The default unlimited budgets let the caller keep exploring without omnilane imposing a cap; pass either budget flag only when that limit is wanted.
+
+## ❓ FAQ
+
+<details>
+<summary><b>Do I need all of these subscriptions?</b></summary>
+
+<br/>
+
+No. Every lane is a fallback chain, and dispatch picks the first candidate
+whose CLI is actually installed. With one subscription the whole table collapses
+onto that vendor; lanes with nothing available turn off rather than failing.
+`omnilane doctor` shows exactly what your machine can reach today, and
+`routing.local.yaml.example` ships starter profiles for common situations
+(Claude-focused, Codex-heavy, no-Codex).
+
+</details>
+
+<details>
+<summary><b>Does omnilane send my code somewhere new?</b></summary>
+
+<br/>
+
+No new destination. Dispatch shells out to vendor CLIs you already installed
+and logged into, so your code reaches exactly the vendors you already use.
+Runners strip API-key environment variables before invoking a subscription CLI,
+so a stray key cannot silently switch you onto pay-per-token billing. The one
+exception is the direct-API vendor family (`openrouter`, `deepseek`, `zai`,
+`mistral`, `groq`, `cerebras`), which by definition calls that provider's API
+with the key you set — those are advise-only and never edit files.
+
+</details>
+
+<details>
+<summary><b>Why does Fable 5.2 now lead hard work?</b></summary>
+
+<br/>
+
+The 2026-11-10 snapshot (AA Intelligence Index v5.0.1, approved that day) scores Fable
+5.2 xhigh at 62, above every other row a lane can dispatch (Opus 5.5 xhigh 57,
+Astra xhigh 55). In `hardest-coding` it also leads Terminal-Bench 4.0 (0.616
+against 0.596 for both Astra and Opus 5.5 xhigh) and SciCode (0.656 against
+0.557 and 0.650). In `hard-judgment` it leads every row in the chain on HLE
+(0.689), Briefcase analytical Elo (1927) and CritPt (0.357); the first Codex
+row, GPT-6.1 Sol xhigh, has 0.526, 1691 and 0.317. It is also the most
+expensive row: an AA index run costs about $11,742 at Fable 5.2 xhigh, against
+$4,766 for Opus 5.5 xhigh and $3,746 for Astra xhigh.
+
+Astra xhigh stays second in `hardest-coding` and first in `consult`; Opus 5.5
+high leads `ui-draft`. Fable 5.2 needs Claude Code 2.1.321 or later. The
+operator approved the snapshot on 2026-11-10; the full per-lane
+tables are in [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt).
+
+</details>
+
+<details>
+<summary><b>Why do the lanes never use <code>max</code>?</b></summary>
+
+<br/>
+
+Effort is selected per task, not assumed to improve monotonically. Since the
+2026-11-10 re-rank no lane chain contains a `max` row, `hardest-coding`
+included: every lane is ordered value-first, and `max` costs the most for a
+small gain (Fable 5.2 scores 65 at max, 62 at xhigh). `max` is still available
+when you select it with `--effort max`; explicit `--model` and `--effort`
+always override these route defaults.
+
+</details>
+
+<details>
+<summary><b>What happens when a lane's first-choice CLI is missing?</b></summary>
+
+<br/>
+
+Dispatch walks the chain and uses the first vendor you have. Inspect the
+decision without spending a call:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # candidate-by-candidate trace
+scripts/dispatch.sh --list                     # whole effective table
+scripts/dispatch.sh --dry-run hardest-coding "…"   # fully resolved plan, no provider call
+```
+
+</details>
+
+<details>
+<summary><b>Can a dispatched worker edit my files?</b></summary>
+
+<br/>
+
+Only if you ask for it. Dispatch defaults to `advise`, with per-vendor read-only
+sandbox or native tool permissions and supported web search. For bounded edits,
+use `--mode work` with an explicit `--workdir`; agent-tool networking is disabled
+while the model connection remains available. `--mode sysops` is a separate,
+explicit full-access policy for Codex, Claude, Grok, and Agy, not an alias for
+work. Use it only when the task explicitly permits operations outside work's
+boundary, such as service management. It is never a lane default. Workers
+also cannot dispatch again — the depth guard refuses nested fan-out with exit 86,
+so one command can never spiral into a chain of agents spending your quota.
+
+</details>
+
+<details>
+<summary><b>My dispatch was refused. Which refusal is it?</b></summary>
+
+<br/>
+
+Three codes, three different fixes. Run `omnilane doctor` first — its
+`transport-overlay` check tells you immediately whether the problem is your
+machine's configuration or your request.
+
+`missing-caller-context` — no identity reached the gate. A human adds
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` or `--operator-asserted-human`. A model
+normally needs nothing: dispatch reads its identity from the nearest launching
+CLI, using a bound current-turn rollout for Codex app-server/no-model launches.
+When that fails, run `omnilane whoami` — it either prints a
+`--caller-context FILE` to pass, or says exactly why it cannot (a missing
+`--effort`, a model alias, no scored row). A model must not assert the human
+exemption for itself.
+
+Refusals print a readable reason and next step before the existing JSON on stderr;
+`OMNILANE_REFUSAL_JSON_ONLY=1` keeps the previous output. Read `failed_gate`, `reason` and
+`next_command` first; `eligible_lanes` lists what you can still dispatch.
+
+`runtime-mapping-unverified` — your identity is fine, but the *target* has no
+proven host-local request selector. Either it was never probed, or its probe
+failed. `omnilane doctor` and `--json` show each unproven row as `WARN`: its ID,
+requested and observed model/effort (when recorded), failure class and reason,
+last probe time, evidence paths (not contents), and next step. Environment
+failures name `omnilane resign --retry-failed --vendor VENDOR`; conclusive
+failures never auto-retry and name the request/CLI/provider mapping to inspect.
+Damaged evidence diagnostics name the affected path and explain restoration
+from a known-good backup or explicit fresh probing into a new directory.
+A provider quota refusal will not clear until that quota does.
+
+`invalid-policy-input` with "transport contract evidence changed" — neither of
+the above. The overlay itself will not load, so *every* vendor is refused. The
+usual cause is a vendor CLI upgrade: the overlay pins each vendor's executable
+and runner-script hash, and Codex and Claude evidence paths embed version
+directories, so an upgrade removes the file rather than changing its digest.
+Tagged evidence degrades only its own vendor; untagged evidence, such as the
+probe manifest, still closes the whole gate. Doctor names the file and the
+vendor; `omnilane resign` re-probes and re-signs it, and the dispatch skill
+carries the runbook behind that command.
+
+`target-above-effective-ceiling` — nothing is broken. The target scores above the
+caller. `required_caller_effort` names the effort the calling session would need;
+a caller marked `caller_degraded` was launched by a harness that recorded no
+effort (a Codex heartbeat automation does this) and is held to its model's floor.
+
+</details>
+
+<details>
+<summary><b>What does my mapping's evidence tier mean?</b></summary>
+
+<br/>
+
+It says how strongly the probe pinned down who answered. It does not affect
+whether you can dispatch.
+
+`billed-model` — the provider named the model it charged for. Claude reports it
+in `modelUsage`; grok reports it the same way under `--output-format json`. This
+is the provider's receipt.
+
+`client-echo` — the CLI wrote down the model it asked for, and that record
+matches your request. Codex keeps it in the session rollout; agy writes it to
+`cli.log`. This is the CLI's copy of your order, not the provider's receipt: it
+proves the request left as intended, not who served it.
+
+`selector-only` — the CLI accepted the selector and reported nothing further.
+Every mapping probed before v0.42.6 reads this way. It still dispatches; it is
+simply the weakest of the three, and `omnilane doctor` names the vendors worth
+re-probing.
+
+None of the three certifies upstream provider identity, and none of them can
+refuse a lane. The tier is derived from what a probe produced rather than from
+the vendor, so a CLI that starts reporting a billed model is promoted on its
+next sweep with no change to omnilane.
+
+</details>
+
+## 📊 Defaults and provenance
+
+Default lane assignments follow the Artificial Analysis Intelligence Index
+v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the
+operator on 2026-11-10), merged from 85 AA model pages; each lane is ordered
+value-first on those scores and its own measures, and rows v5.0.1 no longer
+scores are left out rather than carried over
+([evidence](docs/reports/aa-rebaseline-2026-11-10.md)). They are opinions, not laws — the
+configurator and `routing.local.yaml` exist so you can disagree. The full
+working notes, including per-benchmark caveats, live in
+[`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
+
+## ⚠️ Known limitations
+
+- **Antigravity tool calls in print mode are unstable** in current CLI builds
+  (tool calls may be denied or rejected with invalid-argument errors). The
+  long-context lane is designed for content-you-paste-in synthesis, which is
+  unaffected; for repo *inspection* prefer the claude/codex candidates.
+- **Grok effort selection:** explicit `low`, `medium`, `high` and `xhigh` values are passed to the CLI as `--reasoning-effort`; `-` leaves the CLI default. A requested pair still needs an exact scored configuration and local transport proof.
+
+- **Non-Git Codex work is supported.** Some Codex CLI builds may stall outside
+  a Git worktree, so the automatic fuse above bounds that case and cleans the
+  supervised process group. Omnilane neither initializes nor requires a repository.
+
+## ⬆️ Upgrade note: jobs started by an older version
+
+`jobs close` and `jobs cancel` now signal a worker only after `ps` confirms that its start time matches the one recorded in `pid.start` or `inbox.holder.pid.start`. A job started by an older version has no such file, so its PID cannot be confirmed:
+
+- While that PID is in use, `jobs close` and `jobs cancel` send no signal and exit 1, naming the PID. Check it with `ps -o lstart=,command= -p PID`. If it is the job's worker, stop it by hand (`kill -USR1 PID` for `close`, `kill -TERM PID` for `cancel`). If it is not, leave that process alone: the worker is gone, and you can move the job directory to the trash.
+- A dead PID behaves as before, and `status`, `wait` and `rm` keep their `kill -0` answer for such a job.
+- Jobs started after the upgrade are not affected.
+
+These commands, `jobs wait`, `jobs rm` and `dispatch` need a working `ps`. macOS sandboxes block `/bin/ps`, so they refuse there, and `dispatch` starts no job even with `--caller-context`. Two cases need no `ps` and are still answered there: a job with a recorded exit, and a recorded PID that `kill -0` reports as gone. Run them from a normal terminal, or approve the unsandboxed run. That refusal means the PID could not be confirmed, not that the process is dead.
+
+A live PID whose start time file is invalid is not treated as finished either: `status` reads `unknown (invalid start time file)`, and `wait`, `cancel`, `close` and `rm` refuse. Check it with `ps -o lstart=,command= -p PID`. If that PID is not the job's worker, the worker is gone and you can move the job directory to the trash by hand.
+
+A live PID whose start time differs from the recorded one is treated as another process: `status` answers `dead (worker gone, no exit recorded)` and `cancel` answers `not running` while that process keeps running. A note on stderr says so, with the command to compare the two.
 
 ## 🌱 Status
 

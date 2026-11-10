@@ -2,13 +2,6 @@
 
 # omnilane
 
-### ルーティングテーブルは一枚、ハーネスは全部。
-
-*メインループはもう、どのモデルを使うか迷わない。*<br/>
-**Claude Code · Codex · Grok Build · Antigravity** のどれから操縦しても、すべてのサブタスクを<br/>
-その作業が本当に得意なモデルへ——Codex、Claude、Grok、Gemini、Kimi、Qwen、OpenCode、<br/>
-さらに OpenRouter 経由の任意のホスト型モデル——いまのサブスクリプションのまま、または API キー一つで。
-
 <img src="docs/hero.ja.png" alt="omnilane が各サブタスクを Claude Code・Codex・Grok・Antigravity の最適なモデルへ振り分ける" width="820"/>
 
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
@@ -19,785 +12,70 @@
 
 </div>
 
-## 現行版の更新と検証
+## omnilane とは？
 
-評価表だけの更新では、呼び出し引数と実行ファイルの識別情報が同じ行の検証証拠を自動的に再利用します。点数・日付の変更は新しい上限に直ちに反映され、`omnilane resign`、GUI ログイン、通信、オーバーレイの書き換えは不要です。追加・変更された契約や実行ファイルだけ `omnilane resign --vendor VENDOR` で検証してください。拒否メッセージに対象行と GUI ターミナルの要否が表示されます。信頼済みスナップショットが同梱されていれば旧形式 1 もそのまま使えます。不明な古い出典は `omnilane resign --check` で確認してください。初期設定には `omnilane resign --init` を使用します。署名者承認の規則は変更しません。毎日の処理は `omnilane resign --daily`（または `bash scripts/resign-daily.sh`）を使います。失敗は非ゼロ終了となり、Telegram がなくても `omnilane doctor` がローカルの非公開記録を表示します。スケジューラーの自動インストールはありません。
+omnilane は、Claude Code、Codex、Grok Build、Antigravity からのタスクを、作業の種類に応じてレーンに設定されたモデルへ振り分けます。既存のモデルサブスクリプションや対応 API を共通のコマンドで使い、権限と実行結果を確認したいユーザーや AI アシスタント向けのツールです。新たなホスト型サービスではなく、ローカルのルーティング表と検証済みモデルセレクターを使って、対応するネイティブサブエージェントやベンダー CLI を実行します。
 
-API エラー、タイムアウト、未ログイン、利用枠、接続障害の行は `omnilane resign --vendor VENDOR` で再検証できます。非対話実行では各行の失敗から 20 時間待機します。対話実行、または `omnilane resign --retry-failed --vendor VENDOR` は直ちに再試行します。この指定で署名者の承認は省略されません。失敗証拠と時刻フィールドの有無を摘要で保護し、変更・削除された記録は報告して再試行を拒否します。
+## インストールと初回実行
 
-期限切れの証拠は未検証行と同じ経路で更新し、正常な行は再検証しません。実測モデル／強度の不一致は確定した結果なので、`--retry-failed` でも自動再試行しません。`omnilane doctor` で元の要求と CLI／供給側のモデル対応を調べ、原因を修正してから再検証を手配してください。以下の版別記録は当時の動作を説明しています。現行版では本節に従ってください。
-
----
-
-## 🤔 omnilane とは
-
-**何が問題か。** すでに AI コーディングアシスタント——**Claude Code、Codex、
-Cursor、Gemini CLI** など——を使っていますよね。どれも一つのモデルファミリー
-としかやり取りしません。つまり、頼んだ作業はすべて同じモデルで走ります。適任か
-どうかに関係なく——使い捨てのファイル名変更が最も高価なモデルを消費し、本当に
-難しい設計上の問いは、たまたま開いていたモデルに当たります。
-
-**omnilane がすること。** アシスタントにルーティング表を渡します。作業は
-**レーン**——最難関のコーディング、機械的な物量、トリアージ、難しい判断、
-最終的な仕上げ——に振り分けられ、各レーンにはそれに最も強く(そして最も安い)
-モデルが指定されています。アシスタントは自分の得意なレーンを自分で処理し、
-残りは既存のログインを使って別ベンダーの CLI にバックグラウンドで渡します。
-
-**omnilane ではないもの。** プロキシでも、新しいサブスクでも、常時面倒を見る
-サービスでもありません。表一枚とディスパッチスクリプト一本が、既存ツールの裏で
-動くだけです。`./install.sh --uninstall` で痕跡なく削除できます。
-
-**すべてのサブスクは不要です。** 各レーンはフォールバックチェーンであり、実際に
-インストール済みの最初の候補が選ばれます。CLI が一つでも七つでも動作し、どれも
-無いレーンは失敗せず単にオフになります。サブスク一つでも、デフォルト表はその
-ベンダーに収束します。
-
-**[⬇ 60 秒クイックスタートへ](#-60-秒クイックスタート)** · **[❓ FAQ を読む](#-faq)**
-
-## ⚡ 60 秒クイックスタート
-
-ターミナルの前にいる人間であれば、すぐにディスパッチできます。
-
-**1. インストール。**
+対応ベンダー CLI（`codex`、`claude`、`grok`、`agy`）を少なくとも一つインストールしてログインし、Python 3.9+ と npm を用意してください。以下は、そのログイン情報を利用できるデスクトップのターミナルで、人間が実行する手順です。初期化ではベンダーをプローブし、実際にタスクを実行して確認するため、利用枠を消費します。タスクの文面は変更できます。最初のタスクは読み取り専用です。
 
 ```bash
-npm i -g omnilane
+npm i -g omnilane &&
+omnilane resign --init &&
+omnilane doctor &&
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
+omnilane route --mode advise --workdir "$PWD" triage "ファイルを変更せず、このプロジェクトの概要を説明してください"
 ```
 
-またはリポジトリをクローンします。カスタマイズできるルーティングテーブルとスキルも手に入ります。
+初期化が成功し、doctor で必要な対象が利用可能と確認できてから、ディスパッチを続けてください。`--init` は最初のローカルオーバーレイ（CLI セレクターがどのモデルに到達するかの検証記録）を作成・検証し、初回の信頼済み署名者を記録して、バックアップ後の `local.sh` に登録します。既存のオーバーレイがある場合は拒否されるため、アップグレード時は `omnilane resign` を使ってください。初期化には対話型ターミナルが必要です。変更済み・安全でない署名者を承認することはできず、ローカルの自己署名 CLI は別途、人間の確認が必要です。
+
+環境変数の指定は、**ターミナルを操作する人間としての宣言**です。AI アシスタントは自分の呼び出し元情報を使い、この変数や `--operator-asserted-human` を自分で指定してはいけません。設定方法は後半のリファレンスを参照してください。すべてのベンダーは必要ありません。利用できない候補はスキップされ、呼び出し元のスコア上限とローカル検証も確認されます。
+
+## 日常の使い方
+
+`omnilane list` で実効レーンを確認します。初期調査には `triage`、反復的な実装には `bulk-mechanical`、難しいコードの問題には `hardest-coding`、セカンドオピニオンには `hard-judgment` を使います。全レーンはリファレンスにあります。レーンは候補の順序であり、全モデルのインストールや、プロバイダー呼び出し失敗後の別ベンダーへの自動再試行を保証するものではありません。
 
 ```bash
-git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # finds your CLIs, links the skill, speaks your language
+omnilane list
+omnilane route --mode advise --workdir "$PWD" triage "プロジェクトを調べ、主なリスクを列挙してください"
+omnilane route --mode work --workdir "$PWD" bulk-mechanical "README.md の指摘済みの誤字を修正してください"
+omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "テストを実行し、失敗した項目を修正してください"
+omnilane jobs list
+omnilane jobs wait JOB_ID --timeout 60
+omnilane jobs result JOB_ID
 ```
 
-**2. 手元にあるものを確認する。** `doctor` は omnilane が到達できるモデル CLI と API キーを一覧し、実際に何が動くのかを教えてくれます。何も変更しません。
+`JOB_ID` はバックグラウンド実行で表示された ID に置き換えてください。`advise` は読み取り専用です。`work` は指定作業ディレクトリの変更を許可し、エージェントツールのネットワークアクセスを制限しますが、モデルへの接続は維持します。`jobs wait` は終了を待ち、`jobs result` は回答を読み出します。完了したジョブでも、出力・ファイルの変更・関連テストを確認してから成果を受け入れてください。アシスタント自身のネイティブワーカーは、リファレンスにある別の引き渡し・完了報告手順を使います。
 
-```bash
-omnilane doctor
-omnilane list         # the routing table this machine resolves
-```
+## 拒否されたとき、再署名が止まったとき
 
-**3. 自分がオペレーターだと宣言してからディスパッチする。**
+拒否は `omnilane: refused (...)`、読みやすい理由、`Next:` の順に表示され、その後に従来の JSON が続きます。旧形式の出力が必要なスクリプトでは `OMNILANE_REFUSAL_JSON_ONLY=1` を設定してください。まず `failed_gate`、`reason`、`next_command`、`eligible_lanes` を確認します。再署名の要約には、対応が必要なベンダーごとの理由と次のコマンドを示す `attention` リストもあります。`installed: true` は検証済み変更のインストールを示し、すべての行の利用可能性を意味しません。
 
-```bash
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
-omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane ui start     # optional: watch jobs live in your browser
-```
+表の `VENDOR` と `MODEL` は診断に出た名前に置き換えてください。`whoami` は一回のツール呼び出しで単独実行し、パイプ、`&&`、後続コマンドを付けないでください。
 
-> **なぜ export が必要なのか。** omnilane はディスパッチのたびに「依頼している側の能力スコア」と照合するため、誰が依頼しているのかを示す必要があります。人間は `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`（または呼び出しごとに `--operator-asserted-human`）で一度宣言すれば済みます。モデルは自分でこれを宣言できません。モデルの身元は、それを起動した CLI から読み取られます。どちらも無い場合、ジョブが作られる前に `missing-caller-context` で拒否されます。
-
-人間が使うだけならここまでで十分です。次の節では、より実用的な構成、つまり AI アシスタント自身にディスパッチさせる方法を説明します。
-
-## 🤖 AI アシスタントに omnilane を運転させる
-
-アシスタント（Claude Code、Codex、Grok Build、Antigravity）はスキルファイルを読み、レーンの選び方とディスパッチの方法を学びます。マシンごとに一度、4 ステップです。
-
-### ステップ 1：アシスタントにスキルを渡す
-
-`./install.sh` は見つけた CLI すべてにリンクを張ります。手動の場合:
-
-| アシスタント | 方法 |
-|---|---|
-| Claude Code | `claude plugin marketplace add <このリポジトリ>` の後に `claude plugin install omnilane@omnilane`（`/route`、`/route-jobs`、完了インボックスも付属）。または `skills/omnilane` を `~/.claude/skills/` にリンク |
-| Codex | `skills/omnilane` を `~/.codex/skills/` にリンク |
-| Grok Build | `grok plugin install <このリポジトリ> --trust` |
-| Antigravity | `agy plugin install <このリポジトリ>`（先に `agy plugin validate <このリポジトリ>` で確認） |
-
-### ステップ 2：「各 CLI が指定したモデルを本当に選ぶ」ことを一度だけ証明する
-
-モデルが呼び出し元の場合、ディスパッチできるのはこのマシンが**証明済み**のターゲットだけです。たとえば `codex -m gpt-6.1-sol` が本当に Sol を動かしている、ということです。この証明はローカルファイルで、**トランスポートオーバーレイ（transport overlay）** と呼びます。パッケージには同梱されません。これが無いと、すべてのレーンがモデルの呼び出し元を `runtime-mapping-unverified` で拒否し、`omnilane doctor` は `no overlay configured` と警告します。
-
-通常のデスクトップターミナルで作成してください。（ssh ログインのセッションは、CLI がログインに使うキーチェーンを読めないため、すべてを未ログインと報告します。）
-
-```bash
-omnilane resign --init
-```
-
-初回インストールは対話型ターミナルで実行します。既存のオーバーレイや `--daily` との併用は拒否されます。プローブと実際のディスパッチを検証し、初回信頼の署名者を記録した後、`local.sh` をバックアップして既存の設定を保ったままパスを登録します。安全でない署名や署名者の変更は許可しません。[手動の代替手順](docs/transport-overlay.md#first-installation)。
-
-ログインしていないベンダーは `unprobeable` と報告され、未検証のままになるだけです。他のベンダーは動作します。
-
-### ステップ 3：証明を手作業なしで最新に保つ
-
-オーバーレイは各 CLI の実行ファイルをハッシュで固定します。そして **CLI は自分で更新されます**。週に一度ということも珍しくありません。更新後、そのベンダーのレーンはオーバーレイが再署名されるまで拒否されます。`omnilane resign` はこの作業をすべて行います。変わった箇所を見つけ、そのベンダーだけを再プローブし、結果を確認し、差し替え、実際のディスパッチを 1 件送って確かめ、失敗すれば古いファイルに戻します。 出所チャネルはプローブの許可であり、ディスパッチの許可ではありません。
-
-`--init` は初回信頼の署名者も記録します。古いオーバーレイに限り、人間のオペレーターが別途 `omnilane resign --record-signers` を実行してください。既存のチーム記録は Developer ID チャネルになりますが、現在のファイルは Apple の証明書チェーン、チーム、識別名、解決済みインストール場所を満たす必要があります。操作者の信頼設定がない既存の adhoc 記録には、更新によって信頼が追加されません。
-
-```bash
-omnilane resign --record-signers # 古いオーバーレイのみ、人間が実行
-```
-
-自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。adhoc サンプルには正規の識別子がないため、`--team` はその場所にあるチーム全体を承認します。置き換えるまでは、このチームが署名してそこに置いたどのプログラムも、この CLI に限らず出所チェックを通過して再検証の対象になります。`omnilane resign --check` と `omnilane doctor` には `"identifier_family": ""` と表示されます。製品に結び付けるには、正規の署名サンプルをインストールした状態で、`--team` なしで `omnilane resign --trust-origin claude` をもう一度実行します。チーム単位の承認が置き換えられます。
-
-```bash
-omnilane resign --trust-adhoc claude   # 自分で claude を adhoc 署名している場合のみ
-```
-
-固定済みのスクリプトや macOS 以外のネイティブ実行ファイルには `omnilane resign --trust-location VENDOR` を使います。場所の変更や新しいスクリプトは確認後に `omnilane resign --approve VENDOR` で一度だけ許可し、検証後に新しい場所を信頼できます。この許可はチャネルを作りません。`omnilane resign --revoke-origin VENDOR KIND` で取り消せます。`KIND` は `developer-id`、`adhoc`、`script`、`no-platform-signature`、または全位置チャネルを表す `location` です。空の取り消しリストも古い信頼設定より優先されます。
-
-`omnilane resign --check` と `omnilane doctor` は種別とチャネル、拒否時は観測したチームと識別名を表示します。壊れた署名、検証不能、未署名の macOS ネイティブファイル、壊れた別ホストの設定は必ず停止し、承認では修復できません。出所とログインの問題は別の案内になります。有効なインストールや当該ホストのバックアップを復元してから再試行してください。 出所による停止は実行ファイルが変更された場合に適用されます。固定済みで未変更の実行ファイルは、未検証行の補完、再試行、証拠更新の既存ルールを維持します。
-
-チャネルはホスト固有の `$OMNILANE_HOME/transport-origins.local.json` に 0600、原子的更新、変更前バックアップ付きで保存されます。ホスト間でコピーしないでください。初回使用ポリシーは Developer ID に加え、インストール場所にひも付く自己署名、スクリプト、プラットフォーム署名のないツールを対象とします。第 2 期の初回プローブで有効になり、現在の本番コードはまだこのインターフェースを呼び出していません。初回の信頼は現在、記録済みの識別情報・パス・ポリシー項目がないベンダー単位で判断し、ホスト単位ではありません。他のベンダーの記録があれば拒否するかは、第 2 期の接続時に決定します。アシスタントは信頼、承認、記録、取り消しのコマンドを自分で実行してはいけません。
-
-あとは毎日実行させます。スケジューラーは何でも構いませんが、必ず**デスクトップのログインセッション内**で動かしてください（CLI にはキーチェーンが必要です）。macOS なら LaunchAgent が使えます。
-
-```bash
-cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
-  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
-</dict></plist>
-EOF
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
-```
-
-このリリースでは、デスクトップターミナルからの `omnilane resign` を実機で検証しました。Codex の実際の自己更新に対する無人再署名も含みます。上の LaunchAgent は例であり、それ自体は検証していません。`launchctl kickstart gui/$(id -u)/dev.omnilane.resign` で手元のマシンで確認してください。
-
-`omnilane resign` の終了コード:
-
-| 終了コード | 意味 | あなたがすること |
+| 表示 | 意味 | 次のコマンド |
 |---|---|---|
-| 0 | 変更なし、または変更されたものはすべて再署名済み | 何もしない |
-| 10 | `--check` のみ: 何かが変わった | `omnilane resign` を実行 |
-| 20 | 出所、ログイン、または検証に対応が必要 | 個別の案内に従う。承認で壊れた署名、未署名、検証不能を回避できない |
-| 30 | 再署名したオーバーレイが実ディスパッチに失敗し、前のものに戻した | 何も壊れていない。ログを読む |
-| 2 | オーバーレイが未設定 | ステップ 2 を行う |
-| 40 (`EXIT_HOST_CONFIG`) | ホスト設定の読み込み失敗、または設定済みオーバーレイが読めない・JSON が不正。変更なし | stderr のパスと原因を修正。定期ジョブの通知方針は管理者が決める |
-| 50 (`EXIT_BUSY`) | このホストで別の `omnilane resign` が実行中。読み書きなし | それが終わってから実行する |
-| 60 | 検証済みセレクターは反映済み。保持された残りのセレクターは再検証待ち | `omnilane doctor` で原因を確認し、解消後に `omnilane resign` を実行 |
-
-引数の使い方エラーも終了コード 2 です。設定済みだが読めないオーバーレイは 2 ではなく 40 です。
-
-### ステップ 4：アシスタントの中から試す
-
-アシスタントに `omnilane whoami` を実行させてください。自分がどのモデル・どの effort で動いているかと、スコアが返るはずです。続けて小さな仕事を委任させます。「omnilane で triage レーンに、このリポジトリの TODO コメントの数を数えさせて」。
-
-拒否された場合、どの確認で失敗したのか、何をすべきかが拒否メッセージに書かれています。
-
-| `failed_gate` | 平たく言うと | 直し方 |
-|---|---|---|
-| `caller-identity` | どのモデルが依頼しているのか omnilane に分からない | `omnilane whoami` をそのツール呼び出しの**唯一のコマンド**として実行させる。特に Codex は `; echo $?`、`&&`、パイプの後ろでは読み取れない |
-| `target-transport` | このマシンがそのターゲットを証明していない、またはその後 CLI が更新された | `omnilane resign`（ステップ 3） |
-| `downward-ceiling` | ターゲットのモデルのスコアが依頼側より高い。モデルは横か下にしか委任できない | 拒否メッセージの `eligible_lanes` から選ぶか、より高い effort でアシスタントを起動する |
-
-既存のスレッドを起こす Codex のオートメーションは effort を記録しません。omnilane はその呼び出し元を拒否する代わりに、そのモデルの最低スコアに制限します。安いレーンはそのまま動き、高いレーンはどの effort なら届くかを教えます。
-
-## 🧭 仕組み
-
-omnilane は、**どの** agentic CLI のメインループでも、サブタスクをレーンに
-分類し、各レーンをその作業が最も得意なベンダーへヘッドレスで
-ディスパッチさせる仕組みです。既存のサブスクリプションログインをそのまま
-使います(`openrouter` vendor は例外:CLI 不要、API キー一つで直接接続):
-
-```mermaid
-flowchart LR
-    M["メインループ<br/><i>任意の CLI</i>"] --> T{{"routing.yaml<br/>一枚の共有テーブル"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
-    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
-    T -->|taste-final| C3["Claude — Sonnet 5.5"]
-    T -->|long-context| C4["Codex — GPT-6 Astra"]
-    T -->|live-search| C5["Grok — 4.7"]
-    T -->|"arbitrate(オプトイン)"| C6["vote — 1-4 モデルパネル"]
-```
-
-- **`routing.yaml`** — レーン → ベンダー+モデル+推論エフォート。
-  一つのファイルを四つのハーネスが共有します。
-- **フォールバックチェーン** — レーンには複数の候補を並べられます
-  (`codex … | claude … | off`)。実際にインストールされている最初のベンダー
-  CLI が選ばれるため、一〜二社の契約でも同じテーブルが機能します。
-- **`scripts/dispatch.sh [--vendor V] <レーン> "<タスク>"`** — テーブルを
-  解決し、該当ベンダーの CLI をヘッドレスで起動します。`--vendor` は
-  指定ベンダーに固定し、フォールバックしません。
-- **`skills/omnilane/SKILL.md`** — 四つのハーネス共通のスキル:
-  自分のモデルを特定し、自分のレーンは自前で実行、残りはディスパッチ。
-- **`omnilane mcp`** — 同じルーティングを MCP stdio サーバーとして提供。
-  スキルではなく MCP で統合するホスト向け。
-
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **一枚のテーブル**<br/>四つのハーネスで共有 | 🪂 **フォールバックチェーン**<br/>手持ちの CLI へ自動降格 | 🗳️ **オピニオンパネル**<br/>重大な判断はマルチモデル投票 |
-| 🔒 **安全機構**<br/>ロック · ウォッチドッグ · ネスト禁止 | 🌏 **五言語対応**<br/>インストーラーが母語で対話 | ↩️ **完全可逆**<br/>`--uninstall` で全て元通り |
-
-</div>
-
-## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
-
-AA `aa-v5.0.1-2026-11-10-v1`：**approved（2026-11-10 に操作者が承認）**。AA Intelligence Index v5.0.1 に切り替え、採点済み構成は 68 件。Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54。Claude Code 2.1.321 以降が必要）を追加し、v5.0.1 で採点されなくなった構成を外しました。下の表はすでにこれに従っています：Fable 5.2 xhigh が hardest-coding と hard-judgment の第一候補になり、Claude Opus 5 がスコアを失ったため long-context は GPT-6 Astra (medium) が先頭です。Gemini 4 Carbon はスコアがありますがディスパッチ可能な ID がなく、どのレーンにも入っていません。各ホストで一度 `omnilane resign` を実行し、新しい表に対して overlay を再検証する必要があります。[証拠](docs/reports/aa-rebaseline-2026-11-10.md)。`aa-v4.3.2-2026-10-28-v1`（2026-10-28 承認）を置き換えます。
-
-AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
-
-AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
-
-| レーン | 第一候補 | バックアップ | 用途 |
-|---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
-| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | デザインシステム／参照画像がある場合だけの UI ドラフト |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex クォータ不足時の中級コーディング逃がし弁 |
-| 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
-
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
-
-**バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
-ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
-何もインストールされていなければレーンは `off` に降格します。
-
-> **Claude Fable 5.2 が hardest-coding と hard-judgment の先頭になりました（AA v5.0.1 スナップショット、2026-11-10 承認）。** スコアと並べ替えは[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-10.md)を参照してください。レーンごとの比較は [FAQ](#-faq) にあります。
-
-### 自然言語コンサルテーション
-
-`omnilane` スキルまたは `/route` では、普通に
-**「Opus にこのアーキテクチャを厳しく検討してもらって。」** と頼めます。
-自然言語を解釈するのは Agent Skill であり、`dispatch.sh` に自由文の shell
-パーサーを追加するものではありません。
-
-- 能力だけを尋ねる質問には、該当レーンで現在最初に利用可能なモデルを回答し、
-  モデル呼び出しは行いません。
-- 一般的なベンダー名は、そのベンダー用に `consult` で設定された候補を使います。
-- Opus などの標準モデル別名はスキル表の正確なモデルファミリーに固定します。
-  明示した対象が存在しない、または CLI が使えない場合は明確に失敗し、別の
-  ベンダーやモデルファミリーへフォールバックしません。
-
-<details>
-<summary><b>モデルの役割ガイド（それでも委任は必要）</b></summary>
-
-<br/>
-
-レーンに最適なモデルは、誰がコントローラーかによって変わりません。以下は役割の
-目安であり、自分で実行してよいという例外ではありません。同じモデルでも委任します。
-ネイティブエージェントを使えるのは、呼び出し側がモデル、effort、モード、作業
-ディレクトリ、ツール、分離方式、ライフサイクルがすべて一致すると明示した場合だけで、
-それ以外は CLI を使います。コントローラーは編成と検証を担い、ワーカーは再委任しません。
-以下の開始位置はスコア上限だけから求めたものです（AA v5.0.1 スナップショット、2026-11-10 承認）。
-継承された上限、ホストでのプローブ失敗、クォータによって、チェーンがさらに下へ進む
-ことがあります。
-
-- **Claude Code · Fable 5.2**——上限が最も高いプロンプトレベルのコントローラー（Claude Code 2.1.321 以降が必要）。max、xhigh、high では hardest-coding と hard-judgment の第一候補が Fable 5.2 自身ですが、それでもディスパッチします。medium では最初に届くのが Astra xhigh（hardest-coding）と Fable 5.2 medium（hard-judgment）、low では Opus 5.5 high と Fable 5.2 low です。
-- **Claude Code · Fable 5.1**——xhigh（50）では、hard-judgment は Fable 5.1 xhigh 自身から始まります（それでも委任します）。hardest-coding と taste-final は Sonnet 5.5 xhigh から、bulk-mechanical、fast-agentic、long-context は GPT-6.1 Sol medium から始まります。
-- **Claude Code · Opus 5.5**——ui-draft の先頭は Opus 5.5 high です。xhigh（57）では hardest-coding が Astra xhigh から、hard-judgment が Fable 5.2 medium から始まります。medium（48）では hardest-coding と hard-judgment が Opus 5.5 medium 自身から、ui-draft と long-context が GPT-6.1 Sol medium から始まります。
-- **Claude Code · Opus 5**——スコアが残っているのは max（44）だけなので、`max` で明示的に指名する独立レビュー役であり、どのレーンのデフォルトでもありません。この上限では hardest-coding が Sonnet 5.5 high から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。
-- **Codex · GPT-6.1 Sol**——bulk-mechanical と fast-agentic の先頭は GPT-6.1 Sol medium です。xhigh（52）では hardest-coding が Opus 5.5 high から、hard-judgment が Fable 5.1 xhigh から、long-context が Astra medium から始まります。high（50）では hardest-coding が Sonnet 5.5 xhigh から始まります。
-- **Codex · Astra**——consult（xhigh）と long-context（medium）の第一候補で、xhigh は hardest-coding と taste-final の 2 番手でもあります。xhigh（55）では hard-judgment が Fable 5.2 low から始まります。必要なら `--vendor codex --effort max` を明示的に指定してください。明示した model／effort が常に優先されます。
-- **Codex · GPT-6.1 Terra**——Codex のコスパ枠です。fast-agentic の 2・3 番手（medium、low）、bulk-mechanical の 3 番手（high）。xhigh（45）では hardest-coding が Terra xhigh 自身から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。GPT-5.6 Terra はスコアが max だけで、どのレーンにも入っていません。
-- **Grok Build · Grok 4.7**——live-search と coding-overflow の第一候補、consult の 3 番手で、hardest-coding、hard-judgment、taste-final では Grok の末尾を担います。上限が 35 なので、難しいレーンの多くは Opus 5.5 low から始まります。Grok 4.6 はどのレーンにも入っていません。API シグネチャと引用した事実は必ず検証してください。
-- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）はすべてのレーンで Gemini の枠を占め、Flash より前に並びます。Flash はその後ろのベンダー横断フォールバックで、consult、ui-draft、hard-judgment、live-search、coding-overflow では High、hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic では Medium、triage では Low を使います。エージェント／コーディングのベンチマークから、見た目のセンスやコントローラーとしての適性を推し量らないでください。
-
-</details>
-
-## アシスタント自身のサブエージェントを使う
-
-omnilane は既定でベンダーのコマンドラインツールに仕事を渡します。仕事をすべきモデルがアシスタント**自身のベンダー**のものである場合、別の CLI を経由するのは回り道です。ログインがもう一つ、プロセスがもう一つ、その CLI が更新されれば壊れる箇所がもう一つ増えます。多くのアシスタントは自分でサブエージェントを起動でき、omnilane はそのための計画を立てられます。方法は二つです。
-
-**アシスタントとまったく同じものを動かすワーカー（`--inherit`）。** アシスタントは*モデルも effort も指定せずに*サブエージェントを起動するので、ワーカーは呼び出し元の複製です。複製が本体より強くなることはなく、omnilane のスコア確認が防ごうとしているのはそれだけです。したがってこの経路にはベンダー CLI もトランスポートオーバーレイも不要で、呼び出し元の effort が不明でも、オーバーレイが古くなっていても動きます。
-
-```sh
-omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
-omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
-# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
-#    model argument, checks the result, and records it:
-omnilane jobs --json complete-native JOB_ID /absolute/completion.json
-omnilane jobs --json status JOB_ID
-```
-
-正直な部分: ハンドオフには `satisfies_lane_target: false` と記されます。ここでのレーンは仕事の種類を示すラベルにすぎません。この方法で得た結果は「アシスタント自身のサブエージェント」によるものであり、「hardest-coding のモデル」によるものでは決してありません。呼び出し元より強いモデルを必要とするレーンは、引き続き拒否されます。`--inherits-caller-runtime` は「自分のサブエージェントツールはそう動く」というアシスタント自身の申告であり、omnilane からは観測できません。アシスタントごとに分かっていること:
-
-| アシスタント | モデル引数なしのサブエージェント |
-|---|---|
-| Claude Code | メイン会話のモデルを使い、effort はセッションのものを引き継ぐと公式ドキュメントに明記（エージェント定義が指定する場合を除く）。組み込みの general-purpose エージェントで `CLAUDE_CODE_SUBAGENT_MODEL` が未設定のとき成立。本リリースで端から端まで実行済み |
-| Codex | モデルも effort も付けない `collaboration.spawn_agent`。本リリースで端から端まで実行済み |
-| Grok Build | 親のモデルを引き継ぐとドキュメントに明記（同梱の `general-purpose` は `model: inherit`）。effort については記載なし。本リリースでは未実行 |
-| Antigravity | `agy` 1.2.7 にサブエージェントツールが見当たらない。利用不可 |
-
-**アシスタントのツールが選択できる特定のモデル。** ツールが実際に受け付けるものを capability ファイルに記述し（`omnilane native-context` の出力から始め、正確なモデルと effort の組ごとに行を追加）、通常の `omnilane route` に `--native-context FILE` を渡します。omnilane がサブエージェントを使うのは、ある行が完全に一致したときだけです。モデル、effort、モード、workdir、ツール、分離方式、ライフサイクルのすべてです。同じベンダーは同じモデルではなく、インストール済みの CLI から推測することもありません。`--executor native` はフォールバックせず失敗し、`--executor cli` は外部 CLI を強制します。ファイルが無いというだけで同一ベンダーのターゲットが CLI を経由した場合、ディスパッチはそれを明示するようになりました。
-
-どちらの場合も、サブエージェントはアシスタントのツールとファイルシステムを共有します。OS レベルのサンドボックスは無く、`advise`／`work` は意図であって強制ではありません。バックグラウンド、常駐、名前付きスレッド、複数ラウンド、投票、`sysops` は CLI 経路のままです。プロトコル処理には Python 3.9 以上が必要です。スキーマ、完了ファイル、エージェントの再利用とキャンセル: [docs/native-executor.md](docs/native-executor.md)。
-
-## 🖥️ Live Board
-
-すべてのディスパッチは——フォアグラウンドでも `--background` でも——ディスク上の
-ジョブとして記録されます。Live Board はそのジョブストアの上に載る、任意かつ
-読み取り専用のローカルワークベンチです:各モデルに何を頼み、何が返り、どう
-ルーティングされ、まだ実行中かを一目で確認できます。
-
-<div align="center">
-
-<img src="docs/live-board.png" alt="Omnilane Live Board デスクトップ表示——左にジョブ一覧、右に選択中ジョブのタスク・公開結果・モデルパス" width="820"/>
-
-<img src="docs/live-board-mobile.png" alt="Omnilane Live Board モバイル表示——検索可能なジョブ一覧とステータスフィルター" width="280"/>
-
-</div>
-
-```bash
-omnilane ui start    # サーバーを起動または再利用し、認証済み URL を表示
-omnilane ui status   # ローカルサーバーの状態を確認
-omnilane ui url      # 現在の認証済み URL を表示
-omnilane ui stop     # 正常に停止
-```
-
-デスクトップではジョブ一覧と詳細ペインを別々にスクロールでき、モバイルでは
-一覧／詳細の切り替えと戻る操作、Esc に対応します。Server-Sent Events(SSE)は
-フォーカス中の行を作り直さず更新し、短い切断では最後のスナップショットを保持して
-再接続します。読み込み済みジョブを参照として固定し、別のジョブを選ぶと、モデル
-経路と公開結果を横並びで比較できます。参照スナップショットはブラウザのメモリ内
-だけに保持され、ページを閉じると消えます。`127.0.0.1` のみにバインドし、
-ランダムトークンで保護された読み取り専用画面です。`task.txt` と公開用 `out.txt`
-のみを表示し、ワーカーや
-ベンダーの生ログは表示しません。
-
-画面は英語・日本語・韓国語・繁体字中国語・簡体字中国語で読めます。初回はブラウザ
-の言語に従い、ヘッダーの切り替えで上書きでき、選んだ言語はローカルに記憶されます。
-
-コアルーティングに Python は不要で、この UI のみ Python 3.9 以降が必要です。
-
-## 📦 インストール
-
-前提:ルーティングしたいベンダー CLI(`codex`、`claude`、`grok`、`agy`、
-任意で `kimi`、`qwen`、`opencode`)がログイン済みで `PATH` 上にあること——
-**持っている分だけで OK**、足りないレーンは自動的に降格します。
-`openrouter` vendor は例外で、CLI は不要——`curl` と環境変数の
-`OPENROUTER_API_KEY` だけで動きます。
-
-最速:`./install.sh` — 本機の CLI を検出してスキルを接続し、残りのプラグイン
-コマンドを表示、実効ルーティングを出力し、最後に対話式設定メニューを
-提案します(`--uninstall` で元に戻せます)。インストーラーはシステム言語に
-合わせて英/繁中/簡中/日/韓を自動選択(`OMNILANE_LANG=ja` で強制可)。
-さらに任意で、各 CLI の指示ファイル(`~/.claude/CLAUDE.md`、
-`~/.codex/AGENTS.md`、`~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——パスは
-CLI バージョンにより異なる場合あり)へマーカー付きの可逆な
-**常駐ルーティングリマインダー**を追記できます。非対話インストールは
-`OMNILANE_HOOKS=all|none|claude,codex` を指定。手動接続:
-
-`./install.sh --check` は変更せずドリフトを検査します。インストールまたは
-`--uninstall` に `--dry-run` を加えると所有対象の操作を事前表示します。
-インストーラー所有のリンクとマーカー付きリマインダーを戻すには、
-`./install.sh --uninstall` を実行します。
-
-- **Claude Code**:プラグインとしてインストール(`/route`、`/route-jobs`
-  コマンドに加え、セッション開始時にルーティングリマインダーを自動注入する
-  `SessionStart` フック付き。CLAUDE.md の編集は不要)、または
-  `skills/omnilane` を `~/.claude/skills/` へ。
-- **Codex**:`skills/omnilane` を `~/.codex/skills/` へ配置/リンク。
-- **Grok Build**:`grok plugin install <このリポジトリ> --trust`
-- **Antigravity**:`agy plugin install <このリポジトリ>`(先に
-  `agy plugin validate` で確認)
-
-### MCP サーバー
-
-`omnilane mcp` は依存ゼロでローカル実行される MCP stdio サーバーを起動し、
-MCP 対応ホストがスキルの導入やルーティングリマインダーなしで omnilane を
-発見・呼び出しできるようにします。ホスト側の設定でインストール済み CLI を
-指定してください:
-
-```json
-{
-  "mcpServers": {
-    "omnilane": {
-      "command": "omnilane",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-サーバーは `route` に加えて、読み取り専用の照会ツール `list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor` を公開します。
-`route` のデフォルトは読み取り専用の `advise` モードで、`work` を選ぶ呼び
-出しには明示的な `workdir` が必須です。
-
-実行時に必要なのは Node.js のみ(npm パッケージは不要)。npm 派なら
-`npm install -g omnilane` で MCP サーバーごと CLI をインストールできます。
-
-## ⚙️ カスタマイズ
-
-三層、すべて任意:
-
-1. **対話メニュー** — `scripts/configure.sh` が設定可能なレーンを表示し、レーンごとに
-   ベンダー → モデル → エフォートを選択(候補リスト+自由入力)、結果を
-   `~/.omnilane/routing.local.yaml` に書き込みます。複数ベンダーの `consult`
-   は意図的に除外されるため、変更する場合は手動編集します。
-2. **`~/.omnilane/routing.local.yaml`** — 手書きのオーバーライド。
-   書式は `routing.yaml` と同じで、ローカルが優先。
-3. **`~/.omnilane/local.sh`** — マシン固有のバイナリパス、プロキシ、認証
-   ラッパー。全ランナーが読み込み、コミットされません。
-
-確認はいつでも:
-
-```
-scripts/dispatch.sh --list     # 実効テーブル(フォールバック解決を注記)
-```
-
-## 📖 コマンドリファレンス
-
-```
-eval "$(omnilane completion bash)"             # 現在の Bash で補完を有効化
-source <(omnilane completion zsh)               # 現在の Zsh で補完を有効化
-omnilane completion fish | source              # 現在の Fish で補完を有効化
-omnilane mcp                                   # MCP stdio サーバー(Node.js が必要)
-omnilane release-audit [--target VERSION] [--json] # オフライン・読み取り専用のリリースゲート
-omnilane ui start                              # ローカル Live UI を起動または再利用し、URL を表示
-omnilane ui status                             # Live UI の稼働状態を表示
-omnilane ui url                                # 現在の認証済みローカル URL を表示
-omnilane ui stop                               # Live UI を停止
-omnilane doctor [--json]                       # ルーティングとローカル実行環境を読み取り専用で診断
-# transport-overlay：実行ファイルのパス不一致は FAIL、ベンダーのハッシュやランナーの変更は従来どおり WARN
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
-            [--caller-context FILE | --operator-asserted-human]   # who is asking
-            LANE "TASK"                              # "-" で stdin から読む
-dispatch.sh [--json] --list [--json]
-dispatch.sh [--json] --explain LANE [--json]       # 候補ごとの決定理由をオフライン表示
-dispatch.sh [--json] --validate [--json]           # プロバイダーを呼ばず実効ルーティングを検証
-jobs.sh [--json] {list | status ID | result ID}    # JSON は本文を返さずメタデータのみ
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 一覧を絞り込み
-jobs.sh wait ID [--timeout N]                     # ジョブ終了値。124 はタイムアウト、125 はワーカー消失
-jobs.sh cancel ID                                 # 実行中ジョブを停止:グループに SIGTERM、その後 SIGKILL
-jobs.sh rm ID                                     # 完了/停止ジョブを1件 ~/.Trash へ移動(実行中は拒否)
-jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # ローカル成功率とルーティング集計
-jobs.sh audit [--last N] [--json]                  # 読み取り専用のジョブ整合性・プライバシー検査
-jobs.sh prune [--keep N] [--apply]                # 既定はプレビューのみ。完了ジョブだけを対象。--apply は ~/.Trash へ移動
-configure.sh                                        # 対話式レーンメニュー
-configure.sh set|get|unset|list|diff LANE [SPEC]    # routing.local.yaml を非対話で編集/確認
-```
-
-`configure diff` は両方の表示で `local.sh` の同じマシン固有の利用可否設定を保持し、ローカルバイナリの設定欠落ではなくルーティング上書きの差分を比較します。 どちらかの確認に失敗すると、比較結果を表示せず、その終了ステータスを返して失敗した段階を示します。
-
-`configure get` は確認に失敗した場合、その終了ステータスを返し、部分的なデータを返したりレーン不明と誤報したりしません。`configure list` は存在確認のエラーを報告します。上書きが本当に存在しない場合や空の場合は従来どおり成功します。
-
-`configure set` は一時候補を検証してから公開し、既存ファイルのパーミッションを維持します。既存ルーティング内容の読み取り失敗、予期しない検証処理の失敗、対象レーンの構造エラーでは既存設定を変更しません。利用可否の警告や他レーンのエラーの扱いは従来どおりです。
-
-`configure unset` は読み取りと絞り込みを完了してから、従来どおり既存の保存先へ書き込みます。読み取り・絞り込みの失敗では元の内容を変更しません。書き込みの失敗は報告しますが、ロールバックは保証しません。
-
-Bash・Zsh・Fish の補完には、文書化されたトップレベル、ゴール、ジョブのコマンド群が含まれます。補完を選んでもコマンド文字列を入力するだけで、ジョブ操作は実行しません。
-
-`--vendor` を指定しない場合、`benchmark` は有効なルーティング一覧からベンダーを取得し、表示用の `unavailable` を除外します。対象ベンダーが残らない場合は未設定の診断を表示して終了コード 2 を返します。既定は引き続きプロバイダーを呼び出さないドライランです。
-
-ジョブの `list` と `status` は同じ観測状態を使います。`dead` は、終了コードが記録されておらず、ワーカーの PID が無効または存在しない状態です。`--status running` から除外され、`--status dead` で選択できます。`result` は稼働中とは表示せず、終了コード未記録と報告します。PID がまだない起動中のジョブは従来どおり `running` で、終了コードを推測しません。
-
-バックグラウンドジョブには Perl による監視が必要で、キャンセル時に監視対象のプロセスグループを停止します。
-監視自体はジョブ全体の期限を追加しません。適用されるタイムアウト設定がない場合、メタデータは `job_timeout: null` のままです。
-監視下の呼び出し単位のタイムアウトは Perl alarm を使い、142 を返す場合があります。ジョブ全体の期限切れは 124 を返します。
-`jobs close` はプロセスグループの後処理を含めて最大 11 秒待機します。
-
-`--thread NAME` は単発ディスパッチ間で名前付きの Claude、Codex、Grok、
-Gemini 会話を継続します。0.33.0 ではベンダー、モデル、effort、物理 workdir
-を固定します。ローカル状態は `jobs.sh threads`、`threads show NAME`、
-`threads rm NAME` で管理でき、削除してもベンダー側のセッションは残ります。
-
-終了コード:`2` 使い方エラー(無効なベンダー、または指定ベンダーがレーンに
-ない場合を含む)、`3` レーン無効(off)、`4` チェーン内に利用可能な CLI がない、
-または設定済みの指定ベンダー CLI が利用不可、`5` Round 1 の成功投票者不足、
-`6` Round 2 の反論全失敗、`86` ネストディスパッチ拒否、`87` ロック待ちタイムアウト、
-`124` ジョブ全体タイムアウト。
-それ以外はワーカー自身の終了コードを透過。
-
-## 🎭 モード
-
-- **advise（既定）**: ローカル読み取り専用分析。対応ベンダーのネイティブ検索ツールとモデル接続は使用可能ですが、変更ツールは制限します。X／ウェブ検索機能が全ベンダーで同等とは限りません。
-- **work**: ファイル編集とコマンド実行を明示した `--workdir` 内に制限し、エージェントツールのネットワークを無効化します。モデル接続は維持します。強制境界が未対応ならモデル起動前に停止し、sysops へ暗黙に移行しません。
-- **sysops**: 派遣ごとの明示指定でツール、ファイル、ネットワークの制限を解除します。レーンの既定値にはせず、タスクに許可する操作を記載します。
-
-CLI で `--workdir` を省略すると呼び出し元の現在のディレクトリを使いますが、タスク指示では明示してください。MCP `route`／`dry_run` の work インターフェースでは、別途明示的な `workdir` が必要です。
-
-Codex と Claude は三つのモードに個別のポリシーを適用します。Agy advise／sysops は認証を置き換えず、独立したセッション設定を使用します。Agy 1.1.27 work は検証済みの四つのツールとネイティブ端末サンドボックスを使い、新規／再開の限定検証で作業領域内の読み書き、編集、ビルドと領域外書き込み拒否を確認しました。外部一時ファイル／キャッシュの読み取りも制限されます。設定は起動ごとに明示的に再生成し、不変とは主張しません。別途、実際の work ライブ／FIFO で二つのターンを実行し、前ターンの読み戻し、領域外書き込み拒否、正常終了とソース不変を確認しました。Grok advise はネイティブツールの許可／拒否規則を使用します。子プロセスのネットワーク隔離が Linux 限定のため、macOS の Grok work はデフォルトで起動前に停止します。Grok ライブは明示的な sysops が必要です。検索の可用性やユーザーフックの影響は実際のツールイベントで検証し、終了コードだけでは証明しません。OpenRouter は advise 専用で、他のベンダーはこの四ベンダー契約に自動的には含まれません。
-
-macOS の Grok work：オペレーターは `routing.local.yaml` にのみ `option.grok-macos-work: unconfined` を追加することで、**隔離なし**の単発 work を有効にできます。既定は無効で、無効時は macOS の work チェーンが Grok をスキップします。有効時は `doctor --strict` が失敗します。詳細は[オプション、リスク、Grok ワーカー用の必須タスクブリーフ](docs/grok-unconfined-work.md)を参照してください。
-
-Grok 1.0.13 の単発 `plain` advise は完全なツールセットで実際の検索、ページ取得、書き込み拒否を検証済みです。内部ウェブツール ID とジョブ専用の MCP 準備状態を使い、フックは無効化しません。既存の空でない `CONTEXT_MODE_MCP_SENTINEL_DIR` は上書きせず、競合としてモデル起動前に停止します。この結果はライブや macOS work の検証には拡張しません。詳細は[日付付き実行時ゲート](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)を参照してください。
-
-## 🔒 安全機構
-
-- **ネストディスパッチ禁止** — ワーカーの再ディスパッチを拒否
-  (`OMNILANE_DEPTH` ガード、終了コード 86)。
-- **Codex 直列化ロック** — 同一ターゲットディレクトリへの codex
-  ディスパッチはキューイング。クラッシュ残留ロックは所有者 PID で検出し
-  安全に奪取。
-- **ウォッチドッグ** — 全ワーカーは `timeout`/`gtimeout`、どちらも無ければ
-  perl-alarm フォールバック下で実行(素の macOS がこのケース)。上限は
-  **CLI 呼び出しごと** に適用され、優先順位は `--timeout SECONDS` > レーン別
-  `OMNILANE_TIMEOUT_<LANE>`(例 `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > グローバル
-  `OMNILANE_TIMEOUT`(既定 600 秒)。これは呼び出し単位のハングガードであり、
-  ジョブ全体の予算ではありません。リトライするベンダー(grok)や vote パネル
-  (投票者 × ラウンド)は複数回呼び出すため、総実時間はこの値の数倍になり得ます。
-- **ジョブ全体ヒューズ** — 任意の `--job-timeout SECONDS` はロック待ち、
-  リトライ、全投票者・ラウンドを一つの process group 監視下で制限します。
-  優先順位はフラグ > `OMNILANE_JOB_TIMEOUT_<LANE>` >
-  `OMNILANE_JOB_TIMEOUT` > 無効です。ただし Git worktree 外で Codex の
-  `work` を実行し、全体上限が未設定の場合だけ、解決済みの呼び出し単位
-  ウォッチドッグを自動的に全体ヒューズとして使います（監視機構の上限は
-  999999999 秒）。この自動ヒューズには同梱の Perl 監視機構が必要です。利用
-  できない場合は警告し、既存の呼び出し単位ウォッチドッグ経路で非 Git work を
-  続行します。その経路でも監視ツールがなければ、別途警告します。
-  期限切れは監視対象の process group を終了して 124 を返します。
-  大規模リポジトリの深い監査は 2–4 時間(7200–14400 秒)、呼び出し単位は
-  30 分から始めるのが目安です。ハードコードされた既定値ではありません。
-- **バックグラウンドジョブ** — `--background` ワーカーは独立した process
-  group で動き、呼び出し元の終了後も生存。kill された場合は終了コードを
-  記録し、`jobs.sh status` が `dead` を報告。
-- **ペイロード上限** — 巨大なタスクテキストは自動で頭尾トランケート。
-
-## 📬 ライブメールボックス
-
-ライブメールボックスは、1 回で完結するディスパッチとは別の、対応モードで利用できる常駐バックグラウンド実行です。フォアマンが `--background` で開始し、実行中にも追加の指示を送れます。終わったらフォアマンが `jobs.sh close ID` で閉じます。放置しても常駐し続けるわけではなく、アイドル上限または設定済みのジョブ全体タイムアウト（`--job-timeout`）に達すれば終了します。
-
-```bash
-scripts/dispatch.sh --background --vendor claude hard-judgment "タイムアウトしたテストを確認する"
-# dispatch が表示したジョブ ID を $ID として保存
-scripts/jobs.sh send "$ID" "リトライ経路も確認してください。"
-scripts/jobs.sh watch "$ID"
-scripts/jobs.sh tail "$ID" --lines 20
-scripts/jobs.sh close "$ID"
-scripts/jobs.sh retry "$ID" --background
-```
-
-フォアグラウンドのディスパッチと `jobs retry` は、ジョブが失敗した場合も保存済みの公開出力を表示し、その非ゼロ終了コードを返します。バックグラウンドのディスパッチは従来どおりジョブ ID を出力します。
-
-`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。Grok はさらに `--mode sysops --workdir DIR` が必要で、ACP が制限モードの境界を強制しないため advise／work のライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
-
-アイドル中は API 呼び出しも料金も発生しません。既定では、新しい受信メッセージまたは結果イベントが 900 秒間なければ worker が自動で終了し、ジョブ全体タイムアウトは外側の上限として残ります。やり取りが終わったら早めに `close` できます。終了済み、またはライブでないジョブへの `jobs.sh send` は明確なエラーで失敗します。送った後に追跡しない作業、ライブ対応していないベンダー、クリーンな状態からの再実行が必要な場合には使わず、新しいディスパッチ（または完了後の `retry`）を使ってください。
-
-## 🎯 ゴールオーケストレーション
-
-`omnilane goal` は、フォアマンが進行する作業台帳です。ループを担当するのは、ゴールを開いたエージェントセッションまたは端末の利用者です。ジョブをディスパッチし、完了受信箱または `omnilane jobs wait` で結果を受け取り、次のジョブを判断して繰り返します。ジョブ数と経過秒数の予算はデフォルトで無制限です。`--budget-jobs N` または `--budget-seconds S` を指定した場合に限り、対応する上限が有効になります。omnilane は記録だけを担い、各 goal dispatch の前に呼び出し元が指定した上限とデフォルトで有効な同一失敗のヒューズを検査し、フォアマンがゴールを閉じるときにレポートをまとめます。
-
-```bash
-GOAL_ID="$(omnilane goal open "不安定な決済統合を修正する" \
-  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
-  "決済エラーを再現し、最小修正を実装して検証する")"
-omnilane jobs wait "$JOB_ID" --timeout 900
-omnilane goal note "$GOAL_ID" "決済統合テストが成功した"
-omnilane goal close "$GOAL_ID" --summary "決済統合は安定した"
-```
-
-更新が中断された場合、失敗回数は永続化されたジョブ記録から再構築され、重複計上されません。`goal close` はレポートの保存後にのみ目標を閉じます。保存に失敗した場合は、原因を修正してから再試行できます。
-
-目標が使用中の場合は、読み取り専用のロック所有者診断を表示し、終了コード 75 を維持します。ロックは自動削除されません。記録された PID だけでは所有権を証明できないため、復旧前に手動確認が必要です。
-
-目標の状態とレポートは、`dead` と `missing` を実行中とは表示しません。状態の根拠を取得できない、または整合しない場合は `unknown` とし、終了コードや失敗回数を捏造しません。各ジョブの秒数は投入後の経過時間であり、実稼働時間ではありません。目標の予算は変わらず、未完了ジョブごとに最大二秒のローカル状態確認を一回行います。
-
-完了済みジョブのファイルを通常の操作で削除しても、目標には検証済みの終了コード、完了時刻、完了までの経過秒数が残ります。状態とレポートは別途 `artifacts=missing` と表示します。完了記録のないジョブは missing または unknown のままで、削除によって終了結果を作り出すことはありません。
-
-目標へのディスパッチは、先に意図を記録してジョブ枠を一つ予約します。起動前に一回限りの起動権記録で意図と生成されたジョブ ID を結び付けます。`spent_jobs` は記録済みジョブ数、`reserved_jobs` は未解決の送信数です。未解決または破損した記録がある間は、新しいディスパッチと終了を拒否します。照合は記録を修復するだけで、ジョブの起動、終了コードの推測、不明な送信の再実行は行いません。
-
-スレッド付きの目標ディスパッチでは、stdout は正確なジョブ ID のみです。ID の検証後、対応するスレッド通知を stderr に表示します。直接のバックグラウンドディスパッチは、従来どおり通知と ID を stdout に出力します。
-
-`goal dispatch` はバックグラウンドジョブを起動するため、`--dry-run` はサポートしていません。このオプションはゴールの状態を変更する前に拒否されます。ルーティングをプレビューするには、`omnilane dispatch --dry-run [options] LANE "TASK"` を直接使用してください。 直接のプレビューはゴールの作業ディレクトリを引き継がないため、必要なら `--workdir DIR` を指定してください。
-
-保存された目標予算には JSON 整数を使い、真偽値や数値文字列は受け付けません。任意の上限は引き続き `null` または 1..999999999、カウンターは対応範囲内の非負整数です。不正なフィールドは台帳更新やディスパッチの前に拒否します。作業ディレクトリのパスにタブ、CR、改行、NUL は使えません。通常の空白と Unicode は使用できます。
-
-ディスパッチのエラーや結果の消失後は、再送信の前に `goal status` を確認してください。同じコマンドでも新しい送信は別の意図となるため、保証は意図ごとの最大一回の起動であり、同一コマンド全体の重複排除ではありません。照合には有効な既存のワーカー PID または終了コードの証拠が必要です。照合前にそれを削除すると予約は未解決のままです。照合済みの目標履歴はジョブファイルの削除後も残り、既存の目標も読み取れます。古いロックや不明な意図の自動復旧は行いません。
-
-バックグラウンド処理の終了処理中は、HUP/TERM によって確定した終了コードが変更されません。完了フックは配信済み記録を除外し、読み取り不能の通知を含めて、プロンプトごとに最大十件を配信します。
-
-ゴールの状態は `$OMNILANE_HOME/goals/<goal-id>/` に保存されます。`goal status` では、予算使用量、ヒューズ作動回数、各ジョブから順次届くメタデータと終了状態を確認できます。`goal close` は `report.md` を書き、そのパスを表示します。手順が明白な単一タスクは直接ディスパッチしてください。予算フラグを指定した場合、その上限は厳格な制約であり、完了を保証するものではありません。
-
-## ❓ FAQ
-
-<details>
-<summary><b>これらのサブスクは全部必要ですか?</b></summary>
-
-<br/>
-
-いいえ。各レーンはフォールバックチェーンで、実際にインストール済みの最初の候補が
-使われます。サブスクが一つなら表全体がそのベンダーに収束し、チェーン内に何も無い
-レーンはエラーではなく単にオフになります。`omnilane doctor` で今このマシンが実際に
-到達できる先が分かり、`routing.local.yaml.example` にはよくある状況向けの
-スタータープロファイル(Claude のみ、Codex 中心、Codex 無し)が入っています。
-
-</details>
-
-<details>
-<summary><b>omnilane は私のコードを新しい送信先へ送りますか?</b></summary>
-
-<br/>
-
-新しい送信先は増えません。ディスパッチはすでにインストールしログイン済みの
-ベンダー CLI を呼ぶだけなので、コードが届くのは元から使っているベンダーだけです。
-ランナーはサブスク制 CLI を呼ぶ前に API キーの環境変数を取り除くため、残っていた
-キーによって従量課金へ黙って切り替わることもありません。唯一の例外は direct-API
-ベンダー群(`openrouter`、`deepseek`、`zai`、`mistral`、`groq`、`cerebras`)で、
-これらは定義上あなたが設定したキーでそのプロバイダーの API を呼びます——いずれも
-advise 専用で、ファイルを編集しません。
-
-</details>
-
-<details>
-<summary><b>なぜ今は Fable 5.2 が難しい作業の先頭なのですか?</b></summary>
-
-<br/>
-
-2026-11-10 のスナップショット（AA Intelligence Index v5.0.1、同日承認）では、Fable 5.2
-xhigh が 62 点で、レーンがディスパッチできる他のどの行よりも高くなっています
-（Opus 5.5 xhigh 57、Astra xhigh 55）。`hardest-coding` では Terminal-Bench 4.0
-も最高（0.616。Astra と Opus 5.5 xhigh はどちらも 0.596）で、SciCode は 0.656
-（他の 2 つは 0.557、0.650）です。`hard-judgment` では HLE（0.689）、Briefcase
-analytical Elo（1927）、CritPt（0.357）のいずれもチェーン内で最高で、最初の Codex
-行である GPT-6.1 Sol xhigh はそれぞれ 0.526、1691、0.317 です。一方で最も高価な行
-でもあり、AA のインデックス 1 回分の費用は Fable 5.2 xhigh が約 $11,742、Opus 5.5
-xhigh が約 $4,766、Astra xhigh が約 $3,746 です。
-
-Astra xhigh は引き続き `hardest-coding` の 2 番手、`consult` の第一候補で、
-`ui-draft` の先頭は Opus 5.5 high です。Fable 5.2 には Claude Code 2.1.321 以降が
-必要です。このスナップショットは 2026-11-10 に運用者が承認しました。レーンごとの
-数値は [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) にあります。
-
-</details>
-
-<details>
-<summary><b>なぜどのレーンも <code>max</code> を使わないのですか?</b></summary>
-
-<br/>
-
-effort はタスクごとに選ぶもので、高いほど良いとは限りません。2026-11-10 の並べ替え
-以降、`hardest-coding` を含めてどのレーンのチェーンにも `max` の行はありません。
-各レーンはコスパ優先で並んでおり、`max` は最も高価なわりに伸びが小さいためです
-（Fable 5.2 は max で 65 点、xhigh で 62 点）。`max` は `--effort max` で明示すれば
-今も使えます。明示した `--model` と `--effort` は常にこれらの既定より優先されます。
-
-</details>
-
-<details>
-<summary><b>レーンの第一候補 CLI が無いときはどうなりますか?</b></summary>
-
-<br/>
-
-ディスパッチはチェーンを辿り、手元にある最初のベンダーを使います。コールを消費
-せずに判断を確認できます:
-
-```bash
-scripts/dispatch.sh --explain hardest-coding   # 候補ごとのトレース
-scripts/dispatch.sh --list                     # 実効表の全体
-scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、プロバイダー呼び出し無し
-```
-
-</details>
-
-<details>
-<summary><b>ディスパッチされたワーカーはファイルを編集できますか?</b></summary>
-
-<br/>
-
-依頼した場合のみです。ディスパッチの既定は読み取り専用の `advise` で、ベンダーごとに
-実装されています(読み取り専用サンドボックス、またはネイティブツール権限)。
-範囲を限定した編集では `--mode work` と明示的な `--workdir` を指定してください。
-work は指定ディレクトリ内の変更に限定し、モデル接続を維持したままツールのネットワークを無効化します。
-`--mode sysops` は Codex、Claude、Grok、Agy それぞれの独立した完全アクセス政策で、
-work の別名ではありません。サービス管理など、work の境界を超える操作をタスクが明示的に許可する場合に使います。
-ディスパッチごとの明示指定のみで、レーンの既定値にはなりません。
-ワーカー自身は再ディスパッチできません——深度ガードが終了コード 86 で入れ子の
-ファンアウトを拒否するため、一つのコマンドがエージェントの連鎖に膨らんでクォータを
-食い潰すことはありません。
-
-</details>
-
-<details>
-<summary><b>ディスパッチが拒否されました。どの拒否ですか？</b></summary>
-
-<br/>
-
-3 つのコードには 3 つの異なる対処があります。まず `omnilane doctor` を実行して
-ください。その `transport-overlay` チェックが、問題はこのマシンの設定なのか
-リクエストなのかをすぐに示します。
-
-`missing-caller-context` — 識別情報がゲートに届いていません。人間は
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` または `--operator-asserted-human` を
-使います。モデルは通常何もしなくてよく、dispatch が起動元の CLI から識別情報を
-読み取ります。読み取れない場合は `omnilane whoami` を実行してください。渡すべき
-`--caller-context FILE` を出力するか、読み取れない理由（`--effort` 未指定、モデル
-エイリアス、スコア行なし）を示します。モデルは人間向けの免除を自称してはいけません。
-
-`runtime-mapping-unverified` — 識別情報は正しく、**ターゲット**にホストローカルの
-リクエストセレクタの証明がありません。未プローブか、プローブが失敗しています。
-`omnilane doctor` と `--json` は未検証行を `WARN` として表示します。ID、要求・観測した
-モデルと強度（記録がある場合）、失敗の分類と理由、最終プローブ時刻、証拠のパス
-（内容は非表示）、次の手順を確認できます。環境要因には
-`omnilane resign --retry-failed --vendor VENDOR` を案内します。確定的な失敗は自動再試行せず、
-要求・CLI・プロバイダーの対応を調べます。証拠破損時は対象パスと、正常なバックアップからの
-復元または新しいディレクトリへの明示的な再プローブを案内します。利用上限による拒否は上限が解消するまで続きます。
-
-`invalid-policy-input` と "transport contract evidence changed" — 上記のいずれ
-でもありません。overlay 自体が読み込めないため、**すべてのベンダー**が拒否され
-ます。よくある原因はベンダー CLI の更新です。overlay は各ベンダーの実行ファイルと
-ランナースクリプトのハッシュを固定しており、Codex と Claude の証拠パスは
-バージョンディレクトリを含むため、更新ではダイジェストが変わるのではなく
-ファイルが消えます。タグ付きの証拠は自分のベンダーだけを降格させ、プローブ
-マニフェストのようなタグなしの証拠はゲート全体を閉じます。doctor がファイルと
-ベンダーを示し、再署名の手順はディスパッチスキルにあります。
-
-`target-above-effective-ceiling`——どこも壊れていません。ターゲットのスコアが
-呼び出し側より高いだけです。`required_caller_effort` には、呼び出し側のセッションに
-必要な effort が入ります。`caller_degraded` が付いた呼び出し側は、effort を記録
-しないハーネス（Codex のハートビート自動化など）から起動されたもので、そのモデルの
-最低ラインとして扱われます。
-
-</details>
-
-<details>
-<summary><b>マッピングの証拠ティアは何を意味しますか？</b></summary>
-
-<br/>
-
-プローブが「誰が応答したか」をどれだけ確実に突き止めたかを示します。ディスパッチ
-できるかどうかには影響しません。
-
-`billed-model`——プロバイダーが課金対象のモデル名を返したもの。Claude は
-`modelUsage` に、grok は `--output-format json` で同じように返します。これは
-プロバイダー側の領収書にあたります。
-
-`client-echo`——CLI が要求したモデルを記録しており、それがリクエストと一致した
-もの。Codex はセッションのロールアウトに、agy は `cli.log` に書きます。これは
-CLI 側の注文控えで、プロバイダーの領収書ではありません。リクエストが意図どおりに
-出たことは証明しますが、誰が応答したかまでは証明しません。
-
-`selector-only`——CLI がセレクターを受け付けただけで、それ以上の報告がないもの。
-v0.42.6 より前にプローブしたマッピングはすべてこれになります。ディスパッチは
-できますが、3 つの中で最も弱く、`omnilane doctor` が再プローブする価値のある
-ベンダーを示します。
-
-どのティアも上流プロバイダーの身元を保証するものではなく、どれもレーンを拒否する
-ことはありません。ティアはベンダーではなくプローブの結果から決まるため、CLI が
-課金モデルを報告するようになれば、omnilane を変更しなくても次回のスイープで
-昇格します。
-
-</details>
-
-## 📊 デフォルト値と出典
-
-デフォルトのレーン割当は Artificial Analysis Intelligence Index v5.0.1 の
-スナップショット `aa-v5.0.1-2026-11-10-v1`（2026-11-10、同日に運用者が承認）
-に基づきます。AA のモデルページ 85 件を統合したもので、各レーンはこのスコアと
-レーンごとの指標でコスパ優先に並べ、v5.0.1 で採点されなくなった行は旧スコアを
-引き継がずに外しています（[証拠](docs/reports/aa-rebaseline-2026-11-10.md)）。
-これは意見であって法則ではありません——設定メニューと
-`routing.local.yaml` はそのためにあります。ベンチマークごとの但し書きを含む
-作業ノートは [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) にあります。
-
-## ⚠️ 既知の制限
-
-- **Antigravity の print モードにおけるツール呼び出しは現行 CLI ビルドで
-  不安定**(拒否または invalid-argument)。long-context レーンの本来の用途
-  (本文をタスクに貼り込む長文統合)には影響しません。
-- **Grok に推論エフォートのつまみはありません**。effort 欄はインターフェース
-  互換のためだけに存在し、無視されます。
-- **Git 管理外でも Codex の work は利用できます。** 一部の Codex CLI は
-  Git worktree 外で停止する可能性があるため、上記の自動ヒューズがこのケースを
-  制限し、監視対象の process group を終了します。Omnilane は `git init` を自動実行せず、
-  リポジトリの作成も要求しません。
+| `missing-caller-context` / `caller-identity` | アシスタント起動時のモデルまたは推論強度を読み取れません。 | `omnilane whoami` |
+| 呼び出し元のモデル／強度にスコア行がない | 通常のレーンには完全一致のスコア行が必要です。対応ネイティブワーカーは実際の呼び出し元環境を継承できますが、レーンのモデル目標を満たしたことにはなりません。 | `omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir "$PWD"` の後、リファレンスの `--inherit` 引き渡しを使用 |
+| `target-above-effective-ceiling` | 対象が呼び出し元の許可スコアを超えています。拒否に表示された利用可能レーンを確認してください。 | `omnilane route --explain hardest-coding` |
+| `runtime-mapping-unverified` または CLI 証拠の変更 | このホストでセレクターが未検証か、実行ファイルが更新されています。 | `omnilane resign --vendor VENDOR` |
+| 終了コード 2：オーバーレイ未設定 | 初回設定が未完了です。 | `omnilane resign --init` — 人間が対話型デスクトップターミナルで実行 |
+| 終了コード 20：`needs-login-session` | CLI が未ログインか、プロセスからデスクトップのログインを利用できません。まずデスクトップターミナルでログインしてください。 | `omnilane resign --vendor VENDOR` — ログイン済みのそのターミナルで実行 |
+| 終了コード 20：`cli-not-installed` / `review-executable-source` | CLI がないか、実行ファイルの出所・署名の確認が必要です。承認しても無効な署名は修復されません。 | `omnilane doctor` の後、ベンダー別の案内に従う |
+| 終了コード 20：`provider-verification-incomplete` / `verification-needed` | 検証が未完了です。表示された API、利用枠、ネットワーク、未プローブ行の原因を先に解決してください。 | `omnilane resign --vendor VENDOR` |
+| 環境エラーがクールダウン／リセット時刻待ち | 通常の失敗行は明示的に再試行できます。無人実行の再確認待ち行には回数制限とリセット時刻が引き続き適用されます。 | `omnilane resign --retry-failed --vendor VENDOR` — 原因解決後に実行 |
+| `deterministic-probe-failure`／モデル・強度の不一致 | 要求と観測結果が一致しません。`--retry-failed` でも自動再試行しません。 | `omnilane doctor` で調べ、CLI／プロバイダーの対応を修正してから新たに検証 |
+| 終了コード 60：`partially-re-signed` | 合格したセレクターは導入済みです。保持された行は再確認待ちで、ディスパッチできません。終了コード 20 の保留が優先されます。 | `omnilane resign --vendor VENDOR` — 待機原因の解決後に実行 |
+| 終了コード 20：`operator-or-login-needed`、または次の手順に `--approve`、`--allow-shrink`、`--record-signers`、信頼／取消フラグがある | 操作者の判断が必要であり、アシスタントが自己承認してよいという意味ではありません。 | `omnilane doctor` — 人間が証拠を確認してから、指定操作をターミナルで実行 |
+
+## v0.61.0 の新機能
+
+- **アップグレード後、各ホストで一度 `omnilane resign` を実行してください。** 変更のないセレクター証拠は引き継がれ、新規・変更行は検証が必要です。終了コード **60** は合格行が導入済みで、残りが再確認待ちであることを示します。`omnilane doctor` で確認し、原因を解決してから再試行してください。
+- 承認済み AA Intelligence Index **v5.0.1** スナップショットに **Claude Fable 5.2**（Claude Code **2.1.321+** が必要）を追加し、`hardest-coding` と `hard-judgment` の第一候補にしました。`long-context` は GPT-6 Astra medium が先頭です。明示的なネイティブのモデル／強度行にも現在のスコアが必要です。撤回された組を `native-rows.json` から除くか、対応する継承ワーカーを使ってください。
+- 初回設定は `omnilane resign --init` です。拒否には読みやすい次の手順、終了コード 20 にはベンダー別の `attention` 案内が付きます。doctor／overlay-health は引き継いだ行と新規／未プローブ行の数を表示します。
+- 一部のプロバイダー検証が失敗しても合格セレクターは利用可能です。無人実行の再確認は回数とリセット時刻を守り、モデル不一致は確定的な失敗として扱います。全体が未認証のスイープは最初のプローブで停止し、同じログイン失敗を繰り返しません。
+- アップグレード：`npm i -g omnilane@0.61.0`。
 
 ## 📜 リリース履歴
 
@@ -1405,6 +683,747 @@ v0.42.6 より前にプローブしたマッピングはすべてこれになり
   plugin manifest を統一し、CI が変更履歴と五言語 README の一致を検査します。
 
 </details>
+
+## リファレンス
+
+## オーバーレイの検証と再試行の詳細
+
+評価表だけの更新では、呼び出し引数と実行ファイルの識別情報が同じ行の検証証拠を自動的に再利用します。点数・日付の変更は新しい上限に直ちに反映され、`omnilane resign`、GUI ログイン、通信、オーバーレイの書き換えは不要です。追加・変更された契約や実行ファイルだけ `omnilane resign --vendor VENDOR` で検証してください。拒否メッセージに対象行と GUI ターミナルの要否が表示されます。信頼済みスナップショットが同梱されていれば旧形式 1 もそのまま使えます。不明な古い出典は `omnilane resign --check` で確認してください。初期設定には `omnilane resign --init` を使用します。署名者承認の規則は変更しません。毎日の処理は `omnilane resign --daily`（または `bash scripts/resign-daily.sh`）を使います。失敗は非ゼロ終了となり、Telegram がなくても `omnilane doctor` がローカルの非公開記録を表示します。スケジューラーの自動インストールはありません。
+
+API エラー、タイムアウト、未ログイン、利用枠、接続障害の行は `omnilane resign --vendor VENDOR` で再検証できます。非対話実行では各行の失敗から 20 時間待機します。対話実行、または `omnilane resign --retry-failed --vendor VENDOR` は直ちに再試行します。この指定で署名者の承認は省略されません。失敗証拠と時刻フィールドの有無を摘要で保護し、変更・削除された記録は報告して再試行を拒否します。
+
+期限切れの証拠は未検証行と同じ経路で更新し、正常な行は再検証しません。実測モデル／強度の不一致は確定した結果なので、`--retry-failed` でも自動再試行しません。`omnilane doctor` で元の要求と CLI／供給側のモデル対応を調べ、原因を修正してから再検証を手配してください。以下の版別記録は当時の動作を説明しています。現行版では本節に従ってください。
+
+## 🤖 AI アシスタントに omnilane を運転させる
+
+アシスタント（Claude Code、Codex、Grok Build、Antigravity）はスキルファイルを読み、レーンの選び方とディスパッチの方法を学びます。マシンごとに一度、4 ステップです。
+
+### ステップ 1：アシスタントにスキルを渡す
+
+`./install.sh` は見つけた CLI すべてにリンクを張ります。手動の場合:
+
+| アシスタント | 方法 |
+|---|---|
+| Claude Code | `claude plugin marketplace add <このリポジトリ>` の後に `claude plugin install omnilane@omnilane`（`/route`、`/route-jobs`、完了インボックスも付属）。または `skills/omnilane` を `~/.claude/skills/` にリンク |
+| Codex | `skills/omnilane` を `~/.codex/skills/` にリンク |
+| Grok Build | `grok plugin install <このリポジトリ> --trust` |
+| Antigravity | `agy plugin install <このリポジトリ>`（先に `agy plugin validate <このリポジトリ>` で確認） |
+
+### ステップ 2：「各 CLI が指定したモデルを本当に選ぶ」ことを一度だけ証明する
+
+モデルが呼び出し元の場合、ディスパッチできるのはこのマシンが**証明済み**のターゲットだけです。たとえば `codex -m gpt-6.1-sol` が本当に Sol を動かしている、ということです。この証明はローカルファイルで、**トランスポートオーバーレイ（transport overlay）** と呼びます。パッケージには同梱されません。これが無いと、すべてのレーンがモデルの呼び出し元を `runtime-mapping-unverified` で拒否し、`omnilane doctor` は `no overlay configured` と警告します。
+
+通常のデスクトップターミナルで作成してください。（ssh ログインのセッションは、CLI がログインに使うキーチェーンを読めないため、すべてを未ログインと報告します。）
+
+```bash
+omnilane resign --init
+```
+
+初回インストールは対話型ターミナルで実行します。既存のオーバーレイや `--daily` との併用は拒否されます。プローブと実際のディスパッチを検証し、初回信頼の署名者を記録した後、`local.sh` をバックアップして既存の設定を保ったままパスを登録します。安全でない署名や署名者の変更は許可しません。[手動の代替手順](docs/transport-overlay.md#first-installation)。
+
+ログインしていないベンダーは `unprobeable` と報告され、未検証のままになるだけです。他のベンダーは動作します。
+
+### ステップ 3：証明を手作業なしで最新に保つ
+
+オーバーレイは各 CLI の実行ファイルをハッシュで固定します。そして **CLI は自分で更新されます**。週に一度ということも珍しくありません。更新後、そのベンダーのレーンはオーバーレイが再署名されるまで拒否されます。`omnilane resign` はこの作業をすべて行います。変わった箇所を見つけ、そのベンダーだけを再プローブし、結果を確認し、差し替え、実際のディスパッチを 1 件送って確かめ、失敗すれば古いファイルに戻します。 出所チャネルはプローブの許可であり、ディスパッチの許可ではありません。
+
+`--init` は初回信頼の署名者も記録します。古いオーバーレイに限り、人間のオペレーターが別途 `omnilane resign --record-signers` を実行してください。既存のチーム記録は Developer ID チャネルになりますが、現在のファイルは Apple の証明書チェーン、チーム、識別名、解決済みインストール場所を満たす必要があります。操作者の信頼設定がない既存の adhoc 記録には、更新によって信頼が追加されません。
+
+```bash
+omnilane resign --record-signers # 古いオーバーレイのみ、人間が実行
+```
+
+自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。adhoc サンプルには正規の識別子がないため、`--team` はその場所にあるチーム全体を承認します。置き換えるまでは、このチームが署名してそこに置いたどのプログラムも、この CLI に限らず出所チェックを通過して再検証の対象になります。`omnilane resign --check` と `omnilane doctor` には `"identifier_family": ""` と表示されます。製品に結び付けるには、正規の署名サンプルをインストールした状態で、`--team` なしで `omnilane resign --trust-origin claude` をもう一度実行します。チーム単位の承認が置き換えられます。
+
+```bash
+omnilane resign --trust-adhoc claude   # 自分で claude を adhoc 署名している場合のみ
+```
+
+固定済みのスクリプトや macOS 以外のネイティブ実行ファイルには `omnilane resign --trust-location VENDOR` を使います。場所の変更や新しいスクリプトは確認後に `omnilane resign --approve VENDOR` で一度だけ許可し、検証後に新しい場所を信頼できます。この許可はチャネルを作りません。`omnilane resign --revoke-origin VENDOR KIND` で取り消せます。`KIND` は `developer-id`、`adhoc`、`script`、`no-platform-signature`、または全位置チャネルを表す `location` です。空の取り消しリストも古い信頼設定より優先されます。
+
+`omnilane resign --check` と `omnilane doctor` は種別とチャネル、拒否時は観測したチームと識別名を表示します。壊れた署名、検証不能、未署名の macOS ネイティブファイル、壊れた別ホストの設定は必ず停止し、承認では修復できません。出所とログインの問題は別の案内になります。有効なインストールや当該ホストのバックアップを復元してから再試行してください。 出所による停止は実行ファイルが変更された場合に適用されます。固定済みで未変更の実行ファイルは、未検証行の補完、再試行、証拠更新の既存ルールを維持します。
+
+チャネルはホスト固有の `$OMNILANE_HOME/transport-origins.local.json` に 0600、原子的更新、変更前バックアップ付きで保存されます。ホスト間でコピーしないでください。`resign --init` は現在、記録済みの識別情報・パス・ポリシー項目がないベンダーごとに、ステージングしたポリシーで初回の信頼登録を呼び出します。適格な実行ファイルの出所を確認し、ローカルの adhoc 署名を拒否して、設定と検証が成功した場合にのみ信頼を保存します。既存の信頼を上書きせず、アップグレードによってスクリプトや非 macOS バイナリを自動で信頼することもありません。アシスタントは信頼、承認、署名者記録、取り消しのコマンドを自分で実行してはいけません。
+
+あとは毎日実行させます。スケジューラーは何でも構いませんが、必ず**デスクトップのログインセッション内**で動かしてください（CLI にはキーチェーンが必要です）。macOS なら LaunchAgent が使えます。
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+上の LaunchAgent は任意の設定例で、自動インストールされるスケジューラーではありません。自分のデスクトップログイン環境で `launchctl kickstart gui/$(id -u)/dev.omnilane.resign` を実行し、`omnilane doctor` で結果を確認してください。
+
+`omnilane resign` の終了コード:
+
+| 終了コード | 意味 | あなたがすること |
+|---|---|---|
+| 0 | 変更なし、または変更されたものはすべて再署名済み | 何もしない |
+| 10 | `--check` のみ: 何かが変わった | `omnilane resign` を実行 |
+| 20 | 出所、ログイン、または検証に対応が必要 | 個別の案内に従う。承認で壊れた署名、未署名、検証不能を回避できない |
+| 30 | 再署名したオーバーレイが実ディスパッチに失敗し、前のものに戻した | 何も壊れていない。ログを読む |
+| 2 | オーバーレイが未設定 | ステップ 2 を行う |
+| 40 (`EXIT_HOST_CONFIG`) | ホスト設定の読み込み失敗、または設定済みオーバーレイが読めない・JSON が不正。変更なし | stderr のパスと原因を修正。定期ジョブの通知方針は管理者が決める |
+| 50 (`EXIT_BUSY`) | このホストで別の `omnilane resign` が実行中。読み書きなし | それが終わってから実行する |
+| 60 | 検証済みセレクターは反映済み。保持された残りのセレクターは再検証待ち | `omnilane doctor` で原因を確認し、解消後に `omnilane resign` を実行 |
+
+引数の使い方エラーも終了コード 2 です。設定済みだが読めないオーバーレイは 2 ではなく 40 です。
+
+### ステップ 4：アシスタントの中から試す
+
+アシスタントに `omnilane whoami` を実行させてください。自分がどのモデル・どの effort で動いているかと、スコアが返るはずです。続けて小さな仕事を委任させます。「omnilane で triage レーンに、このリポジトリの TODO コメントの数を数えさせて」。
+
+拒否された場合、どの確認で失敗したのか、何をすべきかが拒否メッセージに書かれています。
+
+| `failed_gate` | 平たく言うと | 直し方 |
+|---|---|---|
+| `caller-identity` | どのモデルが依頼しているのか omnilane に分からない | `omnilane whoami` をそのツール呼び出しの**唯一のコマンド**として実行させる。特に Codex は `; echo $?`、`&&`、パイプの後ろでは読み取れない |
+| `target-transport` | このマシンがそのターゲットを証明していない、またはその後 CLI が更新された | `omnilane resign`（ステップ 3） |
+| `downward-ceiling` | ターゲットのモデルのスコアが依頼側より高い。モデルは横か下にしか委任できない | 拒否メッセージの `eligible_lanes` から選ぶか、より高い effort でアシスタントを起動する |
+
+既存のスレッドを起こす Codex のオートメーションは effort を記録しません。omnilane はその呼び出し元を拒否する代わりに、そのモデルの最低スコアに制限します。安いレーンはそのまま動き、高いレーンはどの effort なら届くかを教えます。
+
+完了したディスパッチは `$OMNILANE_HOME/inbox/` に非公開の完了記録を保存します。Claude Code プラグインの `SessionStart` は、フックが渡すコントローラーのセッション ID を実行中のプロセス祖先に結び付けます。`UserPromptSubmit` は次のプロンプトで、そのセッションが所有する記録を最大十件、原子的に配信します。セッション ID のない旧記録は元のディスパッチの `workdir` を範囲とし、取得した記録は `inbox/consumed/` に移動します。ディスパッチに `OMNILANE_INBOX=0` を設定すると記録作成を無効化できます。既定では有効です。スキルのリンクだけではプラグインの通知機能は入りません。
+
+## 🧭 仕組み
+
+omnilane は、**どの** agentic CLI のメインループでも、サブタスクをレーンに
+分類し、各レーンをその作業が最も得意なベンダーへヘッドレスで
+ディスパッチさせる仕組みです。既存のサブスクリプションログインをそのまま
+使います(`openrouter` vendor は例外:CLI 不要、API キー一つで直接接続):
+
+```mermaid
+flowchart LR
+    M["メインループ<br/><i>任意の CLI</i>"] --> T{{"routing.yaml<br/>一枚の共有テーブル"}}
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
+    T -->|"arbitrate(オプトイン)"| C6["vote — 1-4 モデルパネル"]
+```
+
+- **`routing.yaml`** — レーン → ベンダー+モデル+推論エフォート。
+  一つのファイルを四つのハーネスが共有します。
+- **フォールバックチェーン** — レーンには複数の候補を並べられます
+  (`codex … | claude … | off`)。実際にインストールされている最初のベンダー
+  CLI が選ばれるため、一〜二社の契約でも同じテーブルが機能します。
+- **`scripts/dispatch.sh [--vendor V] <レーン> "<タスク>"`** — テーブルを
+  解決し、該当ベンダーの CLI をヘッドレスで起動します。`--vendor` は
+  指定ベンダーに固定し、フォールバックしません。
+- **`skills/omnilane/SKILL.md`** — 四つのハーネス共通のスキル:
+  自分のモデルを特定し、自分のレーンは自前で実行、残りはディスパッチ。
+- **`omnilane mcp`** — 同じルーティングを MCP stdio サーバーとして提供。
+  スキルではなく MCP で統合するホスト向け。
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **一枚のテーブル**<br/>四つのハーネスで共有 | 🪂 **フォールバックチェーン**<br/>手持ちの CLI へ自動降格 | 🗳️ **オピニオンパネル**<br/>重大な判断はマルチモデル投票 |
+| 🔒 **安全機構**<br/>ロック · ウォッチドッグ · ネスト禁止 | 🌏 **五言語対応**<br/>インストーラーが母語で対話 | ↩️ **完全可逆**<br/>`--uninstall` で全て元通り |
+
+</div>
+
+## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
+
+AA `aa-v5.0.1-2026-11-10-v1`：**approved（2026-11-10 に操作者が承認）**。AA Intelligence Index v5.0.1 に切り替え、採点済み構成は 68 件。Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54。Claude Code 2.1.321 以降が必要）を追加し、v5.0.1 で採点されなくなった構成を外しました。下の表はすでにこれに従っています：Fable 5.2 xhigh が hardest-coding と hard-judgment の第一候補になり、Claude Opus 5 がスコアを失ったため long-context は GPT-6 Astra (medium) が先頭です。Gemini 4 Carbon はスコアがありますがディスパッチ可能な ID がなく、どのレーンにも入っていません。各ホストで一度 `omnilane resign` を実行し、新しい表に対して overlay を再検証する必要があります。[証拠](docs/reports/aa-rebaseline-2026-11-10.md)。`aa-v4.3.2-2026-10-28-v1`（2026-10-28 承認）を置き換えます。
+
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
+
+AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
+
+| レーン | 第一候補 | バックアップ | 用途 |
+|---|---|---|---|
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex クォータ不足時の中級コーディング逃がし弁 |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
+
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+
+**バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
+ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
+何もインストールされていなければレーンは `off` に降格します。
+
+> **Claude Fable 5.2 が hardest-coding と hard-judgment の先頭になりました（AA v5.0.1 スナップショット、2026-11-10 承認）。** スコアと並べ替えは[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-10.md)を参照してください。レーンごとの比較は [FAQ](#-faq) にあります。
+
+### 自然言語コンサルテーション
+
+`omnilane` スキルまたは `/route` では、普通に
+**「Opus にこのアーキテクチャを厳しく検討してもらって。」** と頼めます。
+自然言語を解釈するのは Agent Skill であり、`dispatch.sh` に自由文の shell
+パーサーを追加するものではありません。
+
+- 能力だけを尋ねる質問には、該当レーンで現在最初に利用可能なモデルを回答し、
+  モデル呼び出しは行いません。
+- 一般的なベンダー名は、そのベンダー用に `consult` で設定された候補を使います。
+- Opus などの標準モデル別名はスキル表の正確なモデルファミリーに固定します。
+  明示した対象が存在しない、または CLI が使えない場合は明確に失敗し、別の
+  ベンダーやモデルファミリーへフォールバックしません。
+
+<details>
+<summary><b>モデルの役割ガイド（それでも委任は必要）</b></summary>
+
+<br/>
+
+レーンに最適なモデルは、誰がコントローラーかによって変わりません。以下は役割の
+目安であり、自分で実行してよいという例外ではありません。同じモデルでも委任します。
+ネイティブエージェントを使えるのは、呼び出し側がモデル、effort、モード、作業
+ディレクトリ、ツール、分離方式、ライフサイクルがすべて一致すると明示した場合だけで、
+それ以外は CLI を使います。コントローラーは編成と検証を担い、ワーカーは再委任しません。
+以下の開始位置はスコア上限だけから求めたものです（AA v5.0.1 スナップショット、2026-11-10 承認）。
+継承された上限、ホストでのプローブ失敗、クォータによって、チェーンがさらに下へ進む
+ことがあります。
+
+- **Claude Code · Fable 5.2**——上限が最も高いプロンプトレベルのコントローラー（Claude Code 2.1.321 以降が必要）。max、xhigh、high では hardest-coding と hard-judgment の第一候補が Fable 5.2 自身ですが、それでもディスパッチします。medium では最初に届くのが Astra xhigh（hardest-coding）と Fable 5.2 medium（hard-judgment）、low では Opus 5.5 high と Fable 5.2 low です。
+- **Claude Code · Fable 5.1**——xhigh（50）では、hard-judgment は Fable 5.1 xhigh 自身から始まります（それでも委任します）。hardest-coding と taste-final は Sonnet 5.5 xhigh から、bulk-mechanical、fast-agentic、long-context は GPT-6.1 Sol medium から始まります。
+- **Claude Code · Opus 5.5**——ui-draft の先頭は Opus 5.5 high です。xhigh（57）では hardest-coding が Astra xhigh から、hard-judgment が Fable 5.2 medium から始まります。medium（48）では hardest-coding と hard-judgment が Opus 5.5 medium 自身から、ui-draft と long-context が GPT-6.1 Sol medium から始まります。
+- **Claude Code · Opus 5**——スコアが残っているのは max（44）だけなので、`max` で明示的に指名する独立レビュー役であり、どのレーンのデフォルトでもありません。この上限では hardest-coding が Sonnet 5.5 high から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。
+- **Codex · GPT-6.1 Sol**——bulk-mechanical と fast-agentic の先頭は GPT-6.1 Sol medium です。xhigh（52）では hardest-coding が Opus 5.5 high から、hard-judgment が Fable 5.1 xhigh から、long-context が Astra medium から始まります。high（50）では hardest-coding が Sonnet 5.5 xhigh から始まります。
+- **Codex · Astra**——consult（xhigh）と long-context（medium）の第一候補で、xhigh は hardest-coding と taste-final の 2 番手でもあります。xhigh（55）では hard-judgment が Fable 5.2 low から始まります。必要なら `--vendor codex --effort max` を明示的に指定してください。明示した model／effort が常に優先されます。
+- **Codex · GPT-6.1 Terra**——Codex のコスパ枠です。fast-agentic の 2・3 番手（medium、low）、bulk-mechanical の 3 番手（high）。xhigh（45）では hardest-coding が Terra xhigh 自身から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。GPT-5.6 Terra はスコアが max だけで、どのレーンにも入っていません。
+- **Grok Build · Grok 4.7**——live-search と coding-overflow の第一候補、consult の 3 番手で、hardest-coding、hard-judgment、taste-final では Grok の末尾を担います。上限が 35 なので、難しいレーンの多くは Opus 5.5 low から始まります。Grok 4.6 はどのレーンにも入っていません。API シグネチャと引用した事実は必ず検証してください。
+- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）はすべてのレーンで Gemini の枠を占め、Flash より前に並びます。Flash はその後ろのベンダー横断フォールバックで、consult、ui-draft、hard-judgment、live-search、coding-overflow では High、hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic では Medium、triage では Low を使います。エージェント／コーディングのベンチマークから、見た目のセンスやコントローラーとしての適性を推し量らないでください。
+
+</details>
+
+## アシスタント自身のサブエージェントを使う
+
+omnilane は既定でベンダーのコマンドラインツールに仕事を渡します。仕事をすべきモデルがアシスタント**自身のベンダー**のものである場合、別の CLI を経由するのは回り道です。ログインがもう一つ、プロセスがもう一つ、その CLI が更新されれば壊れる箇所がもう一つ増えます。多くのアシスタントは自分でサブエージェントを起動でき、omnilane はそのための計画を立てられます。方法は二つです。
+
+**アシスタントとまったく同じものを動かすワーカー（`--inherit`）。** アシスタントは*モデルも effort も指定せずに*サブエージェントを起動するので、ワーカーは呼び出し元の複製です。複製が本体より強くなることはなく、omnilane のスコア確認が防ごうとしているのはそれだけです。したがってこの経路にはベンダー CLI もトランスポートオーバーレイも不要で、呼び出し元の effort が不明でも、オーバーレイが古くなっていても動きます。
+
+```sh
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+```
+
+正直な部分: ハンドオフには `satisfies_lane_target: false` と記されます。ここでのレーンは仕事の種類を示すラベルにすぎません。この方法で得た結果は「アシスタント自身のサブエージェント」によるものであり、「hardest-coding のモデル」によるものでは決してありません。呼び出し元より強いモデルを必要とするレーンは、引き続き拒否されます。`--inherits-caller-runtime` は「自分のサブエージェントツールはそう動く」というアシスタント自身の申告であり、omnilane からは観測できません。アシスタントごとに分かっていること:
+
+| アシスタント | モデル引数なしのサブエージェント |
+|---|---|
+| Claude Code | メイン会話のモデルを使い、effort はセッションのものを引き継ぐと公式ドキュメントに明記（エージェント定義が指定する場合を除く）。組み込みの general-purpose エージェントで `CLAUDE_CODE_SUBAGENT_MODEL` が未設定のとき成立。自分のホストで継承動作を確認してください |
+| Codex | モデルも effort も付けない `collaboration.spawn_agent`。自分のホストで継承動作を確認してください |
+| Grok Build | 親のモデルを引き継ぐとドキュメントに明記（同梱の `general-purpose` は `model: inherit`）。effort については記載なし。自分のホストで対応状況を確認してください |
+| Antigravity | `agy` 1.2.7 にサブエージェントツールが見当たらない。利用不可 |
+
+**アシスタントのツールが選択できる特定のモデル。** ツールが実際に受け付けるものを capability ファイルに記述し（`omnilane native-context` の出力から始め、正確なモデルと effort の組ごとに行を追加）、通常の `omnilane route` に `--native-context FILE` を渡します。omnilane がサブエージェントを使うのは、ある行が完全に一致したときだけです。モデル、effort、モード、workdir、ツール、分離方式、ライフサイクルのすべてです。同じベンダーは同じモデルではなく、インストール済みの CLI から推測することもありません。`--executor native` はフォールバックせず失敗し、`--executor cli` は外部 CLI を強制します。ファイルが無いというだけで同一ベンダーのターゲットが CLI を経由した場合、ディスパッチはそれを明示するようになりました。
+
+どちらの場合も、サブエージェントはアシスタントのツールとファイルシステムを共有します。OS レベルのサンドボックスは無く、`advise`／`work` は意図であって強制ではありません。バックグラウンド、常駐、名前付きスレッド、複数ラウンド、投票、`sysops` は CLI 経路のままです。プロトコル処理には Python 3.9 以上が必要です。スキーマ、完了ファイル、エージェントの再利用とキャンセル: [docs/native-executor.md](docs/native-executor.md)。
+
+## 🖥️ Live Board
+
+すべてのディスパッチは——フォアグラウンドでも `--background` でも——ディスク上の
+ジョブとして記録されます。Live Board はそのジョブストアの上に載る、任意かつ
+読み取り専用のローカルワークベンチです:各モデルに何を頼み、何が返り、どう
+ルーティングされ、まだ実行中かを一目で確認できます。
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board デスクトップ表示——左にジョブ一覧、右に選択中ジョブのタスク・公開結果・モデルパス" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board モバイル表示——検索可能なジョブ一覧とステータスフィルター" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # サーバーを起動または再利用し、認証済み URL を表示
+omnilane ui status   # ローカルサーバーの状態を確認
+omnilane ui url      # 現在の認証済み URL を表示
+omnilane ui stop     # 正常に停止
+```
+
+デスクトップではジョブ一覧と詳細ペインを別々にスクロールでき、モバイルでは
+一覧／詳細の切り替えと戻る操作、Esc に対応します。Server-Sent Events(SSE)は
+フォーカス中の行を作り直さず更新し、短い切断では最後のスナップショットを保持して
+再接続します。読み込み済みジョブを参照として固定し、別のジョブを選ぶと、モデル
+経路と公開結果を横並びで比較できます。参照スナップショットはブラウザのメモリ内
+だけに保持され、ページを閉じると消えます。`127.0.0.1` のみにバインドし、
+ランダムトークンで保護された読み取り専用画面です。`task.txt` と公開用 `out.txt`
+のみを表示し、ワーカーや
+ベンダーの生ログは表示しません。
+
+画面は英語・日本語・韓国語・繁体字中国語・簡体字中国語で読めます。初回はブラウザ
+の言語に従い、ヘッダーの切り替えで上書きでき、選んだ言語はローカルに記憶されます。
+
+コアルーティングに Python は不要で、この UI のみ Python 3.9 以降が必要です。
+
+## 📦 インストール
+
+前提:ルーティングしたいベンダー CLI(`codex`、`claude`、`grok`、`agy`、
+任意で `kimi`、`qwen`、`opencode`)がログイン済みで `PATH` 上にあること——
+**持っている分だけで OK**、足りないレーンは自動的に降格します。
+`openrouter` vendor は例外で、CLI は不要——`curl` と環境変数の
+`OPENROUTER_API_KEY` だけで動きます。
+
+最速:`./install.sh` — 本機の CLI を検出してスキルを接続し、残りのプラグイン
+コマンドを表示、実効ルーティングを出力し、最後に対話式設定メニューを
+提案します(`--uninstall` で元に戻せます)。インストーラーはシステム言語に
+合わせて英/繁中/簡中/日/韓を自動選択(`OMNILANE_LANG=ja` で強制可)。
+さらに任意で、各 CLI の指示ファイル(`~/.claude/CLAUDE.md`、
+`~/.codex/AGENTS.md`、`~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——パスは
+CLI バージョンにより異なる場合あり)へマーカー付きの可逆な
+**常駐ルーティングリマインダー**を追記できます。非対話インストールは
+`OMNILANE_HOOKS=all|none|claude,codex` を指定。手動接続:
+
+`./install.sh --check` は変更せずドリフトを検査します。インストールまたは
+`--uninstall` に `--dry-run` を加えると所有対象の操作を事前表示します。
+インストーラー所有のリンクとマーカー付きリマインダーを戻すには、
+`./install.sh --uninstall` を実行します。
+
+- **Claude Code**:プラグインとしてインストール(`/route`、`/route-jobs`
+  コマンドに加え、セッション開始時にルーティングリマインダーを自動注入する
+  `SessionStart` フック付き。CLAUDE.md の編集は不要)、または
+  `skills/omnilane` を `~/.claude/skills/` へ。
+- **Codex**:`skills/omnilane` を `~/.codex/skills/` へ配置/リンク。
+- **Grok Build**:`grok plugin install <このリポジトリ> --trust`
+- **Antigravity**:`agy plugin install <このリポジトリ>`(先に
+  `agy plugin validate` で確認)
+
+### MCP サーバー
+
+`omnilane mcp` は依存ゼロでローカル実行される MCP stdio サーバーを起動し、
+MCP 対応ホストがスキルの導入やルーティングリマインダーなしで omnilane を
+発見・呼び出しできるようにします。ホスト側の設定でインストール済み CLI を
+指定してください:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+サーバーは `route` に加えて、読み取り専用の照会ツール `list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor` を公開します。
+`route` のデフォルトは読み取り専用の `advise` モードで、`work` を選ぶ呼び
+出しには明示的な `workdir` が必須です。
+
+実行時に必要なのは Node.js のみ(npm パッケージは不要)。npm 派なら
+`npm install -g omnilane` で MCP サーバーごと CLI をインストールできます。
+
+## ⚙️ カスタマイズ
+
+三層、すべて任意:
+
+1. **対話メニュー** — `scripts/configure.sh` が設定可能なレーンを表示し、レーンごとに
+   ベンダー → モデル → エフォートを選択(候補リスト+自由入力)、結果を
+   `~/.omnilane/routing.local.yaml` に書き込みます。複数ベンダーの `consult`
+   は意図的に除外されるため、変更する場合は手動編集します。
+2. **`~/.omnilane/routing.local.yaml`** — 手書きのオーバーライド。
+   書式は `routing.yaml` と同じで、ローカルが優先。
+3. **`~/.omnilane/local.sh`** — マシン固有のバイナリパス、プロキシ、認証
+   ラッパー。全ランナーが読み込み、コミットされません。
+
+確認はいつでも:
+
+```
+scripts/dispatch.sh --list     # 実効テーブル(フォールバック解決を注記)
+```
+
+## 📖 コマンドリファレンス
+
+```
+omnilane list | route … | jobs … | configure
+eval "$(omnilane completion bash)"
+source <(omnilane completion zsh)
+omnilane completion fish | source
+omnilane mcp
+omnilane release-audit [--target VERSION] [--json]
+omnilane ui start
+omnilane ui status
+omnilane ui url
+omnilane ui stop
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]
+            LANE "TASK"
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]
+dispatch.sh [--json] --validate [--json]
+jobs.sh [--json] {list | status ID | result ID}
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]
+jobs.sh wait ID [--timeout N]
+jobs.sh cancel ID
+jobs.sh rm ID
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
+jobs.sh audit [--last N] [--json]
+jobs.sh prune [--keep N] [--apply]
+configure.sh
+configure.sh set|get|unset|list|diff LANE [SPEC]
+```
+
+`configure diff` は両方の表示で `local.sh` の同じマシン固有の利用可否設定を保持し、ローカルバイナリの設定欠落ではなくルーティング上書きの差分を比較します。 どちらかの確認に失敗すると、比較結果を表示せず、その終了ステータスを返して失敗した段階を示します。
+
+`configure get` は確認に失敗した場合、その終了ステータスを返し、部分的なデータを返したりレーン不明と誤報したりしません。`configure list` は存在確認のエラーを報告します。上書きが本当に存在しない場合や空の場合は従来どおり成功します。
+
+`configure set` は一時候補を検証してから公開し、既存ファイルのパーミッションを維持します。既存ルーティング内容の読み取り失敗、予期しない検証処理の失敗、対象レーンの構造エラーでは既存設定を変更しません。利用可否の警告や他レーンのエラーの扱いは従来どおりです。
+
+`configure unset` は読み取りと絞り込みを完了してから、従来どおり既存の保存先へ書き込みます。読み取り・絞り込みの失敗では元の内容を変更しません。書き込みの失敗は報告しますが、ロールバックは保証しません。
+
+Bash・Zsh・Fish の補完には、文書化されたトップレベル、ゴール、ジョブのコマンド群が含まれます。補完を選んでもコマンド文字列を入力するだけで、ジョブ操作は実行しません。
+
+`--vendor` を指定しない場合、`benchmark` は有効なルーティング一覧からベンダーを取得し、表示用の `unavailable` を除外します。対象ベンダーが残らない場合は未設定の診断を表示して終了コード 2 を返します。既定は引き続きプロバイダーを呼び出さないドライランです。
+
+ジョブの `list` と `status` は同じ観測状態を使います。`dead` は、終了コードが記録されておらず、ワーカーの PID が無効または存在しない状態です。`--status running` から除外され、`--status dead` で選択できます。`result` は稼働中とは表示せず、終了コード未記録と報告します。PID がまだない起動中のジョブは従来どおり `running` で、終了コードを推測しません。
+
+バックグラウンドジョブには Perl による監視が必要で、キャンセル時に監視対象のプロセスグループを停止します。
+監視自体はジョブ全体の期限を追加しません。適用されるタイムアウト設定がない場合、メタデータは `job_timeout: null` のままです。
+監視下の呼び出し単位のタイムアウトは Perl alarm を使い、142 を返す場合があります。ジョブ全体の期限切れは 124 を返します。
+`jobs close` はプロセスグループの後処理を含めて最大 11 秒待機します。
+
+`--thread NAME` は単発ディスパッチ間で名前付きの Claude、Codex、Grok、
+Gemini 会話を継続します。0.33.0 ではベンダー、モデル、effort、物理 workdir
+を固定します。ローカル状態は `jobs.sh threads`、`threads show NAME`、
+`threads rm NAME` で管理でき、削除してもベンダー側のセッションは残ります。
+
+終了コード:`2` 使い方エラー(無効なベンダー、または指定ベンダーがレーンに
+ない場合を含む)、`3` レーン無効(off)、`4` チェーン内に利用可能な CLI がない、
+または設定済みの指定ベンダー CLI が利用不可、`5` Round 1 の成功投票者不足、
+`6` Round 2 の反論全失敗、`86` ネストディスパッチ拒否、`87` ロック待ちタイムアウト、
+`124` ジョブ全体タイムアウト。
+それ以外はワーカー自身の終了コードを透過。
+
+バックグラウンドジョブには、プロセスグループ全体を取り消すための Perl 監視プロセスが必要です。監視だけではジョブ全体の期限は追加されず、未設定の `job_timeout` は `null` のままです。呼び出しごとの制限は別の `scripts/lib/call-timeout.pl` が管理し、期限切れは 142、ジョブ全体の期限切れは 124 を返します。`jobs close` はグループの後処理を含めて最大 11 秒待ちます。
+
+監視対象はランダムな `OMNILANE_JOB_TOKEN` と `OMNILANE_JOB_ID` を継承します。取消・ジョブ全体の期限切れ後は、完全一致のトークンを持ち、ジョブより後に起動したプロセスも確認し、`setsid` などでグループを離れた残存プロセスを処理します。通常終了時は数えるだけです。`jobs --json status` は `"leftovers":{"reaped":N,"remaining":M}` を返し、通常表示も残存時に `leftovers=M` を付けます。macOS の `/bin/bash` など環境を隠すプラットフォームバイナリや、環境を消したプロセスはこの方法では検出できません。
+
+`jobs recommend` は検証済み公開メタデータと終了コードだけを読み、成功率・サンプル数・名前の順に並べます。既定では完了ジョブが三つ以上必要で、タスクや結果の本文を読まず、ルーティングも変えません。`doctor --probe V` だけが時間制限付きの advise 呼び出しを一度行い、可用性・モデル・所要時間・応答バイト数だけを返します。`--probe` なしではオフラインです。`benchmark` は `benchmarks/workloads.tsv` を使い、既定では予行のみです。`--run` で初めてベンダーを呼び、費用は指定した `--cost-per-call` だけに基づく見積もりです。
+
+`arbitrate` は既定で無効です。`routing.local.yaml` に `arbitrate: vote codex,claude,grok -` を設定するか、メニューで codex／claude／grok／gemini から 1–4 名を選びます。ラウンドごとに各投票者を一度呼び、呼び出し元が意見をまとめます。強度欄を `2` にすると相違点を議論するラウンドを追加します。`arbitrate: exec /path/to/script -` も使用でき、スクリプトは `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE` を受け取り、`OUTPUT_FILE` に判断を書きます。インターフェースは `scripts/runners/run-exec.sh` を参照してください。
+
+## 🎭 モード
+
+- **advise（既定）**: ローカル読み取り専用分析。対応ベンダーのネイティブ検索ツールとモデル接続は使用可能ですが、変更ツールは制限します。X／ウェブ検索機能が全ベンダーで同等とは限りません。
+- **work**: ファイル編集とコマンド実行を明示した `--workdir` 内に制限し、エージェントツールのネットワークを無効化します。モデル接続は維持します。強制境界が未対応ならモデル起動前に停止し、sysops へ暗黙に移行しません。
+- **sysops**: 派遣ごとの明示指定でツール、ファイル、ネットワークの制限を解除します。レーンの既定値にはせず、タスクに許可する操作を記載します。
+
+CLI で `--workdir` を省略すると呼び出し元の現在のディレクトリを使いますが、タスク指示では明示してください。MCP `route`／`dry_run` の work インターフェースでは、別途明示的な `workdir` が必要です。
+
+Codex と Claude は三つのモードに個別のポリシーを適用します。Agy advise／sysops は認証を置き換えず、独立したセッション設定を使用します。Agy 1.1.27 work は検証済みの四つのツールとネイティブ端末サンドボックスを使い、新規／再開の限定検証で作業領域内の読み書き、編集、ビルドと領域外書き込み拒否を確認しました。外部一時ファイル／キャッシュの読み取りも制限されます。設定は起動ごとに明示的に再生成し、不変とは主張しません。別途、実際の work ライブ／FIFO で二つのターンを実行し、前ターンの読み戻し、領域外書き込み拒否、正常終了とソース不変を確認しました。Grok advise はネイティブツールの許可／拒否規則を使用します。子プロセスのネットワーク隔離が Linux 限定のため、macOS の Grok work はデフォルトで起動前に停止します。Grok ライブは明示的な sysops が必要です。検索の可用性やユーザーフックの影響は実際のツールイベントで検証し、終了コードだけでは証明しません。OpenRouter は advise 専用で、他のベンダーはこの四ベンダー契約に自動的には含まれません。
+
+macOS の Grok work：オペレーターは `routing.local.yaml` にのみ `option.grok-macos-work: unconfined` を追加することで、**隔離なし**の単発 work を有効にできます。既定は無効で、無効時は macOS の work チェーンが Grok をスキップします。有効時は `doctor --strict` が失敗します。詳細は[オプション、リスク、Grok ワーカー用の必須タスクブリーフ](docs/grok-unconfined-work.md)を参照してください。
+
+Grok 1.0.13 の単発 `plain` advise は完全なツールセットで実際の検索、ページ取得、書き込み拒否を検証済みです。内部ウェブツール ID とジョブ専用の MCP 準備状態を使い、フックは無効化しません。既存の空でない `CONTEXT_MODE_MCP_SENTINEL_DIR` は上書きせず、競合としてモデル起動前に停止します。この結果はライブや macOS work の検証には拡張しません。詳細は[日付付き実行時ゲート](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)を参照してください。
+
+## 🔒 安全機構
+
+- **ネストディスパッチ禁止** — ワーカーの再ディスパッチを拒否
+  (`OMNILANE_DEPTH` ガード、終了コード 86)。
+- **Codex 直列化ロック** — 同一ターゲットディレクトリへの codex
+  ディスパッチはキューイング。クラッシュ残留ロックは所有者 PID で検出し
+  安全に奪取。
+- **ウォッチドッグ** — 全ワーカーは `timeout`/`gtimeout`、どちらも無ければ
+  perl-alarm フォールバック下で実行(素の macOS がこのケース)。上限は
+  **CLI 呼び出しごと** に適用され、優先順位は `--timeout SECONDS` > レーン別
+  `OMNILANE_TIMEOUT_<LANE>`(例 `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > グローバル
+  `OMNILANE_TIMEOUT`(既定 600 秒)。これは呼び出し単位のハングガードであり、
+  ジョブ全体の予算ではありません。リトライするベンダー(grok)や vote パネル
+  (投票者 × ラウンド)は複数回呼び出すため、総実時間はこの値の数倍になり得ます。
+- **ジョブ全体ヒューズ** — 任意の `--job-timeout SECONDS` はロック待ち、
+  リトライ、全投票者・ラウンドを一つの process group 監視下で制限します。
+  優先順位はフラグ > `OMNILANE_JOB_TIMEOUT_<LANE>` >
+  `OMNILANE_JOB_TIMEOUT` > 無効です。ただし Git worktree 外で Codex の
+  `work` を実行し、全体上限が未設定の場合だけ、解決済みの呼び出し単位
+  ウォッチドッグを自動的に全体ヒューズとして使います（監視機構の上限は
+  999999999 秒）。この自動ヒューズには同梱の Perl 監視機構が必要です。利用
+  できない場合は警告し、既存の呼び出し単位ウォッチドッグ経路で非 Git work を
+  続行します。その経路でも監視ツールがなければ、別途警告します。
+  期限切れは監視対象の process group を終了して 124 を返します。
+  大規模リポジトリの深い監査は 2–4 時間(7200–14400 秒)、呼び出し単位は
+  30 分から始めるのが目安です。ハードコードされた既定値ではありません。
+- **バックグラウンドジョブ** — `--background` ワーカーは独立した process
+  group で動き、呼び出し元の終了後も生存。kill された場合は終了コードを
+  記録し、`jobs.sh status` が `dead` を報告。
+- **ペイロード上限** — 巨大なタスクテキストは自動で頭尾トランケート。
+
+## 📬 ライブメールボックス
+
+呼び出しごとの `--timeout` は常駐セッション全体を対象とし、ターン完了で時計は停止・リセットされません。Claude と Gemini では、送信済みの全ターンがベンダーの SUCCESS となり、使用可能な出力がある場合だけ、回答後の期限切れを成功とします。末尾に `closed by per-call timeout after Ns; last turn completed` が付き、Gemini の末尾の取消エラーも完了済みターンを覆しません。未回答ターンがあれば終了コード 142 と `CALL_TIMEOUT` を維持し、`jobs.sh stats` は `failed` と `call_timed_out` の両方に数えます。回答を読んだら早めに `jobs close ID` で閉じるか、一回限りのバックグラウンド作業には `--single-shot` を使ってください。
+
+ライブメールボックスは、1 回で完結するディスパッチとは別の、対応モードで利用できる常駐バックグラウンド実行です。フォアマンが `--background` で開始し、実行中にも追加の指示を送れます。終わったらフォアマンが `jobs.sh close ID` で閉じます。放置しても常駐し続けるわけではなく、アイドル上限または設定済みのジョブ全体タイムアウト（`--job-timeout`）に達すれば終了します。
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "タイムアウトしたテストを確認する"
+# dispatch が表示したジョブ ID を $ID として保存
+scripts/jobs.sh send "$ID" "リトライ経路も確認してください。"
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+フォアグラウンドのディスパッチと `jobs retry` は、ジョブが失敗した場合も保存済みの公開出力を表示し、その非ゼロ終了コードを返します。バックグラウンドのディスパッチは従来どおりジョブ ID を出力します。
+
+`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。Grok はさらに `--mode sysops --workdir DIR` が必要で、ACP が制限モードの境界を強制しないため advise／work のライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
+
+アイドル中は API 呼び出しも料金も発生しません。既定では、新しい受信メッセージまたは結果イベントが 900 秒間なければ worker が自動で終了し、ジョブ全体タイムアウトは外側の上限として残ります。やり取りが終わったら早めに `close` できます。終了済み、またはライブでないジョブへの `jobs.sh send` は明確なエラーで失敗します。送った後に追跡しない作業、ライブ対応していないベンダー、クリーンな状態からの再実行が必要な場合には使わず、新しいディスパッチ（または完了後の `retry`）を使ってください。
+
+## 🎯 ゴールオーケストレーション
+
+`omnilane goal` は、フォアマンが進行する作業台帳です。ループを担当するのは、ゴールを開いたエージェントセッションまたは端末の利用者です。ジョブをディスパッチし、完了受信箱または `omnilane jobs wait` で結果を受け取り、次のジョブを判断して繰り返します。ジョブ数と経過秒数の予算はデフォルトで無制限です。`--budget-jobs N` または `--budget-seconds S` を指定した場合に限り、対応する上限が有効になります。omnilane は記録だけを担い、各 goal dispatch の前に呼び出し元が指定した上限とデフォルトで有効な同一失敗のヒューズを検査し、フォアマンがゴールを閉じるときにレポートをまとめます。
+
+```bash
+GOAL_ID="$(omnilane goal open "不安定な決済統合を修正する" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "決済エラーを再現し、最小修正を実装して検証する")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "決済統合テストが成功した"
+omnilane goal close "$GOAL_ID" --summary "決済統合は安定した"
+```
+
+更新が中断された場合、失敗回数は永続化されたジョブ記録から再構築され、重複計上されません。`goal close` はレポートの保存後にのみ目標を閉じます。保存に失敗した場合は、原因を修正してから再試行できます。
+
+目標が使用中の場合は、読み取り専用のロック所有者診断を表示し、終了コード 75 を維持します。ロックは自動削除されません。記録された PID だけでは所有権を証明できないため、復旧前に手動確認が必要です。
+
+目標の状態とレポートは、`dead` と `missing` を実行中とは表示しません。状態の根拠を取得できない、または整合しない場合は `unknown` とし、終了コードや失敗回数を捏造しません。各ジョブの秒数は投入後の経過時間であり、実稼働時間ではありません。目標の予算は変わらず、未完了ジョブごとに最大二秒のローカル状態確認を一回行います。
+
+完了済みジョブのファイルを通常の操作で削除しても、目標には検証済みの終了コード、完了時刻、完了までの経過秒数が残ります。状態とレポートは別途 `artifacts=missing` と表示します。完了記録のないジョブは missing または unknown のままで、削除によって終了結果を作り出すことはありません。
+
+目標へのディスパッチは、先に意図を記録してジョブ枠を一つ予約します。起動前に一回限りの起動権記録で意図と生成されたジョブ ID を結び付けます。`spent_jobs` は記録済みジョブ数、`reserved_jobs` は未解決の送信数です。未解決または破損した記録がある間は、新しいディスパッチと終了を拒否します。照合は記録を修復するだけで、ジョブの起動、終了コードの推測、不明な送信の再実行は行いません。
+
+スレッド付きの目標ディスパッチでは、stdout は正確なジョブ ID のみです。ID の検証後、対応するスレッド通知を stderr に表示します。直接のバックグラウンドディスパッチは、従来どおり通知と ID を stdout に出力します。
+
+`goal dispatch` はバックグラウンドジョブを起動するため、`--dry-run` はサポートしていません。このオプションはゴールの状態を変更する前に拒否されます。ルーティングをプレビューするには、`omnilane dispatch --dry-run [options] LANE "TASK"` を直接使用してください。 直接のプレビューはゴールの作業ディレクトリを引き継がないため、必要なら `--workdir DIR` を指定してください。
+
+保存された目標予算には JSON 整数を使い、真偽値や数値文字列は受け付けません。任意の上限は引き続き `null` または 1..999999999、カウンターは対応範囲内の非負整数です。不正なフィールドは台帳更新やディスパッチの前に拒否します。作業ディレクトリのパスにタブ、CR、改行、NUL は使えません。通常の空白と Unicode は使用できます。
+
+ディスパッチのエラーや結果の消失後は、再送信の前に `goal status` を確認してください。同じコマンドでも新しい送信は別の意図となるため、保証は意図ごとの最大一回の起動であり、同一コマンド全体の重複排除ではありません。照合には有効な既存のワーカー PID または終了コードの証拠が必要です。照合前にそれを削除すると予約は未解決のままです。照合済みの目標履歴はジョブファイルの削除後も残り、既存の目標も読み取れます。古いロックや不明な意図の自動復旧は行いません。
+
+バックグラウンド処理の終了処理中は、HUP/TERM によって確定した終了コードが変更されません。完了フックは配信済み記録を除外し、読み取り不能の通知を含めて、プロンプトごとに最大十件を配信します。
+
+ゴールの状態は `$OMNILANE_HOME/goals/<goal-id>/` に保存されます。`goal status` では、予算使用量、ヒューズ作動回数、各ジョブから順次届くメタデータと終了状態を確認できます。`goal close` は `report.md` を書き、そのパスを表示します。手順が明白な単一タスクは直接ディスパッチしてください。予算フラグを指定した場合、その上限は厳格な制約であり、完了を保証するものではありません。
+
+## ❓ FAQ
+
+<details>
+<summary><b>これらのサブスクは全部必要ですか?</b></summary>
+
+<br/>
+
+いいえ。各レーンはフォールバックチェーンで、実際にインストール済みの最初の候補が
+使われます。サブスクが一つなら表全体がそのベンダーに収束し、チェーン内に何も無い
+レーンはエラーではなく単にオフになります。`omnilane doctor` で今このマシンが実際に
+到達できる先が分かり、`routing.local.yaml.example` にはよくある状況向けの
+スタータープロファイル(Claude のみ、Codex 中心、Codex 無し)が入っています。
+
+</details>
+
+<details>
+<summary><b>omnilane は私のコードを新しい送信先へ送りますか?</b></summary>
+
+<br/>
+
+新しい送信先は増えません。ディスパッチはすでにインストールしログイン済みの
+ベンダー CLI を呼ぶだけなので、コードが届くのは元から使っているベンダーだけです。
+ランナーはサブスク制 CLI を呼ぶ前に API キーの環境変数を取り除くため、残っていた
+キーによって従量課金へ黙って切り替わることもありません。唯一の例外は direct-API
+ベンダー群(`openrouter`、`deepseek`、`zai`、`mistral`、`groq`、`cerebras`)で、
+これらは定義上あなたが設定したキーでそのプロバイダーの API を呼びます——いずれも
+advise 専用で、ファイルを編集しません。
+
+</details>
+
+<details>
+<summary><b>なぜ今は Fable 5.2 が難しい作業の先頭なのですか?</b></summary>
+
+<br/>
+
+2026-11-10 のスナップショット（AA Intelligence Index v5.0.1、同日承認）では、Fable 5.2
+xhigh が 62 点で、レーンがディスパッチできる他のどの行よりも高くなっています
+（Opus 5.5 xhigh 57、Astra xhigh 55）。`hardest-coding` では Terminal-Bench 4.0
+も最高（0.616。Astra と Opus 5.5 xhigh はどちらも 0.596）で、SciCode は 0.656
+（他の 2 つは 0.557、0.650）です。`hard-judgment` では HLE（0.689）、Briefcase
+analytical Elo（1927）、CritPt（0.357）のいずれもチェーン内で最高で、最初の Codex
+行である GPT-6.1 Sol xhigh はそれぞれ 0.526、1691、0.317 です。一方で最も高価な行
+でもあり、AA のインデックス 1 回分の費用は Fable 5.2 xhigh が約 $11,742、Opus 5.5
+xhigh が約 $4,766、Astra xhigh が約 $3,746 です。
+
+Astra xhigh は引き続き `hardest-coding` の 2 番手、`consult` の第一候補で、
+`ui-draft` の先頭は Opus 5.5 high です。Fable 5.2 には Claude Code 2.1.321 以降が
+必要です。このスナップショットは 2026-11-10 に運用者が承認しました。レーンごとの
+数値は [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) にあります。
+
+</details>
+
+<details>
+<summary><b>なぜどのレーンも <code>max</code> を使わないのですか?</b></summary>
+
+<br/>
+
+effort はタスクごとに選ぶもので、高いほど良いとは限りません。2026-11-10 の並べ替え
+以降、`hardest-coding` を含めてどのレーンのチェーンにも `max` の行はありません。
+各レーンはコスパ優先で並んでおり、`max` は最も高価なわりに伸びが小さいためです
+（Fable 5.2 は max で 65 点、xhigh で 62 点）。`max` は `--effort max` で明示すれば
+今も使えます。明示した `--model` と `--effort` は常にこれらの既定より優先されます。
+
+</details>
+
+<details>
+<summary><b>レーンの第一候補 CLI が無いときはどうなりますか?</b></summary>
+
+<br/>
+
+ディスパッチはチェーンを辿り、手元にある最初のベンダーを使います。コールを消費
+せずに判断を確認できます:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # 候補ごとのトレース
+scripts/dispatch.sh --list                     # 実効表の全体
+scripts/dispatch.sh --dry-run hardest-coding "…"   # 解決済みプラン、プロバイダー呼び出し無し
+```
+
+</details>
+
+<details>
+<summary><b>ディスパッチされたワーカーはファイルを編集できますか?</b></summary>
+
+<br/>
+
+依頼した場合のみです。ディスパッチの既定は読み取り専用の `advise` で、ベンダーごとに
+実装されています(読み取り専用サンドボックス、またはネイティブツール権限)。
+範囲を限定した編集では `--mode work` と明示的な `--workdir` を指定してください。
+work は指定ディレクトリ内の変更に限定し、モデル接続を維持したままツールのネットワークを無効化します。
+`--mode sysops` は Codex、Claude、Grok、Agy それぞれの独立した完全アクセス政策で、
+work の別名ではありません。サービス管理など、work の境界を超える操作をタスクが明示的に許可する場合に使います。
+ディスパッチごとの明示指定のみで、レーンの既定値にはなりません。
+ワーカー自身は再ディスパッチできません——深度ガードが終了コード 86 で入れ子の
+ファンアウトを拒否するため、一つのコマンドがエージェントの連鎖に膨らんでクォータを
+食い潰すことはありません。
+
+</details>
+
+<details>
+<summary><b>ディスパッチが拒否されました。どの拒否ですか？</b></summary>
+
+<br/>
+
+3 つのコードには 3 つの異なる対処があります。まず `omnilane doctor` を実行して
+ください。その `transport-overlay` チェックが、問題はこのマシンの設定なのか
+リクエストなのかをすぐに示します。
+
+`missing-caller-context` — 識別情報がゲートに届いていません。人間は
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` または `--operator-asserted-human` を
+使います。モデルは通常何もしなくてよく、dispatch が起動元の CLI から識別情報を
+読み取ります。読み取れない場合は `omnilane whoami` を実行してください。渡すべき
+`--caller-context FILE` を出力するか、読み取れない理由（`--effort` 未指定、モデル
+エイリアス、スコア行なし）を示します。モデルは人間向けの免除を自称してはいけません。
+
+`runtime-mapping-unverified` — 識別情報は正しく、**ターゲット**にホストローカルの
+リクエストセレクタの証明がありません。未プローブか、プローブが失敗しています。
+`omnilane doctor` と `--json` は未検証行を `WARN` として表示します。ID、要求・観測した
+モデルと強度（記録がある場合）、失敗の分類と理由、最終プローブ時刻、証拠のパス
+（内容は非表示）、次の手順を確認できます。環境要因には
+`omnilane resign --retry-failed --vendor VENDOR` を案内します。確定的な失敗は自動再試行せず、
+要求・CLI・プロバイダーの対応を調べます。証拠破損時は対象パスと、正常なバックアップからの
+復元または新しいディレクトリへの明示的な再プローブを案内します。利用上限による拒否は上限が解消するまで続きます。
+
+`invalid-policy-input` と "transport contract evidence changed" — 上記のいずれ
+でもありません。overlay 自体が読み込めないため、**すべてのベンダー**が拒否され
+ます。よくある原因はベンダー CLI の更新です。overlay は各ベンダーの実行ファイルと
+ランナースクリプトのハッシュを固定しており、Codex と Claude の証拠パスは
+バージョンディレクトリを含むため、更新ではダイジェストが変わるのではなく
+ファイルが消えます。タグ付きの証拠は自分のベンダーだけを降格させ、プローブ
+マニフェストのようなタグなしの証拠はゲート全体を閉じます。doctor がファイルと
+ベンダーを示し、再署名の手順はディスパッチスキルにあります。
+
+`target-above-effective-ceiling`——どこも壊れていません。ターゲットのスコアが
+呼び出し側より高いだけです。`required_caller_effort` には、呼び出し側のセッションに
+必要な effort が入ります。`caller_degraded` が付いた呼び出し側は、effort を記録
+しないハーネス（Codex のハートビート自動化など）から起動されたもので、そのモデルの
+最低ラインとして扱われます。
+
+</details>
+
+<details>
+<summary><b>マッピングの証拠ティアは何を意味しますか？</b></summary>
+
+<br/>
+
+プローブが「誰が応答したか」をどれだけ確実に突き止めたかを示します。ディスパッチ
+できるかどうかには影響しません。
+
+`billed-model`——プロバイダーが課金対象のモデル名を返したもの。Claude は
+`modelUsage` に、grok は `--output-format json` で同じように返します。これは
+プロバイダー側の領収書にあたります。
+
+`client-echo`——CLI が要求したモデルを記録しており、それがリクエストと一致した
+もの。Codex はセッションのロールアウトに、agy は `cli.log` に書きます。これは
+CLI 側の注文控えで、プロバイダーの領収書ではありません。リクエストが意図どおりに
+出たことは証明しますが、誰が応答したかまでは証明しません。
+
+`selector-only`——CLI がセレクターを受け付けただけで、それ以上の報告がないもの。
+v0.42.6 より前にプローブしたマッピングはすべてこれになります。ディスパッチは
+できますが、3 つの中で最も弱く、`omnilane doctor` が再プローブする価値のある
+ベンダーを示します。
+
+どのティアも上流プロバイダーの身元を保証するものではなく、どれもレーンを拒否する
+ことはありません。ティアはベンダーではなくプローブの結果から決まるため、CLI が
+課金モデルを報告するようになれば、omnilane を変更しなくても次回のスイープで
+昇格します。
+
+</details>
+
+## 📊 デフォルト値と出典
+
+デフォルトのレーン割当は Artificial Analysis Intelligence Index v5.0.1 の
+スナップショット `aa-v5.0.1-2026-11-10-v1`（2026-11-10、同日に運用者が承認）
+に基づきます。AA のモデルページ 85 件を統合したもので、各レーンはこのスコアと
+レーンごとの指標でコスパ優先に並べ、v5.0.1 で採点されなくなった行は旧スコアを
+引き継がずに外しています（[証拠](docs/reports/aa-rebaseline-2026-11-10.md)）。
+これは意見であって法則ではありません——設定メニューと
+`routing.local.yaml` はそのためにあります。ベンチマークごとの但し書きを含む
+作業ノートは [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) にあります。
+
+## ⚠️ 既知の制限
+
+- **Antigravity の print モードにおけるツール呼び出しは現行 CLI ビルドで
+  不安定**(拒否または invalid-argument)。long-context レーンの本来の用途
+  (本文をタスクに貼り込む長文統合)には影響しません。
+- **Grok の推論強度：**明示的な `low`、`medium`、`high`、`xhigh` は `--reasoning-effort` で CLI に渡します。`-` は CLI の既定値を使います。要求する組には完全一致のスコア行とローカルの転送検証が必要です。
+
+- **Git 管理外でも Codex の work は利用できます。** 一部の Codex CLI は
+  Git worktree 外で停止する可能性があるため、上記の自動ヒューズがこのケースを
+  制限し、監視対象の process group を終了します。Omnilane は `git init` を自動実行せず、
+  リポジトリの作成も要求しません。
+
+## ⬆️ アップグレード時の注意：旧版で開始したジョブ
+
+`jobs close` と `jobs cancel` は、`ps` の開始時刻が `pid.start` または `inbox.holder.pid.start` と一致した場合だけシグナルを送ります。旧版のジョブにはこのファイルがないため、PID が使用中ならシグナルを送らず 1 を返します。`ps -o lstart=,command= -p PID` で確認し、本当にそのワーカーである場合だけ、人間が `kill -USR1 PID` で閉じるか `kill -TERM PID` で取り消してください。別のプロセスなら触れず、元のワーカーが消えていればジョブディレクトリを手動でゴミ箱へ移せます。PID が消えている場合は従来どおりで、旧ジョブの `status`、`wait`、`rm` は `kill -0` の結果を使います。アップグレード後に開始したジョブは影響を受けません。
+
+これらと `jobs wait`、`jobs rm`、`dispatch` には動作する `ps` が必要です。macOS サンドボックスが `/bin/ps` を禁止すると拒否され、`--caller-context` があってもジョブを開始しません。終了コードが記録済み、または記録された PID が `kill -0` で消滅確認できる場合は回答できます。通常のターミナルを使うか、利用環境の権限手続きでサンドボックス外実行を承認してください。PID を確認できないことは、プロセスが終了した証拠ではありません。
+
+開始時刻ファイルが不正で PID が生存している場合、`status` は `unknown (invalid start time file)` と表示し、`wait`、`cancel`、`close`、`rm` は拒否します。まず上記の `ps` で確認してください。生存 PID の開始時刻が記録と違う場合は別プロセスとみなし、`status` は `dead (worker gone, no exit recorded)`、`cancel` は `not running` と表示してそのプロセスを残します。標準エラーに比較コマンドも表示します。
 
 ## 🌱 ステータス
 

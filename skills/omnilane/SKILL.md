@@ -424,9 +424,11 @@ location (`"identifier_family": ""` in `--check` and `doctor`): any program the 
 signed there can pass the source check until the operator re-runs `--trust-origin
 VENDOR` without `--team` on a verified factory sample. Say so when presenting it. `--approve` is one-shot and creates no
 channel. Revocation overrides legacy overlay trust. Do not copy
-`transport-origins.local.json` or evidence between hosts. The first-use policy now covers Developer ID plus self-signed, script and
-no-platform-signature tools at their installation location; it takes effect with
-the phase-2 first probe, and no production code calls the interface yet. First-use trust is currently per vendor with no recorded identity, path or policy entry, not per host; phase-2 wiring will decide whether other vendors' existing records should block it.
+`transport-origins.local.json` or evidence between hosts. `resign --init` now calls first-use enrollment on a staged policy, per vendor with
+no recorded identity, path or policy entry. Initialization checks eligible executable
+sources, refuses locally adhoc-signed samples and publishes trust only with
+successful verified setup. Existing trust is not overwritten, and upgrades do not
+silently trust scripts or non-macOS binaries.
 
 After two failed attempts at a task, reassess the scope; an upward move needs the human. On vendor quota exhaustion (429, "stream disconnected", usage limit) send mid-tier coding through `coding-overflow`; never silently downgrade `hardest-coding` — wait or escalate.
 

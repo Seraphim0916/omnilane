@@ -2,13 +2,6 @@
 
 # omnilane
 
-### 一张路由表,四个执行框架通用。
-
-*让主循环不再猜要用哪个模型。*<br/>
-从 **Claude Code · Codex · Grok Build · Antigravity** 任一框架驾驶,每个子任务都派给<br/>
-真正最擅长它的模型——Codex、Claude、Grok、Gemini、Kimi、Qwen、OpenCode,<br/>
-或经 OpenRouter 直达任何托管模型——用你已经在付的订阅,或一把 API 密钥。
-
 <img src="docs/hero.zh-CN.png" alt="omnilane 把每个子任务派给 Claude Code、Codex、Grok、Antigravity 中最擅长的模型" width="820"/>
 
 [![ci](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml/badge.svg)](https://github.com/Seraphim0916/omnilane/actions/workflows/ci.yml)
@@ -19,735 +12,70 @@
 
 </div>
 
-## 当前升级与验证
+## omnilane 是什么？
 
-仅更新评分表快照时，调用参数和可执行文件身份未变的行会自动沿用探测证据；分数或日期变化立即使用新上限，无需运行 `omnilane resign`、图形登录或联网，也不改写覆盖文件。只有新增或参数合约、可执行文件身份变化的行需要 `omnilane resign --vendor VENDOR`；拒绝消息指出行及是否需要图形终端。软件包包含可信来源快照时，旧格式 1 可直接使用；未知的更早来源先用 `omnilane resign --check` 检查。首次配置使用 `omnilane resign --init`，签名者审批规则不变。每日任务使用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失败保留非零退出码，本机私有记录由 `omnilane doctor` 显示，不依赖 Telegram，也不会自动安装定时任务。
+omnilane 让 Claude Code、Codex、Grok Build 或 Antigravity 按工作类型，把任务交给通道指定的模型。它适合希望用同一套命令整合已有模型订阅或支持的 API，并明确控制权限、查看结果的用户和 AI 助手。它通过本地路由表与已验证的模型选择参数，启动兼容的原生子代理或供应商 CLI，不需要另一个托管服务。
 
-环境原因（API 错误、超时、登录、配额或连接问题）造成的失败，可用 `omnilane resign --vendor VENDOR` 重试。非交互运行会在每行失败后等待 20 小时；交互运行或 `omnilane resign --retry-failed --vendor VENDOR` 会立即重试。重试标志不会批准签名者变更。失败证据及时间戳是否存在都受完整性保护；记录被修改或删除时会报告问题，不会重试。
+## 安装与首次运行
 
-过期证据通过同一套缺失行补测流程刷新，不会重新探测正常的行。模型或强度不符属于已确认的问题，即使加上 `--retry-failed` 也不会自动重试。请运行 `omnilane doctor`，检查记录的请求以及 CLI 和供应商路由，修正原因后再安排新的验证。下方版本说明描述各次发布时的行为；当前安装以本节为准。
-
----
-
-## 🤔 omnilane 是什么?
-
-**问题在哪。** 你已经在用某个 AI 写代码助手——**Claude Code、Codex、Cursor、
-Gemini CLI** 之类。每一个都只接一个模型家族,所以你交代的每件事都跑在那同一个
-模型上,不管它合不合适:随手改个文件名烧掉最贵的模型,真正难的架构问题却刚好落在
-你当下开着的那个。
-
-**omnilane 做什么。** 它给你的助手一张路由表。工作被分进**通道**——最难的实现、
-机械粗活、初筛、硬判断、文字终审——每条通道指名对那件事最强(也最省)的模型。
-助手保留自己本来就擅长的通道,其余用你既有的登录,在后台交给别家厂商的 CLI。
-
-**它不是什么。** 不是 proxy、不是另一笔订阅、不是又一个要维护的服务。它就是一张表
-加一支派工脚本,躲在你现有工具背后跑。`./install.sh --uninstall` 可完全清除。
-
-**你不需要每一家订阅。** 每条通道都是候选链,派工时自动采用本机实际装了的第一个
-候选。装一家或七家都行,整条链都没有的通道就自动关闭,而不是报错。只有一份订阅
-时,整张默认表会收敛到那一家。
-
-**[⬇ 直接跳到 60 秒上手](#-60-秒上手)** · **[❓ 看常见问题](#-常见问题)**
-
-## ⚡ 60 秒上手
-
-你本人坐在终端前，现在就可以派工。
-
-**1. 安装。**
+先安装并登录至少一个支持的供应商 CLI（`codex`、`claude`、`grok` 或 `agy`），并准备好 Python 3.9+ 和 npm。请由你本人在能读取登录状态的桌面终端中执行以下整段；初始化会探测供应商并实际派发一次任务进行验证，因此会使用供应商额度。任务文本可以替换；第一个任务只读取数据。
 
 ```bash
-npm i -g omnilane
+npm i -g omnilane &&
+omnilane resign --init &&
+omnilane doctor &&
+export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
+omnilane route --mode advise --workdir "$PWD" triage "概述这个项目的用途，不要修改文件"
 ```
 
-或者把仓库克隆下来，顺便拿到可以自定义的路由表和技能文件：
+初始化成功、doctor 显示所需目标可用后，再继续派发任务。`--init` 会创建第一份本地覆盖文件（记录 CLI 选择参数实际对应哪个模型的验证证据），完成验证、记录首次信任的签名者，并先备份 `local.sh` 再登记；已有覆盖文件时会拒绝运行。升级现有安装请改用 `omnilane resign`。初始化需要交互式终端，不能批准已变更或不安全的签名者；本地自签 CLI 仍需另外由人工检查。
+
+这个环境变量代表**你本人在终端操作**。AI 助手必须使用自己的调用方身份，不能自行设置它或使用 `--operator-asserted-human`；设置方法见后面的参考资料。不必安装所有供应商：系统会跳过不可用的候选，并继续检查调用方分数上限与本地验证。
+
+## 日常使用
+
+先用 `omnilane list` 查看当前生效的通道。初步检查用 `triage`、重复性实现用 `bulk-mechanical`、困难代码问题用 `hardest-coding`、第二意见用 `hard-judgment`；完整通道表位于参考资料中。通道是一串候选顺序，不保证每个模型都已安装，也不意味着供应商调用失败后会自动换一家重试。
 
 ```bash
-git clone https://github.com/Seraphim0916/omnilane && cd omnilane
-./install.sh          # finds your CLIs, links the skill, speaks your language
+omnilane list
+omnilane route --mode advise --workdir "$PWD" triage "检查项目并列出主要风险"
+omnilane route --mode work --workdir "$PWD" bulk-mechanical "修正 README.md 中已指出的错字"
+omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "运行测试并修复失败项"
+omnilane jobs list
+omnilane jobs wait JOB_ID --timeout 60
+omnilane jobs result JOB_ID
 ```
 
-**2. 看看手上有什么。** `doctor` 会列出 omnilane 能找到哪些模型 CLI 和 API 密钥，让你知道实际会运行哪一个。它不会改动任何东西。
+将 `JOB_ID` 替换为后台任务返回的编号。`advise` 为只读；`work` 允许修改指定工作目录并限制代理工具的网络访问，模型连接仍然可用。`jobs wait` 等待任务结束，`jobs result` 读取回答；接受结果前，仍应检查输出、文件变更和相关测试。助手自己的原生子代理采用另一套交接与完成报告流程，详见参考资料。
 
-```bash
-omnilane doctor
-omnilane list         # the routing table this machine resolves
-```
+## 请求被拒绝或重签名停止时
 
-**3. 表明你是操作者，然后派工。**
+拒绝消息现在先显示 `omnilane: refused (...)`、通俗原因和 `Next:`，随后保留原有 JSON。需要旧输出格式的程序可以设置 `OMNILANE_REFUSAL_JSON_ONLY=1`。先读 `failed_gate`、`reason`、`next_command` 和 `eligible_lanes`；重签名摘要还提供 `attention` 列表，逐一列出需要处理的供应商、原因及下一条命令。`installed: true` 表示已安装通过验证的变更，不代表每个配置都已可用。
 
-```bash
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1
-omnilane route hardest-coding "fix the flaky auth token refresh"
-omnilane ui start     # optional: watch jobs live in your browser
-```
+下表中的 `VENDOR`、`MODEL` 请替换为诊断消息中的名称。`whoami` 必须单独占用一次工具调用，不加管道、`&&` 或其他命令。
 
-> **为什么要那行 export?** omnilane 每次派工都会拿“提问者的能力分数”去比对，所以派工时必须说明是谁在问。真人说一次就够：`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`（或每次带 `--operator-asserted-human`）。模型不能替自己这样声明，它的身份是从启动它的 CLI 读出来的。两者都没有时，派工会在创建任何任务之前就被拒绝，代码是 `missing-caller-context`。
-
-真人用到这里就够了。下面这一节讲更实用的用法：让你的 AI 助手自己派工。
-
-## 🤖 让你的 AI 助手来驾驶 omnilane
-
-助手（Claude Code、Codex、Grok Build 或 Antigravity）会读取一份技能文件，里面教它怎么选通道、怎么派工。每台机器做一次，共四步。
-
-### 第 1 步：把技能交给助手
-
-`./install.sh` 会为它找到的每个 CLI 建好链接。手动做法：
-
-| 助手 | 做法 |
-|---|---|
-| Claude Code | `claude plugin marketplace add <本仓库路径>`，再 `claude plugin install omnilane@omnilane`（同时提供 `/route`、`/route-jobs` 和完工收件箱）；或把 `skills/omnilane` 链接到 `~/.claude/skills/` |
-| Codex | 把 `skills/omnilane` 链接到 `~/.codex/skills/` |
-| Grok Build | `grok plugin install <本仓库路径> --trust` |
-| Antigravity | `agy plugin install <本仓库路径>`（先用 `agy plugin validate <本仓库路径>` 检查） |
-
-### 第 2 步：证明一次“每个 CLI 真的会选到你指定的模型”
-
-模型来派工时，只能派给这台机器**证明过**的目标：例如 `codex -m gpt-6.1-sol` 真的运行的是 Sol。这份证明是一个本地文件，叫**传输覆盖文件（transport overlay）**。安装包里不会附带。没有它，每条通道都会用 `runtime-mapping-unverified` 拒绝模型调用者，`omnilane doctor` 也会警告 `no overlay configured`。
-
-请在普通的桌面终端里创建。（通过 ssh 登录的会话读不到 CLI 登录用的钥匙串，会把每一家都报告为未登录。）
-
-```bash
-omnilane resign --init
-```
-
-首次安装须在交互式终端中执行；已有覆盖文件或同时使用 `--daily` 时会拒绝。命令会验证探测结果和实际派发、记录首次信任的签名者，并在备份 `local.sh` 后保留原有设置、加入覆盖文件路径。不安全的签名或签名者变化仍会被拒绝。[手动备用步骤](docs/transport-overlay.md#first-installation)。
-
-未登录的那一家会被标为 `unprobeable`，只是保持未验证，其他家照常可用。
-
-### 第 3 步：让这份证明自己保持最新，不用你动手
-
-覆盖文件用哈希值钉住每个 CLI 可执行文件，而**这些 CLI 会自己更新**，常常一周一次。更新之后，那一家的通道就会被拒绝，直到覆盖文件重新签署为止。`omnilane resign` 一条命令做完全部：找出哪里变了、只重新探测那一家、检查结果、换上新文件、发一笔真实派工确认，失败就自动恢复旧文件。 来源通道只允许开始补测，不会直接放行调度。
-
-`--init` 已自动记录首次信任的签名者；只有旧覆盖文件需要由人工操作者另外运行 `omnilane resign --record-signers`。原有团队记录会形成官方通道，但当前文件仍须通过 Apple 证书链、团队、标识名称和解析后安装位置的检查。只有自签记录、没有操作者信任的旧文件，不会因升级而新增信任。
-
-```bash
-omnilane resign --record-signers # 仅限旧覆盖文件，由人工操作者运行
-```
-
-如果你自行修补并自签，执行 `omnilane resign --trust-adhoc claude`，信任同一位置之后的自签更新。另在**每台主机分别**安装有效官方样本时执行 `omnilane resign --trust-origin claude`；当前若为自签，使用 `omnilane resign --trust-origin claude --team TEAMID`，将 `TEAMID` 换成你独立确认的十位团队代码。命令仅限终端，必须输入屏幕要求的明确确认，没有跳过确认的选项，也没有默认团队。官方更新与随后的自签更新分别需要补测。同位置信任无法证明替换文件由谁产生。自签样本看不到官方识别名称，所以加 `--team` 等于批准该团队在这个位置的所有程序：在替换之前，该团队签名并放在这里的任何程序都能通过来源检查并进入补测，不只是这个 CLI。`omnilane resign --check` 和 `omnilane doctor` 会显示为 `"identifier_family": ""`。要绑定到这个产品，请在安装有效官方样本时，不加 `--team` 再执行一次 `omnilane resign --trust-origin claude`，它会取代团队层级的那条批准。
-
-```bash
-omnilane resign --trust-adhoc claude   # 只有你自己会把 claude 签成 adhoc 时才需要
-```
-
-已固定的脚本或非 macOS 原生文件可用 `omnilane resign --trust-location VENDOR`。位置变化或首次出现脚本时，确认来源后执行 `omnilane resign --approve VENDOR`，补测成功后再信任新位置；批准只限本次，不建立通道。使用 `omnilane resign --revoke-origin VENDOR KIND` 撤销；`KIND` 可为 `developer-id`、`adhoc`、`script`、`no-platform-signature` 或 `location`（全部位置通道）。撤销后的空列表仍优先于覆盖文件的旧信任。
-
-`omnilane resign --check` 和 `omnilane doctor` 显示种类、通道，以及阻止时观察到的团队和标识名称。签名损坏、无法验证、macOS 原生文件完全未签名、通道文件损坏或属于其他主机时始终停止，批准不能修复这些问题。来源失败和登录失败提供不同指引；先恢复有效安装或本机通道备份，再重试。 来源阻止适用于可执行文件已变更的情况。未变更且已固定的可执行文件，沿用既有缺失配置补测、重试和证据更新规则。
-
-通道保存在绑定主机、0600、原子写入且修改前备份的 `$OMNILANE_HOME/transport-origins.local.json`，不要跨主机复制。首次使用策略现在涵盖官方签名，以及安装位置上的自签、脚本和无平台签名工具；将在第二期首次探测时生效，目前生产代码尚未调用此接口。目前首次使用信任按供应商判定，该供应商须无已记录的身份、路径或策略项，而非按整台主机判定；主机已有其他供应商记录是否应阻止，留待第二期接入时决定。不会因升级而悄悄信任脚本或非 macOS 文件。助手不得自行执行信任、批准、记录或撤销命令。
-
-然后让它每天运行一次。用什么调度器都行，但必须运行在**你的桌面登录会话里**（CLI 需要钥匙串）。macOS 可以用 LaunchAgent：
-
-```bash
-cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>dev.omnilane.resign</string>
-  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
-  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
-</dict></plist>
-EOF
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
-```
-
-本版实测过从桌面终端执行 `omnilane resign`，包括一次真实的、无人值守的 Codex 自动升级重签；上面这个 LaunchAgent 包装只是示例，本身没有实测过。请在你的机器上用 `launchctl kickstart gui/$(id -u)/dev.omnilane.resign` 确认。
-
-`omnilane resign` 的退出码：
-
-| 退出码 | 含义 | 你要做的事 |
+| 看到什么 | 含义 | 下一条命令 |
 |---|---|---|
-| 0 | 没有东西变动，或变动的都已重签 | 不用做 |
-| 10 | 只有 `--check` 会出现：有东西变了 | 执行 `omnilane resign` |
-| 20 | 来源、登录或验证需要处理 | 按对应消息操作；批准不能豁免损坏签名、未签名或无法验证的情况 |
-| 30 | 重签后的覆盖文件没通过真实派工，已恢复为前一份 | 没有东西损坏，读日志即可 |
-| 2 | 没有配置覆盖文件 | 做第 2 步 |
-| 40 (`EXIT_HOST_CONFIG`) | 主机配置加载失败，或已配置的覆盖文件无法读取、JSON 无效；不做更改 | 修正 stderr 指出的路径与原因；每日任务的通知方式由负责人决定 |
-| 50 (`EXIT_BUSY`) | 这台主机已有另一个 `omnilane resign` 在运行；不读也不写 | 等它运行完再执行这一次 |
-| 60 | 已安装通过验证的选择器，其余保留的选择器待复验 | 用 `omnilane doctor` 查看原因，排除后运行 `omnilane resign` |
-
-argparse usage errors also return 2; a configured but unreadable overlay returns 40, not 2.
-
-### 第 4 步：在助手里面试试看
-
-请你的助手执行 `omnilane whoami`。它应该报告自己是哪个模型、哪个强度，以及一个分数。接着请它派一件小事：“用 omnilane 让 triage 通道数一数这个项目里有几个 TODO 注释”。
-
-如果被拒绝，拒绝消息会说明是哪一关没过、该怎么办：
-
-| `failed_gate` | 白话 | 怎么修 |
-|---|---|---|
-| `caller-identity` | omnilane 看不出是哪个模型在问 | 让它把 `omnilane whoami` 作为那次工具调用里的**唯一一条命令**。Codex 尤其如此：后面接了 `; echo $?`、`&&` 或管道就读不到 |
-| `target-transport` | 这台机器还没证明过那个目标，或 CLI 之后更新过 | `omnilane resign`（第 3 步） |
-| `downward-ceiling` | 目标模型的分数比提问的模型高；模型只能平派或向下派 | 从拒绝消息列出的 `eligible_lanes` 里挑一条，或用更高的强度启动助手 |
-
-Codex 的定时任务唤醒已有会话时不会记录强度。omnilane 这时会把该调用者限制在它那个模型的最低分，而不是直接拒绝：便宜的通道照常可用，贵的通道会告诉你需要哪个强度才派得动。
-
-## 🧭 工作原理
-
-omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道(lane),
-再以无头方式把每条通道派发给该项工作最强的厂商——直接沿用你已有的订阅登录
-(`openrouter` vendor 例外:免装任何 CLI,一把 API 密钥直连):
-
-```mermaid
-flowchart LR
-    M["主循环<br/><i>你在用的任一 CLI</i>"] --> T{{"routing.yaml<br/>一张共用路由表"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
-    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
-    T -->|taste-final| C3["Claude — Sonnet 5.5"]
-    T -->|long-context| C4["Codex — GPT-6 Astra"]
-    T -->|live-search| C5["Grok — 4.7"]
-    T -->|"arbitrate(可选)"| C6["vote — 1-4 模型评审团"]
-```
-
-- **`routing.yaml`** — 通道 → 厂商+模型+推理档位。一个文件,四个执行框架共用。
-- **候选链** — 一条通道可以列多个候选(`codex … | claude … | off`),
-  派发时自动采用本机**实际安装了**的第一个厂商 CLI。只订一、两家也能用同一张表。
-- **`scripts/dispatch.sh [--vendor V] <通道> "<任务>"`** — 查表后以无头方式
-  调用对应厂商的 CLI。`--vendor` 会锁定指定厂商，不做降级。
-- **`skills/omnilane/SKILL.md`** — 一份技能四个框架都能加载:
-  先认出自己是哪个模型,自己通道的活自己干,其余派出去。
-- **`omnilane mcp`** — 同一套路由改以 MCP stdio server 提供,
-  给走 MCP 而非 skill 集成的宿主。
-
-<div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🧭 **一张表**<br/>四个执行框架共用 | 🪂 **候选链**<br/>自动降级到你装了的 CLI | 🗳️ **意见评审团**<br/>重大决定多模型投票 |
-| 🔒 **安全机制**<br/>排队锁 · 看门狗 · 禁嵌套 | 🌏 **五种语言**<br/>安装器说你的母语 | ↩️ **完全可逆**<br/>`--uninstall` 一键还原 |
-
-</div>
-
-## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
-
-AA `aa-v5.0.1-2026-11-10-v1`：**approved（操作者 2026-11-10 批准）**；改用 AA Intelligence Index v5.0.1，68 行计分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），并去掉 v5.0.1 不再计分的行。下表已按它排列：Fable 5.2 xhigh 成为 hardest-coding 与 hard-judgment 的首选；Claude Opus 5 失去分数，long-context 改由 GPT-6 Astra (medium) 领头。Gemini 4 Carbon 有分数，但没有可派发的代号，不在任何车道。每台主机都要运行一次 `omnilane resign`，让 overlay 针对新评分表重新验证。[证据](docs/reports/aa-rebaseline-2026-11-10.md)。取代 `aa-v4.3.2-2026-10-28-v1`（2026-10-28 批准）。
-
-AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当天“把新模型收进去”的指示批准）**；130 行计分、9 行未知。新增 GPT-6.1 Terra（六行，max 48），按价值规则放入 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各车道首选不变。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 批准）。
-
-AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
-
-| 通道 | 首选模型 | 备选模型 | 用途 |
-|---|---|---|---|
-| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最难的实现、深度调试、正确性关键的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 重构、迁移、测试、大范围扫描——机械耐力活 |
-| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 架构裁决、深度推理、第二意见 |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | 对外文字、提示词／文档润色、风格裁决 |
-| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 仅在提供设计系统／参考图时生成 UI 草稿 |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 实时 X／网页搜索与社交上下文 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 配额耗尽时的中量级编码安全阀 |
-| 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
-
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
-
-**备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
-通道都是这样一条链;整条都没装时,通道自动降为 `off`。
-
-> **Claude Fable 5.2 现在领头 hardest-coding 与 hard-judgment（AA v5.0.1 快照，2026-11-10 批准）。** 分数与重排见[重测报告](docs/reports/aa-rebaseline-2026-11-10.md)；各通道的比较见[常见问题](#-常见问题)。
-
-### 自然语言咨询
-
-通过 `omnilane` 技能或 `/route`,你可以直接说: **“请 Opus 挑战这个架构。”**
-自然语言由 Agent Skill 判断,不是在 `dispatch.sh` 里做自由文本 shell 解析。
-
-- 只问“哪个模型适合”时,回答匹配通道当前第一个可用模型,不发出模型调用。
-- 只指定厂商名时,使用该厂商在 `consult` 通道中配置的候选模型。
-- 指定标准模型别名(例如 Opus)时,会锁定技能表中的确切模型家族。明确目标
-  不存在或 CLI 不可用时会清楚失败,不会暗中更换厂商或模型家族。
-
-<details>
-<summary><b>模型角色指引：仍须派发</b></summary>
-
-<br/>
-
-通道的最佳模型不会因为主控是谁而改变。以下是角色提示，不是自己执行的豁免：
-即使模型相同，也要委派。只有调用方明确确认模型、推理强度、模式、工作目录、
-工具、隔离方式和生命周期都相符时，才可以用原生代理；否则走 CLI。
-主控负责编排和验收，工作代理执行任务，不得再派发。
-下面各条的起点只按分数上限推算（AA v5.0.1 快照，2026-11-10 批准）；继承上限、主机探测失败或
-额度不足，都可能让链继续往下走。
-
-- **Claude Code · Fable 5.2**——上限最高的提示词层主控（需要 Claude Code 2.1.321 以上）。在 max、xhigh、high 时，hardest-coding 与 hard-judgment 的第一候选就是 Fable 5.2 自己，仍要派发。medium 时第一个可派的是 Astra xhigh（hardest-coding）与 Fable 5.2 medium（hard-judgment）；low 时是 Opus 5.5 high 与 Fable 5.2 low。
-- **Claude Code · Fable 5.1**——xhigh（50）时，hard-judgment 从 Fable 5.1 xhigh 自己开始（仍要派发）；hardest-coding 与 taste-final 从 Sonnet 5.5 xhigh 开始；bulk-mechanical、fast-agentic、long-context 从 GPT-6.1 Sol medium 开始。
-- **Claude Code · Opus 5.5**——ui-draft 由它的 high 领头。xhigh（57）时，hardest-coding 从 Astra xhigh、hard-judgment 从 Fable 5.2 medium 开始；medium（48）时，hardest-coding 与 hard-judgment 从 Opus 5.5 medium 自己开始，ui-draft 与 long-context 从 GPT-6.1 Sol medium 开始。
-- **Claude Code · Opus 5**——只剩 max 还有分数（44），所以只作为明确点名、用 `max` 的独立复核者，不是任何通道的默认。在这个上限下，hardest-coding 从 Sonnet 5.5 high、hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。
-- **Codex · GPT-6.1 Sol**——bulk-mechanical 与 fast-agentic 由它的 medium 领头。xhigh（52）时，hardest-coding 从 Opus 5.5 high、hard-judgment 从 Fable 5.1 xhigh、long-context 从 Astra medium 开始；high（50）时，hardest-coding 从 Sonnet 5.5 xhigh 开始。
-- **Codex · Astra**——consult（xhigh）与 long-context（medium）的第一候选，xhigh 也是 hardest-coding 与 taste-final 的第二位。xhigh（55）时，hard-judgment 从 Fable 5.2 low 开始。需要时明确指定 `--vendor codex --effort max`；显式指定的 model／effort 始终优先。
-- **Codex · GPT-6.1 Terra**——Codex 的性价比行：fast-agentic 第二、第三（medium、low），bulk-mechanical 第三（high）。xhigh（45）时，hardest-coding 从 Terra xhigh 自己开始，hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。GPT-5.6 Terra 只剩 max 有分数，不在任何通道。
-- **Grok Build · Grok 4.7**——live-search 与 coding-overflow 的第一候选、consult 第三，也是 hardest-coding、hard-judgment、taste-final 的 Grok 尾段。上限只有 35，困难通道大多从 Opus 5.5 low 开始。Grok 4.6 不在任何通道。仍需验证 API 签名和引用的事实。
-- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）在每条通道占据 Gemini 的位置，排在 Flash 前面。Flash 是它之后的跨厂商备用：consult、ui-draft、hard-judgment、live-search、coding-overflow 用 High；hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic 用 Medium；triage 用 Low。不要从代理／编码评测推断审美能力或主控权。
-
-</details>
-
-## 使用助手自己的子代理
-
-omnilane 默认把工作交给厂商的命令行工具。当该做这件事的模型就是助手**自己那一家**的时候，再绕出去调用另一个 CLI 是多走一趟：多一次登录、多一个进程，那个 CLI 一更新又多一个会坏的地方。多数助手自己就能启动子代理，omnilane 可以改为替它规划这种工作。有两种做法。
-
-**与助手运行完全相同内容的工人（`--inherit`）。** 助手启动子代理时*不指定模型、也不指定强度*，工人就是调用者的分身。分身不可能比本体强，而 omnilane 的分数检查要防的就只有这件事，所以这条路不需要厂商 CLI、不需要传输覆盖文件；调用者的强度读不到、或覆盖文件过期时，它照样能用。
-
-```sh
-omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
-omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
-# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
-#    model argument, checks the result, and records it:
-omnilane jobs --json complete-native JOB_ID /absolute/completion.json
-omnilane jobs --json status JOB_ID
-```
-
-诚实的部分：交接单上标着 `satisfies_lane_target: false`。通道在这里只是“这是哪一类工作”的标签。这样做出来的结果是“助手自己的子代理”做的，绝不是“hardest-coding 那个模型”做的；需要比调用者更强模型的通道，照样会被拒绝。`--inherits-caller-runtime` 是助手自己声明“我的子代理工具就是这样运作”，omnilane 观察不到。各家目前已知的情况：
-
-| 助手 | 不带模型参数的子代理 |
-|---|---|
-| Claude Code | 官方文档写明会使用主会话的模型，强度沿用会话（除非代理定义另有设置）。内置 general-purpose 代理、且未设置 `CLAUDE_CODE_SUBAGENT_MODEL` 时成立。本版完整跑通过 |
-| Codex | `collaboration.spawn_agent` 不带模型、不带强度。本版完整跑通过 |
-| Grok Build | 文档写明沿用上层的模型（内置 `general-purpose` 代理是 `model: inherit`）；强度没有文档说明。本版没有跑过 |
-| Antigravity | `agy` 1.2.7 中找不到子代理工具。不适用 |
-
-**助手的工具能指定的特定模型。** 把工具真正接受的内容写进能力声明文件（从 `omnilane native-context` 生成的文件开始，每组确切的模型与强度加一行），再用普通的 `omnilane route` 带上 `--native-context FILE`。只有某一行完全匹配时 omnilane 才会使用子代理：模型、强度、模式、工作目录、工具、隔离方式、生命周期都要对上。同一家厂商不等于同一个模型，也不会根据你装了哪些 CLI 去猜。`--executor native` 不匹配就失败、不回退；`--executor cli` 强制走外部 CLI。如果同厂商的目标只因为没给文件而走了 CLI，派工现在会明说。
-
-无论哪一种，子代理都共用助手的工具与文件系统：没有操作系统层面的沙箱，`advise`／`work` 是意图，不是强制。后台、常驻、具名会话、多轮、投票与 `sysops` 工作仍走 CLI。协议处理需要 Python 3.9 以上。结构定义、完成文件、代理复用与取消：见 [docs/native-executor.md](docs/native-executor.md)。
-
-## 🖥️ Live Board
-
-每一次派发——无论前台还是 `--background`——都是落盘的一条 job。Live Board
-是架在这个 job 存储之上、可选且只读的本地工作台:每个模型被问了什么、答了
-什么、怎么路由、是否还在运行,一眼看完。
-
-<div align="center">
-
-<img src="docs/live-board.png" alt="Omnilane Live Board 桌面版——左侧为作业列表,右侧为选定作业的任务、公开结果与模型路径" width="820"/>
-
-<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 手机版——可搜索的作业列表与状态筛选" width="280"/>
-
-</div>
-
-```bash
-omnilane ui start    # 启动或复用服务器，输出通过认证的网址
-omnilane ui status   # 查看本地服务器状态
-omnilane ui url      # 输出当前通过认证的网址
-omnilane ui stop     # 正常停止
-```
-
-桌面版的作业列表与详情区域可分别滚动;手机版使用列表／详情切换，支持返回键与
-Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的作业行;短暂断线时
-保留最后画面并自动重连。可将任意已加载作业固定为参考，再选择另一条作业，并排
-比较模型路径和公开结果;参考快照只留在浏览器内存中，关闭页面即消失。服务只绑定
-`127.0.0.1`、使用随机令牌保护、全程只读。界面只显示 `task.txt` 和公开的
-`out.txt`，不会显示工作端或厂商原始日志。
-
-界面提供英文、日文、韩文、繁体中文与简体中文。首次加载依浏览器语言决定，可用标题栏
-的切换器覆盖，选择会记在本地。
-
-核心路由不需要 Python;只有这个界面需要 Python 3.9 或更高版本。
-
-## 📦 安装
-
-前置需求:想路由到的厂商 CLI(`codex`、`claude`、`grok`、`agy`,另可选
-`kimi`、`qwen`、`opencode`)已登录且在 `PATH` 上——**有几家装几家就好**,
-缺的通道会自动降级。`openrouter` vendor 是例外:不需要任何 CLI,只要
-`curl` 和环境变量里的 `OPENROUTER_API_KEY`。
-
-最快:`./install.sh` — 自动检测本机的 CLI、接好技能、列出其余的插件安装命令、
-打印这台机器的生效路由表,最后询问是否进入交互设置菜单(`--uninstall` 可逆)。
-安装界面依系统语言自动切换(英/繁中/简中/日/韩,可用 `OMNILANE_LANG=zh-CN`
-强制)。另提供可选的各 CLI **常驻路由提示**:在各 CLI 指令文件末尾加一段带
-标记、可逆的区块(`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、
-`~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路径可能随 CLI 版本不同);
-非交互安装可带 `OMNILANE_HOOKS=all|none|claude,codex`。手动接线:
-
-`./install.sh --check` 可只读检查漂移；安装或 `--uninstall` 加上
-`--dry-run`，可先预览每个由这份 checkout 拥有的文件动作。
-要回滚安装器拥有的链接与标记提示，执行 `./install.sh --uninstall`。
-
-- **Claude Code**:以插件安装(附 `/route`、`/route-jobs` 命令,并内置
-  `SessionStart` hook,会话开始时自动注入路由提醒,无需修改 CLAUDE.md),
-  或把 `skills/omnilane` 放进 `~/.claude/skills/`。
-- **Codex**:把 `skills/omnilane` 放进或链接到 `~/.codex/skills/`。
-- **Grok Build**:`grok plugin install <本仓库路径> --trust`
-- **Antigravity**:`agy plugin install <本仓库路径>`(先用
-  `agy plugin validate` 检查)
-
-### MCP server
-
-`omnilane mcp` 会启动零依赖、跑在本机的 MCP stdio server,让任何支持 MCP
-的宿主无需安装 skill、也不用加路由提醒,即可发现并调用 omnilane。在宿主
-配置里指向已安装的 CLI 即可:
-
-```json
-{
-  "mcpServers": {
-    "omnilane": {
-      "command": "omnilane",
-      "args": ["mcp"]
-    }
-  }
-}
-```
-
-Server 提供 `route`,以及一组只读查询工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor`。
-`route` 默认只读 `advise` 模式;选择 `work` 的调用必须同时提供明确的
-`workdir`。
-
-唯一的运行需求是 Node.js(不装任何 npm 包);也可以直接
-`npm install -g omnilane`,CLI 连同 MCP server 一起装好。
-
-## ⚙️ 自定义设置
-
-三层,全部可选:
-
-1. **交互菜单** — `scripts/configure.sh` 列出可配置的通道,让你逐条选
-   厂商 → 模型 → 推理档位(有建议清单,也可自由输入未来的新模型名),
-   写进 `~/.omnilane/routing.local.yaml`。多厂商 `consult` 会被刻意跳过,
-   如需修改请手动编辑。`install.sh` 装完会主动询问。
-2. **`~/.omnilane/routing.local.yaml`** — 手改覆盖文件,格式同 `routing.yaml`,
-   本机优先。参考 `routing.local.yaml.example`。
-3. **`~/.omnilane/local.sh`** — 机器专属的可执行文件路径、代理、认证包装;
-   每个执行器都会加载,永不进版本控制。参考 `local.sh.example`。
-
-随时检查结果:
-
-```
-scripts/dispatch.sh --list     # 生效表,标出候选链降级与关闭的通道
-```
-
-## 📖 命令参考
-
-```
-eval "$(omnilane completion bash)"             # 在当前 Bash 启用补全
-source <(omnilane completion zsh)               # 在当前 Zsh 启用补全
-omnilane completion fish | source
-omnilane mcp                                   # MCP stdio server(需 Node.js)
-omnilane release-audit [--target 版本] [--json]     # 离线、只读的发布闸门
-omnilane ui start                              # 启动或复用本地 Live UI,输出链接
-omnilane ui status                             # 查看 Live UI 是否正在运行
-omnilane ui url                                # 输出当前通过认证的本地链接
-omnilane ui stop                               # 停止 Live UI
-omnilane doctor [--json]                       # 只读检查路由与本地运行环境
-# transport-overlay：可执行文件路径不符为 FAIL；供应商哈希或运行器变动仍为 WARN
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir 目录]
-            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
-            [--caller-context FILE | --operator-asserted-human]   # who is asking
-            通道 "任务"                              # "-" 表示从 stdin 读任务
-dispatch.sh [--json] --list [--json]
-dispatch.sh [--json] --explain 通道 [--json]       # 离线逐候选解释路由决策
-dispatch.sh [--json] --validate [--json]           # 离线检查生效路由，不调用模型
-jobs.sh [--json] {list | status 作业ID | result 作业ID} # JSON 结果只回元数据，不回正文
-jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]  # 过滤列表
-jobs.sh wait 作业ID [--timeout N]                  # 作业退出码；124 超时；125 工作进程消失
-jobs.sh cancel 作业ID                              # 停止运行中的作业:整组 SIGTERM,再 SIGKILL
-jobs.sh rm 作业ID                                  # 删除单个已完成/已死作业(运行中会被拒绝)
-jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # 本机成功率与路由汇总
-jobs.sh audit [--last N] [--json]                  # 只读检查作业完整性与隐私
-jobs.sh prune [--keep N] [--apply]                # 默认仅预览；只清理已完成作业；--apply 移到 ~/.Trash
-configure.sh                                        # 交互通道菜单
-configure.sh set|get|unset|list|diff LANE [SPEC]    # 非交互编辑/查看 routing.local.yaml
-```
-
-`configure diff` 在两份视图中保留 `local.sh` 的相同本机可用性设置，因此比较的是路由覆盖，而不是本机程序设置缺失造成的差异。 任一检查失败时，会返回该退出状态并说明失败阶段，而不会输出比较结果。
-
-`configure get` 会传递检查失败的退出状态，不会返回不完整数据或误报通道不存在。`configure list` 会报告存在性检查错误；覆盖配置确实缺失或为空时仍正常成功。
-
-`configure set` 先验证临时候选配置，再发布，并保留现有文件的权限模式。读取现有路由内容失败、验证程序意外失败或目标通道出现结构错误时，原配置保持不变；可用性警告和其他通道错误仍按既有规则处理。
-
-`configure unset` 先完成读取与筛选，再沿用原本的就地写入方式更新目标文件。读取或筛选失败时原内容不变；写入失败会报告错误，但不保证回滚。
-
-Bash、Zsh 和 Fish 补全包含文档中的顶层命令、目标命令和作业命令组。选择补全只会填入命令文字，不会执行作业操作。
-
-未指定 `--vendor` 时，`benchmark` 从有效路由列表获取供应商，并忽略仅用于显示的 `unavailable` 标记。如果没有可用于 benchmark 的供应商，会以退出码 2 报告未找到已配置供应商；默认仍是干跑，不调用供应商。
-
-作业的 `list` 和 `status` 使用一致的观测状态。`dead` 表示没有记录退出码，且工作进程的 PID 无效或已不存在；它不会出现在 `--status running` 中，可用 `--status dead` 筛选。`result` 会说明未记录退出码，不再误称进程仍在运行。尚无 PID 的启动阶段仍沿用 `running` 状态，不会推测退出码。
-
-后台作业需要 Perl 监督，使取消能终止受监督的进程组。
-监督本身不增加整体作业期限；没有适用的作业超时设置时，元数据仍为 `job_timeout: null`。
-受监督的单次调用使用 Perl alarm，超时可能返回 142；整体作业期限到期返回 124。
-`jobs close` 最多等待 11 秒，包含进程组清理。
-
-`--thread NAME` 可在多次单次派发间延续命名的 Claude、Codex、Grok 或 Gemini
-对话。0.33.0 会固定厂商、模型、effort 与实际工作目录；使用
-`jobs.sh threads`、`threads show NAME`、`threads rm NAME` 管理本地状态，
-删除状态不会删除厂商端会话。
-
-退出码:`2` 用法错误(包括厂商值无效,或指定厂商不在该通道)、`3` 通道已关闭、
-`4` 候选链没有可用 CLI,或指定厂商已配置但其 CLI 不可用、
-`5` 第一轮成功评审太少、`6` 第二轮没有任何反驳成功、`86` 拒绝嵌套派发、
-`87` 等锁超时、`124` 整体任务超时;
-其余直接透传工作端自己的退出码。
-
-## 🎭 模式
-
-- **advise（默认）**：本地只读分析；供应商支持时可用原生网页／搜索工具。保留模型连接，限制修改工具；不同供应商的 X／网页搜索能力并不等同。
-- **work**：文件与命令操作限于显式 `--workdir`，关闭代理工具网络访问，保留模型连接。不支持的强制边界在调用模型前停止，不会静默切换为 sysops。
-- **sysops**：每次派工显式选择，开放代理工具、文件和网络访问；不作为通道默认值，任务必须列明允许的操作。
-
-CLI 省略 `--workdir` 时默认使用调用端当前目录；任务说明仍应明确工作目录。MCP `route`／`dry_run` 的 work 接口则单独要求明确的 `workdir`。
-
-Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work (default) 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
-
-macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 中加入 `option.grok-macos-work: unconfined`，启用**没有隔离**的单次 work。默认关闭；关闭时，macOS 的 work 候选链会跳过 Grok。开启时 `doctor --strict` 会失败。详见[选项、风险与 Grok 工作者必须使用的任务书模板](docs/grok-unconfined-work.md)。
-
-## 🔒 内置安全机制
-
-- **禁止嵌套派发** — 工作端不得再往外派(`OMNILANE_DEPTH` 守卫,退出码 86),
-  杜绝 AI 叫 AI 的额度连环烧。
-- **Codex 排队锁** — 同一目标目录的 codex 派发自动串行化(锁以规范化后的
-  workdir 为键);崩溃残留的锁以所有者 PID 检测后安全接管。
-- **看门狗** — 每个工作端跑在 `timeout`/`gtimeout` 之下,两者皆无时退到
-  perl-alarm 后备(原生 macOS 就是这种情况),卡死的 CLI 不会挂一整晚。
-  上限作用于**每次 CLI 调用**,优先级从高到低:`--timeout SECONDS` > 单通道
-  `OMNILANE_TIMEOUT_<LANE>`(通道名大写、`-` 换成 `_`,如
-  `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 全局 `OMNILANE_TIMEOUT`(默认 600 秒)。
-  它是单次调用的防卡死看门狗,不是整个任务的时间预算:会重试的 vendor(grok)
-  或 vote 面板(评审 × 轮次)会发起多次调用,总耗时可能是该值的数倍。
-- **整体任务保险丝** — 可选的 `--job-timeout SECONDS` 用同一个进程组监工,
-  一次覆盖等锁、重试、所有评审和轮次。优先级为参数 >
-  `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 关闭；唯一的自动例外
-  是 Codex 在 Git worktree 外执行 `work` 时，若未设置整体上限，就沿用解析后的
-  单次调用看门狗作为整体保险丝，上限为监工支持的 999999999 秒。到期会清理
-  受监工的进程组并返回 124。这个自动保险丝需要内置的 Perl 监工；若环境
-  无法使用，派发会警告但仍通过原有单次调用看门狗路径执行非 Git 工作；若连
-  单次看门狗工具都没有，该路径会另外警告。
-  完整深度代码审查建议从 2–4 小时
-  (7200–14400 秒)起步,单次调用看门狗可先设 30 分钟;这些只是建议值,
-  不会写死为默认值。
-- **后台作业生命周期** — `--background` 的工作端跑在自己的 process group,
-  调用端退出也不受影响;被杀会落盘退出码,`jobs.sh status` 会报 `dead`
-  而不是永远显示 `running`。
-- **任务载荷上限** — 过大的任务文本自动头尾截断,防止撑爆工作端上下文。
-
-## 📬 实时邮箱
-
-实时邮箱是受支持模式的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：空闲上限或已配置的整个作业超时（`--job-timeout`）到期后都会终止它。
-
-```bash
-scripts/dispatch.sh --background --vendor claude hard-judgment "检查超时测试失败的原因"
-# 将 dispatch 显示的作业 ID 保存为 $ID
-scripts/jobs.sh send "$ID" "再检查重试路径。"
-scripts/jobs.sh watch "$ID"
-scripts/jobs.sh tail "$ID" --lines 20
-scripts/jobs.sh close "$ID"
-scripts/jobs.sh retry "$ID" --background
-```
-
-前台派发与前台 `jobs retry` 在作业失败时也会打印已保存的公开输出，再返回该作业的非零退出码。后台派发保留原有 job ID 输出。
-
-`watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 还要求 `--mode sysops --workdir DIR`，advise／work 的实时请求在启动前停止，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
-
-空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
-
-## 🎯 目标编排
-
-`omnilane goal` 是由领班驱动的工作台账。循环由调用方负责，也就是打开目标的代理会话或终端用户：派发一个作业，从完成收件箱或 `omnilane jobs wait` 取回结果，决定下一个作业，再重复执行。作业数量和秒数预算默认均不设上限；只有传入 `--budget-jobs N` 或 `--budget-seconds S` 时，才会启用对应的硬上限。omnilane 只负责记账；每次 goal dispatch 前都会检查调用方设置的上限和默认启用的重复失败熔断器，领班关闭目标时才汇总报告。
-
-```bash
-GOAL_ID="$(omnilane goal open "修复不稳定的结账集成" \
-  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
-  "重现结账失败，完成最小修复并验证")"
-omnilane jobs wait "$JOB_ID" --timeout 900
-omnilane goal note "$GOAL_ID" "结账集成测试已通过"
-omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
-```
-
-更新中断后，失败次数会从持久化工作记录重建，不会重复计数。`goal close` 只在报告写入成功后关闭目标；若写入失败，修正错误后可重试关闭。
-
-目标忙碌时会显示只读的锁持有者诊断，并保持退出码 75。不会自动移除锁；记录中的 PID 无法证明持有权，因此恢复前仍须人工确认。
-
-目标状态与报告会如实显示 `dead` 和 `missing`，不再误称仍在运行。任务状态证据不可用或不一致时显示 `unknown`，不编造退出码或失败次数。各任务秒数仍是提交后的经过时间，并非实际运行时间；目标预算不变。每个未完成任务各做一次最多两秒的本地状态查询。
-
-正常清理已完成任务的文件后，目标仍保留已验证的退出码、完成时间与截至完成的经过秒数。状态与报告会另行标注 `artifacts=missing`。没有已记录完成结果的任务仍保持缺失或未知，清理不会产生虚构的结束结果。
-
-目标派工会先持久化意图并预留一个任务名额，再以一次性的领取记录，在启动前绑定意图与生成的任务 ID。`spent_jobs` 仍统计已记录任务；`reserved_jobs` 表示尚未确认的提交。未确认或损坏的账本会阻止新派工与结案。对账只修复记录，不启动任务、不编造退出码，也不重试结果不明的提交。
-
-带线程的目标派工，其 stdout 只输出确切的任务 ID；验证 ID 后，对应的线程通知会显示在 stderr。直接后台派工仍保留原有的“通知加任务 ID”stdout 格式。
-
-`goal dispatch` 会启动后台任务，不支持 `--dry-run`；该选项会在目标状态发生变化前被拒绝。要预览路由，请直接使用 `omnilane dispatch --dry-run [options] LANE "TASK"`。 直接预览不会继承目标的工作目录；需要时请传入 `--workdir DIR`。
-
-目标预算记录必须使用 JSON 整数，不接受布尔值或数字字符串。可选上限仍是 `null` 或 1..999999999；计数器必须非负且位于支持的数值范围。无效字段会在更新账本或派工前被拒绝。工作目录路径不支持制表符、回车、换行或 NUL；普通空格与 Unicode 仍受支持。
-
-派工报错或结果丢失时，先查看 `goal status` 再决定是否重新提交：再次执行相同命令仍会创建新意图，因此保证的是每个意图最多启动一次，而不是所有相同命令自动去重。对账需要有效的已有任务 PID／退出码证据；若在对账前清理证据，预留名额会保持未确认。已完成对账的目标历史不受清理任务文件影响。旧目标仍可读取，不会自动回收过期锁或恢复结果不明的意图。
-
-后台任务开始收尾后，HUP/TERM 不会改写已选定的退出状态。完成通知会跳过已消费记录，每次提示最多发送十条，包括无法读取记录的通知。
-
-目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；传入预算参数后，对应的上限是硬限制，并不保证任务完成。
-
-## ❓ 常见问题
-
-<details>
-<summary><b>这些订阅我全都要有吗?</b></summary>
-
-<br/>
-
-不用。每条通道都是候选链,派工时采用本机实际装了的第一个候选。只有一份订阅时,
-整张表会收敛到那一家;整条链都没有的通道自动关闭,不会报错。运行
-`omnilane doctor` 可以看到这台机器现在实际接得到什么,`routing.local.yaml.example`
-也附了常见情形的起手配置(只有 Claude、以 Codex 为主、没有 Codex)。
-
-</details>
-
-<details>
-<summary><b>omnilane 会不会把我的代码送到新的地方?</b></summary>
-
-<br/>
-
-不会多出新的去处。派工是调用你早就装好也登录过的厂商 CLI,所以代码只会到达
-你本来就在用的那几家。执行器在调用订阅制 CLI 前会剥掉 API 密钥环境变量,避免
-一把残留的密钥把你悄悄切到按 token 计费。唯一的例外是 direct-API vendor 家族
-(`openrouter`、`deepseek`、`zai`、`mistral`、`groq`、`cerebras`),它们本来就是
-拿你配置的密钥直调该提供商的 API——这几家只做 advise,不会改文件。
-
-</details>
-
-<details>
-<summary><b>为什么困难工作现在由 Fable 5.2 领头？</b></summary>
-
-<br/>
-
-2026-11-10 的快照（AA Intelligence Index v5.0.1，当天批准）给 Fable 5.2 xhigh 打了
-62 分，高于通道能派发的其他所有行（Opus 5.5 xhigh 57、Astra xhigh 55）。在
-`hardest-coding`，它的 Terminal-Bench 4.0 也最高（0.616；Astra 与 Opus 5.5 xhigh
-都是 0.596），SciCode 为 0.656（另两者 0.557、0.650）。在 `hard-judgment`，它的
-HLE（0.689）、Briefcase analytical Elo（1927）、CritPt（0.357）都是整条链最高；
-第一个 Codex 行 GPT-6.1 Sol xhigh 分别是 0.526、1691、0.317。它也是最贵的一行：
-AA 跑一次指数，Fable 5.2 xhigh 约 $11,742，Opus 5.5 xhigh 约 $4,766，Astra xhigh
-约 $3,746。
-
-Astra xhigh 仍是 `hardest-coding` 第二、`consult` 第一；`ui-draft` 由 Opus 5.5
-high 领头。Fable 5.2 需要 Claude Code 2.1.321 以上。这份快照已由操作者
-在 2026-11-10 批准；各通道的完整数值见
-[`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt)。
-
-</details>
-
-<details>
-<summary><b>为什么通道都不用 <code>max</code>？</b></summary>
-
-<br/>
-
-推理强度按任务选择，不默认越高越好。2026-11-10 重排之后，包括 `hardest-coding`
-在内，没有任何通道的链包含 `max` 行：每条通道都按性价比优先排序，而 `max` 最贵、
-提升很小（Fable 5.2 的 max 是 65 分，xhigh 是 62 分）。需要时仍可用 `--effort max`
-明确指定；显式的 `--model` 和 `--effort` 始终覆盖这些通道默认值。
-
-</details>
-
-<details>
-<summary><b>通道首选的 CLI 没装会怎样?</b></summary>
-
-<br/>
-
-派工会沿着候选链往下走,用你手上有的第一家。不花任何额度就能先看决策:
-
-```bash
-scripts/dispatch.sh --explain hardest-coding   # 逐候选解释
-scripts/dispatch.sh --list                     # 整张生效表
-scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,不调用模型
-```
-
-</details>
-
-<details>
-<summary><b>被派工的模型会不会乱改我的文件?</b></summary>
-
-<br/>
-
-除非你明确要求修改。派工默认是 `advise`，通过各厂商的只读沙箱或原生工具权限
-保持只读，并保留支持的网页搜索。一般修改使用 `--mode work` 和明确的 `--workdir`，
-关闭代理工具网络，但保留模型连接。`--mode sysops` 是 Codex、Claude、Grok、Agy
-各自独立的完整权限策略，不是 work 的别名；只有任务明确允许超出 work 边界的
-操作，例如服务管理，才逐次选择，永远不作为通道默认值。
-工作端也不能再往外派——深度守卫会用退出码 86 拒绝嵌套派工,一道
-命令不可能失控变成一整串 AI 烧你的额度。
-
-</details>
-
-<details>
-<summary><b>派工被拒了，是哪一种拒绝？</b></summary>
-
-<br/>
-
-三个代码，三种不同的修法。先运行 `omnilane doctor`——它的 `transport-overlay`
-检查会直接告诉你问题出在本机配置还是你的请求。
-
-`missing-caller-context`——没有身份送到闸门。真人加上
-`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 或 `--operator-asserted-human`。
-模型通常什么都不用做：dispatch 会从启动它的 CLI 读取身份。读不到时运行
-`omnilane whoami`，它会打印可以带的 `--caller-context FILE`，或说明读不到的确切原因
-（缺 `--effort`、模型别名、查无评分行）。模型不得替自己主张真人豁免。
-
-`runtime-mapping-unverified`——目标没有已验证的本机请求选择器。
-`omnilane doctor` 及其 `--json` 输出会将每个未验证行列为 `WARN`，显示标识符、请求和
-观察到的模型及强度（如有记录）、失败类别与原因、上次探测时间、
-证据路径（不显示内容）以及下一步。环境原因造成的失败会给出
-`omnilane resign --retry-failed --vendor VENDOR`；已确认的失败不会
-自动重试，需要检查请求、CLI 和供应商映射。
-证据损坏时，诊断会指出路径，并说明如何从已知完好的备份
-恢复，或明确发起探测、将新证据写入新目录。配额造成的拒绝
-会持续到供应商配额恢复。
-
-`invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
-是 overlay 本身加载失败，因此**所有厂商**都会被拒。常见成因是厂商 CLI 升级：
-overlay 钉住每家的可执行文件与 runner 脚本哈希，而 Codex 与 Claude 的证据路径
-内嵌版本目录，升级后是文件消失而非哈希改变。带标签的证据只降级自己那一家；
-未标签的证据（例如探测清单）仍会关闭整个闸门。doctor 会指出文件与厂商，
-重签流程写在派工技能里。
-
-`target-above-effective-ceiling`——没有坏掉的东西。目标的分数高于调用方。
-`required_caller_effort` 会写出调用会话需要的推理强度；标有 `caller_degraded`
-的调用方，是由没有记录推理强度的工具启动的（Codex 的心跳自动化就是这样），
-会按该模型的最低档计算。
-
-</details>
-
-<details>
-<summary><b>映射上的证据等级是什么意思？</b></summary>
-
-<br/>
-
-它说明这次探测把「谁回答的」钉到多紧。它**不影响**你能不能派工。
-
-`billed-model`——供应商自己说出它计费的模型。claude 放在 `modelUsage`；
-grok 在 `--output-format json` 下也一样。这是供应商开的收据。
-
-`client-echo`——CLI 记下自己送出的模型，而且那笔记录与你的请求相符。
-codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订单，
-不是收据：它证明请求照原样送出去了，不能证明是谁接的。
-
-`selector-only`——CLI 收下选择器，其余不表态。v0.42.6 之前探测的每一条映射
-都是这一级。它照样能派工，只是三级里最弱的一级；`omnilane doctor` 会点名
-哪几家值得重探。
-
-三者都不能证明上游供应商身分，也都不会让任何车道被拒。等级是从探测产出的
-东西推导出来的，不是按厂商指定，所以哪支 CLI 开始汇报计费模型，下一次重探
-就会自动升级，omnilane 不用改。
-
-</details>
-
-## 📊 默认值与数据来源
-
-默认通道配置依据 Artificial Analysis Intelligence Index v5.0.1 快照
-`aa-v5.0.1-2026-11-10-v1`（2026-11-10，操作者当天批准），由 85 个 AA 模型页
-合并而成；每条通道按这些分数和该通道自己的测量，以性价比优先排序，v5.0.1 不再计分的行
-直接去掉，不沿用旧分数（[证据](docs/reports/aa-rebaseline-2026-11-10.md)）。这些是意见不是定律——
-设置菜单和 `routing.local.yaml` 就是让你不同意用的。评审团(arbitrate)
-默认关闭;要用就在 `routing.local.yaml` 写
-`arbitrate: vote codex,claude,grok -`(从四家里任选 1-4 个评审),
-或改用 `exec` 厂商指向你自己的多模型审查闸脚本。完整工作笔记(含各评测的
-但书)见 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)。
-
-## ⚠️ 已知限制
-
-- **Antigravity 的 print 模式工具调用在现行 CLI 版本不稳定**(可能被拒或
-  返回无效参数)。long-context 通道的设计本来就是"把内容贴进任务"的长文
-  整合,不受影响;要*读取仓库*的咨询请用 claude/codex 候选。
-- **Grok 没有推理档位开关**;effort 字段仅为接口一致而保留,实际忽略。
-- **非 Git 的 Codex work 仍受支持。** 部分 Codex CLI 版本可能在 Git worktree
-  外卡住，因此上面的自动保险丝会限制这个场景并清理受监工的进程组。Omnilane
-  不会自动执行 `git init`，也不要求用户创建仓库。
+| `missing-caller-context` / `caller-identity` | 无法读取启动助手时指定的模型或推理强度。 | `omnilane whoami` |
+| 调用方模型／强度没有评分项 | 普通通道路由需要完全匹配的评分组合。支持的原生子代理可以继承调用方的实际运行环境，但不算达到通道指定的模型目标。 | `omnilane native-context --vendor VENDOR --model MODEL --inherits-caller-runtime --workdir "$PWD"`，再按参考资料使用 `--inherit` 交接 |
+| `target-above-effective-ceiling` | 目标超过调用方允许的分数；查看拒绝消息中的可用通道。 | `omnilane route --explain hardest-coding` |
+| `runtime-mapping-unverified` 或 CLI 证据已变化 | 此主机尚未验证该选择参数，或可执行文件已更新。 | `omnilane resign --vendor VENDOR` |
+| 退出码 2：未配置覆盖文件 | 首次设置尚未完成。 | `omnilane resign --init` — 由人工在交互式桌面终端执行 |
+| 退出码 20：`needs-login-session` | CLI 尚未登录，或当前进程无法读取桌面登录状态；先在桌面终端登录。 | `omnilane resign --vendor VENDOR` — 在该已登录的终端执行 |
+| 退出码 20：`cli-not-installed` 或 `review-executable-source` | 缺少 CLI，或可执行文件来源／签名需要检查；批准不能修复无效签名。 | `omnilane doctor`，再按供应商专属指引处理 |
+| 退出码 20：`provider-verification-incomplete` 或 `verification-needed` | 验证未完成；先处理列出的 API、额度、网络或尚未探测项。 | `omnilane resign --vendor VENDOR` |
+| 环境失败因冷却期／重置时间暂缓 | 普通失败项可以显式要求重试；无人值守的待复查项仍受重试上限和重置时间约束。 | `omnilane resign --retry-failed --vendor VENDOR` — 先排除原因 |
+| `deterministic-probe-failure`／模型或强度错误 | 请求与观察结果不符；即使加上 `--retry-failed` 也不会自动重试。 | `omnilane doctor`，修正 CLI／供应商映射后再安排新验证 |
+| 退出码 60：`partially-re-signed` | 通过的选择参数已安装；保留项待复查，不能派发任务。需要处理的退出码 20 优先。 | `omnilane resign --vendor VENDOR` — 待原因解除后执行 |
+| 退出码 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤销标志 | 这是操作者决策，不是助手可以自行批准的权限。 | `omnilane doctor` — 由人工检查证据，再在终端执行指定操作 |
+
+## v0.61.0 新功能
+
+- **升级后，每台主机先运行一次 `omnilane resign`。** 未变更的选择参数证据可以沿用，新增或变更项需要验证。退出码 **60** 表示通过项已安装，其他项待复查；用 `omnilane doctor` 查看，排除原因后再重试。
+- 已批准的 AA Intelligence Index **v5.0.1** 快照加入 **Claude Fable 5.2**（需要 Claude Code **2.1.321+**），并将它设为 `hardest-coding`、`hard-judgment` 首选；`long-context` 首选改为 GPT-6 Astra medium。显式指定的原生模型／强度也必须仍有评分；请从 `native-rows.json` 移除已撤回的组合，或使用支持的继承子代理。
+- 首次设置改用 `omnilane resign --init`。拒绝消息用通俗语言说明下一步，退出码 20 提供各供应商的 `attention` 指引，doctor／overlay-health 显示沿用与新增／尚未探测项的数量。
+- 部分供应商验证失败时，重签名仍保留通过项的可用性；无人值守的待复查有重试上限，遵守重置时间，模型不符则视为确定失败。整批未登录时，第一次探测失败就停止，不重复相同登录失败。
+- 升级：`npm i -g omnilane@0.61.0`。
 
 ## 📜 版本历程
 
@@ -1303,6 +631,703 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
   plugin manifest，CI 会检查变更记录和五种语言 README 是否一致。
 
 </details>
+
+## 参考资料
+
+## 覆盖文件验证与重试细节
+
+仅更新评分表快照时，调用参数和可执行文件身份未变的行会自动沿用探测证据；分数或日期变化立即使用新上限，无需运行 `omnilane resign`、图形登录或联网，也不改写覆盖文件。只有新增或参数合约、可执行文件身份变化的行需要 `omnilane resign --vendor VENDOR`；拒绝消息指出行及是否需要图形终端。软件包包含可信来源快照时，旧格式 1 可直接使用；未知的更早来源先用 `omnilane resign --check` 检查。首次配置使用 `omnilane resign --init`，签名者审批规则不变。每日任务使用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失败保留非零退出码，本机私有记录由 `omnilane doctor` 显示，不依赖 Telegram，也不会自动安装定时任务。
+
+环境原因（API 错误、超时、登录、配额或连接问题）造成的失败，可用 `omnilane resign --vendor VENDOR` 重试。非交互运行会在每行失败后等待 20 小时；交互运行或 `omnilane resign --retry-failed --vendor VENDOR` 会立即重试。重试标志不会批准签名者变更。失败证据及时间戳是否存在都受完整性保护；记录被修改或删除时会报告问题，不会重试。
+
+过期证据通过同一套缺失行补测流程刷新，不会重新探测正常的行。模型或强度不符属于已确认的问题，即使加上 `--retry-failed` 也不会自动重试。请运行 `omnilane doctor`，检查记录的请求以及 CLI 和供应商路由，修正原因后再安排新的验证。下方版本说明描述各次发布时的行为；当前安装以本节为准。
+
+## 🤖 让你的 AI 助手来驾驶 omnilane
+
+助手（Claude Code、Codex、Grok Build 或 Antigravity）会读取一份技能文件，里面教它怎么选通道、怎么派工。每台机器做一次，共四步。
+
+### 第 1 步：把技能交给助手
+
+`./install.sh` 会为它找到的每个 CLI 建好链接。手动做法：
+
+| 助手 | 做法 |
+|---|---|
+| Claude Code | `claude plugin marketplace add <本仓库路径>`，再 `claude plugin install omnilane@omnilane`（同时提供 `/route`、`/route-jobs` 和完工收件箱）；或把 `skills/omnilane` 链接到 `~/.claude/skills/` |
+| Codex | 把 `skills/omnilane` 链接到 `~/.codex/skills/` |
+| Grok Build | `grok plugin install <本仓库路径> --trust` |
+| Antigravity | `agy plugin install <本仓库路径>`（先用 `agy plugin validate <本仓库路径>` 检查） |
+
+### 第 2 步：证明一次“每个 CLI 真的会选到你指定的模型”
+
+模型来派工时，只能派给这台机器**证明过**的目标：例如 `codex -m gpt-6.1-sol` 真的运行的是 Sol。这份证明是一个本地文件，叫**传输覆盖文件（transport overlay）**。安装包里不会附带。没有它，每条通道都会用 `runtime-mapping-unverified` 拒绝模型调用者，`omnilane doctor` 也会警告 `no overlay configured`。
+
+请在普通的桌面终端里创建。（通过 ssh 登录的会话读不到 CLI 登录用的钥匙串，会把每一家都报告为未登录。）
+
+```bash
+omnilane resign --init
+```
+
+首次安装须在交互式终端中执行；已有覆盖文件或同时使用 `--daily` 时会拒绝。命令会验证探测结果和实际派发、记录首次信任的签名者，并在备份 `local.sh` 后保留原有设置、加入覆盖文件路径。不安全的签名或签名者变化仍会被拒绝。[手动备用步骤](docs/transport-overlay.md#first-installation)。
+
+未登录的那一家会被标为 `unprobeable`，只是保持未验证，其他家照常可用。
+
+### 第 3 步：让这份证明自己保持最新，不用你动手
+
+覆盖文件用哈希值钉住每个 CLI 可执行文件，而**这些 CLI 会自己更新**，常常一周一次。更新之后，那一家的通道就会被拒绝，直到覆盖文件重新签署为止。`omnilane resign` 一条命令做完全部：找出哪里变了、只重新探测那一家、检查结果、换上新文件、发一笔真实派工确认，失败就自动恢复旧文件。 来源通道只允许开始补测，不会直接放行调度。
+
+`--init` 已自动记录首次信任的签名者；只有旧覆盖文件需要由人工操作者另外运行 `omnilane resign --record-signers`。原有团队记录会形成官方通道，但当前文件仍须通过 Apple 证书链、团队、标识名称和解析后安装位置的检查。只有自签记录、没有操作者信任的旧文件，不会因升级而新增信任。
+
+```bash
+omnilane resign --record-signers # 仅限旧覆盖文件，由人工操作者运行
+```
+
+如果你自行修补并自签，执行 `omnilane resign --trust-adhoc claude`，信任同一位置之后的自签更新。另在**每台主机分别**安装有效官方样本时执行 `omnilane resign --trust-origin claude`；当前若为自签，使用 `omnilane resign --trust-origin claude --team TEAMID`，将 `TEAMID` 换成你独立确认的十位团队代码。命令仅限终端，必须输入屏幕要求的明确确认，没有跳过确认的选项，也没有默认团队。官方更新与随后的自签更新分别需要补测。同位置信任无法证明替换文件由谁产生。自签样本看不到官方识别名称，所以加 `--team` 等于批准该团队在这个位置的所有程序：在替换之前，该团队签名并放在这里的任何程序都能通过来源检查并进入补测，不只是这个 CLI。`omnilane resign --check` 和 `omnilane doctor` 会显示为 `"identifier_family": ""`。要绑定到这个产品，请在安装有效官方样本时，不加 `--team` 再执行一次 `omnilane resign --trust-origin claude`，它会取代团队层级的那条批准。
+
+```bash
+omnilane resign --trust-adhoc claude   # 只有你自己会把 claude 签成 adhoc 时才需要
+```
+
+已固定的脚本或非 macOS 原生文件可用 `omnilane resign --trust-location VENDOR`。位置变化或首次出现脚本时，确认来源后执行 `omnilane resign --approve VENDOR`，补测成功后再信任新位置；批准只限本次，不建立通道。使用 `omnilane resign --revoke-origin VENDOR KIND` 撤销；`KIND` 可为 `developer-id`、`adhoc`、`script`、`no-platform-signature` 或 `location`（全部位置通道）。撤销后的空列表仍优先于覆盖文件的旧信任。
+
+`omnilane resign --check` 和 `omnilane doctor` 显示种类、通道，以及阻止时观察到的团队和标识名称。签名损坏、无法验证、macOS 原生文件完全未签名、通道文件损坏或属于其他主机时始终停止，批准不能修复这些问题。来源失败和登录失败提供不同指引；先恢复有效安装或本机通道备份，再重试。 来源阻止适用于可执行文件已变更的情况。未变更且已固定的可执行文件，沿用既有缺失配置补测、重试和证据更新规则。
+
+通道保存在绑定主机、0600 权限、原子写入且变更前备份的 `$OMNILANE_HOME/transport-origins.local.json`，不要跨主机复制。`resign --init` 现在会在暂存策略中执行首次信任登记，以没有已有身份、路径或策略项的供应商为单位。它会检查符合条件的可执行文件来源、拒绝本地 adhoc 自签样本，并仅在设置与验证成功后写入信任。已有信任不会被覆盖，升级也不会自动信任脚本或非 macOS 文件。助手不得自行执行信任、批准、签名者记录或撤销命令。
+
+然后让它每天运行一次。用什么调度器都行，但必须运行在**你的桌面登录会话里**（CLI 需要钥匙串）。macOS 可以用 LaunchAgent：
+
+```bash
+cat > ~/Library/LaunchAgents/dev.omnilane.resign.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.omnilane.resign</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>omnilane resign --daily</string></array>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/tmp/omnilane-resign.log</string>
+  <key>StandardErrorPath</key><string>/tmp/omnilane-resign.log</string>
+</dict></plist>
+EOF
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plist
+```
+
+上面的 LaunchAgent 是可选示例，不会自动安装计划任务。请在自己的桌面登录环境运行 `launchctl kickstart gui/$(id -u)/dev.omnilane.resign`，再用 `omnilane doctor` 检查结果。
+
+`omnilane resign` 的退出码：
+
+| 退出码 | 含义 | 你要做的事 |
+|---|---|---|
+| 0 | 没有东西变动，或变动的都已重签 | 不用做 |
+| 10 | 只有 `--check` 会出现：有东西变了 | 执行 `omnilane resign` |
+| 20 | 来源、登录或验证需要处理 | 按对应消息操作；批准不能豁免损坏签名、未签名或无法验证的情况 |
+| 30 | 重签后的覆盖文件没通过真实派工，已恢复为前一份 | 没有东西损坏，读日志即可 |
+| 2 | 没有配置覆盖文件 | 做第 2 步 |
+| 40 (`EXIT_HOST_CONFIG`) | 主机配置加载失败，或已配置的覆盖文件无法读取、JSON 无效；不做更改 | 修正 stderr 指出的路径与原因；每日任务的通知方式由负责人决定 |
+| 50 (`EXIT_BUSY`) | 这台主机已有另一个 `omnilane resign` 在运行；不读也不写 | 等它运行完再执行这一次 |
+| 60 | 已安装通过验证的选择器，其余保留的选择器待复验 | 用 `omnilane doctor` 查看原因，排除后运行 `omnilane resign` |
+
+argparse usage errors also return 2; a configured but unreadable overlay returns 40, not 2.
+
+### 第 4 步：在助手里面试试看
+
+请你的助手执行 `omnilane whoami`。它应该报告自己是哪个模型、哪个强度，以及一个分数。接着请它派一件小事：“用 omnilane 让 triage 通道数一数这个项目里有几个 TODO 注释”。
+
+如果被拒绝，拒绝消息会说明是哪一关没过、该怎么办：
+
+| `failed_gate` | 白话 | 怎么修 |
+|---|---|---|
+| `caller-identity` | omnilane 看不出是哪个模型在问 | 让它把 `omnilane whoami` 作为那次工具调用里的**唯一一条命令**。Codex 尤其如此：后面接了 `; echo $?`、`&&` 或管道就读不到 |
+| `target-transport` | 这台机器还没证明过那个目标，或 CLI 之后更新过 | `omnilane resign`（第 3 步） |
+| `downward-ceiling` | 目标模型的分数比提问的模型高；模型只能平派或向下派 | 从拒绝消息列出的 `eligible_lanes` 里挑一条，或用更高的强度启动助手 |
+
+Codex 的定时任务唤醒已有会话时不会记录强度。omnilane 这时会把该调用者限制在它那个模型的最低分，而不是直接拒绝：便宜的通道照常可用，贵的通道会告诉你需要哪个强度才派得动。
+
+完成的任务会在 `$OMNILANE_HOME/inbox/` 写入私有完成记录。Claude Code 插件的 `SessionStart` 会将钩子提供的主控会话编号绑定到仍在运行的进程祖先；`UserPromptSubmit` 在主控下一次提示时，以原子方式交付最多十条属于该会话的记录。没有会话编号的旧记录仍按原任务的 `workdir` 判断范围；取用后移到 `inbox/consumed/`。派发任务时设置 `OMNILANE_INBOX=0` 可以禁用记录创建，默认启用；仅链接技能不会安装插件通知流程。
+
+## 🧭 工作原理
+
+omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道(lane),
+再以无头方式把每条通道派发给该项工作最强的厂商——直接沿用你已有的订阅登录
+(`openrouter` vendor 例外:免装任何 CLI,一把 API 密钥直连):
+
+```mermaid
+flowchart LR
+    M["主循环<br/><i>你在用的任一 CLI</i>"] --> T{{"routing.yaml<br/>一张共用路由表"}}
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
+    T -->|"arbitrate(可选)"| C6["vote — 1-4 模型评审团"]
+```
+
+- **`routing.yaml`** — 通道 → 厂商+模型+推理档位。一个文件,四个执行框架共用。
+- **候选链** — 一条通道可以列多个候选(`codex … | claude … | off`),
+  派发时自动采用本机**实际安装了**的第一个厂商 CLI。只订一、两家也能用同一张表。
+- **`scripts/dispatch.sh [--vendor V] <通道> "<任务>"`** — 查表后以无头方式
+  调用对应厂商的 CLI。`--vendor` 会锁定指定厂商，不做降级。
+- **`skills/omnilane/SKILL.md`** — 一份技能四个框架都能加载:
+  先认出自己是哪个模型,自己通道的活自己干,其余派出去。
+- **`omnilane mcp`** — 同一套路由改以 MCP stdio server 提供,
+  给走 MCP 而非 skill 集成的宿主。
+
+<div align="center">
+
+| | | |
+|:---:|:---:|:---:|
+| 🧭 **一张表**<br/>四个执行框架共用 | 🪂 **候选链**<br/>自动降级到你装了的 CLI | 🗳️ **意见评审团**<br/>重大决定多模型投票 |
+| 🔒 **安全机制**<br/>排队锁 · 看门狗 · 禁嵌套 | 🌏 **五种语言**<br/>安装器说你的母语 | ↩️ **完全可逆**<br/>`--uninstall` 一键还原 |
+
+</div>
+
+## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
+
+AA `aa-v5.0.1-2026-11-10-v1`：**approved（操作者 2026-11-10 批准）**；改用 AA Intelligence Index v5.0.1，68 行计分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），并去掉 v5.0.1 不再计分的行。下表已按它排列：Fable 5.2 xhigh 成为 hardest-coding 与 hard-judgment 的首选；Claude Opus 5 失去分数，long-context 改由 GPT-6 Astra (medium) 领头。Gemini 4 Carbon 有分数，但没有可派发的代号，不在任何车道。每台主机都要运行一次 `omnilane resign`，让 overlay 针对新评分表重新验证。[证据](docs/reports/aa-rebaseline-2026-11-10.md)。取代 `aa-v4.3.2-2026-10-28-v1`（2026-10-28 批准）。
+
+AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当天“把新模型收进去”的指示批准）**；130 行计分、9 行未知。新增 GPT-6.1 Terra（六行，max 48），按价值规则放入 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各车道首选不变。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 批准）。
+
+AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
+
+| 通道 | 首选模型 | 备选模型 | 用途 |
+|---|---|---|---|
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最难的实现、深度调试、正确性关键的修改 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 架构裁决、深度推理、第二意见 |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | 对外文字、提示词／文档润色、风格裁决 |
+| 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 仅在提供设计系统／参考图时生成 UI 草稿 |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
+| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 实时 X／网页搜索与社交上下文 |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 配额耗尽时的中量级编码安全阀 |
+| 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
+
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+
+**备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
+通道都是这样一条链;整条都没装时,通道自动降为 `off`。
+
+> **Claude Fable 5.2 现在领头 hardest-coding 与 hard-judgment（AA v5.0.1 快照，2026-11-10 批准）。** 分数与重排见[重测报告](docs/reports/aa-rebaseline-2026-11-10.md)；各通道的比较见[常见问题](#-常见问题)。
+
+### 自然语言咨询
+
+通过 `omnilane` 技能或 `/route`,你可以直接说: **“请 Opus 挑战这个架构。”**
+自然语言由 Agent Skill 判断,不是在 `dispatch.sh` 里做自由文本 shell 解析。
+
+- 只问“哪个模型适合”时,回答匹配通道当前第一个可用模型,不发出模型调用。
+- 只指定厂商名时,使用该厂商在 `consult` 通道中配置的候选模型。
+- 指定标准模型别名(例如 Opus)时,会锁定技能表中的确切模型家族。明确目标
+  不存在或 CLI 不可用时会清楚失败,不会暗中更换厂商或模型家族。
+
+<details>
+<summary><b>模型角色指引：仍须派发</b></summary>
+
+<br/>
+
+通道的最佳模型不会因为主控是谁而改变。以下是角色提示，不是自己执行的豁免：
+即使模型相同，也要委派。只有调用方明确确认模型、推理强度、模式、工作目录、
+工具、隔离方式和生命周期都相符时，才可以用原生代理；否则走 CLI。
+主控负责编排和验收，工作代理执行任务，不得再派发。
+下面各条的起点只按分数上限推算（AA v5.0.1 快照，2026-11-10 批准）；继承上限、主机探测失败或
+额度不足，都可能让链继续往下走。
+
+- **Claude Code · Fable 5.2**——上限最高的提示词层主控（需要 Claude Code 2.1.321 以上）。在 max、xhigh、high 时，hardest-coding 与 hard-judgment 的第一候选就是 Fable 5.2 自己，仍要派发。medium 时第一个可派的是 Astra xhigh（hardest-coding）与 Fable 5.2 medium（hard-judgment）；low 时是 Opus 5.5 high 与 Fable 5.2 low。
+- **Claude Code · Fable 5.1**——xhigh（50）时，hard-judgment 从 Fable 5.1 xhigh 自己开始（仍要派发）；hardest-coding 与 taste-final 从 Sonnet 5.5 xhigh 开始；bulk-mechanical、fast-agentic、long-context 从 GPT-6.1 Sol medium 开始。
+- **Claude Code · Opus 5.5**——ui-draft 由它的 high 领头。xhigh（57）时，hardest-coding 从 Astra xhigh、hard-judgment 从 Fable 5.2 medium 开始；medium（48）时，hardest-coding 与 hard-judgment 从 Opus 5.5 medium 自己开始，ui-draft 与 long-context 从 GPT-6.1 Sol medium 开始。
+- **Claude Code · Opus 5**——只剩 max 还有分数（44），所以只作为明确点名、用 `max` 的独立复核者，不是任何通道的默认。在这个上限下，hardest-coding 从 Sonnet 5.5 high、hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。
+- **Codex · GPT-6.1 Sol**——bulk-mechanical 与 fast-agentic 由它的 medium 领头。xhigh（52）时，hardest-coding 从 Opus 5.5 high、hard-judgment 从 Fable 5.1 xhigh、long-context 从 Astra medium 开始；high（50）时，hardest-coding 从 Sonnet 5.5 xhigh 开始。
+- **Codex · Astra**——consult（xhigh）与 long-context（medium）的第一候选，xhigh 也是 hardest-coding 与 taste-final 的第二位。xhigh（55）时，hard-judgment 从 Fable 5.2 low 开始。需要时明确指定 `--vendor codex --effort max`；显式指定的 model／effort 始终优先。
+- **Codex · GPT-6.1 Terra**——Codex 的性价比行：fast-agentic 第二、第三（medium、low），bulk-mechanical 第三（high）。xhigh（45）时，hardest-coding 从 Terra xhigh 自己开始，hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。GPT-5.6 Terra 只剩 max 有分数，不在任何通道。
+- **Grok Build · Grok 4.7**——live-search 与 coding-overflow 的第一候选、consult 第三，也是 hardest-coding、hard-judgment、taste-final 的 Grok 尾段。上限只有 35，困难通道大多从 Opus 5.5 low 开始。Grok 4.6 不在任何通道。仍需验证 API 签名和引用的事实。
+- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）在每条通道占据 Gemini 的位置，排在 Flash 前面。Flash 是它之后的跨厂商备用：consult、ui-draft、hard-judgment、live-search、coding-overflow 用 High；hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic 用 Medium；triage 用 Low。不要从代理／编码评测推断审美能力或主控权。
+
+</details>
+
+## 使用助手自己的子代理
+
+omnilane 默认把工作交给厂商的命令行工具。当该做这件事的模型就是助手**自己那一家**的时候，再绕出去调用另一个 CLI 是多走一趟：多一次登录、多一个进程，那个 CLI 一更新又多一个会坏的地方。多数助手自己就能启动子代理，omnilane 可以改为替它规划这种工作。有两种做法。
+
+**与助手运行完全相同内容的工人（`--inherit`）。** 助手启动子代理时*不指定模型、也不指定强度*，工人就是调用者的分身。分身不可能比本体强，而 omnilane 的分数检查要防的就只有这件事，所以这条路不需要厂商 CLI、不需要传输覆盖文件；调用者的强度读不到、或覆盖文件过期时，它照样能用。
+
+```sh
+omnilane native-context --workdir /absolute/repo --inherits-caller-runtime   # prints a capability file
+omnilane route --inherit --native-context /path/printed/above --workdir /absolute/repo triage "Count the TODO comments"
+# -> a PENDING handoff (JSON). The assistant now starts its own sub-agent with no
+#    model argument, checks the result, and records it:
+omnilane jobs --json complete-native JOB_ID /absolute/completion.json
+omnilane jobs --json status JOB_ID
+```
+
+诚实的部分：交接单上标着 `satisfies_lane_target: false`。通道在这里只是“这是哪一类工作”的标签。这样做出来的结果是“助手自己的子代理”做的，绝不是“hardest-coding 那个模型”做的；需要比调用者更强模型的通道，照样会被拒绝。`--inherits-caller-runtime` 是助手自己声明“我的子代理工具就是这样运作”，omnilane 观察不到。各家目前已知的情况：
+
+| 助手 | 不带模型参数的子代理 |
+|---|---|
+| Claude Code | 官方文档写明会使用主会话的模型，强度沿用会话（除非代理定义另有设置）。内置 general-purpose 代理、且未设置 `CLAUDE_CODE_SUBAGENT_MODEL` 时成立。请在自己的主机验证继承行为 |
+| Codex | `collaboration.spawn_agent` 不带模型、不带强度。请在自己的主机验证继承行为 |
+| Grok Build | 文档写明沿用上层的模型（内置 `general-purpose` 代理是 `model: inherit`）；强度没有文档说明。请在自己的主机确认支持情况 |
+| Antigravity | `agy` 1.2.7 中找不到子代理工具。不适用 |
+
+**助手的工具能指定的特定模型。** 把工具真正接受的内容写进能力声明文件（从 `omnilane native-context` 生成的文件开始，每组确切的模型与强度加一行），再用普通的 `omnilane route` 带上 `--native-context FILE`。只有某一行完全匹配时 omnilane 才会使用子代理：模型、强度、模式、工作目录、工具、隔离方式、生命周期都要对上。同一家厂商不等于同一个模型，也不会根据你装了哪些 CLI 去猜。`--executor native` 不匹配就失败、不回退；`--executor cli` 强制走外部 CLI。如果同厂商的目标只因为没给文件而走了 CLI，派工现在会明说。
+
+无论哪一种，子代理都共用助手的工具与文件系统：没有操作系统层面的沙箱，`advise`／`work` 是意图，不是强制。后台、常驻、具名会话、多轮、投票与 `sysops` 工作仍走 CLI。协议处理需要 Python 3.9 以上。结构定义、完成文件、代理复用与取消：见 [docs/native-executor.md](docs/native-executor.md)。
+
+## 🖥️ Live Board
+
+每一次派发——无论前台还是 `--background`——都是落盘的一条 job。Live Board
+是架在这个 job 存储之上、可选且只读的本地工作台:每个模型被问了什么、答了
+什么、怎么路由、是否还在运行,一眼看完。
+
+<div align="center">
+
+<img src="docs/live-board.png" alt="Omnilane Live Board 桌面版——左侧为作业列表,右侧为选定作业的任务、公开结果与模型路径" width="820"/>
+
+<img src="docs/live-board-mobile.png" alt="Omnilane Live Board 手机版——可搜索的作业列表与状态筛选" width="280"/>
+
+</div>
+
+```bash
+omnilane ui start    # 启动或复用服务器，输出通过认证的网址
+omnilane ui status   # 查看本地服务器状态
+omnilane ui url      # 输出当前通过认证的网址
+omnilane ui stop     # 正常停止
+```
+
+桌面版的作业列表与详情区域可分别滚动;手机版使用列表／详情切换，支持返回键与
+Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的作业行;短暂断线时
+保留最后画面并自动重连。可将任意已加载作业固定为参考，再选择另一条作业，并排
+比较模型路径和公开结果;参考快照只留在浏览器内存中，关闭页面即消失。服务只绑定
+`127.0.0.1`、使用随机令牌保护、全程只读。界面只显示 `task.txt` 和公开的
+`out.txt`，不会显示工作端或厂商原始日志。
+
+界面提供英文、日文、韩文、繁体中文与简体中文。首次加载依浏览器语言决定，可用标题栏
+的切换器覆盖，选择会记在本地。
+
+核心路由不需要 Python;只有这个界面需要 Python 3.9 或更高版本。
+
+## 📦 安装
+
+前置需求:想路由到的厂商 CLI(`codex`、`claude`、`grok`、`agy`,另可选
+`kimi`、`qwen`、`opencode`)已登录且在 `PATH` 上——**有几家装几家就好**,
+缺的通道会自动降级。`openrouter` vendor 是例外:不需要任何 CLI,只要
+`curl` 和环境变量里的 `OPENROUTER_API_KEY`。
+
+最快:`./install.sh` — 自动检测本机的 CLI、接好技能、列出其余的插件安装命令、
+打印这台机器的生效路由表,最后询问是否进入交互设置菜单(`--uninstall` 可逆)。
+安装界面依系统语言自动切换(英/繁中/简中/日/韩,可用 `OMNILANE_LANG=zh-CN`
+强制)。另提供可选的各 CLI **常驻路由提示**:在各 CLI 指令文件末尾加一段带
+标记、可逆的区块(`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、
+`~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路径可能随 CLI 版本不同);
+非交互安装可带 `OMNILANE_HOOKS=all|none|claude,codex`。手动接线:
+
+`./install.sh --check` 可只读检查漂移；安装或 `--uninstall` 加上
+`--dry-run`，可先预览每个由这份 checkout 拥有的文件动作。
+要回滚安装器拥有的链接与标记提示，执行 `./install.sh --uninstall`。
+
+- **Claude Code**:以插件安装(附 `/route`、`/route-jobs` 命令,并内置
+  `SessionStart` hook,会话开始时自动注入路由提醒,无需修改 CLAUDE.md),
+  或把 `skills/omnilane` 放进 `~/.claude/skills/`。
+- **Codex**:把 `skills/omnilane` 放进或链接到 `~/.codex/skills/`。
+- **Grok Build**:`grok plugin install <本仓库路径> --trust`
+- **Antigravity**:`agy plugin install <本仓库路径>`(先用
+  `agy plugin validate` 检查)
+
+### MCP server
+
+`omnilane mcp` 会启动零依赖、跑在本机的 MCP stdio server,让任何支持 MCP
+的宿主无需安装 skill、也不用加路由提醒,即可发现并调用 omnilane。在宿主
+配置里指向已安装的 CLI 即可:
+
+```json
+{
+  "mcpServers": {
+    "omnilane": {
+      "command": "omnilane",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Server 提供 `route`,以及一组只读查询工具:`list_lanes`、`explain`、`validate`、`dry_run`、`jobs_list`、`jobs_status`、`jobs_result`、`jobs_stats`、`jobs_audit`、`doctor`。
+`route` 默认只读 `advise` 模式;选择 `work` 的调用必须同时提供明确的
+`workdir`。
+
+唯一的运行需求是 Node.js(不装任何 npm 包);也可以直接
+`npm install -g omnilane`,CLI 连同 MCP server 一起装好。
+
+## ⚙️ 自定义设置
+
+三层,全部可选:
+
+1. **交互菜单** — `scripts/configure.sh` 列出可配置的通道,让你逐条选
+   厂商 → 模型 → 推理档位(有建议清单,也可自由输入未来的新模型名),
+   写进 `~/.omnilane/routing.local.yaml`。多厂商 `consult` 会被刻意跳过,
+   如需修改请手动编辑。`install.sh` 装完会主动询问。
+2. **`~/.omnilane/routing.local.yaml`** — 手改覆盖文件,格式同 `routing.yaml`,
+   本机优先。参考 `routing.local.yaml.example`。
+3. **`~/.omnilane/local.sh`** — 机器专属的可执行文件路径、代理、认证包装;
+   每个执行器都会加载,永不进版本控制。参考 `local.sh.example`。
+
+随时检查结果:
+
+```
+scripts/dispatch.sh --list     # 生效表,标出候选链降级与关闭的通道
+```
+
+## 📖 命令参考
+
+```
+omnilane list | route … | jobs … | configure
+eval "$(omnilane completion bash)"
+source <(omnilane completion zsh)
+omnilane completion fish | source
+omnilane mcp
+omnilane release-audit [--target VERSION] [--json]
+omnilane ui start
+omnilane ui status
+omnilane ui url
+omnilane ui stop
+omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]
+omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD]
+dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+            [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
+            [--caller-context FILE | --operator-asserted-human]
+            LANE "TASK"
+dispatch.sh [--json] --list [--json]
+dispatch.sh [--json] --explain LANE [--json]
+dispatch.sh [--json] --validate [--json]
+jobs.sh [--json] {list | status ID | result ID}
+jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]
+jobs.sh wait ID [--timeout N]
+jobs.sh cancel ID
+jobs.sh rm ID
+jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]
+jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
+jobs.sh audit [--last N] [--json]
+jobs.sh prune [--keep N] [--apply]
+configure.sh
+configure.sh set|get|unset|list|diff LANE [SPEC]
+```
+
+`configure diff` 在两份视图中保留 `local.sh` 的相同本机可用性设置，因此比较的是路由覆盖，而不是本机程序设置缺失造成的差异。 任一检查失败时，会返回该退出状态并说明失败阶段，而不会输出比较结果。
+
+`configure get` 会传递检查失败的退出状态，不会返回不完整数据或误报通道不存在。`configure list` 会报告存在性检查错误；覆盖配置确实缺失或为空时仍正常成功。
+
+`configure set` 先验证临时候选配置，再发布，并保留现有文件的权限模式。读取现有路由内容失败、验证程序意外失败或目标通道出现结构错误时，原配置保持不变；可用性警告和其他通道错误仍按既有规则处理。
+
+`configure unset` 先完成读取与筛选，再沿用原本的就地写入方式更新目标文件。读取或筛选失败时原内容不变；写入失败会报告错误，但不保证回滚。
+
+Bash、Zsh 和 Fish 补全包含文档中的顶层命令、目标命令和作业命令组。选择补全只会填入命令文字，不会执行作业操作。
+
+未指定 `--vendor` 时，`benchmark` 从有效路由列表获取供应商，并忽略仅用于显示的 `unavailable` 标记。如果没有可用于 benchmark 的供应商，会以退出码 2 报告未找到已配置供应商；默认仍是干跑，不调用供应商。
+
+作业的 `list` 和 `status` 使用一致的观测状态。`dead` 表示没有记录退出码，且工作进程的 PID 无效或已不存在；它不会出现在 `--status running` 中，可用 `--status dead` 筛选。`result` 会说明未记录退出码，不再误称进程仍在运行。尚无 PID 的启动阶段仍沿用 `running` 状态，不会推测退出码。
+
+后台作业需要 Perl 监督，使取消能终止受监督的进程组。
+监督本身不增加整体作业期限；没有适用的作业超时设置时，元数据仍为 `job_timeout: null`。
+受监督的单次调用使用 Perl alarm，超时可能返回 142；整体作业期限到期返回 124。
+`jobs close` 最多等待 11 秒，包含进程组清理。
+
+`--thread NAME` 可在多次单次派发间延续命名的 Claude、Codex、Grok 或 Gemini
+对话。0.33.0 会固定厂商、模型、effort 与实际工作目录；使用
+`jobs.sh threads`、`threads show NAME`、`threads rm NAME` 管理本地状态，
+删除状态不会删除厂商端会话。
+
+退出码:`2` 用法错误(包括厂商值无效,或指定厂商不在该通道)、`3` 通道已关闭、
+`4` 候选链没有可用 CLI,或指定厂商已配置但其 CLI 不可用、
+`5` 第一轮成功评审太少、`6` 第二轮没有任何反驳成功、`86` 拒绝嵌套派发、
+`87` 等锁超时、`124` 整体任务超时;
+其余直接透传工作端自己的退出码。
+
+后台任务需要 Perl 监督程序才能取消整个进程组；只有监督程序不会增加总时限，未设置时 `job_timeout` 仍为 `null`。单次调用另由 `scripts/lib/call-timeout.pl` 计时，超时返回 142；整项任务超时返回 124。`jobs close` 最多等待 11 秒，包括进程组清理。
+
+受监督的任务会继承随机的 `OMNILANE_JOB_TOKEN` 和 `OMNILANE_JOB_ID`。取消或整项任务超时后，监督程序会查找携带完全匹配令牌、且在任务之后启动的进程，处理通过 `setsid` 等方式离开组的残留；正常完成时只计数。`jobs --json status` 增加 `"leftovers":{"reaped":N,"remaining":M}`，文本状态有残留时会附上 `leftovers=M`。macOS 的 `/bin/bash` 等平台程序会隐藏环境，清除环境的进程也无法用此方式找到。
+
+`jobs recommend` 只读取已验证的公开元数据与退出码，按成功率、样本数、名称排序；默认至少三个已完成任务，不读任务或结果正文，也不改路由。`doctor --probe V` 才会实际发出一次有时限的 advise 调用，只报告可用性、模型、耗时与响应字节数；不加 `--probe` 就保持离线。`benchmark` 使用 `benchmarks/workloads.tsv`，默认只预演；`--run` 才会调用供应商，成本只按你提供的 `--cost-per-call` 估算。
+
+`arbitrate` 默认关闭，可在 `routing.local.yaml` 设置 `arbitrate: vote codex,claude,grok -`，或通过配置菜单从 codex／claude／grok／gemini 选择 1–4 位投票者。每轮每位投票者各调用一次，调用方负责综合判断；将强度字段设为 `2` 会加入针对分歧的辩论轮。也可设置 `arbitrate: exec /path/to/script -`：脚本接收 `MODE WORKDIR EFFORT PROMPT_FILE OUTPUT_FILE`，将结论写到 `OUTPUT_FILE`，接口见 `scripts/runners/run-exec.sh`。
+
+## 🎭 模式
+
+- **advise（默认）**：本地只读分析；供应商支持时可用原生网页／搜索工具。保留模型连接，限制修改工具；不同供应商的 X／网页搜索能力并不等同。
+- **work**：文件与命令操作限于显式 `--workdir`，关闭代理工具网络访问，保留模型连接。不支持的强制边界在调用模型前停止，不会静默切换为 sysops。
+- **sysops**：每次派工显式选择，开放代理工具、文件和网络访问；不作为通道默认值，任务必须列明允许的操作。
+
+CLI 省略 `--workdir` 时默认使用调用端当前目录；任务说明仍应明确工作目录。MCP `route`／`dry_run` 的 work 接口则单独要求明确的 `workdir`。
+
+Codex 和 Claude 的三种模式使用不同策略。Agy advise／sysops 使用独立的原生会话设置，不替换订阅认证；Agy 1.1.27 work 已使用四个经过验证的工具及原生终端沙箱完成限定的新建／续接验收：工作目录内读写、修改、编译及越界写入拒绝通过。外部临时文件／缓存读取也受限；每次启动重写明确设置，不宣称设置全程不可变。另一次正式 work 实时／FIFO 两轮验收已通过前轮读回、越界写入拒绝及正常关闭，源文件保持不变。Grok advise 使用原生工具允许／拒绝规则；Grok 1.0.13 的完整单次 `plain` 路径已验证原生关键词搜索、抓取网页及写入拒绝，采用内部网页工具 ID 和每项作业独立的 MCP 就绪状态，不关闭钩子。`CONTEXT_MODE_MCP_SENTINEL_DIR` 已设置为非空值时，会在调用模型前报告冲突，不覆盖原设置。原生子进程网络隔离仅支持 Linux，因此 macOS Grok work (default) 仍保留前置检查；Grok 实时模式仍要求显式 sysops，这次 advise 结果不扩展到其他路径。OpenRouter 仍仅支持 advise；其他供应商不自动纳入这份四供应商契约。证据范围见[日期化运行验收表](docs/model-capabilities-2026-09.md#f-mode-runtime-gate-2026-09-06)。
+
+macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 中加入 `option.grok-macos-work: unconfined`，启用**没有隔离**的单次 work。默认关闭；关闭时，macOS 的 work 候选链会跳过 Grok。开启时 `doctor --strict` 会失败。详见[选项、风险与 Grok 工作者必须使用的任务书模板](docs/grok-unconfined-work.md)。
+
+## 🔒 内置安全机制
+
+- **禁止嵌套派发** — 工作端不得再往外派(`OMNILANE_DEPTH` 守卫,退出码 86),
+  杜绝 AI 叫 AI 的额度连环烧。
+- **Codex 排队锁** — 同一目标目录的 codex 派发自动串行化(锁以规范化后的
+  workdir 为键);崩溃残留的锁以所有者 PID 检测后安全接管。
+- **看门狗** — 每个工作端跑在 `timeout`/`gtimeout` 之下,两者皆无时退到
+  perl-alarm 后备(原生 macOS 就是这种情况),卡死的 CLI 不会挂一整晚。
+  上限作用于**每次 CLI 调用**,优先级从高到低:`--timeout SECONDS` > 单通道
+  `OMNILANE_TIMEOUT_<LANE>`(通道名大写、`-` 换成 `_`,如
+  `OMNILANE_TIMEOUT_HARD_JUDGMENT`) > 全局 `OMNILANE_TIMEOUT`(默认 600 秒)。
+  它是单次调用的防卡死看门狗,不是整个任务的时间预算:会重试的 vendor(grok)
+  或 vote 面板(评审 × 轮次)会发起多次调用,总耗时可能是该值的数倍。
+- **整体任务保险丝** — 可选的 `--job-timeout SECONDS` 用同一个进程组监工,
+  一次覆盖等锁、重试、所有评审和轮次。优先级为参数 >
+  `OMNILANE_JOB_TIMEOUT_<LANE>` > `OMNILANE_JOB_TIMEOUT` > 关闭；唯一的自动例外
+  是 Codex 在 Git worktree 外执行 `work` 时，若未设置整体上限，就沿用解析后的
+  单次调用看门狗作为整体保险丝，上限为监工支持的 999999999 秒。到期会清理
+  受监工的进程组并返回 124。这个自动保险丝需要内置的 Perl 监工；若环境
+  无法使用，派发会警告但仍通过原有单次调用看门狗路径执行非 Git 工作；若连
+  单次看门狗工具都没有，该路径会另外警告。
+  完整深度代码审查建议从 2–4 小时
+  (7200–14400 秒)起步,单次调用看门狗可先设 30 分钟;这些只是建议值,
+  不会写死为默认值。
+- **后台作业生命周期** — `--background` 的工作端跑在自己的 process group,
+  调用端退出也不受影响;被杀会落盘退出码,`jobs.sh status` 会报 `dead`
+  而不是永远显示 `running`。
+- **任务载荷上限** — 过大的任务文本自动头尾截断,防止撑爆工作端上下文。
+
+## 📬 实时邮箱
+
+单次调用的 `--timeout` 覆盖整个常驻会话，完成一轮不会停止或重置计时。Claude、Gemini 只有在所有已发送轮次都取得供应商 SUCCESS、且有可用输出时，才将已回答后的超时视为成功，输出末尾标记 `closed by per-call timeout after Ns; last turn completed`；Gemini 尾部的取消错误不会推翻已完成轮次。仍有未回答轮次时保留退出码 142，标记 `CALL_TIMEOUT`，`jobs.sh stats` 同时计入 `failed` 与 `call_timed_out`。读完回答请尽快用 `jobs close ID` 关闭；一次性的后台任务可用 `--single-shot`。
+
+实时邮箱是受支持模式的常驻后台派发，不是一次性派发。派发方以 `--background` 打开后，运行中仍可追加指令，并负责用 `jobs.sh close ID` 收尾。即使无人处理，它也不会永久存在：空闲上限或已配置的整个作业超时（`--job-timeout`）到期后都会终止它。
+
+```bash
+scripts/dispatch.sh --background --vendor claude hard-judgment "检查超时测试失败的原因"
+# 将 dispatch 显示的作业 ID 保存为 $ID
+scripts/jobs.sh send "$ID" "再检查重试路径。"
+scripts/jobs.sh watch "$ID"
+scripts/jobs.sh tail "$ID" --lines 20
+scripts/jobs.sh close "$ID"
+scripts/jobs.sh retry "$ID" --background
+```
+
+前台派发与前台 `jobs retry` 在作业失败时也会打印已保存的公开输出，再返回该作业的非零退出码。后台派发保留原有 job ID 输出。
+
+`watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 还要求 `--mode sysops --workdir DIR`，advise／work 的实时请求在启动前停止，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
+
+空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
+
+## 🎯 目标编排
+
+`omnilane goal` 是由领班驱动的工作台账。循环由调用方负责，也就是打开目标的代理会话或终端用户：派发一个作业，从完成收件箱或 `omnilane jobs wait` 取回结果，决定下一个作业，再重复执行。作业数量和秒数预算默认均不设上限；只有传入 `--budget-jobs N` 或 `--budget-seconds S` 时，才会启用对应的硬上限。omnilane 只负责记账；每次 goal dispatch 前都会检查调用方设置的上限和默认启用的重复失败熔断器，领班关闭目标时才汇总报告。
+
+```bash
+GOAL_ID="$(omnilane goal open "修复不稳定的结账集成" \
+  --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+  "重现结账失败，完成最小修复并验证")"
+omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane goal note "$GOAL_ID" "结账集成测试已通过"
+omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
+```
+
+更新中断后，失败次数会从持久化工作记录重建，不会重复计数。`goal close` 只在报告写入成功后关闭目标；若写入失败，修正错误后可重试关闭。
+
+目标忙碌时会显示只读的锁持有者诊断，并保持退出码 75。不会自动移除锁；记录中的 PID 无法证明持有权，因此恢复前仍须人工确认。
+
+目标状态与报告会如实显示 `dead` 和 `missing`，不再误称仍在运行。任务状态证据不可用或不一致时显示 `unknown`，不编造退出码或失败次数。各任务秒数仍是提交后的经过时间，并非实际运行时间；目标预算不变。每个未完成任务各做一次最多两秒的本地状态查询。
+
+正常清理已完成任务的文件后，目标仍保留已验证的退出码、完成时间与截至完成的经过秒数。状态与报告会另行标注 `artifacts=missing`。没有已记录完成结果的任务仍保持缺失或未知，清理不会产生虚构的结束结果。
+
+目标派工会先持久化意图并预留一个任务名额，再以一次性的领取记录，在启动前绑定意图与生成的任务 ID。`spent_jobs` 仍统计已记录任务；`reserved_jobs` 表示尚未确认的提交。未确认或损坏的账本会阻止新派工与结案。对账只修复记录，不启动任务、不编造退出码，也不重试结果不明的提交。
+
+带线程的目标派工，其 stdout 只输出确切的任务 ID；验证 ID 后，对应的线程通知会显示在 stderr。直接后台派工仍保留原有的“通知加任务 ID”stdout 格式。
+
+`goal dispatch` 会启动后台任务，不支持 `--dry-run`；该选项会在目标状态发生变化前被拒绝。要预览路由，请直接使用 `omnilane dispatch --dry-run [options] LANE "TASK"`。 直接预览不会继承目标的工作目录；需要时请传入 `--workdir DIR`。
+
+目标预算记录必须使用 JSON 整数，不接受布尔值或数字字符串。可选上限仍是 `null` 或 1..999999999；计数器必须非负且位于支持的数值范围。无效字段会在更新账本或派工前被拒绝。工作目录路径不支持制表符、回车、换行或 NUL；普通空格与 Unicode 仍受支持。
+
+派工报错或结果丢失时，先查看 `goal status` 再决定是否重新提交：再次执行相同命令仍会创建新意图，因此保证的是每个意图最多启动一次，而不是所有相同命令自动去重。对账需要有效的已有任务 PID／退出码证据；若在对账前清理证据，预留名额会保持未确认。已完成对账的目标历史不受清理任务文件影响。旧目标仍可读取，不会自动回收过期锁或恢复结果不明的意图。
+
+后台任务开始收尾后，HUP/TERM 不会改写已选定的退出状态。完成通知会跳过已消费记录，每次提示最多发送十条，包括无法读取记录的通知。
+
+目标状态保存在 `$OMNILANE_HOME/goals/<goal-id>/`。使用 `goal status` 可以查看预算用量、熔断次数，以及各作业陆续写入的元数据和退出状态。`goal close` 会写入 `report.md` 并打印路径。单个且做法明确的任务直接派发即可；传入预算参数后，对应的上限是硬限制，并不保证任务完成。
+
+## ❓ 常见问题
+
+<details>
+<summary><b>这些订阅我全都要有吗?</b></summary>
+
+<br/>
+
+不用。每条通道都是候选链,派工时采用本机实际装了的第一个候选。只有一份订阅时,
+整张表会收敛到那一家;整条链都没有的通道自动关闭,不会报错。运行
+`omnilane doctor` 可以看到这台机器现在实际接得到什么,`routing.local.yaml.example`
+也附了常见情形的起手配置(只有 Claude、以 Codex 为主、没有 Codex)。
+
+</details>
+
+<details>
+<summary><b>omnilane 会不会把我的代码送到新的地方?</b></summary>
+
+<br/>
+
+不会多出新的去处。派工是调用你早就装好也登录过的厂商 CLI,所以代码只会到达
+你本来就在用的那几家。执行器在调用订阅制 CLI 前会剥掉 API 密钥环境变量,避免
+一把残留的密钥把你悄悄切到按 token 计费。唯一的例外是 direct-API vendor 家族
+(`openrouter`、`deepseek`、`zai`、`mistral`、`groq`、`cerebras`),它们本来就是
+拿你配置的密钥直调该提供商的 API——这几家只做 advise,不会改文件。
+
+</details>
+
+<details>
+<summary><b>为什么困难工作现在由 Fable 5.2 领头？</b></summary>
+
+<br/>
+
+2026-11-10 的快照（AA Intelligence Index v5.0.1，当天批准）给 Fable 5.2 xhigh 打了
+62 分，高于通道能派发的其他所有行（Opus 5.5 xhigh 57、Astra xhigh 55）。在
+`hardest-coding`，它的 Terminal-Bench 4.0 也最高（0.616；Astra 与 Opus 5.5 xhigh
+都是 0.596），SciCode 为 0.656（另两者 0.557、0.650）。在 `hard-judgment`，它的
+HLE（0.689）、Briefcase analytical Elo（1927）、CritPt（0.357）都是整条链最高；
+第一个 Codex 行 GPT-6.1 Sol xhigh 分别是 0.526、1691、0.317。它也是最贵的一行：
+AA 跑一次指数，Fable 5.2 xhigh 约 $11,742，Opus 5.5 xhigh 约 $4,766，Astra xhigh
+约 $3,746。
+
+Astra xhigh 仍是 `hardest-coding` 第二、`consult` 第一；`ui-draft` 由 Opus 5.5
+high 领头。Fable 5.2 需要 Claude Code 2.1.321 以上。这份快照已由操作者
+在 2026-11-10 批准；各通道的完整数值见
+[`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt)。
+
+</details>
+
+<details>
+<summary><b>为什么通道都不用 <code>max</code>？</b></summary>
+
+<br/>
+
+推理强度按任务选择，不默认越高越好。2026-11-10 重排之后，包括 `hardest-coding`
+在内，没有任何通道的链包含 `max` 行：每条通道都按性价比优先排序，而 `max` 最贵、
+提升很小（Fable 5.2 的 max 是 65 分，xhigh 是 62 分）。需要时仍可用 `--effort max`
+明确指定；显式的 `--model` 和 `--effort` 始终覆盖这些通道默认值。
+
+</details>
+
+<details>
+<summary><b>通道首选的 CLI 没装会怎样?</b></summary>
+
+<br/>
+
+派工会沿着候选链往下走,用你手上有的第一家。不花任何额度就能先看决策:
+
+```bash
+scripts/dispatch.sh --explain hardest-coding   # 逐候选解释
+scripts/dispatch.sh --list                     # 整张生效表
+scripts/dispatch.sh --dry-run hardest-coding "…"   # 完整解析后的计划,不调用模型
+```
+
+</details>
+
+<details>
+<summary><b>被派工的模型会不会乱改我的文件?</b></summary>
+
+<br/>
+
+除非你明确要求修改。派工默认是 `advise`，通过各厂商的只读沙箱或原生工具权限
+保持只读，并保留支持的网页搜索。一般修改使用 `--mode work` 和明确的 `--workdir`，
+关闭代理工具网络，但保留模型连接。`--mode sysops` 是 Codex、Claude、Grok、Agy
+各自独立的完整权限策略，不是 work 的别名；只有任务明确允许超出 work 边界的
+操作，例如服务管理，才逐次选择，永远不作为通道默认值。
+工作端也不能再往外派——深度守卫会用退出码 86 拒绝嵌套派工,一道
+命令不可能失控变成一整串 AI 烧你的额度。
+
+</details>
+
+<details>
+<summary><b>派工被拒了，是哪一种拒绝？</b></summary>
+
+<br/>
+
+三个代码，三种不同的修法。先运行 `omnilane doctor`——它的 `transport-overlay`
+检查会直接告诉你问题出在本机配置还是你的请求。
+
+`missing-caller-context`——没有身份送到闸门。真人加上
+`OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1` 或 `--operator-asserted-human`。
+模型通常什么都不用做：dispatch 会从启动它的 CLI 读取身份。读不到时运行
+`omnilane whoami`，它会打印可以带的 `--caller-context FILE`，或说明读不到的确切原因
+（缺 `--effort`、模型别名、查无评分行）。模型不得替自己主张真人豁免。
+
+`runtime-mapping-unverified`——目标没有已验证的本机请求选择器。
+`omnilane doctor` 及其 `--json` 输出会将每个未验证行列为 `WARN`，显示标识符、请求和
+观察到的模型及强度（如有记录）、失败类别与原因、上次探测时间、
+证据路径（不显示内容）以及下一步。环境原因造成的失败会给出
+`omnilane resign --retry-failed --vendor VENDOR`；已确认的失败不会
+自动重试，需要检查请求、CLI 和供应商映射。
+证据损坏时，诊断会指出路径，并说明如何从已知完好的备份
+恢复，或明确发起探测、将新证据写入新目录。配额造成的拒绝
+会持续到供应商配额恢复。
+
+`invalid-policy-input` 搭配 "transport contract evidence changed"——以上皆非。
+是 overlay 本身加载失败，因此**所有厂商**都会被拒。常见成因是厂商 CLI 升级：
+overlay 钉住每家的可执行文件与 runner 脚本哈希，而 Codex 与 Claude 的证据路径
+内嵌版本目录，升级后是文件消失而非哈希改变。带标签的证据只降级自己那一家；
+未标签的证据（例如探测清单）仍会关闭整个闸门。doctor 会指出文件与厂商，
+重签流程写在派工技能里。
+
+`target-above-effective-ceiling`——没有坏掉的东西。目标的分数高于调用方。
+`required_caller_effort` 会写出调用会话需要的推理强度；标有 `caller_degraded`
+的调用方，是由没有记录推理强度的工具启动的（Codex 的心跳自动化就是这样），
+会按该模型的最低档计算。
+
+</details>
+
+<details>
+<summary><b>映射上的证据等级是什么意思？</b></summary>
+
+<br/>
+
+它说明这次探测把「谁回答的」钉到多紧。它**不影响**你能不能派工。
+
+`billed-model`——供应商自己说出它计费的模型。claude 放在 `modelUsage`；
+grok 在 `--output-format json` 下也一样。这是供应商开的收据。
+
+`client-echo`——CLI 记下自己送出的模型，而且那笔记录与你的请求相符。
+codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订单，
+不是收据：它证明请求照原样送出去了，不能证明是谁接的。
+
+`selector-only`——CLI 收下选择器，其余不表态。v0.42.6 之前探测的每一条映射
+都是这一级。它照样能派工，只是三级里最弱的一级；`omnilane doctor` 会点名
+哪几家值得重探。
+
+三者都不能证明上游供应商身分，也都不会让任何车道被拒。等级是从探测产出的
+东西推导出来的，不是按厂商指定，所以哪支 CLI 开始汇报计费模型，下一次重探
+就会自动升级，omnilane 不用改。
+
+</details>
+
+## 📊 默认值与数据来源
+
+默认通道配置依据 Artificial Analysis Intelligence Index v5.0.1 快照
+`aa-v5.0.1-2026-11-10-v1`（2026-11-10，操作者当天批准），由 85 个 AA 模型页
+合并而成；每条通道按这些分数和该通道自己的测量，以性价比优先排序，v5.0.1 不再计分的行
+直接去掉，不沿用旧分数（[证据](docs/reports/aa-rebaseline-2026-11-10.md)）。这些是意见不是定律——
+设置菜单和 `routing.local.yaml` 就是让你不同意用的。评审团(arbitrate)
+默认关闭;要用就在 `routing.local.yaml` 写
+`arbitrate: vote codex,claude,grok -`(从四家里任选 1-4 个评审),
+或改用 `exec` 厂商指向你自己的多模型审查闸脚本。完整工作笔记(含各评测的
+但书)见 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)。
+
+## ⚠️ 已知限制
+
+- **Antigravity 的 print 模式工具调用在现行 CLI 版本不稳定**(可能被拒或
+  返回无效参数)。long-context 通道的设计本来就是"把内容贴进任务"的长文
+  整合,不受影响;要*读取仓库*的咨询请用 claude/codex 候选。
+- **Grok 推理强度：**显式指定的 `low`、`medium`、`high`、`xhigh` 会通过 `--reasoning-effort` 传给 CLI；`-` 使用 CLI 默认值。请求的组合仍需有完全匹配的评分和本地传输验证。
+
+- **非 Git 的 Codex work 仍受支持。** 部分 Codex CLI 版本可能在 Git worktree
+  外卡住，因此上面的自动保险丝会限制这个场景并清理受监工的进程组。Omnilane
+  不会自动执行 `git init`，也不要求用户创建仓库。
+
+## ⬆️ 升级注意：旧版本启动的任务
+
+`jobs close` 和 `jobs cancel` 必须先由 `ps` 确认进程启动时间符合 `pid.start` 或 `inbox.holder.pid.start`，才会发送信号。旧版本任务没有这些文件：PID 仍在使用时，两个命令不发送信号并返回 1。用 `ps -o lstart=,command= -p PID` 核对；确认确实是该任务进程后，才由你手动用 `kill -USR1 PID` 关闭，或用 `kill -TERM PID` 取消。如果是其他进程，保留它；原任务已消失时，可手动把任务目录移到回收站。PID 已不存在时沿用原行为；旧任务的 `status`、`wait`、`rm` 仍按 `kill -0` 判断。升级后新启动的任务不受影响。
+
+上述操作与 `jobs wait`、`jobs rm`、`dispatch` 需要可用的 `ps`。macOS 沙箱可能禁止 `/bin/ps`，因此会拒绝运行，派发任务即使有 `--caller-context` 也不会启动；已有退出码或已记录 PID 经 `kill -0` 确认不存在时，仍可回答。请在普通终端运行，或按你的权限机制批准沙箱外运行；无法读取 PID 不代表进程已死。
+
+如果启动时间文件无效且 PID 存在，`status` 显示 `unknown (invalid start time file)`，`wait`、`cancel`、`close`、`rm` 都拒绝操作；先用上述 `ps` 命令核对。如果存活 PID 的启动时间与记录不同，则视为其他进程：`status` 显示 `dead (worker gone, no exit recorded)`，`cancel` 显示 `not running`，不干扰该进程，并在标准错误中提供比对命令。
 
 ## 🌱 状态
 
