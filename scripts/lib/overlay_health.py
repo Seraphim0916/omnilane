@@ -60,9 +60,16 @@ def offenders(overlay_path: Path) -> list[str]:
 
 
 def pending_summary(overlay: dict) -> str:
-    pending = {m["identity"]["vendor"]: m["pending_recheck"]["reason"]
-               for m in overlay.get("mappings", []) if m.get("pending_recheck")}
-    return "; ".join(f"{vendor}: {reason}" for vendor, reason in sorted(pending.items()))
+    from selector_recheck import pending_rows
+    from probe_failure import public_reason
+    held = {m["identity"]["vendor"]: m["pending_recheck"]["reason"]
+            for m in overlay.get("mappings", []) if m.get("pending_recheck")}
+    parts = [f"{vendor}: {reason}" for vendor, reason in sorted(held.items())]
+    pending = pending_rows(overlay)
+    if pending:
+        parts.append(f"{len(pending)} selector(s) pending: " + "; ".join(
+            f"{cid}: {public_reason(item['verdict_reason'])}" for cid, item in sorted(pending.items())))
+    return "; ".join(parts)
 
 
 def main() -> None:

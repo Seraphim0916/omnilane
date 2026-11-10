@@ -12,14 +12,16 @@ drift and, when it is safe to, repairs it without an operator:
 A changed executable is re-probed only through a matching host-local source
 channel: a verified Developer ID or an explicitly trusted installation kind and
 location. Channels do not grant dispatch authority; fresh probe evidence is still
-required. Missing and environment-failed rows keep the existing retry rules:
-unattended environment retries wait 20 hours, while interactive runs or
+required. Retained selectors use bounded unattended retries; other missing and
+environment-failed rows keep the existing retry rules: unattended environment
+retries wait 20 hours, while interactive runs or
 --retry-failed bypass only cooldown. --approve is one-shot and cannot waive
 invalid, unsigned macOS or unverifiable signatures. --trust-origin requires a
 terminal and explicit confirmation; --trust-adhoc retains local location trust.
 Exit codes: 0 nothing to do, or re-signed and verified; 10 drift found (--check);
 20 drift needs an operator; 30 attempted and rolled back; 40 host configuration
 failed (EXIT_HOST_CONFIG); 50 another resign is running on this host (EXIT_BUSY);
+60 partially re-signed, retained selectors pending re-check (also --check);
 2 no overlay configured (also argparse usage errors).
 """
 from __future__ import annotations
@@ -46,11 +48,13 @@ import cli_provenance  # noqa: E402
 import origin_policy  # noqa: E402
 import probe_sweep  # noqa: E402
 import probe_failure  # noqa: E402
+import selector_recheck  # noqa: E402
 from overlay_diagnostics import recovery_guidance  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
 EXIT_HOST_CONFIG = 40
 EXIT_BUSY = 50
+EXIT_PARTIAL = 60
 VENDORS = probe_sweep.VENDORS
 
 
@@ -75,13 +79,16 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
     report = {}
     registry_snapshot = build_overlay.REGISTRY["snapshot"]["id"]
     cross_snapshot = overlay.get("snapshot_id") != registry_snapshot
-    compatible, expired_ids = set(), set()
+    compatible, expired_ids, verified_counts = set(), set(), {}
     candidate = copy.deepcopy(build_overlay.REGISTRY)
     try:
         aa_policy.validate_transport_overlay(candidate, overlay, "maintenance-inspection")
         compatible = {item["config_id"] for item in candidate["_transport_carry_forward"]}
         expired_ids = {cid for cid, reason in candidate["_transport_unverified"].items()
                        if reason == "evidence-expired"}
+        verified_counts = {vendor: sum(row["vendor"] == vendor and
+                                       row["transport_mapping"].get("runtime_verified") is True
+                                       for row in candidate["scored_configs"]) for vendor in VENDORS}
     except (aa_policy.PolicyError, OSError, KeyError, TypeError):
         pass  # Unknown or damaged sources cannot save any probe work.
     for vendor in VENDORS:
@@ -115,6 +122,8 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
                            f"moved from {overlay.get('snapshot_id')} to {registry_snapshot}")
         missing = unprobed(overlay, vendor)
         failed = probe_failure.failed_probes(overlay, vendor)
+        pending_selectors = selector_recheck.pending_rows(overlay, vendor)
+        stale = bool(reasons or changed)
         expired = sorted(cid for cid in expired_ids if build_overlay.ROWS[cid]["vendor"] == vendor)
         if expired:
             reasons.append(f"{len(expired)} configuration(s) have expired probe evidence: "
@@ -123,6 +132,9 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             causes = ", ".join(sorted({item["reason"] for item in failed.values()}))
             reasons.append(f"{len(failed)} configuration(s) failed their last probe for an environment "
                            f"reason ({causes}): " + ", ".join(sorted(failed)))
+        if pending_selectors:
+            reasons.append(f"{len(pending_selectors)} selector(s) pending re-check: "
+                           + ", ".join(sorted(pending_selectors)))
         if missing:
             reasons.append(f"{len(missing)} configuration(s) never probed on this host: "
                            + ", ".join(missing))
@@ -145,6 +157,15 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
             "recorded_codesign": recorded_signer(recorded_cli),
         }
+        deterministic = selector_recheck.deterministic_rows(overlay, vendor)
+        if deterministic:
+            report[vendor]["deterministic_failures"] = deterministic
+        if pending_selectors:
+            report[vendor].update(stale=stale, pending_count=len(pending_selectors),
+                                  verified_count=verified_counts.get(vendor, 0),
+                                  mapping_pending="pending re-check" in reasons,
+                                  pending_selectors={cid: probe_failure.public_reason(item["verdict_reason"])
+                                                     for cid, item in pending_selectors.items()})
     return report
 
 
@@ -286,6 +307,7 @@ def smoke(vendor: str, overlay: dict, overlay_path: Path, timeout: int = 300,
     """
     rows = [(build_overlay.ROWS[m["config_id"]], m) for m in overlay["mappings"]
             if build_overlay.ROWS[m["config_id"]]["vendor"] == vendor
+            and not m.get("pending_recheck")
             and (m["runtime_effort"] or m["selector_type"] == "model_id_encoded_effort"
                  or vendor == "claude")]
     if not rows:
@@ -733,6 +755,9 @@ def _resign(args, live: Path, anchors, log) -> int:
     drifted = [vendor for vendor in wanted if report[vendor]["drifted"]]
     summary = {"host": overlay.get("host"), "checked_at": datetime.now(timezone.utc).isoformat(),
                "live_overlay": str(live), "live_sha256": sha256(live), "vendors": report}
+    deterministic = {v: report[v]["deterministic_failures"] for v in wanted if report[v].get("deterministic_failures")}
+    if deterministic:
+        summary["deterministic_failures"] = deterministic
     args.status_summary = summary
     if not drifted:
         try:
@@ -746,31 +771,53 @@ def _resign(args, live: Path, anchors, log) -> int:
             print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         return EXIT_OK
     for vendor in drifted:
-        log(f"omnilane: {vendor} drifted: " + "; ".join(report[vendor]["reasons"]))
+        label = "drifted"
+        if report[vendor].get("pending_count") and not report[vendor]["stale"]:
+            label = "partially re-signed" if report[vendor]["verified_count"] else "pending re-check"
+        log(f"omnilane: {vendor} {label}: " + "; ".join(report[vendor]["reasons"]))
     if args.check:
+        selector_pending = selector_recheck.partial_summary(
+            overlay, {v: report[v].get("verified_count", 0) for v in VENDORS}, wanted)
+        if selector_pending:
+            summary["selector_pending"] = selector_pending
+            summary["partially_re_signed"] = {v: state for v, state in selector_pending.items()
+                                               if state["verified_count"] and not report[v]["stale"]}
         if args.json:
             print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         log("omnilane: run `omnilane resign` to re-probe and re-sign")
-        return EXIT_DRIFT
+        return (EXIT_PARTIAL if all(report[v].get("pending_count") and not report[v]["stale"]
+                                    and report[v]["verified_count"]
+                                    and not report[v]["unprobed"] and not report[v]["expired"]
+                                    and not report[v]["mapping_pending"]
+                                    and not selector_recheck.has_unretained(
+                                        report[v]["failed_environment"], report[v].get("pending_selectors", {}))
+                                    for v in drifted) else EXIT_DRIFT)
 
     # The retry flag only bypasses the cost cooldown, never the signer gate.
-    immediate = getattr(args, "retry_failed", False) or sys.stdin.isatty()
+    interactive = sys.stdin.isatty() and not getattr(args, "daily", False)
+    immediate = getattr(args, "retry_failed", False) or interactive
     deferred = {}
     for vendor in drifted:
         failed = report[vendor]["failed_environment"]
+        pending_rows = selector_recheck.pending_rows(overlay, vendor)
         retry, cooling = [], {}
         for cid, failure in failed.items():
-            blocked, until = probe_failure.cooldown(failure["last_failed_at"])
-            if blocked and not immediate:
+            blocked, until = (probe_failure.pending_cooldown(pending_rows[cid]) if cid in pending_rows else
+                              probe_failure.cooldown(failure["last_failed_at"]))
+            bypass = interactive if cid in pending_rows else immediate
+            if blocked and not bypass:
                 cooling[cid] = until
             else:
                 retry.append(cid)
         report[vendor].update(retry_failed=retry, cooldown=cooling)
         if cooling:
             deferred[vendor] = cooling
+            retry_hint = (f"run `omnilane resign --vendor {vendor}` in an interactive terminal to retry now"
+                          if set(cooling) & set(pending_rows) else
+                          f"run `omnilane resign --retry-failed --vendor {vendor}` to retry now")
             log(f"omnilane: {vendor}: {len(cooling)} failed configuration(s) deferred by the "
-                "20-hour non-interactive retry cooldown; "
-                f"run `omnilane resign --retry-failed --vendor {vendor}` to retry now")
+                "20-hour non-interactive retry cooldown or provider reset time; "
+                + retry_hint)
     if any(report[vendor]["failed_environment"] for vendor in drifted):
         try:
             verified(live)
@@ -782,7 +829,8 @@ def _resign(args, live: Path, anchors, log) -> int:
     installed = False
     for vendor in drifted:
         if report[vendor]["only_missing"] and not (report[vendor]["unprobed"] or
-                                                    report[vendor]["retry_failed"] or report[vendor]["expired"]):
+                                                    report[vendor]["retry_failed"] or report[vendor]["expired"]
+                                                    or args.allow_shrink and report[vendor].get("pending_count")):
             continue
         allowed, reason = gate(report[vendor], vendor in (args.approve or []))
         report[vendor]["gate"] = {"allowed": allowed, "reason": reason}
@@ -816,24 +864,32 @@ def _resign(args, live: Path, anchors, log) -> int:
                                            only_missing=report[vendor]["only_missing"],
                                            retry_failed=report[vendor]["retry_failed"],
                                            refresh_expired=report[vendor]["expired"],
-                                           skip_configs=report[vendor]["cooldown"], retry_now=immediate)
+                                           skip_configs=report[vendor]["cooldown"], retry_now=immediate,
+                                           per_selector=not report[vendor]["only_missing"]
+                                           or bool(report[vendor].get("pending_selectors")))
                   for vendor in proceed}
         summary["sweeps"] = sweeps
         unfinished = [vendor for vendor, result in sweeps.items() if result["outcome"] != "done"]
         for vendor in unfinished:
             log(f"omnilane: {vendor}: {sweeps[vendor]['outcome']} - {sweeps[vendor]['detail']}")
-        # A selector the live overlay verifies and this sweep could not is more
-        # likely a provider having a bad hour than a selector that stopped working.
-        # Installing that would trade a stale pin for a smaller overlay.
-        was_verified = {mapping["config_id"] for mapping in overlay.get("mappings", [])}
-        was_verified -= {cid for vendor in VENDORS for cid in report[vendor]["expired"]}
         for vendor, result in sweeps.items():
-            lost = sorted(was_verified & set(result["failed"]))
-            if lost and vendor not in unfinished and not args.allow_shrink:
+            if vendor in unfinished:
+                continue
+            try:
+                environmental, conclusive = selector_recheck.regressions(
+                    root, overlay, vendor, result, expired=report[vendor]["expired"],
+                    deferred=report[vendor]["cooldown"])
+                probe_failure.validate_retry_results(root, vendor, list(environmental), result)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                log(f"omnilane: selector evidence did not validate ({error}); live overlay untouched")
+                return EXIT_ROLLED_BACK
+            lost = sorted(cid for cid, reason in conclusive.items()
+                          if not args.allow_shrink or reason == "evidence-tier-regression")
+            if lost:
                 result["regressed"] = lost
                 unfinished.append(vendor)
                 log(f"omnilane: {vendor}: {len(lost)} selector(s) the live overlay verifies failed "
-                    f"this time ({', '.join(lost)}); keeping the old pin. Retry later, or pass "
+                    f"this time ({', '.join(cid + ': ' + conclusive[cid] for cid in lost)}); keeping the old pin. Retry later, or pass "
                     "--allow-shrink if they are really gone")
         if unfinished:
             held += unfinished
@@ -891,6 +947,12 @@ def _resign(args, live: Path, anchors, log) -> int:
                     entry["operator_trust"] = old["operator_trust"]
                     entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
         pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"])
+        unattempted = {cid for v in proceed for cid in selector_recheck.pending_rows(overlay, v)
+                       if cid not in set(sweeps[v]["passed"]) | set(sweeps[v]["failed"])}
+        selector_recheck.retain_pending(staged, overlay, proceed, summary["checked_at"],
+                                        allow_shrink=args.allow_shrink,
+                                        expired={cid for v in proceed for cid in report[v]["expired"]},
+                                        deferred=unattempted | {cid for v in proceed for cid in report[v]["cooldown"]})
         staged_path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
         try:
             try:
@@ -903,7 +965,8 @@ def _resign(args, live: Path, anchors, log) -> int:
             log(f"omnilane: the staged overlay does not load ({error}); live overlay untouched")
             return EXIT_ROLLED_BACK
         summary["verified"] = {"before": before, "after": after}
-        empty = [vendor for vendor in proceed if after[vendor] == 0 and
+        empty = [vendor for vendor in proceed if after[vendor] == 0
+                 and not selector_recheck.pending_rows(staged, vendor) and
                  not (report[vendor]["only_missing"] and before[vendor] == 0 and
                       not sweeps[vendor]["passed"])]
         if empty:
@@ -911,7 +974,8 @@ def _resign(args, live: Path, anchors, log) -> int:
                 "live overlay untouched")
             return EXIT_ROLLED_BACK
         for vendor in proceed:
-            if after[vendor] < max(before[vendor], len(sweeps[vendor]["passed"])):
+            retained_count = len(selector_recheck.pending_rows(staged, vendor))
+            if after[vendor] < max(before[vendor] - retained_count, len(sweeps[vendor]["passed"])):
                 log(f"omnilane: {vendor}: fewer selectors verified than expected "
                     f"({before[vendor]} -> {after[vendor]}); see {root}/evidence")
         backup = live.with_name(live.name + f".before-{sweep_id}")
@@ -934,7 +998,7 @@ def _resign(args, live: Path, anchors, log) -> int:
         try:
             if not args.no_smoke:
                 for vendor in proceed:
-                    if report[vendor]["only_missing"] and not sweeps[vendor]["passed"]:
+                    if after[vendor] == 0 or report[vendor]["only_missing"] and not sweeps[vendor]["passed"]:
                         continue
                     # Retry proofs stay staged until smoke completes, including
                     # when SIGTERM/SIGKILL prevents Python cleanup from running.
@@ -960,6 +1024,11 @@ def _resign(args, live: Path, anchors, log) -> int:
                 installed = True
                 log(f"omnilane: installed {staged_path} over {live} (backup {backup})")
             summary["still_failed_environment"] = {v: rows for v, rows in remaining.items() if rows}
+            deterministic = {v: rows for v in wanted if (rows := selector_recheck.deterministic_rows(staged, v))}
+            if deterministic:
+                summary["deterministic_failures"] = deterministic
+            else:
+                summary.pop("deterministic_failures", None)
             for vendor, rows in summary["still_failed_environment"].items():
                 log(f"omnilane: {vendor}: {len(rows)} configuration(s) remain unverified after "
                     "an environment failure; "
@@ -967,11 +1036,33 @@ def _resign(args, live: Path, anchors, log) -> int:
             summary["failed_retries"] = {
                 v: sorted(set(report[v]["retry_failed"]) & set(sweeps[v]["failed"])) for v in proceed
                 if set(report[v]["retry_failed"]) & set(sweeps[v]["failed"])}
-            if summary["failed_retries"] or summary["still_failed_environment"]:
+            selector_pending = selector_recheck.partial_summary(staged, after, proceed)
+            partial = {v: state for v, state in selector_pending.items() if state["verified_count"]}
+            if selector_pending:
+                summary["selector_pending"] = selector_pending
+            if partial:
+                summary["partially_re_signed"] = partial
+            for vendor, state in selector_pending.items():
+                disposition = "partially re-signed" if state["verified_count"] else "not re-signed"
+                log(f"omnilane: {vendor}: {disposition}, {state['verified_count']} verified, "
+                    f"{state['pending_count']} selector(s) pending re-check: " + ", ".join(state["config_ids"]))
+            unretained_failures = any(selector_recheck.has_unretained(rows, selector_recheck.pending_rows(staged, vendor))
+                                     for vendor, rows in summary["still_failed_environment"].items())
+            # Ordinary failed-row retries keep their existing exit-20 contract.
+            # Only retained pending rows may settle as deterministic findings
+            # without holding the siblings that recovered in this run.
+            unretained_failures = unretained_failures or any(
+                selector_recheck.has_unretained(rows, selector_recheck.pending_rows(overlay, vendor))
+                for vendor, rows in summary["failed_retries"].items())
+            if unretained_failures or set(selector_pending) - set(partial):
                 outcome = EXIT_OPERATOR
+            elif partial:
+                outcome = EXIT_PARTIAL
             gaps = {vendor: unprobed(staged, vendor) for vendor in VENDORS}
             gaps = {vendor: rows for vendor, rows in gaps.items() if rows}
             summary["still_unprobed"] = gaps
+            if getattr(args, "daily", False) and gaps and outcome in (EXIT_OK, EXIT_PARTIAL):
+                outcome = EXIT_OPERATOR
             for vendor, rows in gaps.items():
                 # Dispatch refuses these rows until a probe answers them; the next
                 # resign picks them up as drift, from a session that can probe them.
@@ -983,10 +1074,18 @@ def _resign(args, live: Path, anchors, log) -> int:
         outcome, pending = install_pending(live, overlay, hold_reasons, root,
                                            summary["checked_at"], log)
         installed = outcome == EXIT_OK
-    if deferred and outcome == EXIT_OK:
-        outcome = EXIT_OPERATOR
+    if deferred and outcome in (EXIT_OK, EXIT_PARTIAL):
+        current = json.loads(live.read_text())
+        counts = verified(live)
+        retained = selector_recheck.partial_summary(current, counts, wanted)
+        if retained:
+            summary["selector_pending"] = retained
+            summary["partially_re_signed"] = {v: state for v, state in retained.items() if state["verified_count"]}
+        unresolved = any(selector_recheck.has_unretained(rows, selector_recheck.pending_rows(current, v)) or not counts[v]
+                         or report[v].get("mapping_pending") for v, rows in deferred.items())
+        outcome = EXIT_OPERATOR if unresolved else EXIT_PARTIAL
     summary["deferred_retries"] = deferred
-    if held and outcome == EXIT_OK:
+    if held and outcome in (EXIT_OK, EXIT_PARTIAL):
         outcome = EXIT_OPERATOR
     for vendor in held:
         mark = pending.get(vendor, {})
@@ -1016,7 +1115,8 @@ def _resign(args, live: Path, anchors, log) -> int:
                 guidance = origin_guidance(vendor, report[vendor].get("origin_reason"), report[vendor].get("codesign"))
                 log(guidance["message"] + " / " + guidance["message_zh_tw"])
     summary["pending_recheck"] = pending
-    summary.update(re_signed=proceed if outcome != EXIT_ROLLED_BACK else [], held=held,
+    summary.update(re_signed=[v for v in proceed if summary.get("verified", {}).get("after", {}).get(v)]
+                   if outcome != EXIT_ROLLED_BACK else [], held=held,
                    exit_code=outcome, sweep_root=str(root) if root.exists() else None)
     if root.exists():
         (root / "resign-report.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2,
@@ -1073,12 +1173,24 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             code = resign(args, log=lambda text: print(text, file=sys.stderr))
             gaps = getattr(args, "status_summary", {}).get("still_unprobed", {})
-            if code == EXIT_OK and any(gaps.get(vendor) for vendor in (args.vendor or VENDORS)):
+            if code in (EXIT_OK, EXIT_PARTIAL) and any(gaps.values()):
                 return EXIT_OPERATOR
             return code
         return run_daily(daily_action,
                          args.vendor, lambda: getattr(args, "status_summary", {}))
-    return resign(args, log=lambda text: print(text, file=sys.stderr))
+    code = resign(args, log=lambda text: print(text, file=sys.stderr))
+    # A person retrying a daily finding must not leave its old quota/login
+    # reason behind. Do not create daily state for hosts that do not use it,
+    # and keep --check and source-approval actions read-only with respect to it.
+    from verification_status import record, status_path
+    summary = getattr(args, "status_summary", None)
+    if not args.check and summary and code in (EXIT_OK, EXIT_OPERATOR, EXIT_PARTIAL) and status_path().is_file():
+        try:
+            record(code, args.vendor, summary)
+        except (OSError, ValueError, TypeError, KeyError):
+            print("omnilane: verification status could not be refreshed; run `omnilane doctor`.", file=sys.stderr)
+            return code or EXIT_HOST_CONFIG
+    return code
 
 
 if __name__ == "__main__":

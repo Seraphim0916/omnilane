@@ -14,7 +14,10 @@ ADVISOR_KILL_SWITCH = "CLAUDE_CODE_DISABLE_ADVISOR_TOOL"
 COOLDOWN = timedelta(hours=20)
 ENVIRONMENT_REASONS = frozenset(("timeout", "api-error", "quota-exhausted", "not-authenticated",
                                "connection-error", "rate-limited"))
-CONCLUSIVE_REASONS = frozenset(("model-mismatch", "client-record-mismatch", "effort-silently-defaulted"))
+CONCLUSIVE_REASONS = frozenset(("model-mismatch", "client-record-mismatch", "effort-silently-defaulted",
+                               "model-account-mismatch", "evidence-tier-regression"))
+TIER_RANK = {"selector-only": 0, "client-echo": 1, "billed-model": 2}
+RESET_HINT = re.compile(r"\bresets?\s+in\s+((?:\d+\s*[dhms]\s*)+)", re.IGNORECASE)
 # Generic exits/results are retryable only when they identify an environmental
 # cause. Never search these phrases inside a model/effort mismatch reason.
 ENVIRONMENT_DETAIL = re.compile(
@@ -32,12 +35,71 @@ ENVIRONMENT_DETAIL = re.compile(
 def environment_reason(reason) -> str | None:
     if not isinstance(reason, str):
         return None
+    if "; stderr-review: " in reason:
+        # Codex's final event owns the outcome. MCP startup diagnostics are not
+        # evidence about the provider's authentication or model availability.
+        reason = engine_view("codex", {"verdict": "fail", "verdict_reason": reason})["verdict_reason"]
     base = reason.split(":", 1)[0]
     if base in ENVIRONMENT_REASONS:
         return base
     if base in ("exit-code", "result-error", "unexpected-stderr") and ENVIRONMENT_DETAIL.search(reason):
         return base
     return None
+
+
+def public_reason(reason) -> str:
+    """Bound diagnostic hints before they cross from local proof to a caller."""
+    text = " ".join(str(reason or "").split())
+    if text in CONCLUSIVE_REASONS:
+        return text
+    base, separator, detail = text.partition(":")
+    prefix = base + ": " if separator and base in CONCLUSIVE_REASONS else ""
+    if prefix:
+        text = detail.lstrip()
+    hint = RESET_HINT.search(text)
+    reset = hint.group(0).strip() if hint else ""
+    if hint:
+        text = text[:hint.start()] + text[hint.end():]
+    text = re.sub(r"[\w.+%-]+@[\w.-]+", "[redacted]", text)
+    text = re.sub(r"(?i)\b(?:account|organisation|organization|org|tenant|user)[ _-]*(?:id)?"
+                  r"[\"']?\s*[=:]\s*[\"']?[^\s,;\"']+", "[redacted]", text)
+    text = re.sub(r"(?i)\b(?:account|organisation|organization|org|tenant|user)[ _-]*id\s+"
+                  r"[\"']?[^\s,;\"']+", "[redacted]", text)
+    text = re.sub(r"(?i)\b(?:bearer\s+|(?:access[ _-]*token|refresh[ _-]*token|token|api[ _-]*key)"
+                  r"[\"']?\s*[=:]\s*[\"']?)[^\s,;\"']+", "[redacted]", text)
+    text = re.sub(r"(?i)\b(?:sk[-_]|org[-_]|acct[-_]|account[-_]|tenant[-_])[A-Za-z0-9_-]+\b", "[redacted]", text)
+    text = re.sub(r"\b[A-Za-z0-9_./+=-]{24,}\b",
+                  lambda match: match.group(0) if match.group(0) in CONCLUSIVE_REASONS else "[redacted]", text)
+    text = prefix + " ".join(text.split()).strip(" .;")
+    suffix = ("; " + reset) if reset else ""
+    budget = max(0, 160 - len(suffix))
+    if len(text) > budget:
+        text = text[:max(0, budget - 3)].rstrip() + "..."
+    return (text + suffix)[:160]
+
+
+def pending_cooldown(item, *, now=None):
+    """Two pending runs may be consecutive; reset hints always bind unattended runs."""
+    mark = item["pending_recheck"]
+    stamp = item.get("last_failed_at") or mark.get("at")
+    now = now or datetime.now(timezone.utc)
+    hint = RESET_HINT.search(str(item.get("verdict_reason", "")))
+    if hint:
+        try:
+            at = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            if at.tzinfo is None:
+                raise ValueError("timezone required")
+            seconds = sum(int(n) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[unit.lower()]
+                          for n, unit in re.findall(r"(\d+)\s*([dhms])", hint.group(1), re.IGNORECASE))
+            until = at + timedelta(seconds=seconds)
+            if now < until:
+                return True, until.isoformat()
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return True, "invalid failure timestamp"
+    runs = mark.get("consecutive_runs")
+    if type(runs) is not int or runs < 1:
+        return True, "invalid pending run count"
+    return cooldown(stamp, now=now) if runs >= 2 else (False, None)
 
 
 def cooldown(last_failed_at, *, now=None) -> tuple[bool, str | None]:
@@ -66,6 +128,34 @@ def contextual_failure(verdict, descriptor, stdout, stderr):
     return verdict
 
 
+def classified_verdict(verdict, descriptor, stdout, stderr, vendor, extra):
+    """Only tighten the pinned engine's result; model evidence outranks stderr."""
+    requested = probe._requested_model(descriptor.get("command", []))
+    if vendor in ("gemini", "agy", "codex"):
+        record = probe._client_record(descriptor, extra.get(
+            "rollout" if vendor == "codex" else "cli_log", ""), "model-record")
+        if record[0] == "fail":
+            return record
+    elif vendor == "grok":
+        try:
+            response = json.loads(stdout)
+        except (ValueError, TypeError):
+            response = None
+        usage = response.get("modelUsage") if isinstance(response, dict) else None
+        models = sorted(usage) if isinstance(usage, dict) else []
+        if models and models not in ([requested], [f"{requested}-build"]):
+            return "fail", "model-mismatch", ", ".join(models), probe.TIER_SELECTOR
+    if vendor == "codex" and verdict[0] == "fail":
+        event = probe.codex_failure(stdout)
+        if re.search(r"model.*(?:not supported|unsupported|not available|does not exist)|"
+                     r"(?:account|plan).*not.*(?:support|access).*model", event, re.IGNORECASE):
+            return "fail", "model-account-mismatch: " + verdict[1], verdict[2], verdict[3]
+    minimum = descriptor.get("required_evidence_tier")
+    if verdict[0] == "pass" and minimum in TIER_RANK and TIER_RANK[verdict[3]] < TIER_RANK[minimum]:
+        return "fail", "evidence-tier-regression", verdict[2], verdict[3]
+    return contextual_failure(verdict, descriptor, stdout, stderr)
+
+
 def judge(root: Path, entry: dict, vendor: str, command: list[str], token: str, *, legacy=False):
     """Re-judge fixed evidence paths, never paths or retry classes supplied by JSON."""
     evidence = root / "evidence"
@@ -90,7 +180,7 @@ def judge(root: Path, entry: dict, vendor: str, command: list[str], token: str, 
              if (path := evidence / f"{entry['name']}.{suffix}").is_file()}
     verdict = probe.verdict(descriptor, streams["stdout"], streams["stderr"],
                             "agy" if vendor == "gemini" else vendor, token, extra)
-    verdict = contextual_failure(verdict, descriptor, streams["stdout"], streams["stderr"])
+    verdict = classified_verdict(verdict, descriptor, streams["stdout"], streams["stderr"], vendor, extra)
     if descriptor.get("verdict") != verdict[0] and not (legacy and "verdict" not in descriptor):
         raise ValueError("failed probe verdict disagrees with raw evidence")
     if "verdict" not in descriptor:
@@ -256,13 +346,16 @@ def not_authenticated(vendor: str, record: dict) -> bool:
 
 
 def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
-              retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False) -> dict:
+              retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False,
+              per_selector=False) -> dict:
     """Reuse the pinned sweep engine, exposing only eligible staged gaps to it.
 
     The original live evidence never changes. The pinned engine's handling of a
     first-time login failure is preserved, with its output moved out of the
     evidence to root/unprobeable; retry login failures keep their new negative
     evidence so the next unattended run can respect the cooldown.
+    With per_selector, login failures are independent only after a selector in
+    this run authenticated; a wholly unauthenticated full sweep still stops once.
     """
     import probe_sweep
     entries = {entry["config_id"]: entry for entry in probe_sweep.plan(vendor)}
@@ -275,6 +368,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
         for suffix, content in saved.items():
             (root / "evidence" / f"{name}.{suffix}").write_bytes(content)
     originals, skipped, captured, answered_again = {}, {}, {}, set()
+    authenticated = False
     for cid in (*retry_failed, *refresh_expired):
         entry = entries[cid]
         if cid in retry_failed:
@@ -324,20 +418,48 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
         if record.get("verdict") == "fail":
             streams = [(root / "evidence" / f"{name}.{suffix}").read_text(errors="replace")
                        for suffix in ("stdout", "stderr")]
-            verdict = contextual_failure((record["verdict"], record.get("verdict_reason"),
+            extra = {suffix: path.read_text(errors="replace") for suffix in ("rollout", "cli_log")
+                     if (path := root / "evidence" / f"{name}.{suffix}").is_file()}
+            verdict = classified_verdict((record["verdict"], record.get("verdict_reason"),
                                           record.get("observed_model"), record.get("evidence_tier")),
-                                         record, *streams)
-            record["verdict_reason"] = verdict[1]
+                                         record, *streams, vendor, extra)
+            record.update(zip(("verdict", "verdict_reason", "observed_model", "evidence_tier"), verdict))
             record["last_failed_at"] = datetime.now(timezone.utc).isoformat()
             (root / "evidence" / f"{name}.json").write_text(json.dumps(record, indent=2) + "\n")
         captured[cid] = snapshot(name)
         return record
 
     def run_probe(name, argv, **kwargs):
-        return engine_view(vendor, real_probe(name, argv, **kwargs))
+        nonlocal authenticated
+        record = real_probe(name, argv, **kwargs)
+        if by_name[name]["config_id"] in skipped:
+            return {"verdict": "fail", "verdict_reason": "deferred-by-cooldown"}
+        if record.get("verdict") == "fail" and str(record.get("verdict_reason", "")).split(":", 1)[0] in CONCLUSIVE_REASONS:
+            # The engine also searches raw streams for login/transient phrases.
+            # A model mismatch must not acquire those classifications from noise.
+            return {"verdict": "fail", "verdict_reason": record["verdict_reason"].split(":", 1)[0]}
+        login = not_authenticated(vendor, record)
+        if not login and (record.get("verdict") == "pass" or record.get("observed_model")):
+            authenticated = True
+        if per_selector and authenticated and record.get("verdict") == "fail" \
+                and environment_reason(record.get("verdict_reason")) and login:
+            # A login failure can belong to one model's backend. Keep its real
+            # negative proof and let the pinned engine probe the other selectors.
+            return {"verdict": "fail", "verdict_reason": "not-authenticated"}
+        if login and record.get("verdict") == "fail":
+            # Preserve the engine's login stop without letting a secondary
+            # timeout/503 diagnostic trigger its transient retry first.
+            return {"verdict": "fail", "verdict_reason": "not logged in"}
+        return engine_view(vendor, record)
 
     try:
         result = probe_sweep.sweep(vendor, root, log=log, only_missing=only_missing, run_probe=run_probe)
+        if (per_selector and result.get("detail") == "no selector of this vendor passed"
+                and result["failed"] and all(cid in captured and environment_reason(
+                    json.loads(captured[cid]["json"]).get("verdict_reason")) for cid in result["failed"])):
+            # Resign decides whether complete negative results can be retained;
+            # no passing mapping or dispatch authority is synthesized here.
+            result["outcome"] = "done"
         # The original engine deletes descriptors for unauthenticated probes.
         # Restore only completed negative retry records; never synthesize a pass.
         retry_login = False

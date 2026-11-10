@@ -174,6 +174,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 2 | 오버레이가 설정되지 않음 | 2단계를 한다 |
 | 40 (`EXIT_HOST_CONFIG`) | 호스트 설정 로드 실패 또는 설정된 오버레이를 읽을 수 없거나 JSON 이 잘못됨; 변경 없음 | stderr 의 경로와 원인을 수정; 일일 작업 알림 정책은 관리자가 결정 |
 | 50 (`EXIT_BUSY`) | 이 호스트에서 다른 `omnilane resign`이 실행 중; 읽기·쓰기 없음 | 그것이 끝난 뒤 실행 |
+| 60 | 검증된 선택자는 반영되었고, 나머지 유지된 선택자는 재검증 대기 중 | `omnilane doctor`로 원인을 확인하고 해결 후 `omnilane resign` 실행 |
 
 argparse 사용법 오류도 2 를 반환합니다. 설정되었지만 읽을 수 없는 오버레이는 2 가 아니라 40 입니다.
 

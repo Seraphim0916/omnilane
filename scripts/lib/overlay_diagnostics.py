@@ -7,7 +7,7 @@ import json_depth
 import shlex
 from pathlib import Path
 
-from probe_failure import environment_reason
+from probe_failure import environment_reason, public_reason
 
 
 def read_object(path: Path) -> dict:
@@ -75,6 +75,8 @@ def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
         descriptor = read_object(Path(descriptor_path)) if descriptor_path else {}
         reason = item.get("verdict_reason") or "unknown"
         failure_class = "environment" if environment_reason(reason) else "conclusive"
+        if item.get("pending_recheck"):
+            reason = public_reason(reason)
         if reason in ("not probed on this host", "vendor CLI is not installed"):
             failure_class = "unprobed"
         if failure_class == "environment":

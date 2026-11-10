@@ -312,7 +312,8 @@ class MainTests(HomeFixture):
         self.assertEqual(code, resign.EXIT_OPERATOR)
         with mock.patch.object(resign, "resign", side_effect=fake):
             code, _ = self.run_main("--daily", "--vendor", "claude")
-        self.assertEqual(code, resign.EXIT_OK)
+        # A gap remains actionable even when a different vendor was requested.
+        self.assertEqual(code, resign.EXIT_OPERATOR)
 
 
 if __name__ == "__main__":

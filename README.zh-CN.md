@@ -170,6 +170,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 2 | 没有配置覆盖文件 | 做第 2 步 |
 | 40 (`EXIT_HOST_CONFIG`) | 主机配置加载失败，或已配置的覆盖文件无法读取、JSON 无效；不做更改 | 修正 stderr 指出的路径与原因；每日任务的通知方式由负责人决定 |
 | 50 (`EXIT_BUSY`) | 这台主机已有另一个 `omnilane resign` 在运行；不读也不写 | 等它运行完再执行这一次 |
+| 60 | 已安装通过验证的选择器，其余保留的选择器待复验 | 用 `omnilane doctor` 查看原因，排除后运行 `omnilane resign` |
 
 argparse usage errors also return 2; a configured but unreadable overlay returns 40, not 2.
 

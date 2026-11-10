@@ -175,6 +175,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 2 | オーバーレイが未設定 | ステップ 2 を行う |
 | 40 (`EXIT_HOST_CONFIG`) | ホスト設定の読み込み失敗、または設定済みオーバーレイが読めない・JSON が不正。変更なし | stderr のパスと原因を修正。定期ジョブの通知方針は管理者が決める |
 | 50 (`EXIT_BUSY`) | このホストで別の `omnilane resign` が実行中。読み書きなし | それが終わってから実行する |
+| 60 | 検証済みセレクターは反映済み。保持された残りのセレクターは再検証待ち | `omnilane doctor` で原因を確認し、解消後に `omnilane resign` を実行 |
 
 引数の使い方エラーも終了コード 2 です。設定済みだが読めないオーバーレイは 2 ではなく 40 です。
 

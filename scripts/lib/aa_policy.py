@@ -318,18 +318,25 @@ def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any]
     registry["_transport_evidence_tiers"] = tiers
     registry["_transport_carry_forward"] = audit
     registry["_transport_unverified"] = unverified
-    from probe_failure import CONCLUSIVE_REASONS, environment_reason
+    from probe_failure import CONCLUSIVE_REASONS, environment_reason, public_reason
     # Display-only hints; never feed failure metadata into verified mappings.
     registry["_transport_environment_failures"] = {
         item.get("config_id"): environment_reason(item.get("verdict_reason"))
         for item in overlay.get("unproven", []) if isinstance(item, dict)
         and item.get("config_id") in current_rows and environment_reason(item.get("verdict_reason"))}
     registry["_transport_conclusive_failures"] = {
-        item["config_id"]: item["verdict_reason"]
+        item["config_id"]: public_reason(item["verdict_reason"])
         for item in overlay.get("unproven", []) if isinstance(item, dict)
         and item.get("config_id") in current_rows
         and isinstance(item.get("verdict_reason"), str)
-        and item["verdict_reason"].split(":", 1)[0] in CONCLUSIVE_REASONS}
+        and (item.get("probed_at") or item["verdict_reason"].split(":", 1)[0] in CONCLUSIVE_REASONS)
+        and not environment_reason(item["verdict_reason"])
+        and item["verdict_reason"] not in ("not probed on this host", "vendor CLI is not installed")}
+    registry["_transport_pending_recheck"] = {
+        item["config_id"]: public_reason(item["verdict_reason"])
+        for item in overlay.get("unproven", []) if isinstance(item, dict)
+        and item.get("pending_recheck") and item.get("config_id") in current_rows
+        and environment_reason(item.get("verdict_reason"))}
     registry["_transport_compatibility_sha256"] = compatibility_sha
     registry["_transport_executable_paths"] = {
         vendor: [e["path"] for e in overlay["evidence"] if e.get("vendor") == vendor
@@ -450,6 +457,11 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
                                    for item in registry.get("_transport_carry_forward", [])):
         if not request or str(Path(request).resolve()) not in registry.get("_transport_executable_paths", {}).get(vendor, []):
             return None, "runtime-executable-changed", {"vendor": vendor, "model": model, "effort": effort}
+    pending = {cid: reason for cid, reason in registry.get("_transport_pending_recheck", {}).items()
+               if cid in unresolved}
+    if pending and not candidates and not missing_effort:
+        return None, "selector-pending-recheck", {"candidate_config_ids": sorted(pending),
+                                                "pending_recheck": pending}
     if vendor in registry.get("_stale_transport_vendors", []):
         return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
     if vendor == "grok" and candidates and any(
@@ -578,6 +590,12 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         guidance = transport_guidance(vendor, target_config, detail.get("candidate_config_ids", []),
                                       registry.get("_transport_environment_failures", {}),
                                       registry.get("_transport_conclusive_failures", ()))
+        if mapping_code == "selector-pending-recheck":
+            reasons = "; ".join(f"{cid}: {reason}" for cid, reason in detail["pending_recheck"].items())
+            guidance.update(
+                message=f"Selector pending re-check: {reasons}. Run `omnilane resign --vendor {vendor}` to retry.",
+                message_zh_tw=f"選擇器待複驗：{reasons}。請執行 `omnilane resign --vendor {vendor}` 重試。",
+                next_command=f"omnilane resign --vendor {vendor}")
         base.update(
             code=mapping_code,
             message=guidance["message"],

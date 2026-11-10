@@ -170,6 +170,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 | 2 | 沒有設定覆蓋檔 | 做第 2 步 |
 | 40 (`EXIT_HOST_CONFIG`) | 主機設定載入失敗，或已設定的覆蓋檔無法讀取、JSON 不合法；不做變更 | 修正 stderr 指出的路徑與原因；每日工作的通知方式由負責人決定 |
 | 50 (`EXIT_BUSY`) | 這台主機已有另一個 `omnilane resign` 在跑；不讀也不寫 | 等它跑完再執行這一次 |
+| 60 | 已安裝通過驗證的選擇器，其餘保留的選擇器待複驗 | 用 `omnilane doctor` 查看原因，排除後執行 `omnilane resign` |
 
 argparse 的用法錯誤也回傳 2；已設定但讀不到的覆蓋檔回傳 40，不是 2。
 

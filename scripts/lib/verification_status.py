@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
@@ -12,6 +13,7 @@ REASONS = {
     0: "verified", 2: "not-configured-or-invalid-arguments", 10: "verification-needed",
     20: "operator-or-login-needed", 30: "verification-failed-settings-kept",
     40: "host-configuration-unavailable", 50: "verification-busy",
+    60: "partially-re-signed",
 }
 
 
@@ -20,12 +22,17 @@ def transport_guidance(vendor, config_id=None, candidates=(), environment_failur
     command = "omnilane resign" + (" --vendor " + safe_vendor if safe_vendor else " --check")
     rows = config_id or ", ".join(candidates) or "requested model/effort"
     if any(cid in conclusive_failures for cid in ([config_id] if config_id else candidates)):
+        from probe_failure import public_reason
+        details = ("; ".join(public_reason(conclusive_failures[cid])
+                             for cid in ([config_id] if config_id else candidates) if cid in conclusive_failures)
+                   if isinstance(conclusive_failures, dict) else "model/effort mismatch")
         return dict(next_command="omnilane doctor", requires_gui_session=False,
-                    message=f"{vendor}: {rows} reached a different model or effort than declared. "
+                    message=f"{vendor}: {rows} has a deterministic probe finding: {details}. "
                             "It will not retry automatically. Run `omnilane doctor`, inspect the "
                             "recorded request and CLI/provider model routing, and correct the cause "
                             "before explicitly arranging a fresh verification.",
-                    message_zh_tw=f"{vendor} 的 {rows} 實測打到的不是宣稱的模型／強度，不會自動重試。"
+                    message_zh_tw=f"{vendor} 的 {rows} 已確認有探測問題，不會自動重試。"
+                                  f"紀錄原因：{details}。"
                                   "請執行 `omnilane doctor`，核對原始請求、工具與供應端的模型對應；"
                                   "查明並修正原因後，再明確安排重新驗證。")
     failed = any(cid in environment_failures for cid in ([config_id] if config_id else candidates))
@@ -138,42 +145,106 @@ def load():
     return value
 
 
+def _mapping(value):
+    return value if isinstance(value, Mapping) else {}
+
+
+def _selector_count(value, field="pending_count"):
+    from selector_recheck import summary_ids
+    if isinstance(value, Mapping) and field in value:
+        value = value[field]
+    elif field == "verified_count":
+        return 0
+    elif isinstance(value, Mapping) and "config_ids" in value:
+        value = value["config_ids"]
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, (Mapping, list, tuple, set, frozenset)):
+        return len(summary_ids(value))
+    return None if value else 0
+
+
 def record(code, vendors=None, summary=None):
     """Persist only allowlisted metadata, not CLI output, prompts, or credentials."""
     import aa_policy
+    from selector_recheck import summary_ids
     summary = summary or {}
     state = load()
     state.pop("running", None)
     now = datetime.now(timezone.utc).isoformat()
-    requested = [v for v in (vendors or VENDORS) if v in VENDORS]
+    gaps = summary.get("still_unprobed", {})
+    requested = [v for v in VENDORS if v in (vendors or VENDORS) or gaps.get(v)]
     for vendor in requested:
-        if code == 0:
+        deterministic = summary.get("deterministic_failures", {}).get(vendor, {})
+        gap = gaps.get(vendor, [])
+        if code == 0 and not gap and not deterministic:
             state["pending"].pop(vendor, None)
             continue
         reason = REASONS.get(code, "verification-interrupted")
-        report = summary.get("vendors", {}).get(vendor, {})
-        sweep = summary.get("sweeps", {}).get(vendor, {})
+        report_value = summary.get("vendors", {}).get(vendor, {})
+        report = _mapping(report_value)
+        sweep = _mapping(summary.get("sweeps", {}).get(vendor, {}))
+        partial = summary.get("partially_re_signed", {}).get(vendor)
+        retained = summary.get("selector_pending", {}).get(vendor) or partial
+        pending = summary.get("pending_recheck", {}).get(vendor)
+        deferred = summary.get("deferred_retries", {}).get(vendor)
+        retried = summary.get("failed_retries", {}).get(vendor)
+        missing = gap if "still_unprobed" in summary else report.get("unprobed", [])
+        failed = (summary["still_failed_environment"].get(vendor, {}) if "still_failed_environment" in summary
+                  else report.get("failed_environment", {}))
+        if gap:
+            reason = "verification-needed"
+        elif code == 0 and deterministic:
+            reason = "deterministic-probe-failure"
+        elif code in (20, 60) and partial:
+            reason = "partially-re-signed"
+        elif code == 60:
+            if deterministic:
+                reason = "deterministic-probe-failure"
+            elif not retained:
+                if missing or failed or deferred or retried or pending:
+                    reason = "verification-needed"
+                elif report and not report.get("drifted"):
+                    state["pending"].pop(vendor, None)
+                    continue
+                elif not report_value:
+                    # Another vendor's partial result proves nothing about this
+                    # vendor's prior gap. Preserve its names and actual reason.
+                    continue
+                else:
+                    reason = "verification-needed"
         if sweep.get("outcome") == "unprobeable":
             reason = "needs-login-session"
-        elif report.get("gate", {}).get("allowed") is False:
+        elif _mapping(report.get("gate")).get("allowed") is False:
             reason = "review-executable-source" if report.get("cli") else "cli-not-installed"
         elif sweep.get("outcome") not in (None, "done"):
             reason = "provider-verification-incomplete"
         if code == 20 and summary.get("held") and vendor not in summary["held"] \
                 and vendor not in summary.get("deferred_retries", {}) \
                 and vendor not in summary.get("failed_retries", {}) \
-                and vendor not in summary.get("still_failed_environment", {}):
+                and vendor not in summary.get("still_failed_environment", {}) and not retained and not gap and not deterministic and not pending:
             state["pending"].pop(vendor, None)
             continue
         prior = state["pending"].get(vendor, {})
         same = prior.get("reason") == reason and prior.get("exit_code") == code
         # Row IDs come only from the package registry, never free-form logs.
         import build_overlay
-        rows = sorted({cid for cid in list(report.get("unprobed", [])) +
-                       list(report.get("failed_environment", {})) if cid in build_overlay.ROWS})
+        rows = sorted({cid for value in (missing, failed, gap, deterministic, retained, pending, deferred, retried)
+                       for cid in summary_ids(value) if cid in build_overlay.ROWS})
         state["pending"][vendor] = dict(vendor=vendor, reason=reason, config_ids=rows,
                                          exit_code=code, first_seen=prior.get("first_seen", now) if same else now,
                                          last_seen=now, attempts=prior.get("attempts", 0) + 1 if same else 1)
+        if retained:
+            pending_ids = sorted(cid for cid in summary_ids(retained) if cid in build_overlay.ROWS)
+            state["pending"][vendor]["pending_config_ids"] = pending_ids
+            for field in ("pending_count", "verified_count"):
+                count = _selector_count(retained, field)
+                if count is not None:
+                    state["pending"][vendor][field] = count
+        if isinstance(deterministic, Mapping) and deterministic:
+            from probe_failure import public_reason
+            state["pending"][vendor]["deterministic_failures"] = {
+                cid: public_reason(reason) for cid, reason in deterministic.items() if cid in build_overlay.ROWS}
         if reason == "review-executable-source":
             # Allowlist codes only; signer details are re-observed by --check.
             source_reason = report.get("origin_reason")
@@ -197,10 +268,13 @@ def pending_summary():
             raise ValueError("invalid local verification status")
         reason = entry.get("reason")
         allowed = set(REASONS.values()) | {"verification-interrupted", "needs-login-session",
-                    "review-executable-source", "cli-not-installed", "provider-verification-incomplete"}
+                    "review-executable-source", "cli-not-installed", "provider-verification-incomplete",
+                    "deterministic-probe-failure"}
         if reason not in allowed:
             raise ValueError("invalid local verification status reason")
-        if reason == "verification-busy":
+        if reason == "deterministic-probe-failure":
+            action = "inspect the recorded finding with `omnilane doctor`; no automatic retry"
+        elif reason == "verification-busy":
             action = "wait for the running verification, then retry"
         elif reason == "review-executable-source":
             action = ("Source review required; this attempt did not execute the CLI. "
@@ -212,7 +286,12 @@ def pending_summary():
             action = "check local.sh and the overlay path with `omnilane doctor`"
         else:
             action = transport_guidance(vendor)["message"]
-        messages.append(f"{vendor}: {reason}; next: {action}")
+        selectors = (f"; {entry.get('pending_count', len(entry.get('config_ids', [])))} selector(s) pending: "
+                     + ", ".join(entry.get("pending_config_ids", entry.get("config_ids", [])))) if "pending_count" in entry else ""
+        from probe_failure import public_reason
+        findings = "; ".join(f"{cid}: {public_reason(value)}"
+                             for cid, value in entry.get("deterministic_failures", {}).items())
+        messages.append(f"{vendor}: {reason}{selectors}" + (f"; {findings}" if findings else "") + f"; next: {action}")
     return "; ".join(messages)
 
 
@@ -237,12 +316,21 @@ def run_daily(action, vendors=None, summary=None, log=None):
     except (OSError, ValueError, RuntimeError):
         code = 40
     try:
-        record(code, vendors, summary() if callable(summary) else summary)
+        result_summary = summary() if callable(summary) else summary
+        record(code, vendors, result_summary)
     except (OSError, ValueError, TypeError, KeyError):
         log("omnilane: automatic verification status could not be saved; check OMNILANE_HOME permissions. "
             "Verification is not reported as successful.")
         return code or 40
-    if code:
+    if code == 60:
+        partial = (result_summary or {}).get("partially_re_signed", {})
+        def total(field):
+            counts = [_selector_count(value, field) for value in partial.values()]
+            return "unknown" if None in counts else sum(counts)
+        verified, pending = total("verified_count"), total("pending_count")
+        log(f"omnilane: automatic verification partially completed: {verified} verified, {pending} pending. "
+            "Run `omnilane resign` in an interactive terminal to retry, or `omnilane doctor` for details.")
+    elif code:
         log("omnilane: automatic verification did not complete; the unresolved status is saved locally. "
             "Run `omnilane doctor` for the vendor and next step.")
     return code
