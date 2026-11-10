@@ -263,7 +263,7 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v5.0.1-2026-11-10-v1`: **proposed, awaiting operator approval**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` after it is approved. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md).
+AA `aa-v5.0.1-2026-11-10-v1`: **approved by the operator on 2026-11-10**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` once to re-prove its overlay against the new table. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md). It replaces `aa-v4.3.2-2026-10-28-v1` (approved 2026-10-28).
 
 AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
 
@@ -290,7 +290,7 @@ The **backup** is the next candidate in the lane's `routing.yaml` chain — what
 dispatch falls back to when the first-choice vendor CLI is not installed. Every
 lane is such a chain; when nothing in it is installed the lane degrades to `off`.
 
-> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (proposed AA v5.0.1 snapshot).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
+> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (AA v5.0.1 snapshot, approved 2026-11-10).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
 
 ### Natural-language consultation
 
@@ -369,8 +369,8 @@ hints, not self-execution exemptions: even a same-model task is delegated.
 A native agent is eligible only when the caller explicitly confirms the exact
 model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
 The commander orchestrates and validates; workers do not delegate again.
-Starting rows below come from the score ceiling alone (proposed AA v5.0.1
-snapshot); an inherited ceiling, a failed host probe or a quota can move the
+Starting rows below come from the score ceiling alone (AA v5.0.1 snapshot,
+approved 2026-11-10); an inherited ceiling, a failed host probe or a quota can move the
 chain further down.
 
 - **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later). At max, xhigh or high, hardest-coding and hard-judgment start on Fable 5.2 itself; still delegate. At medium the first reachable rows are Astra xhigh (hardest-coding) and Fable 5.2 medium (hard-judgment); at low, Opus 5.5 high and Fable 5.2 low.
@@ -780,7 +780,7 @@ with the key you set — those are advise-only and never edit files.
 
 <br/>
 
-The proposed 2026-11-10 snapshot (AA Intelligence Index v5.0.1) scores Fable
+The 2026-11-10 snapshot (AA Intelligence Index v5.0.1, approved that day) scores Fable
 5.2 xhigh at 62, above every other row a lane can dispatch (Opus 5.5 xhigh 57,
 Astra xhigh 55). In `hardest-coding` it also leads Terminal-Bench 4.0 (0.616
 against 0.596 for both Astra and Opus 5.5 xhigh) and SciCode (0.656 against
@@ -792,7 +792,7 @@ $4,766 for Opus 5.5 xhigh and $3,746 for Astra xhigh.
 
 Astra xhigh stays second in `hardest-coding` and first in `consult`; Opus 5.5
 high leads `ui-draft`. Fable 5.2 needs Claude Code 2.1.321 or later. The
-snapshot stays proposed until the operator approves it; the full per-lane
+operator approved the snapshot on 2026-11-10; the full per-lane
 tables are in [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt).
 
 </details>
@@ -925,8 +925,8 @@ next sweep with no change to omnilane.
 ## 📊 Defaults and provenance
 
 Default lane assignments follow the Artificial Analysis Intelligence Index
-v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, proposed, awaiting
-operator approval), merged from 85 AA model pages; each lane is ordered
+v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the
+operator on 2026-11-10), merged from 85 AA model pages; each lane is ordered
 value-first on those scores and its own measures, and rows v5.0.1 no longer
 scores are left out rather than carried over
 ([evidence](docs/reports/aa-rebaseline-2026-11-10.md)). They are opinions, not laws — the

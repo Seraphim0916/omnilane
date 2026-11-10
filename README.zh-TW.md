@@ -225,7 +225,7 @@ flowchart LR
 
 ## 🛤️ 通道一覽(預設值;實際生效值跑 `scripts/dispatch.sh --list` 看)
 
-AA `aa-v5.0.1-2026-11-10-v1`：**proposed（提議中，待操作者核准）**；改用 AA Intelligence Index v5.0.1，68 列計分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），並拿掉 v5.0.1 已不計分的列。下表已照它排：Fable 5.2 xhigh 成為 hardest-coding 與 hard-judgment 的首選；Claude Opus 5 失去分數，long-context 改由 GPT-6 Astra （medium） 領頭。Gemini 4 Carbon 有分數，但沒有可派工的代號，不在任何車道。核准後每台主機都要跑一次 `omnilane resign`。[證據](docs/reports/aa-rebaseline-2026-11-10.md)。
+AA `aa-v5.0.1-2026-11-10-v1`：**approved（操作者 2026-11-10 核准）**；改用 AA Intelligence Index v5.0.1，68 列計分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），並拿掉 v5.0.1 已不計分的列。下表已照它排：Fable 5.2 xhigh 成為 hardest-coding 與 hard-judgment 的首選；Claude Opus 5 失去分數，long-context 改由 GPT-6 Astra （medium） 領頭。Gemini 4 Carbon 有分數，但沒有可派工的代號，不在任何車道。每台主機都要跑一次 `omnilane resign`，讓 overlay 對新評分表重新驗證。[證據](docs/reports/aa-rebaseline-2026-11-10.md)。取代 `aa-v4.3.2-2026-10-28-v1`（2026-10-28 核准）。
 
 AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控依操作者當天「把新模型收進去」的指示核准）**；130 列計分、9 列未知。新增 GPT-6.1 Terra（六列，max 48），依價值規則放進 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各車道首選不變。仍待主機傳輸驗證。[證據](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 核准）。
 
@@ -251,7 +251,7 @@ Argon High 已加入所有原有 Flash 的車道，需要 Google AI Ultra 與成
 **備選模型**是候選鏈的下一位——首選那家的廠商 CLI 沒裝時,派工就降到它。每條
 通道都是這樣一條鏈;整條都沒裝時,通道自動降為 `off`。
 
-> **Claude Fable 5.2 現在領頭 hardest-coding 與 hard-judgment（AA v5.0.1 快照，提議中）。** 分數與重排見[重拍報告](docs/reports/aa-rebaseline-2026-11-10.md)；各通道的比較見[常見問題](#-常見問題)。
+> **Claude Fable 5.2 現在領頭 hardest-coding 與 hard-judgment（AA v5.0.1 快照，2026-11-10 核准）。** 分數與重排見[重拍報告](docs/reports/aa-rebaseline-2026-11-10.md)；各通道的比較見[常見問題](#-常見問題)。
 
 ### 自然語言諮詢
 
@@ -300,7 +300,7 @@ omnilane jobs --json status JOB_ID
 即使模型相同，也要委派給子代理。呼叫端明示模型、推理強度、任務模式與工作目錄，
 並以空工具陣列及 `shared-inherited` 隔離和生命週期能力同列相符時，才採原生代理；否則走 CLI。
 主控負責編排與驗收，工作代理執行任務且不得再派工。
-下面各條的起點只依分數上限推算（AA v5.0.1 提議快照）；繼承上限、主機探測失敗或額度，
+下面各條的起點只依分數上限推算（AA v5.0.1 快照，2026-11-10 核准）；繼承上限、主機探測失敗或額度，
 都可能讓鏈再往下走。
 
 - **Claude Code · Fable 5.2**——上限最高的提示詞層主控（需要 Claude Code 2.1.321 以上）。在 max、xhigh、high 時，hardest-coding 與 hard-judgment 的第一候選就是 Fable 5.2 自己，仍要派工。medium 時第一個派得到的是 Astra xhigh（hardest-coding）與 Fable 5.2 medium（hard-judgment）；low 時是 Opus 5.5 high 與 Fable 5.2 low。
@@ -637,7 +637,7 @@ omnilane goal close "$GOAL_ID" --summary "結帳整合已穩定"
 
 <br/>
 
-2026-11-10 的提議快照（AA Intelligence Index v5.0.1）給 Fable 5.2 xhigh 62 分，
+2026-11-10 的快照（AA Intelligence Index v5.0.1，當天核准）給 Fable 5.2 xhigh 62 分，
 高於通道能派的其他所有列（Opus 5.5 xhigh 57、Astra xhigh 55）。在
 `hardest-coding`，它的 Terminal-Bench 4.0 也最高（0.616；Astra 與 Opus 5.5
 xhigh 都是 0.596），SciCode 0.656（另兩者 0.557、0.650）。在 `hard-judgment`，
@@ -647,8 +647,8 @@ xhigh 都是 0.596），SciCode 0.656（另兩者 0.557、0.650）。在 `hard-j
 Astra xhigh 約 $3,746。
 
 Astra xhigh 仍是 `hardest-coding` 第二、`consult` 第一；`ui-draft` 由 Opus 5.5
-high 領頭。Fable 5.2 需要 Claude Code 2.1.321 以上。操作者核准前，這份快照都是
-提議狀態；各通道完整數值見
+high 領頭。Fable 5.2 需要 Claude Code 2.1.321 以上。這份快照已由操作者
+在 2026-11-10 核准；各通道完整數值見
 [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt)。
 
 </details>
@@ -759,7 +759,7 @@ codex 記在 session rollout，agy 寫進 `cli.log`。這是 CLI 自己抄的訂
 ## 📊 預設值與資料來源
 
 預設通道配置依據 Artificial Analysis Intelligence Index v5.0.1 快照
-`aa-v5.0.1-2026-11-10-v1`（2026-11-10，提議中，待操作者核准），由 85 個 AA 模型頁
+`aa-v5.0.1-2026-11-10-v1`（2026-11-10，操作者當天核准），由 85 個 AA 模型頁
 合併而成；每條通道依這些分數和該通道自己的量測，以價值優先排序，v5.0.1 不再計分的列
 直接拿掉，不沿用舊分數（[證據](docs/reports/aa-rebaseline-2026-11-10.md)）。這些是意見不是定律——
 設定選單和 `routing.local.yaml` 就是讓你不同意用的。完整工作筆記(含各評測的

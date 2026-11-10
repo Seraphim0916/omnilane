@@ -232,7 +232,7 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-AA `aa-v5.0.1-2026-11-10-v1`: **proposed (제안 상태, 운영자 승인 대기)**. AA Intelligence Index v5.0.1로 바꾸고 점수가 있는 구성은 68개입니다. Claude Fable 5.2(max 65, xhigh 62, high 62, medium 56, low 54. Claude Code 2.1.321 이상 필요)를 추가하고 v5.0.1에서 점수가 없어진 구성은 뺐습니다. 아래 표는 이미 이를 따릅니다: Fable 5.2 xhigh가 hardest-coding과 hard-judgment의 1순위가 되고, Claude Opus 5가 점수를 잃어 long-context는 GPT-6 Astra (medium)이 맨 앞입니다. Gemini 4 Carbon은 점수는 있지만 디스패치 가능한 ID가 없어 어느 레인에도 없습니다. 승인 후 모든 호스트에서 `omnilane resign`을 한 번 실행해야 합니다. [근거](docs/reports/aa-rebaseline-2026-11-10.md).
+AA `aa-v5.0.1-2026-11-10-v1`: **approved (2026-11-10 운영자 승인)**. AA Intelligence Index v5.0.1로 바꾸고 점수가 있는 구성은 68개입니다. Claude Fable 5.2(max 65, xhigh 62, high 62, medium 56, low 54. Claude Code 2.1.321 이상 필요)를 추가하고 v5.0.1에서 점수가 없어진 구성은 뺐습니다. 아래 표는 이미 이를 따릅니다: Fable 5.2 xhigh가 hardest-coding과 hard-judgment의 1순위가 되고, Claude Opus 5가 점수를 잃어 long-context는 GPT-6 Astra (medium)이 맨 앞입니다. Gemini 4 Carbon은 점수는 있지만 디스패치 가능한 ID가 없어 어느 레인에도 없습니다. 모든 호스트에서 `omnilane resign`을 한 번 실행해 새 표에 맞춰 overlay를 다시 검증해야 합니다. [근거](docs/reports/aa-rebaseline-2026-11-10.md). `aa-v4.3.2-2026-10-28-v1`(2026-10-28 승인)을 대체합니다.
 
 AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는 같은 날 운영자 지시에 따라 컨트롤러가 승인)**. 점수가 있는 구성 130개와 미평가 구성 9개. GPT-6.1 Terra(6개 구성, max 48)를 추가하고 가치 규칙이 고른 위치에 hardest-coding, bulk-mechanical, ui-draft, fast-agentic으로 넣었습니다. 각 레인의 첫 선택은 바뀌지 않습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-rebaseline-2026-10-27.md). `aa-v4.3.2-2026-10-18-v1`(2026-10-19 승인)을 대체합니다.
 
@@ -259,7 +259,7 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
 디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
 설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
 
-> **Claude Fable 5.2 가 이제 hardest-coding 과 hard-judgment 의 맨 앞입니다 (AA v5.0.1 스냅샷, 제안 상태).** 점수와 재정렬은 [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-10.md) 에 있고, 레인별 비교는 [FAQ](#-faq) 에 있습니다.
+> **Claude Fable 5.2 가 이제 hardest-coding 과 hard-judgment 의 맨 앞입니다 (AA v5.0.1 스냅샷, 2026-11-10 승인).** 점수와 재정렬은 [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-10.md) 에 있고, 레인별 비교는 [FAQ](#-faq) 에 있습니다.
 
 ### 자연어 상담
 
@@ -285,7 +285,7 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
 네이티브 에이전트는 호출자가 모델, effort, 모드, 작업 디렉터리, 도구, 격리 방식,
 수명 주기가 모두 일치한다고 명시했을 때만 쓸 수 있고, 그 밖에는 CLI 를 씁니다.
 컨트롤러는 조율과 검증을 맡고, 워커는 다시 위임하지 않습니다.
-아래 시작 위치는 점수 상한만으로 계산한 것입니다(AA v5.0.1 제안 스냅샷). 상속된
+아래 시작 위치는 점수 상한만으로 계산한 것입니다(AA v5.0.1 스냅샷, 2026-11-10 승인). 상속된
 상한, 호스트 프로브 실패, 쿼터 때문에 체인이 더 아래로 내려갈 수 있습니다.
 
 - **Claude Code · Fable 5.2**——상한이 가장 높은 프롬프트 수준 컨트롤러(Claude Code 2.1.321 이상 필요). max, xhigh, high 에서는 hardest-coding 과 hard-judgment 의 1순위가 Fable 5.2 자신이지만 그래도 디스패치합니다. medium 에서 처음 닿는 행은 Astra xhigh(hardest-coding)와 Fable 5.2 medium(hard-judgment), low 에서는 Opus 5.5 high 와 Fable 5.2 low 입니다.
@@ -631,7 +631,7 @@ Codex 중심, Codex 없음)이 들어 있습니다.
 
 <br/>
 
-2026-11-10 제안 스냅샷(AA Intelligence Index v5.0.1)에서 Fable 5.2 xhigh 는
+2026-11-10 스냅샷(AA Intelligence Index v5.0.1, 같은 날 승인)에서 Fable 5.2 xhigh 는
 62점으로, 레인이 디스패치할 수 있는 다른 모든 행보다 높습니다(Opus 5.5 xhigh 57,
 Astra xhigh 55). `hardest-coding` 에서는 Terminal-Bench 4.0 도 가장 높고(0.616.
 Astra 와 Opus 5.5 xhigh 는 둘 다 0.596), SciCode 는 0.656 입니다(나머지 둘은
@@ -643,7 +643,7 @@ xhigh 약 $3,746 입니다.
 
 Astra xhigh 는 여전히 `hardest-coding` 2순위이자 `consult` 1순위이고, `ui-draft`
 는 Opus 5.5 high 가 맨 앞입니다. Fable 5.2 에는 Claude Code 2.1.321 이상이
-필요합니다. 이 스냅샷은 운영자가 승인하기 전까지 제안 상태입니다. 레인별 전체 수치는
+필요합니다. 이 스냅샷은 2026-11-10 운영자가 승인했습니다. 레인별 전체 수치는
 [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) 에 있습니다.
 
 </details>
@@ -763,7 +763,7 @@ v0.42.6 이전에 프로브한 매핑은 모두 이 등급입니다. 디스패�
 ## 📊 기본값과 출처
 
 기본 레인 배치는 Artificial Analysis Intelligence Index v5.0.1 스냅샷
-`aa-v5.0.1-2026-11-10-v1`(2026-11-10, 제안 상태, 운영자 승인 대기)에 근거합니다.
+`aa-v5.0.1-2026-11-10-v1`(2026-11-10, 같은 날 운영자 승인)에 근거합니다.
 AA 모델 페이지 85개를 합친 것으로, 각 레인은 이 점수와 레인별 측정값으로 가성비
 우선 정렬하며, v5.0.1 에서 점수가 없어진 행은 이전 점수를 이어받지 않고 뺐습니다
 ([근거](docs/reports/aa-rebaseline-2026-11-10.md)).

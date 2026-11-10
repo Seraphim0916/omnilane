@@ -2,10 +2,10 @@
 
 來源：claude-code-s／MacStudio；工作樹 `feat/aa-fable-5-2`，基底 `ccaf389`。
 
-狀態：**proposed**（`approval.status = "proposed"`、`approval.scope = "aa-v5.0.1-rebaseline"`），等 Vincent 核准。核准前這份快照不具權威；主機尚未重簽。
+狀態：**approved**（`approval.status = "approved"`、`approval.scope = "aa-v5.0.1-rebaseline"`）。Vincent 2026-11-10 16:1x 在提問視窗對「omnilane 的 AA 5.0.1 新評分表（加入 Fable 5.2、車道重排、Carbon 只當參考）要核准嗎？」選了「核准，合併並重簽 (Recommended)」，主控依此核准；主機還沒有重簽。
 
 快照：`aa-v5.0.1-2026-11-10-v1`，AA Intelligence Index 5.0.1，`as_of` 2026-11-10（Asia/Taipei）。
-政策檔 SHA-256：`af518566e61a67685789d55bf09478818f7fa55f18e31fde8917ed376f2ae974`。
+政策檔 SHA-256：`f29328d86e08bbfc6088d97a58e38d9a379c513811177a62e7ec1c47f287673a`（提議版是 `af518566e61a67685789d55bf09478818f7fa55f18e31fde8917ed376f2ae974`，差別只有 `approval.status` 與 `estimated_scores` 兩欄）。
 抽取檔：`docs/reports/aa-v5.0.1-extract-2026-11-10.json`，SHA-256 `18d62899f41e5cc096b04fef765180e9243b123adeae2885f85a94cf08cf11e9`（等於政策檔 `snapshot.source.extract_sha256`）。
 
 ## 來源頁與抓取方式
@@ -94,5 +94,5 @@
 
 - **fast-agentic 沒有重排**：這條車道以「首字延遲 ≤10 秒」為門檻，但 5.0.1 沒有公布首字延遲，`value` 會把整條車道算成空的。所以只拿掉沒分數的列、維持原順序，門檻怎麼改另待決定。
 - 73 列移到 unknown 後，這些模型只能等 AA 重新計分才會回到評分表；目前不估算。
-- `aa_policy.py` 的 `APPROVED_*` 釘值已指向本快照（版本 5.0.1、政策檔雜湊 `af518566…`），但 `approval.status` 仍是 proposed；核准與否以 Vincent 的決定為準。
-- 核准後每台主機都要跑 `omnilane resign`，overlay 才會對新評分表重新證明；Claude Fable 5.2 的探測需要 Claude Code 2.1.321 以上。
+- `aa_policy.py` 的 `APPROVED_*` 釘值指向本快照的核准版（版本 5.0.1、政策檔雜湊 `f29328d8…`）；封存檔的本快照條目用 `aa_rebaseline.py compat-entry --write` 重寫，`APPROVED_ARCHIVE_SHA256` 與 `test_origin_integration.py` 的兩個釘值跟著更新。
+- 每台主機都要跑 `omnilane resign`，overlay 才會對新評分表重新證明；Claude Fable 5.2 的探測需要 Claude Code 2.1.321 以上。

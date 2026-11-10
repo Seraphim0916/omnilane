@@ -1,11 +1,11 @@
 # Model capabilities — AA routing snapshots
 
-A new snapshot is **proposed, not yet approved**: `aa-v5.0.1-2026-11-10-v1` on AA Intelligence Index v5.0.1
-(captured 2026-11-10; `docs/reports/aa-v5.0.1-extract-2026-11-10.json`). `routing.yaml` on this branch already
-follows it (LANES-501 "now" variant, below); until the operator approves the snapshot and every host re-signs,
-the 2026-10-28 snapshot described next is the one in force.
+The current approved snapshot is **2026-11-10**, snapshot `aa-v5.0.1-2026-11-10-v1` on AA Intelligence Index v5.0.1
+(captured 2026-11-10; `docs/reports/aa-v5.0.1-extract-2026-11-10.json`). The operator approved it on 2026-11-10;
+`routing.yaml` follows it (LANES-501 "now" variant, below). Every host re-signs with `omnilane resign` before
+the new rows are dispatchable there.
 
-The current approved snapshot is **2026-10-28**, snapshot `aa-v4.3.2-2026-10-28-v1` (agy-hosted Claude added:
+The previous snapshot is **2026-10-28**, snapshot `aa-v4.3.2-2026-10-28-v1` (agy-hosted Claude added:
 `gemini/claude-opus-5-5-{high,medium,low}` and `gemini/claude-sonnet-5-5-{high,medium,low}`, same AA rows as native Claude).
 The operator approved it on 2026-10-28; no lane order changed and host transport proof is still required.
 The previous snapshot `aa-v4.3.2-2026-10-27-v1` (GPT-6.1 Terra added) was approved on 2026-10-27;
@@ -15,10 +15,10 @@ scores from v4.2 and older scales are not comparable with v4.3.2.
 Full provenance, all field conflicts, and the complete diff are in
 [the Haiku 5.5 evidence report](reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-## Proposed snapshot — 2026-11-10 (AA v5.0.1; Claude Fable 5.2 added; routing re-ranked)
+## Current approved snapshot — 2026-11-10 (AA v5.0.1; Claude Fable 5.2 added; routing re-ranked; approved 2026-11-10)
 
 Baseline: AA Intelligence Index **v5.0.1**, captured 2026-11-10, snapshot
-`aa-v5.0.1-2026-11-10-v1` (approval status `proposed`). Scores on v5.0.1 are not
+`aa-v5.0.1-2026-11-10-v1` (approval status `approved`, by the operator on 2026-11-10). Scores on v5.0.1 are not
 comparable with v4.3.2; the whole table moved down (for example GPT-6 Luna high and
 Claude Haiku 5.5 both fell), so compare rows only within one snapshot.
 

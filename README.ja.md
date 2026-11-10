@@ -234,7 +234,7 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
-AA `aa-v5.0.1-2026-11-10-v1`：**proposed（提案中、操作者の承認待ち）**。AA Intelligence Index v5.0.1 に切り替え、採点済み構成は 68 件。Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54。Claude Code 2.1.321 以降が必要）を追加し、v5.0.1 で採点されなくなった構成を外しました。下の表はすでにこれに従っています：Fable 5.2 xhigh が hardest-coding と hard-judgment の第一候補になり、Claude Opus 5 がスコアを失ったため long-context は GPT-6 Astra (medium) が先頭です。Gemini 4 Carbon はスコアがありますがディスパッチ可能な ID がなく、どのレーンにも入っていません。承認後は各ホストで `omnilane resign` が必要です。[証拠](docs/reports/aa-rebaseline-2026-11-10.md)。
+AA `aa-v5.0.1-2026-11-10-v1`：**approved（2026-11-10 に操作者が承認）**。AA Intelligence Index v5.0.1 に切り替え、採点済み構成は 68 件。Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54。Claude Code 2.1.321 以降が必要）を追加し、v5.0.1 で採点されなくなった構成を外しました。下の表はすでにこれに従っています：Fable 5.2 xhigh が hardest-coding と hard-judgment の第一候補になり、Claude Opus 5 がスコアを失ったため long-context は GPT-6 Astra (medium) が先頭です。Gemini 4 Carbon はスコアがありますがディスパッチ可能な ID がなく、どのレーンにも入っていません。各ホストで一度 `omnilane resign` を実行し、新しい表に対して overlay を再検証する必要があります。[証拠](docs/reports/aa-rebaseline-2026-11-10.md)。`aa-v4.3.2-2026-10-28-v1`（2026-10-28 承認）を置き換えます。
 
 AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
 
@@ -261,7 +261,7 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
 ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
 何もインストールされていなければレーンは `off` に降格します。
 
-> **Claude Fable 5.2 が hardest-coding と hard-judgment の先頭になりました（AA v5.0.1 スナップショット、提案中）。** スコアと並べ替えは[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-10.md)を参照してください。レーンごとの比較は [FAQ](#-faq) にあります。
+> **Claude Fable 5.2 が hardest-coding と hard-judgment の先頭になりました（AA v5.0.1 スナップショット、2026-11-10 承認）。** スコアと並べ替えは[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-10.md)を参照してください。レーンごとの比較は [FAQ](#-faq) にあります。
 
 ### 自然言語コンサルテーション
 
@@ -287,7 +287,7 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
 ネイティブエージェントを使えるのは、呼び出し側がモデル、effort、モード、作業
 ディレクトリ、ツール、分離方式、ライフサイクルがすべて一致すると明示した場合だけで、
 それ以外は CLI を使います。コントローラーは編成と検証を担い、ワーカーは再委任しません。
-以下の開始位置はスコア上限だけから求めたものです（AA v5.0.1 の提案スナップショット）。
+以下の開始位置はスコア上限だけから求めたものです（AA v5.0.1 スナップショット、2026-11-10 承認）。
 継承された上限、ホストでのプローブ失敗、クォータによって、チェーンがさらに下へ進む
 ことがあります。
 
@@ -644,7 +644,7 @@ advise 専用で、ファイルを編集しません。
 
 <br/>
 
-2026-11-10 の提案スナップショット（AA Intelligence Index v5.0.1）では、Fable 5.2
+2026-11-10 のスナップショット（AA Intelligence Index v5.0.1、同日承認）では、Fable 5.2
 xhigh が 62 点で、レーンがディスパッチできる他のどの行よりも高くなっています
 （Opus 5.5 xhigh 57、Astra xhigh 55）。`hardest-coding` では Terminal-Bench 4.0
 も最高（0.616。Astra と Opus 5.5 xhigh はどちらも 0.596）で、SciCode は 0.656
@@ -656,7 +656,7 @@ xhigh が約 $4,766、Astra xhigh が約 $3,746 です。
 
 Astra xhigh は引き続き `hardest-coding` の 2 番手、`consult` の第一候補で、
 `ui-draft` の先頭は Opus 5.5 high です。Fable 5.2 には Claude Code 2.1.321 以降が
-必要です。このスナップショットは運用者が承認するまで提案段階のままです。レーンごとの
+必要です。このスナップショットは 2026-11-10 に運用者が承認しました。レーンごとの
 数値は [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) にあります。
 
 </details>
@@ -782,7 +782,7 @@ v0.42.6 より前にプローブしたマッピングはすべてこれになり
 ## 📊 デフォルト値と出典
 
 デフォルトのレーン割当は Artificial Analysis Intelligence Index v5.0.1 の
-スナップショット `aa-v5.0.1-2026-11-10-v1`（2026-11-10、提案中、運用者の承認待ち）
+スナップショット `aa-v5.0.1-2026-11-10-v1`（2026-11-10、同日に運用者が承認）
 に基づきます。AA のモデルページ 85 件を統合したもので、各レーンはこのスコアと
 レーンごとの指標でコスパ優先に並べ、v5.0.1 で採点されなくなった行は旧スコアを
 引き継がずに外しています（[証拠](docs/reports/aa-rebaseline-2026-11-10.md)）。

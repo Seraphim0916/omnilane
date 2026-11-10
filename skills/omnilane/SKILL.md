@@ -497,8 +497,8 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the AA v5.0.1 scores of the proposed `aa-v5.0.1-2026-11-10-v1`
-snapshot; until the operator approves it the previous approved snapshot governs.
+Ceilings below are the AA v5.0.1 scores of the `aa-v5.0.1-2026-11-10-v1`
+snapshot, approved by the operator on 2026-11-10.
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
 can still move the chain further down.
 
@@ -579,7 +579,7 @@ can still move the chain further down.
 
 ### Model aliases
 
-Proposed snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, **proposed, awaiting operator approval**):
+Current approved snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the operator on 2026-11-10):
 AA Intelligence Index v5.0.1, 68 scored rows, 82 unknown, 4 reference. It adds Claude Fable 5.2
 (max/xhigh/high/medium/low; Claude Code 2.1.321 or later). Rows v5.0.1 no longer scores move to
 unknown without carrying their old score. Gemini 4 Carbon and Gemini 3.1 Pro are reference rows only.
