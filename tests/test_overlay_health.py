@@ -69,7 +69,7 @@ class OverlayHealthTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(level, "WARN")
         self.assertIn("no overlay configured", message)
-        self.assertIn("build_overlay.py", message)
+        self.assertIn("omnilane resign --init", message)
 
     def test_a_human_operated_host_needs_no_overlay(self):
         rc, level, message = run(None, OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1")

@@ -21,7 +21,7 @@
 
 ## 目前版本的升級與驗證
 
-只換評分表快照時，呼叫參數與執行檔身分沒變的列會自動沿用既有探測證據；分數或日期更新直接套用新上限，不必執行 `omnilane resign`、登入圖形桌面或連網，也不改寫覆蓋檔。只有新增或參數合約、執行檔身分有變的列需要 `omnilane resign --vendor VENDOR`；拒絕訊息會指出列與是否需要圖形終端機。套件內有可信來源快照的舊格式 1 可直接使用；未知的更舊來源請先用 `omnilane resign --check` 查明。首次設定與簽署者核准規則不變。每日排程改用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失敗保留非零結束碼，並留下私有本機紀錄供 `omnilane doctor` 顯示，不依賴 Telegram；不會自動安裝排程。
+只換評分表快照時，呼叫參數與執行檔身分沒變的列會自動沿用既有探測證據；分數或日期更新直接套用新上限，不必執行 `omnilane resign`、登入圖形桌面或連網，也不改寫覆蓋檔。只有新增或參數合約、執行檔身分有變的列需要 `omnilane resign --vendor VENDOR`；拒絕訊息會指出列與是否需要圖形終端機。套件內有可信來源快照的舊格式 1 可直接使用；未知的更舊來源請先用 `omnilane resign --check` 查明。首次設定使用 `omnilane resign --init`，簽署者核准規則不變。每日排程改用 `omnilane resign --daily`（或 `bash scripts/resign-daily.sh`）：失敗保留非零結束碼，並留下私有本機紀錄供 `omnilane doctor` 顯示，不依賴 Telegram；不會自動安裝排程。
 
 上次探測因 API 錯誤、逾時、未登入、額度或連線問題失敗時，可執行 `omnilane resign --vendor VENDOR`。非互動執行會對每列等待 20 小時；互動執行或 `omnilane resign --retry-failed --vendor VENDOR` 可立即重試。這個旗標不會放寬簽署者檢查。失敗證據與時間欄位是否存在都受摘要保護；被修改或刪除時會回報，不會重試。
 
@@ -107,14 +107,10 @@ omnilane ui start     # optional: watch jobs live in your browser
 請在一般的桌面終端機裡建立。（用 ssh 登入的工作階段讀不到 CLI 登入用的鑰匙圈，會把每一家都報成沒登入。）
 
 ```bash
-cd "$(npm root -g)/omnilane"            # or your clone
-ROOT=~/.omnilane/transport-evidence/first-sweep
-python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
-python3 scripts/lib/build_overlay.py --root "$ROOT"
-cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
-echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
-omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+omnilane resign --init
 ```
+
+首次安裝請在互動式終端機執行；已有覆蓋檔或搭配 `--daily` 時會拒絕。這個指令會完成探測與實際派工驗證、記錄首次信任的簽署者，再備份 `local.sh` 並保留原設定、加入覆蓋檔路徑。簽章不安全或簽署者變更仍會被擋下。[手動備用流程](docs/transport-overlay.md#first-installation)。
 
 沒登入的那一家會被標成 `unprobeable`，就只是維持未驗證，其他家照常可用。
 
@@ -122,10 +118,10 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 
 覆蓋檔是用雜湊值釘住每個 CLI 執行檔的，而**這些 CLI 會自己更新**，常常一週一次。更新之後，那一家的通道就會被拒，直到覆蓋檔重簽為止。`omnilane resign` 一個指令做完全部：找出哪裡變了、只重新探測那一家、檢查結果、換上新檔、送一筆真實派工確認，失敗就自動還原舊檔。 來源通道只允許啟動補測，不會直接放行派工。
 
-第 2 步完成後，對尚未變動的執行檔執行一次 `omnilane resign --record-signers`。舊有團隊紀錄會形成原廠通道，目前的檔仍須通過 Apple 憑證鏈、團隊、識別名稱與解析後安裝位置的比對。只有自簽紀錄、沒有操作者信任的舊檔，不會因升級而新增信任。
+`--init` 已自動記錄首次信任的簽署者；只有較舊的覆蓋檔需要由操作者另外執行 `omnilane resign --record-signers`。舊有團隊紀錄會形成原廠通道，目前的檔仍須通過 Apple 憑證鏈、團隊、識別名稱與解析後安裝位置的比對。只有自簽紀錄、沒有操作者信任的舊檔，不會因升級而新增信任。
 
 ```bash
-omnilane resign --record-signers     # once, right after Step 2
+omnilane resign --record-signers # 只限較舊覆蓋檔，由操作者執行
 ```
 
 若你會自行修補並自簽，執行 `omnilane resign --trust-adhoc claude`，信任同位置之後的自簽更新。另在**每台主機各自**安裝有效原廠樣本時，執行 `omnilane resign --trust-origin claude`；目前若是自簽，改用 `omnilane resign --trust-origin claude --team TEAMID`，將 `TEAMID` 換成你獨立查明的十碼團隊代號。此指令限終端機，必須輸入畫面指定的明確確認，沒有略過確認的旗標，也沒有預設團隊。原廠更新與後來的自簽更新各自需要補測。同位置信任不能證明替換檔是誰產生的。自簽樣本看不到原廠識別名稱，所以加 `--team` 等於核准該團隊在這個位置的所有程式：在換掉之前，該團隊簽署並放在這裡的任何程式都能通過來源檢查並進入補測，不只這個 CLI。`omnilane resign --check` 和 `omnilane doctor` 會顯示為 `"identifier_family": ""`。要綁定到這個產品，請在安裝有效原廠樣本時，不加 `--team` 再執行一次 `omnilane resign --trust-origin claude`，它會取代團隊層級的那筆核准。

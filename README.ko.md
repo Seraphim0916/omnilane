@@ -21,7 +21,7 @@
 
 ## 현재 버전의 업그레이드와 검증
 
-평가표만 바뀌면 호출 인수와 실행 파일 식별 정보가 같은 행의 검증 증거를 자동으로 재사용합니다. 점수나 날짜 변경은 새 상한에 즉시 반영되며 `omnilane resign`, GUI 로그인, 네트워크 호출이나 오버레이 수정이 필요 없습니다. 추가되거나 호출 계약 또는 실행 파일이 바뀐 행만 `omnilane resign --vendor VENDOR`로 검증하세요. 거부 메시지에 대상 행과 GUI 터미널 필요 여부가 표시됩니다. 신뢰된 원본 스냅샷이 패키지에 있으면 기존 형식 1도 바로 사용합니다. 알 수 없는 이전 원본은 `omnilane resign --check`로 확인하세요. 최초 설정과 서명자 승인 규칙은 그대로입니다. 일일 작업에는 `omnilane resign --daily` 또는 `bash scripts/resign-daily.sh`를 사용하세요. 실패는 0이 아닌 종료 코드를 유지하고 Telegram 없이도 `omnilane doctor`에 로컬 비공개 기록이 표시됩니다. 예약 작업은 자동 설치하지 않습니다.
+평가표만 바뀌면 호출 인수와 실행 파일 식별 정보가 같은 행의 검증 증거를 자동으로 재사용합니다. 점수나 날짜 변경은 새 상한에 즉시 반영되며 `omnilane resign`, GUI 로그인, 네트워크 호출이나 오버레이 수정이 필요 없습니다. 추가되거나 호출 계약 또는 실행 파일이 바뀐 행만 `omnilane resign --vendor VENDOR`로 검증하세요. 거부 메시지에 대상 행과 GUI 터미널 필요 여부가 표시됩니다. 신뢰된 원본 스냅샷이 패키지에 있으면 기존 형식 1도 바로 사용합니다. 알 수 없는 이전 원본은 `omnilane resign --check`로 확인하세요. 최초 설정에는 `omnilane resign --init`를 사용합니다. 서명자 승인 규칙은 그대로입니다. 일일 작업에는 `omnilane resign --daily` 또는 `bash scripts/resign-daily.sh`를 사용하세요. 실패는 0이 아닌 종료 코드를 유지하고 Telegram 없이도 `omnilane doctor`에 로컬 비공개 기록이 표시됩니다. 예약 작업은 자동 설치하지 않습니다.
 
 API 오류, 시간 초과, 로그인, 할당량 또는 연결 문제로 실패한 행은 `omnilane resign --vendor VENDOR`로 다시 검증할 수 있습니다. 비대화형 실행은 각 행의 실패 후 20시간을 기다립니다. 대화형 실행이나 `omnilane resign --retry-failed --vendor VENDOR`는 즉시 재시도합니다. 이 옵션은 서명자 승인을 대신하지 않습니다. 실패 증거와 시간 필드의 존재 여부를 해시로 보호하며, 변경되거나 삭제된 기록은 보고하고 재시도를 거부합니다.
 
@@ -111,14 +111,10 @@ omnilane ui start     # optional: watch jobs live in your browser
 일반 데스크톱 터미널에서 만드세요. (ssh 로그인 세션은 CLI 가 로그인에 쓰는 키체인을 읽지 못해 모두 로그인되지 않았다고 보고합니다.)
 
 ```bash
-cd "$(npm root -g)/omnilane"            # or your clone
-ROOT=~/.omnilane/transport-evidence/first-sweep
-python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
-python3 scripts/lib/build_overlay.py --root "$ROOT"
-cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
-echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
-omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+omnilane resign --init
 ```
+
+최초 설치는 대화형 터미널에서 실행하세요. 기존 오버레이가 있거나 `--daily`와 함께 사용하면 거부됩니다. 프로브와 실제 디스패치를 검증하고 최초 신뢰 서명자를 기록한 다음, `local.sh`를 백업하고 기존 설정을 보존하면서 경로를 등록합니다. 안전하지 않은 서명이나 서명자 변경은 승인하지 않습니다. [수동 대체 절차](docs/transport-overlay.md#first-installation).
 
 로그인하지 않은 벤더는 `unprobeable` 로 보고되고 미검증 상태로 남을 뿐입니다. 나머지는 동작합니다.
 
@@ -126,10 +122,10 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 
 오버레이는 각 CLI 실행 파일을 해시로 고정합니다. 그리고 **CLI 는 스스로 업데이트됩니다**. 일주일에 한 번인 경우도 흔합니다. 업데이트 뒤에는 오버레이가 다시 서명될 때까지 그 벤더의 레인이 거부됩니다. `omnilane resign` 이 이 일을 전부 합니다. 바뀐 것을 찾고, 그 벤더만 다시 프로브하고, 결과를 확인하고, 교체하고, 실제 디스패치 한 건으로 확인하고, 실패하면 이전 파일로 되돌립니다. 출처 채널은 프로브만 허용하며 디스패치를 직접 허용하지 않습니다.
 
-2단계 직후 변경되지 않은 파일에 `omnilane resign --record-signers`를 한 번 실행합니다. 기존 팀 기록은 Developer ID 채널이 되지만 현재 파일은 Apple 인증서 체인, 팀, 식별자와 실제 설치 위치를 통과해야 합니다. 명시적인 신뢰가 없는 기존 adhoc 기록에는 업그레이드로 신뢰가 추가되지 않습니다.
+`--init`가 최초 신뢰 서명자를 자동으로 기록합니다. 이전 오버레이에만 사람이 별도로 `omnilane resign --record-signers`를 실행하세요. 기존 팀 기록은 Developer ID 채널이 되지만 현재 파일은 Apple 인증서 체인, 팀, 식별자와 실제 설치 위치를 통과해야 합니다. 명시적인 신뢰가 없는 기존 adhoc 기록에는 업그레이드로 신뢰가 추가되지 않습니다.
 
 ```bash
-omnilane resign --record-signers     # once, right after Step 2
+omnilane resign --record-signers # 이전 오버레이만, 사람이 실행
 ```
 
 직접 패치하고 adhoc 서명한다면 `omnilane resign --trust-adhoc claude`를 사용합니다. 또 **각 호스트에서 따로** 유효한 공식 서명 샘플을 설치한 상태로 `omnilane resign --trust-origin claude`를 실행합니다. 현재 파일이 adhoc이면 `omnilane resign --trust-origin claude --team TEAMID`에 독립적으로 확인한 10자리 팀 ID를 넣습니다. 터미널에서 화면에 나온 정확한 확인 문구를 입력해야 합니다. 확인 생략 옵션이나 기본 팀은 없습니다. 공식 업데이트와 이후 adhoc 업데이트는 각각 검증이 필요합니다. 같은 위치를 신뢰해도 파일의 제작자를 증명하지는 못합니다. adhoc 샘플에는 공식 식별자가 없으므로 `--team`은 그 위치의 팀 전체를 승인합니다. 교체하기 전까지는 이 CLI뿐 아니라 그 팀이 서명해 그 위치에 둔 어떤 프로그램도 출처 검사를 통과해 재검증 대상이 됩니다. `omnilane resign --check`와 `omnilane doctor`에는 `"identifier_family": ""`로 표시됩니다. 제품에 묶으려면 유효한 공식 서명 샘플을 설치한 상태에서 `--team` 없이 `omnilane resign --trust-origin claude`를 다시 실행합니다. 팀 단위 승인이 교체됩니다.

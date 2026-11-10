@@ -777,6 +777,8 @@ class SandboxRefusalTests(unittest.TestCase):
         self.assertEqual(result, 3)
         self.assertEqual(
             error.getvalue(),
+            "omnilane: refused (caller-identity): the Codex sandbox blocked process inspection. "
+            "Next: run omnilane whoami in a normal terminal or a session authorized for process inspection\n"
             "omnilane: cannot read the caller identity: "
             f"{caller_identity.CODEX_SANDBOX_REFUSAL}\n")
         self.assertNotIn("--caller-context FILE", error.getvalue())

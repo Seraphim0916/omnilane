@@ -715,6 +715,8 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         pid, (vendor, model, effort), source = read_caller(
             os.getpid(), lookup, process_environment, environment)
     except ValueError as error:
+        from refusal_evidence import caller_guidance, print_human
+        print_human(dict(failed_gate="caller-identity", **caller_guidance(str(error))))
         print(f"omnilane: cannot read the caller identity: {error}", file=sys.stderr)
         return 3
     row, reason = resolve(registry, vendor, model, effort)
@@ -727,6 +729,8 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         row = floor_row(registry, vendor, model)
         degraded = row is not None
     if row is None:
+        from refusal_evidence import caller_guidance, print_human
+        print_human(dict(failed_gate="caller-identity", **caller_guidance(reason)))
         print(f"omnilane: cannot read the caller identity from pid {pid}: {reason}", file=sys.stderr)
         if reason.startswith(NO_ROW):
             print(f"omnilane: to hand work to your own sub-agent instead, state the runtime: "

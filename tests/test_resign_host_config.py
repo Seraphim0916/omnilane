@@ -21,7 +21,7 @@ ROOT = test_resign.ROOT
 HOST_CONFIG = 40
 UNCONFIGURED = (
     "omnilane: no transport overlay is configured (OMNILANE_AA_TRANSPORT_OVERLAY); "
-    "there is nothing to re-sign. See the README, 'Let your AI assistant drive omnilane', Step 2.\n"
+    "Next: omnilane resign --init (human operator in a desktop terminal).\n"
 )
 
 
@@ -117,7 +117,7 @@ class HostConfigTests(unittest.TestCase):
             self.assert_host_error(Path(build_overlay.__file__).with_name("common.sh"),
                                    "fixture source failure", before_overlay=True)
 
-    def test_unconfigured_is_exactly_the_old_code_and_message(self):
+    def test_unconfigured_keeps_exit_two_and_points_to_init(self):
         for local in (None, ":\n"):
             if local is not None:
                 self.local.write_text(local)

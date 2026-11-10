@@ -21,7 +21,7 @@
 
 ## 現行版の更新と検証
 
-評価表だけの更新では、呼び出し引数と実行ファイルの識別情報が同じ行の検証証拠を自動的に再利用します。点数・日付の変更は新しい上限に直ちに反映され、`omnilane resign`、GUI ログイン、通信、オーバーレイの書き換えは不要です。追加・変更された契約や実行ファイルだけ `omnilane resign --vendor VENDOR` で検証してください。拒否メッセージに対象行と GUI ターミナルの要否が表示されます。信頼済みスナップショットが同梱されていれば旧形式 1 もそのまま使えます。不明な古い出典は `omnilane resign --check` で確認してください。初期設定と署名者承認は変更しません。毎日の処理は `omnilane resign --daily`（または `bash scripts/resign-daily.sh`）を使います。失敗は非ゼロ終了となり、Telegram がなくても `omnilane doctor` がローカルの非公開記録を表示します。スケジューラーの自動インストールはありません。
+評価表だけの更新では、呼び出し引数と実行ファイルの識別情報が同じ行の検証証拠を自動的に再利用します。点数・日付の変更は新しい上限に直ちに反映され、`omnilane resign`、GUI ログイン、通信、オーバーレイの書き換えは不要です。追加・変更された契約や実行ファイルだけ `omnilane resign --vendor VENDOR` で検証してください。拒否メッセージに対象行と GUI ターミナルの要否が表示されます。信頼済みスナップショットが同梱されていれば旧形式 1 もそのまま使えます。不明な古い出典は `omnilane resign --check` で確認してください。初期設定には `omnilane resign --init` を使用します。署名者承認の規則は変更しません。毎日の処理は `omnilane resign --daily`（または `bash scripts/resign-daily.sh`）を使います。失敗は非ゼロ終了となり、Telegram がなくても `omnilane doctor` がローカルの非公開記録を表示します。スケジューラーの自動インストールはありません。
 
 API エラー、タイムアウト、未ログイン、利用枠、接続障害の行は `omnilane resign --vendor VENDOR` で再検証できます。非対話実行では各行の失敗から 20 時間待機します。対話実行、または `omnilane resign --retry-failed --vendor VENDOR` は直ちに再試行します。この指定で署名者の承認は省略されません。失敗証拠と時刻フィールドの有無を摘要で保護し、変更・削除された記録は報告して再試行を拒否します。
 
@@ -112,14 +112,10 @@ omnilane ui start     # optional: watch jobs live in your browser
 通常のデスクトップターミナルで作成してください。（ssh ログインのセッションは、CLI がログインに使うキーチェーンを読めないため、すべてを未ログインと報告します。）
 
 ```bash
-cd "$(npm root -g)/omnilane"            # or your clone
-ROOT=~/.omnilane/transport-evidence/first-sweep
-python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
-python3 scripts/lib/build_overlay.py --root "$ROOT"
-cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
-echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
-omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+omnilane resign --init
 ```
+
+初回インストールは対話型ターミナルで実行します。既存のオーバーレイや `--daily` との併用は拒否されます。プローブと実際のディスパッチを検証し、初回信頼の署名者を記録した後、`local.sh` をバックアップして既存の設定を保ったままパスを登録します。安全でない署名や署名者の変更は許可しません。[手動の代替手順](docs/transport-overlay.md#first-installation)。
 
 ログインしていないベンダーは `unprobeable` と報告され、未検証のままになるだけです。他のベンダーは動作します。
 
@@ -127,10 +123,10 @@ omnilane doctor | grep transport-overlay              # PASS, with a count per v
 
 オーバーレイは各 CLI の実行ファイルをハッシュで固定します。そして **CLI は自分で更新されます**。週に一度ということも珍しくありません。更新後、そのベンダーのレーンはオーバーレイが再署名されるまで拒否されます。`omnilane resign` はこの作業をすべて行います。変わった箇所を見つけ、そのベンダーだけを再プローブし、結果を確認し、差し替え、実際のディスパッチを 1 件送って確かめ、失敗すれば古いファイルに戻します。 出所チャネルはプローブの許可であり、ディスパッチの許可ではありません。
 
-ステップ 2 の直後、未変更のファイルに対して一度 `omnilane resign --record-signers` を実行します。既存のチーム記録は Developer ID チャネルになりますが、現在のファイルは Apple の証明書チェーン、チーム、識別名、解決済みインストール場所を満たす必要があります。操作者の信頼設定がない既存の adhoc 記録には、更新によって信頼が追加されません。
+`--init` は初回信頼の署名者も記録します。古いオーバーレイに限り、人間のオペレーターが別途 `omnilane resign --record-signers` を実行してください。既存のチーム記録は Developer ID チャネルになりますが、現在のファイルは Apple の証明書チェーン、チーム、識別名、解決済みインストール場所を満たす必要があります。操作者の信頼設定がない既存の adhoc 記録には、更新によって信頼が追加されません。
 
 ```bash
-omnilane resign --record-signers     # once, right after Step 2
+omnilane resign --record-signers # 古いオーバーレイのみ、人間が実行
 ```
 
 自分でパッチして adhoc 署名する場合は `omnilane resign --trust-adhoc claude` を使います。さらに**各ホストで個別に**正規の署名サンプルを確認し、`omnilane resign --trust-origin claude` を実行します。現在のサンプルが adhoc なら `omnilane resign --trust-origin claude --team TEAMID` を使い、独立して確認した 10 文字のチーム ID を指定します。端末と画面に示された明示的な確認入力が必須です。確認を省くフラグも既定のチームもありません。正規版と後続の adhoc 版はそれぞれ再検証されます。同じ場所の信頼は作成者の証明ではありません。adhoc サンプルには正規の識別子がないため、`--team` はその場所にあるチーム全体を承認します。置き換えるまでは、このチームが署名してそこに置いたどのプログラムも、この CLI に限らず出所チェックを通過して再検証の対象になります。`omnilane resign --check` と `omnilane doctor` には `"identifier_family": ""` と表示されます。製品に結び付けるには、正規の署名サンプルをインストールした状態で、`--team` なしで `omnilane resign --trust-origin claude` をもう一度実行します。チーム単位の承認が置き換えられます。

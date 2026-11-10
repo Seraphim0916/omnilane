@@ -4871,5 +4871,12 @@ if grok_option_output="$(python3 -m unittest discover -s "$ROOT/tests" -p test_g
 else
   fail "Grok macOS unconfined operator option" "$grok_option_output"
 fi
+test_usability_cli() {
+  local name="readable refusal, legacy bytes, init guards and doctor hints (offline CLI)" out rc=0
+  out="$(python3 -m unittest discover -s "$ROOT/tests" -p test_usability_cli.py 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then fail "$name" "$out"; else pass "$name"; fi
+}
+test_usability_cli
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

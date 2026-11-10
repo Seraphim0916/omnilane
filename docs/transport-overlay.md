@@ -2,7 +2,33 @@
 
 Operator reference. A model driving omnilane needs only the refusal table in
 `skills/omnilane/SKILL.md`; this is the background for the person who maintains
-the host. The short version: `omnilane resign` does all of this for you.
+the host. First installation is `omnilane resign --init`; subsequent maintenance is `omnilane resign`.
+
+## First installation
+
+The human operator runs `omnilane resign --init` in a desktop terminal with the vendor CLIs signed in.
+It probes, builds and verifies the overlay, runs a real smoke dispatch for each verified vendor,
+records first-trust signers and writes the overlay assignment to `$OMNILANE_HOME/local.sh`.
+Existing settings are preserved, and backups and evidence are kept in the printed initialization root.
+It refuses an existing overlay, non-interactive execution, `--daily`, and approval or smoke-skipping flags.
+It never approves a changed signer or trusts an adhoc executable. A held vendor stays unverified;
+verified vendors may still be installed, with `installed: true` and an `attention` entry for each gap.
+
+For manual recovery or older installations, the underlying steps remain available:
+
+```bash
+cd "$(npm root -g)/omnilane"            # or your clone
+ROOT=~/.omnilane/transport-evidence/first-sweep
+python3 scripts/lib/probe_sweep.py --root "$ROOT"
+python3 scripts/lib/build_overlay.py --root "$ROOT"
+cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
+# Back up an existing local.sh before adding this assignment.
+echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
+omnilane resign --record-signers       # human operator, unchanged pinned executables only
+omnilane doctor
+```
+
+The manual steps do not waive any executable-origin, proof or signer gate.
 
 The *transport overlay* (`~/.omnilane/transport-contracts.local.json`) is this
 host's proof that each vendor CLI really selects the model a lane names. It pins
@@ -39,13 +65,12 @@ silently: before 0.42.6 the overlay hashed claude `2.1.263` while every dispatch
 ran `2.1.266`, so eleven mappings were "verified" against a binary that had not
 run for a day.
 
-The overlay also names the score registry snapshot it was built for, and dispatch
-refuses an overlay built for any other (`transport overlay snapshot mismatch`).
-A release that re-scores the registry therefore stales every vendor at once, on
-every host, whether or not a CLI moved. `omnilane resign` treats that as drift
-too. No executable changed, so it reuses the probe evidence it already has,
-probes only the rows that have none (the models the new registry added) and
-rebuilds the overlay for the new snapshot.
+The overlay names its source score snapshot. Unchanged request-selector proofs carry
+over automatically to an approved new snapshot; a score or date change alone requires
+no re-signing, login or network call. Only new or changed request contracts and changed
+executables need probing, using `omnilane resign --vendor VENDOR`. Doctor reports how
+many rows carried over and how many are new and unprobed. Unknown source snapshots,
+expired evidence and changed contracts still fail their existing checks.
 
 ## Re-signing with `omnilane resign`
 
@@ -66,6 +91,13 @@ JSON or empty). A missing vendor CLI retains the existing drift/held behavior.
 | 50 (`EXIT_BUSY`) | another resign holds this host's resign lock; nothing read or written |
 | 60 | verified selectors are installed; only retained selectors remain pending re-check (`omnilane doctor` explains; `omnilane resign` retries) |
 | 2 | genuinely no overlay configured; argparse usage errors also use 2 |
+
+The JSON summary includes `installed` and an `attention` list (`vendor`, `reason`,
+`next_command`). Each held or incomplete vendor also gets a final readable line.
+`installed: true` with exit 20 or 60 means installation succeeded with outstanding
+rows; use that vendor's next step. A next step containing `--approve`,
+`--record-signers`, `--trust-adhoc` or `--allow-shrink` is for a human operator
+to review and run in a terminal, never for an unattended job or model to adopt.
 
 Daily-job owners should decide notification policy for the new code 40. An
 explicitly configured but unreadable overlay is not an unconfigured host.

@@ -427,7 +427,15 @@ aa_print_refusal() {
       --routing "$OMNILANE_HOME/routing.local.yaml" --routing "$OMNILANE_REPO/routing.yaml")" \
       || refusal="$AA_LAST_DECISION"
   fi
+  if [[ "${OMNILANE_REFUSAL_JSON_ONLY:-0}" != "1" ]]; then
+    printf '%s\n' "$refusal" | python3 "$OMNILANE_REPO/scripts/lib/refusal_evidence.py" \
+      --human-only --headline "${1:-}" || true
+  fi
   printf '%s\n' "$refusal" >&2
+  if [[ -n "${OMNILANE_AA_CALLER_DIAGNOSTIC:-}" ]]; then
+    # The readable hint supplements whoami's exact failure, never replaces it.
+    printf '%s\n' "$OMNILANE_AA_CALLER_DIAGNOSTIC" >&2
+  fi
   REFUSAL_EVIDENCE=""
   if [[ -n "$refusal" ]] && command -v python3 >/dev/null 2>&1; then
     REFUSAL_EVIDENCE="$(printf '%s\n' "$refusal" | python3 "$OMNILANE_REPO/scripts/lib/refusal_evidence.py" \
@@ -940,11 +948,23 @@ fi
 # the harness sets those flags and the model cannot. An explicit file or the
 # human assertion still wins; OMNILANE_AA_CALLER_FROM_PROCESS=0 keeps the
 # file-only contract.
+export OMNILANE_AA_CALLER_DIAGNOSTIC=""
 if [[ "$AA_OPERATOR_ASSERTED_HUMAN" == "0" && -z "$AA_CALLER_CONTEXT" \
       && "${OMNILANE_AA_CALLER_FROM_PROCESS:-1}" != "0" ]]; then
-  if derived_caller="$(python3 "$OMNILANE_REPO/scripts/lib/caller_identity.py" \
-      --registry "$AA_POLICY_FILE")"; then
-    AA_CALLER_CONTEXT="$derived_caller"
+  if [[ "${OMNILANE_REFUSAL_JSON_ONLY:-0}" == "1" ]]; then
+    if derived_caller="$(python3 "$OMNILANE_REPO/scripts/lib/caller_identity.py" \
+        --registry "$AA_POLICY_FILE")"; then
+      AA_CALLER_CONTEXT="$derived_caller"
+    fi
+  elif derived_caller="$(OMNILANE_REFUSAL_JSON_ONLY=1 python3 "$OMNILANE_REPO/scripts/lib/caller_identity.py" \
+      --registry "$AA_POLICY_FILE" 2>&1)"; then
+    # whoami prints diagnostics first and its context path last.
+    AA_CALLER_CONTEXT="${derived_caller##*$'\n'}"
+    if [[ "$derived_caller" == *$'\n'* ]]; then
+      printf '%s\n' "${derived_caller%$'\n'*}" >&2
+    fi
+  else
+    OMNILANE_AA_CALLER_DIAGNOSTIC="$derived_caller"
   fi
 fi
 AA_POLICY_ACTIVE=1
@@ -1027,7 +1047,12 @@ else
   # A forced native executor keeps its own refusal for an off lane (exit 2).
   if [[ "${EXECUTOR:-}" != "native" ]] && chain_is_disabled "$CHAIN"; then
     # Not a refusal about the caller or the transport: the lane has no target at all.
-    echo "omnilane: lane '$LANE' is disabled in routing config (chain:$CHAIN). Enable it in $OMNILANE_HOME/routing.local.yaml; 'omnilane list' shows the effective table." >&2
+    if [[ "${OMNILANE_REFUSAL_JSON_ONLY:-0}" == "1" ]]; then
+      echo "omnilane: lane '$LANE' is disabled in routing config (chain:$CHAIN). Enable it in $OMNILANE_HOME/routing.local.yaml; 'omnilane list' shows the effective table." >&2
+    else
+      # Keep caller-controlled lane names in the JSON only.
+      echo "omnilane: refused (lane-disabled): this lane is disabled in routing config. Next: omnilane list" >&2
+    fi
     printf '{"allowed":false,"code":"lane-disabled","failed_gate":"lane-disabled","lane":"%s","next_command":"omnilane list"}\n' "$LANE" >&2
     exit 3
   fi
@@ -1039,7 +1064,9 @@ else
     exit 3
   elif [[ "$resolve_rc" -ne 0 ]]; then
     headline="omnilane: no eligible available target for lane '$LANE' (chain:$CHAIN)."
-    echo "$headline" >&2
+    if [[ -z "$AA_LAST_DECISION" || "${OMNILANE_REFUSAL_JSON_ONLY:-0}" == "1" ]]; then
+      echo "$headline" >&2
+    fi
     if [[ -n "$AA_LAST_DECISION" ]]; then
       aa_print_refusal "$headline"
       inherit_fallback

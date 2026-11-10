@@ -21,7 +21,7 @@ or any hosted model via OpenRouter — on the subscriptions you already pay for,
 
 ## Current upgrade and verification
 
-Snapshot-only upgrades now reuse unchanged request-selector proofs automatically: score/date changes use the new ceiling immediately, without `omnilane resign`, GUI login, network calls, or rewriting the overlay. Only new/changed request contracts or executable identities need `omnilane resign --vendor VENDOR`; the refusal names the affected row and whether a desktop terminal is needed. Legacy format 1 works for release-pinned source snapshots; unknown older sources need inspection with `omnilane resign --check`. First-time setup and signer approval are unchanged. Run scheduled verification as `omnilane resign --daily` (or `bash scripts/resign-daily.sh`): failures stay nonzero and appear in `omnilane doctor` from private local status, without Telegram. No scheduler is installed automatically.
+Snapshot-only upgrades now reuse unchanged request-selector proofs automatically: score/date changes use the new ceiling immediately, without `omnilane resign`, GUI login, network calls, or rewriting the overlay. Only new/changed request contracts or executable identities need `omnilane resign --vendor VENDOR`; the refusal names the affected row and whether a desktop terminal is needed. Legacy format 1 works for release-pinned source snapshots; unknown older sources need inspection with `omnilane resign --check`. Use `omnilane resign --init` for first-time setup; signer approval rules are unchanged. Run scheduled verification as `omnilane resign --daily` (or `bash scripts/resign-daily.sh`): failures stay nonzero and appear in `omnilane doctor` from private local status, without Telegram. No scheduler is installed automatically.
 
 Environment failures (API errors, timeouts, login, quota, or connectivity) are eligible for `omnilane resign --vendor VENDOR`. If previously verified selectors fail for these reasons, passing selectors still get the current executable pin and snapshot. Failed selectors are retained individually under `unproven[].pending_recheck`, with their prior mapping for audit only, and dispatch refuses them with their own failure reason. The first two consecutive pending runs may retry without a cooldown; starting with the third pending run, unattended invocations (including `--daily`) use the 20-hour cooldown. A recorded reset hint always defers unattended retries until that time. Interactive resign retries retained selectors immediately; other environment-failed rows keep the 20-hour non-interactive cooldown. For those ordinary environment-failed rows, interactive runs or `omnilane resign --retry-failed --vendor VENDOR` bypass the cooldown. Retained pending selectors still honor unattended bounds and reset hints even with `--retry-failed`. The retry flag never approves a signer change. Failure evidence and timestamp presence are integrity-protected; changed or deleted records are reported and are not retried.
 
@@ -127,14 +127,10 @@ Build it from a normal desktop terminal. (An ssh login cannot read the keychain
 the CLIs log in with, so it would report them all as not logged in.)
 
 ```bash
-cd "$(npm root -g)/omnilane"            # or your clone
-ROOT=~/.omnilane/transport-evidence/first-sweep
-python3 scripts/lib/probe_sweep.py --root "$ROOT"     # one tiny prompt per selector, about 55 calls
-python3 scripts/lib/build_overlay.py --root "$ROOT"
-cp "$ROOT/transport-contracts.local.json" ~/.omnilane/transport-contracts.local.json
-echo 'export OMNILANE_AA_TRANSPORT_OVERLAY="$HOME/.omnilane/transport-contracts.local.json"' >> ~/.omnilane/local.sh
-omnilane doctor | grep transport-overlay              # PASS, with a count per vendor
+omnilane resign --init
 ```
+
+This first-install command requires an interactive terminal and refuses an existing overlay or `--daily`. It verifies the probes and a real dispatch, records first-trust signers, and backs up `local.sh` before adding the overlay assignment while preserving your settings. Unsafe or changed signers remain blocked. [Manual fallback](docs/transport-overlay.md#first-installation).
 
 A vendor you are not logged in to is reported `unprobeable` and simply stays
 unverified; the others work.
@@ -147,10 +143,10 @@ is re-signed. `omnilane resign` does the whole job: finds what changed, re-probe
 only that vendor, checks the result, swaps it in, sends one real dispatch to
 confirm, and restores the old file if that fails. A source channel only permits probing; it never authorizes dispatch by itself.
 
-Record the signers of the unchanged executables from Step 2 once with `omnilane resign --record-signers`. Existing team records imply a Developer ID channel, now requiring Apple's certificate chain as well as the team, product identifier and resolved installation location. An old adhoc record without explicit operator trust grants no channel.
+`--init` already records first-trust signers; only older overlays need the separate human-operator `omnilane resign --record-signers` step. Existing team records imply a Developer ID channel, now requiring Apple's certificate chain as well as the team, product identifier and resolved installation location. An old adhoc record without explicit operator trust grants no channel.
 
 ```bash
-omnilane resign --record-signers     # once, right after Step 2
+omnilane resign --record-signers # older overlays only; human operator
 ```
 
 For a locally patched CLI, `omnilane resign --trust-adhoc claude` trusts future adhoc updates at the same installation location. On **each host separately**, also run `omnilane resign --trust-origin claude` while a verified factory sample is installed. If the installed sample is adhoc, use `omnilane resign --trust-origin claude --team TEAMID`, replacing `TEAMID` with the ten-character team you independently confirmed. This command requires a terminal and the exact confirmation shown; there is no confirmation bypass and no default team. A verified factory update and a later local adhoc update each need their own probes. Same-location adhoc trust does not prove who produced the replacement. An adhoc sample shows no factory identifier, so the `--team` form approves the whole team at that location: until you replace it, any program that team signed there can pass the source check and be probed, not only this CLI. `omnilane resign --check` and `omnilane doctor` show this as `"identifier_family": ""`. To bind the approval to the product, run `omnilane resign --trust-origin claude` again, without `--team`, while a verified factory sample is installed; it replaces the team-wide entry.

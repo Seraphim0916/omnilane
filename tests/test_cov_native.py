@@ -440,7 +440,8 @@ class RouteTests(NativeFixture):
                                  operator_asserted_human=False, dry_run=True)
         code, out, err = self.run_route(args)
         self.assertEqual((code, out), (3, ""))
-        refusal = json.loads(err)
+        self.assertTrue(err.startswith("omnilane: refused (native-capability):"), err)
+        refusal = json.loads(err.splitlines()[-1])
         self.assertEqual((refusal["allowed"], refusal["failed_gate"], refusal["code"], refusal["reason"]),
                          (False, "native-capability", "native-inherit-unavailable",
                           "host-does-not-assert-runtime-inheritance"))

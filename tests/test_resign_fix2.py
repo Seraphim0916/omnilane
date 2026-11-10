@@ -54,6 +54,29 @@ def file_snapshot(root):
             for path in root.rglob("*") if path.is_file()}
 
 
+def without_usability_summary(text):
+    """Only additive public summary fields differ from this pinned baseline."""
+    if not text:
+        return text
+    value = json.loads(text)
+    value.pop("attention", None)
+    value.pop("installed", None)
+    # --check previously omitted this field; its actual return code is compared separately.
+    value.pop("exit_code", None)
+    return value
+
+
+def without_usability_lines(text):
+    return [line for line in text.splitlines(keepends=True)
+            if not line.startswith("omnilane: installed: ")
+            and not any(line.startswith(vendor + ": ") and ". Next: " in line for vendor in VENDORS)]
+
+
+def comparable_files(files):
+    return {name: without_usability_summary(content) if name.endswith("/resign-report.json") else content
+            for name, content in files.items()}
+
+
 def restore_snapshot(root, files, directories):
     """Rewind only the fake host, preserving identical paths and input bytes."""
     for path in root.rglob("*"):
@@ -472,7 +495,7 @@ class MissingCliGuidanceTests(unittest.TestCase):
             self.assertEqual(state["pending"]["grok"]["attempts"], 1)
             self.assertNotIn("running", state)
 
-    def test_real_resign_matches_c7c63e8_except_final_missing_guidance(self):
+    def test_real_resign_keeps_c7c63e8_state_and_exit_codes_with_additive_guidance(self):
         from verification_status import origin_guidance
 
         frozen = resign.datetime.now(resign.timezone.utc)
@@ -528,11 +551,15 @@ class MissingCliGuidanceTests(unittest.TestCase):
                         old, new = results
                         self.assertEqual(new[0], old[0])
                         self.assertEqual(new[0], 30 if scenario == "pending_not_installed" else 20)
-                        self.assertEqual(new[1].splitlines(keepends=True), old[1].splitlines(keepends=True))
+                        self.assertEqual(without_usability_summary(new[1]), without_usability_summary(old[1]))
                         if json_mode:
-                            self.assertEqual(json.loads(new[1]), json.loads(old[1]))
-                        self.assertEqual(new[3], old[3])  # Includes full resign-report.json bytes.
-                        self.assertEqual(new[4:], old[4:])  # Full --check stdout, stderr and exit.
+                            self.assertIn("attention", json.loads(new[1]))
+                            self.assertIn("installed", json.loads(new[1]))
+                        # All proof and policy bytes still match; only report fields are additive.
+                        self.assertEqual(comparable_files(new[3]), comparable_files(old[3]))
+                        self.assertEqual(new[4], old[4])
+                        self.assertEqual(without_usability_summary(new[5][0]), without_usability_summary(old[5][0]))
+                        self.assertEqual(without_usability_lines(new[5][1]), without_usability_lines(old[5][1]))
                         expected = old[2]
                         if scenario == "first_missing":
                             self.assertEqual(old[2].splitlines().count(old_line), 1)
@@ -541,7 +568,7 @@ class MissingCliGuidanceTests(unittest.TestCase):
                         else:
                             self.assertNotIn("沒有安裝", new[2])
                             self.assert_no_guidance(new[2])
-                        self.assertEqual(new[2].splitlines(keepends=True), expected.splitlines(keepends=True))
+                        self.assertEqual(without_usability_lines(new[2]), expected.splitlines(keepends=True))
                         self.comparisons.append({"scenario": scenario, "json": json_mode,
                                                  "before_stdout": old[1], "after_stdout": new[1],
                                                  "before_stderr": old[2], "after_stderr": new[2],

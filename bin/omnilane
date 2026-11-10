@@ -154,6 +154,7 @@ omnilane — one routing table, every harness
   omnilane native-context --install [--harness codex|claude-code]
                                          from a terminal: record each harness's configured model for
                                          dispatch's fallback when the caller cannot be read
+  omnilane resign --init                 first overlay: human operator in a desktop terminal
   omnilane resign [--check] [--vendor V] [--approve V] [--record-signers] [--trust-adhoc V]
                                          re-probe and re-sign the transport overlay after a CLI update
   omnilane self-exec record --refusal PATH --reason "TEXT" [--lane L] [--task "TEXT"]

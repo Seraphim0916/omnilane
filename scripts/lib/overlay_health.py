@@ -72,6 +72,21 @@ def pending_summary(overlay: dict) -> str:
     return "; ".join(parts)
 
 
+def snapshot_summary(overlay: dict, registry: dict) -> str:
+    from resign import VENDORS, unprobed
+    gaps = {vendor: unprobed(overlay, vendor) for vendor in VENDORS}
+    vendors = [vendor for vendor, rows in gaps.items() if rows]
+    carried = registry.get("_transport_carry_forward", [])
+    older = overlay.get("snapshot_id") != registry["snapshot"]["id"]
+    if not (older or carried or vendors):
+        return ""
+    count = sum(len(rows) for rows in gaps.values())
+    command = (f"omnilane resign --vendor {vendors[0]}" if len(vendors) == 1 else
+               "omnilane resign" if vendors else "omnilane doctor")
+    return (f"snapshot verification: {len(carried)} row(s) carried over; "
+            f"{count} new and unprobed. Next: {command}")
+
+
 def main() -> None:
     overlay_path = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY", "")
     if "--pending" in sys.argv[2:]:
@@ -86,7 +101,7 @@ def main() -> None:
         if os.environ.get("OMNILANE_AA_OPERATOR_ASSERTED_HUMAN") == "1":
             emit("PASS", "no overlay configured; fine for a human operator, but a model caller "
                          "would be refused on every lane (README, 'Let your AI assistant drive omnilane')")
-        emit("WARN", "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: probe_sweep.py --root ROOT, build_overlay.py --root ROOT, then export OMNILANE_AA_TRANSPORT_OVERLAY in local.sh; see the README, 'Let your AI assistant drive omnilane'")
+        emit("WARN", "no overlay configured, so a model caller is refused on every lane (runtime-mapping-unverified). First install: omnilane resign --init (human operator in a desktop terminal); manual fallback: docs/transport-overlay.md")
     if not Path(overlay_path).exists():
         emit("FAIL", f"configured overlay is missing: {overlay_path}")
 
@@ -123,6 +138,14 @@ def main() -> None:
     pending = pending_summary(overlay)
     unproven = overlay.get("unproven", [])
     extra = f"; {len(unproven)} config(s) recorded unproven" if unproven else ""
+    try:
+        snapshot_hint = snapshot_summary(overlay, registry)
+    except (ImportError, AttributeError):
+        # Advisory counts must not hide the already-validated gate result when
+        # maintenance helpers are unavailable (the drift check is also optional).
+        snapshot_hint = "snapshot row counts unavailable"
+    if snapshot_hint:
+        extra += "; " + snapshot_hint
     weak = sorted({vendor for (vendor, tier) in verified if tier == "selector-only"})
     if weak:
         extra += (f"; {', '.join(weak)} prove only the request selector, re-probe to "

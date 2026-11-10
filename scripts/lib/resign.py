@@ -34,6 +34,7 @@ import filecmp
 import json
 import os
 import secrets
+import shlex
 import shutil
 import subprocess
 import sys
@@ -317,7 +318,10 @@ def smoke(vendor: str, overlay: dict, overlay_path: Path, timeout: int = 300,
     # (claude-haiku-4-5 refused it on 2026-10-03); a fresh sum still proves a live answer.
     left, right = 100 + secrets.randbelow(900), 100 + secrets.randbelow(900)
     expected = str(left + right)
+    # Dispatch reloads local.sh before parsing arguments. An explicit overlay
+    # argument therefore wins over both that file and the inherited environment.
     command = ["bash", str(build_overlay.REPO / "scripts/dispatch.sh"), "--operator-asserted-human",
+               "--transport-overlay", str(overlay_path),
                "--background", "--single-shot", "--timeout", str(timeout), "--vendor", vendor,
                "--model", mapping["runtime_model"]]
     if mapping["selector_type"] != "model_id_encoded_effort" and mapping["runtime_effort"]:
@@ -534,16 +538,22 @@ def public_summary(value):
     return value
 
 
-def load_host_configuration() -> tuple[str, dict]:
+def load_host_configuration(*, inherit_overlay: bool = True) -> tuple[str, dict]:
     """Load dispatch's shell configuration and resolve binaries before reading an overlay."""
     common = Path(build_overlay.__file__).with_name("common.sh")
     home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
+    environment = dict(os.environ)
+    if not inherit_overlay:
+        # Installation must prove that local.sh persists the assignment, not
+        # merely echo an overlay inherited from the process performing setup.
+        environment.pop("OMNILANE_AA_TRANSPORT_OVERLAY", None)
+        environment.pop("OMNILANE_AA_OVERLAY_SHA256", None)
     try:
         result = subprocess.run(
             ["bash", "-euo", "pipefail", "-c",
              'source "$1" >&2; printf "%s" "${OMNILANE_AA_TRANSPORT_OVERLAY:-}"',
              "omnilane-resign-config", str(common)],
-            stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True,
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, check=True, env=environment,
         )
         return result.stdout, current_anchors() if result.stdout else {}
     except (OSError, subprocess.CalledProcessError) as error:
@@ -684,19 +694,55 @@ def resign_lock(live: Path):
         os.close(fd)
 
 
+def finish_resign(args, code, log):
+    """Publish one consistent result for interactive, JSON and daily consumers."""
+    from verification_status import attention
+    summary = getattr(args, "status_summary", None)
+    if summary is None:
+        return code
+    summary.setdefault("installed", False)
+    summary["exit_code"] = code
+    summary["attention"] = attention(code, summary)
+    for item in summary["attention"]:
+        log(f"{item['vendor']}: {item['reason']}. Next: {item['next_command']}")
+    if summary["installed"]:
+        log("omnilane: installed: true" + ("; some rows are still outstanding" if summary["attention"] else ""))
+    if summary.get("sweep_root"):
+        (Path(summary["sweep_root"]) / "resign-report.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, default=str) + "\n")
+    if args.json:
+        print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2, default=str))
+    return code
+
+
+def overlay_configuration(content, live):
+    """Append an idempotent override without parsing or removing user shell code."""
+    assignment = "export OMNILANE_AA_TRANSPORT_OVERLAY=" + shlex.quote(str(live))
+    if content == assignment + "\n" or content.endswith("\n" + assignment + "\n"):
+        return content
+    return content + ("\n" if content and not content.endswith("\n") else "") + assignment + "\n"
+
+
 def resign(args, log=print) -> int:
+    if getattr(args, "init", False):
+        if getattr(args, "daily", False) or not sys.stdin.isatty():
+            log("omnilane: --init requires a human operator in an interactive terminal; it cannot run unattended or with --daily")
+            return EXIT_UNCONFIGURED
     try:
         overlay_env, anchors = load_host_configuration()
     except RuntimeError as error:
         log(f"omnilane: {error}")
         return EXIT_HOST_CONFIG
+    if getattr(args, "init", False):
+        from resign_init import initialize
+        return finish_resign(args, initialize(args, overlay_env, log), log)
     if not overlay_env:
         log("omnilane: no transport overlay is configured (OMNILANE_AA_TRANSPORT_OVERLAY); "
-            "there is nothing to re-sign. See the README, 'Let your AI assistant drive omnilane', Step 2.")
+            "Next: omnilane resign --init (human operator in a desktop terminal).")
         return EXIT_UNCONFIGURED
     live = Path(overlay_env).expanduser()
     if args.check:
-        return _resign(args, live, anchors, log)
+        return finish_resign(args, _resign(args, live, anchors, log), log)
     # An unreadable overlay is a host error that must leave nothing behind, so
     # check it before creating the lock file next to it; _resign reads it again
     # under the lock.
@@ -710,7 +756,7 @@ def resign(args, log=print) -> int:
             log(f"omnilane: another omnilane resign is already running on this host (pid {holder}); "
                 "run this one after it finishes, so neither install overwrites the other")
             return EXIT_BUSY
-        return _resign(args, live, anchors, log)
+        return finish_resign(args, _resign(args, live, anchors, log), log)
 
 
 def _resign(args, live: Path, anchors, log) -> int:
@@ -767,8 +813,6 @@ def _resign(args, live: Path, anchors, log) -> int:
                 "to inspect the source and files before re-verifying")
             return EXIT_HOST_CONFIG
         log("omnilane: transport overlay matches what the runners execute; nothing to re-sign")
-        if args.json:
-            print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         return EXIT_OK
     for vendor in drifted:
         label = "drifted"
@@ -782,8 +826,6 @@ def _resign(args, live: Path, anchors, log) -> int:
             summary["selector_pending"] = selector_pending
             summary["partially_re_signed"] = {v: state for v, state in selector_pending.items()
                                                if state["verified_count"] and not report[v]["stale"]}
-        if args.json:
-            print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2))
         log("omnilane: run `omnilane resign` to re-probe and re-sign")
         return (EXIT_PARTIAL if all(report[v].get("pending_count") and not report[v]["stale"]
                                     and report[v]["verified_count"]
@@ -854,6 +896,7 @@ def _resign(args, live: Path, anchors, log) -> int:
     if proceed:
         source = previous_root(overlay)
         if source is None or not (source / "evidence").is_dir():
+            summary.update(held=proceed + held, evidence_missing=True)
             log("omnilane: the live overlay's probe evidence is gone; a full sweep is needed "
                 "(scripts/lib/probe_sweep.py --root NEW, then build_overlay.py --root NEW)")
             return EXIT_OPERATOR
@@ -887,6 +930,7 @@ def _resign(args, live: Path, anchors, log) -> int:
                           if not args.allow_shrink or reason == "evidence-tier-regression")
             if lost:
                 result["regressed"] = lost
+                result["regression_reasons"] = {cid: conclusive[cid] for cid in lost}
                 unfinished.append(vendor)
                 log(f"omnilane: {vendor}: {len(lost)} selector(s) the live overlay verifies failed "
                     f"this time ({', '.join(cid + ': ' + conclusive[cid] for cid in lost)}); keeping the old pin. Retry later, or pass "
@@ -1117,12 +1161,7 @@ def _resign(args, live: Path, anchors, log) -> int:
     summary["pending_recheck"] = pending
     summary.update(re_signed=[v for v in proceed if summary.get("verified", {}).get("after", {}).get(v)]
                    if outcome != EXIT_ROLLED_BACK else [], held=held,
-                   exit_code=outcome, sweep_root=str(root) if root.exists() else None)
-    if root.exists():
-        (root / "resign-report.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2,
-                                                            default=str) + "\n")
-    if args.json:
-        print(json.dumps(public_summary(summary), ensure_ascii=False, indent=2, default=str))
+                   exit_code=outcome, installed=installed, sweep_root=str(root) if root.exists() else None)
     return outcome
 
 
@@ -1135,6 +1174,7 @@ def main(argv: list[str] | None = None) -> int:
     origin_commands.add_argument("--revoke-origin", nargs=2, metavar=("VENDOR", "KIND"))
     parser.add_argument("--team", help="explicit Developer ID team; never inferred for adhoc samples")
     parser.add_argument("--check", action="store_true", help="report drift and change nothing")
+    parser.add_argument("--init", action="store_true", help="human operator: probe and install the first overlay in a terminal")
     parser.add_argument("--retry-failed", action="store_true",
                         help="retry environment failures now, bypassing only the 20-hour cooldown")
     parser.add_argument("--vendor", action="append", choices=VENDORS,
@@ -1156,12 +1196,17 @@ def main(argv: list[str] | None = None) -> int:
                         help="persist unresolved verification for doctor and preserve failure exit status")
     try:
         args = parser.parse_args(argv)
+        if args.init and any((args.daily, args.check, args.retry_failed, args.approve, args.trust_adhoc,
+                              args.trust_origin, args.trust_location, args.revoke_origin,
+                              args.record_signers, args.allow_shrink, args.no_smoke)):
+            parser.error("--init cannot be combined with daily, check, retry, approval or smoke-skipping actions")
         if args.team is not None and not args.trust_origin:
             parser.error("--team requires --trust-origin")
         if any((args.trust_origin, args.trust_location, args.revoke_origin)) and any((args.check, args.daily, args.trust_adhoc, args.record_signers, args.approve)):
             parser.error("origin commands cannot be combined with other actions")
     except SystemExit as error:
-        if error.code and "--daily" in (argv if argv is not None else sys.argv[1:]):
+        supplied = argv if argv is not None else sys.argv[1:]
+        if error.code and "--daily" in supplied and "--init" not in supplied:
             from verification_status import run_daily
             return run_daily(lambda: int(error.code))
         raise

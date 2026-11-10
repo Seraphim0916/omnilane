@@ -275,6 +275,14 @@ def route_inherited(args, ctx, registry, registry_sha):
         registry, registry_sha, caller=caller, caller_sha256=caller_sha,
         operator_asserted_human=args.operator_asserted_human, host_asserted=host)
     if not decision["allowed"]:
+        diagnostic = os.environ.get("OMNILANE_AA_CALLER_DIAGNOSTIC", "")
+        if decision.get("code") == "missing-caller-context" and diagnostic \
+                and os.environ.get("OMNILANE_REFUSAL_JSON_ONLY") != "1":
+            from refusal_evidence import caller_guidance
+            decision.update(caller_guidance(diagnostic))
+            decision["message"] = decision["reason"]
+        from refusal_evidence import print_human
+        print_human(decision)
         print(aa_policy._json_line(decision), end="", file=sys.stderr)
         return 3
     identity = caller["caller"] if caller is not None else host
@@ -285,6 +293,8 @@ def route_inherited(args, ctx, registry, registry_sha):
                         message="this harness cannot take an inherited native worker: " + reason,
                         failed_gate="native-capability", reason=reason, child_context=None,
                         next_command="omnilane native-context --workdir " + args.workdir)
+        from refusal_evidence import print_human
+        print_human(decision)
         print(aa_policy._json_line(decision), end="", file=sys.stderr)
         return 3
     plan = {"schema_version": 1, "executor": executor, "executor_reason": reason, "inherit": True,
@@ -449,8 +459,11 @@ def route(args):
         caller_sha256=caller_sha,
         operator_asserted_human=args.operator_asserted_human,
         target_config=args.target_config,
+        caller_diagnostic=os.environ.get("OMNILANE_AA_CALLER_DIAGNOSTIC", ""),
     )
     if not policy_decision["allowed"]:
+        from refusal_evidence import print_human
+        print_human(policy_decision)
         print(aa_policy._json_line(policy_decision), end="", file=sys.stderr)
         return 3
     executor, reason, model = choose(args, ctx)

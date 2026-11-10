@@ -486,7 +486,8 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
            vendor: str, model: str, effort: str | None,
            caller: dict[str, Any] | None, caller_sha256: str | None,
            operator_asserted_human: bool = False,
-           target_config: str | None = None) -> dict[str, Any]:
+           target_config: str | None = None,
+           caller_diagnostic: str = "") -> dict[str, Any]:
     base: dict[str, Any] = {
         "schema_version": 1,
         "snapshot_id": registry["snapshot"]["id"],
@@ -524,6 +525,10 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
             reason="no caller identity reached the gate",
             next_command="omnilane whoami",
         )
+        if caller_diagnostic:
+            from refusal_evidence import caller_guidance
+            base.update(caller_guidance(caller_diagnostic))
+            base["message"] = base["reason"]
         return base
     base["caller_context_sha256"] = caller_sha256
     caller_identity = caller["caller"]
@@ -860,6 +865,7 @@ def main(argv: list[str] | None = None) -> int:
             caller_sha256=caller_sha,
             operator_asserted_human=args.operator_asserted_human,
             target_config=args.target_config,
+            caller_diagnostic=os.environ.get("OMNILANE_AA_CALLER_DIAGNOSTIC", ""),
         )
         if args.publish_dir and result["allowed"]:
             publish_context(args.publish_dir, registry, caller, result, args.registry)

@@ -164,6 +164,101 @@ def _selector_count(value, field="pending_count"):
     return None if value else 0
 
 
+def reason_class(code, summary, vendor):
+    """The same outcome precedence for daily status and end-of-run guidance."""
+    deterministic = summary.get("deterministic_failures", {}).get(vendor, {})
+    gap = summary.get("still_unprobed", {}).get(vendor, [])
+    reason = REASONS.get(code, "verification-interrupted")
+    report_value = summary.get("vendors", {}).get(vendor, {})
+    report = _mapping(report_value)
+    sweep = _mapping(summary.get("sweeps", {}).get(vendor, {}))
+    partial = summary.get("partially_re_signed", {}).get(vendor)
+    retained = summary.get("selector_pending", {}).get(vendor) or partial
+    pending = summary.get("pending_recheck", {}).get(vendor)
+    deferred = summary.get("deferred_retries", {}).get(vendor)
+    retried = summary.get("failed_retries", {}).get(vendor)
+    missing = gap if "still_unprobed" in summary else report.get("unprobed", [])
+    failed = (summary["still_failed_environment"].get(vendor, {}) if "still_failed_environment" in summary
+              else report.get("failed_environment", {}))
+    if gap:
+        reason = "verification-needed"
+    elif code == 0 and deterministic:
+        reason = "deterministic-probe-failure"
+    elif code in (20, 60) and partial:
+        reason = "partially-re-signed"
+    elif code == 60:
+        if deterministic:
+            reason = "deterministic-probe-failure"
+        elif not retained:
+            if missing or failed or deferred or retried or pending:
+                reason = "verification-needed"
+            elif report and not report.get("drifted"):
+                return None
+            elif not report_value:
+                # Another vendor's partial result proves nothing about this
+                # vendor's prior gap. Preserve its names and actual reason.
+                return ""
+            else:
+                reason = "verification-needed"
+    if sweep.get("outcome") == "unprobeable":
+        reason = "needs-login-session"
+    elif _mapping(report.get("gate")).get("allowed") is False:
+        reason = "review-executable-source" if report.get("cli") else "cli-not-installed"
+    elif sweep.get("outcome") not in (None, "done"):
+        reason = "provider-verification-incomplete"
+    if code == 20 and summary.get("held") and vendor not in summary["held"] \
+            and vendor not in summary.get("deferred_retries", {}) \
+            and vendor not in summary.get("failed_retries", {}) \
+            and vendor not in summary.get("still_failed_environment", {}) and not retained and not gap and not deterministic and not pending:
+        return None
+    return reason
+
+
+def attention(code, summary):
+    """Actionable public hints, never approvals or additional retry authority."""
+    result = []
+    for vendor in VENDORS:
+        report = _mapping(summary.get("vendors", {}).get(vendor, {}))
+        unresolved = any(summary.get(key, {}).get(vendor) for key in (
+            "still_unprobed", "still_failed_environment", "deferred_retries", "failed_retries",
+            "selector_pending", "partially_re_signed", "pending_recheck", "deterministic_failures"))
+        if vendor not in summary.get("held", []) and not unresolved and not (
+                code not in (0, 60) and report.get("drifted")):
+            continue
+        reason = reason_class(code, summary, vendor)
+        if not reason:
+            continue
+        command = f"omnilane resign --vendor {vendor}"
+        sweep = _mapping(summary.get("sweeps", {}).get(vendor, {}))
+        if reason == "review-executable-source":
+            command = origin_guidance(vendor, report.get("origin_reason"), report.get("codesign"))["next_command"] or "omnilane doctor"
+        elif reason in ("cli-not-installed", "deterministic-probe-failure") or summary.get("evidence_missing"):
+            command = "omnilane doctor"
+        elif sweep.get("regressed"):
+            if "evidence-tier-regression" in sweep.get("regression_reasons", {}).values():
+                command = "omnilane doctor"
+            else:
+                command += " --allow-shrink"
+        elif any(summary.get(key, {}).get(vendor) for key in (
+                "still_failed_environment", "deferred_retries", "failed_retries")):
+            command = f"omnilane resign --retry-failed --vendor {vendor}"
+        if summary.get("initializing") and not summary.get("installed"):
+            # Approval/retry actions require an existing overlay. Failed bootstrap
+            # must point at setup, not send the operator back to exit 2.
+            command = ("omnilane doctor" if reason in ("review-executable-source", "cli-not-installed")
+                       else "omnilane resign --init")
+        operator_only = any(flag in command for flag in (
+            "--approve", "--record-signers", "--trust-adhoc", "--allow-shrink", "--trust-origin"))
+        if operator_only:
+            command += " (for the human operator to run in a terminal after reviewing the source or loss)"
+        elif reason == "needs-login-session":
+            command += " (in a desktop terminal signed in to this CLI)"
+        elif summary.get("deferred_retries", {}).get(vendor):
+            command += " (in an interactive terminal, or wait for the cooldown/reset time)"
+        result.append(dict(vendor=vendor, reason=reason, next_command=command))
+    return result
+
+
 def record(code, vendors=None, summary=None):
     """Persist only allowlisted metadata, not CLI output, prompts, or credentials."""
     import aa_policy
@@ -192,38 +287,11 @@ def record(code, vendors=None, summary=None):
         missing = gap if "still_unprobed" in summary else report.get("unprobed", [])
         failed = (summary["still_failed_environment"].get(vendor, {}) if "still_failed_environment" in summary
                   else report.get("failed_environment", {}))
-        if gap:
-            reason = "verification-needed"
-        elif code == 0 and deterministic:
-            reason = "deterministic-probe-failure"
-        elif code in (20, 60) and partial:
-            reason = "partially-re-signed"
-        elif code == 60:
-            if deterministic:
-                reason = "deterministic-probe-failure"
-            elif not retained:
-                if missing or failed or deferred or retried or pending:
-                    reason = "verification-needed"
-                elif report and not report.get("drifted"):
-                    state["pending"].pop(vendor, None)
-                    continue
-                elif not report_value:
-                    # Another vendor's partial result proves nothing about this
-                    # vendor's prior gap. Preserve its names and actual reason.
-                    continue
-                else:
-                    reason = "verification-needed"
-        if sweep.get("outcome") == "unprobeable":
-            reason = "needs-login-session"
-        elif _mapping(report.get("gate")).get("allowed") is False:
-            reason = "review-executable-source" if report.get("cli") else "cli-not-installed"
-        elif sweep.get("outcome") not in (None, "done"):
-            reason = "provider-verification-incomplete"
-        if code == 20 and summary.get("held") and vendor not in summary["held"] \
-                and vendor not in summary.get("deferred_retries", {}) \
-                and vendor not in summary.get("failed_retries", {}) \
-                and vendor not in summary.get("still_failed_environment", {}) and not retained and not gap and not deterministic and not pending:
+        reason = reason_class(code, summary, vendor)
+        if reason is None:
             state["pending"].pop(vendor, None)
+            continue
+        if reason == "":
             continue
         prior = state["pending"].get(vendor, {})
         same = prior.get("reason") == reason and prior.get("exit_code") == code

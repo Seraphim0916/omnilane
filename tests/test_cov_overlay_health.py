@@ -99,7 +99,7 @@ class OverlayHealthInProcessTests(unittest.TestCase):
     def test_absent_overlay_warns_or_passes_for_a_human(self):
         level, message = self.single()
         self.assertEqual(level, "WARN")
-        self.assertIn("build_overlay.py", message)
+        self.assertIn("omnilane resign --init", message)
         level, message = self.single(OMNILANE_AA_OPERATOR_ASSERTED_HUMAN="1")
         self.assertEqual(level, "PASS")
         self.assertIn("fine for a human operator", message)
@@ -182,7 +182,10 @@ class OverlayHealthInProcessTests(unittest.TestCase):
         self.assertEqual(self.check(broken, "--pending"), (None, []))
 
     def stub_resign(self, report):
+        import resign as real_resign
         module = ModuleType("resign")
+        module.VENDORS = real_resign.VENDORS
+        module.unprobed = real_resign.unprobed
         module.current_anchors = lambda: {}
         module.detect = lambda overlay, anchors: report
         module.origin_status = lambda value: None
@@ -231,7 +234,7 @@ class OverlayHealthInProcessTests(unittest.TestCase):
         module.current_anchors = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
         level, message = self.single(self.overlay(), resign=module)
         self.assertEqual(level, "PASS")
-        self.assertEqual(message, "verified mappings: none")
+        self.assertEqual(message, "verified mappings: none; snapshot row counts unavailable")
 
     def test_digest_streams_large_files(self):
         big = self.base / "big"

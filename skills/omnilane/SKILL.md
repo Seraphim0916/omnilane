@@ -363,7 +363,10 @@ operator's rules say a reroute needs their approval.
 
 | `failed_gate` / `code` | Meaning | Do this |
 |---|---|---|
-| `caller-identity` · `missing-caller-context` | nobody could tell who is asking | run `omnilane whoami` alone and apply Step 1; if it still cannot read you, repeat with `--native-context` from `native-context --vendor V --model M --inherits-caller-runtime` and take the inherited handoff (Step 3) |
+| `caller-identity` · `missing-caller-context` (no vendor CLI ancestor) | no launching vendor CLI was found | a human operator adds `--operator-asserted-human`: this is the human operator's statement, never a flag for models; a model supplies its caller context or its own inherited worker |
+| `caller-identity` · `missing-caller-context` (Codex compound command) | the surrounding shell hid the direct child's identity | run the omnilane command alone as the only command, without `;`, `&&`, a pipe or a subshell |
+| `caller-identity` · `missing-caller-context` (unscored model) | this model has no row in the approved score table yet; unscored callers are refused by design until a release updates the table | use your own sub-agent with `--inherit` and a capability file from `omnilane native-context --vendor V --model M --inherits-caller-runtime`; repeating `whoami`, downgrading or assigning a provisional ceiling cannot authorize a lane |
+| `caller-identity` · `missing-caller-context` (other) | no usable caller context reached the gate | follow `next_command`; run `omnilane whoami` alone to inspect the remaining identity problem |
 | `caller-identity` · `invalid-degraded-caller` | a context file is marked `effort_unverified` but is not its model's lowest row | use the file `whoami` writes; do not edit it |
 | `downward-ceiling` · `target-above-effective-ceiling` | the target scores above you | a fitting lane from `eligible_lanes`, or report `required_caller_effort` to the operator |
 | `target-transport` · `runtime-mapping-unverified` / `unknown-target-runtime` | you are identified; this host has not (or no longer) proven that target. Usually a vendor CLI updated itself | tell the operator to run `omnilane resign`; meanwhile a fitting lane from `eligible_lanes` whose `transport_verified` is true |
