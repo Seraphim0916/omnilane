@@ -158,7 +158,7 @@ class OverlayHealthInProcessTests(unittest.TestCase):
     def test_selector_only_and_pending_mappings_are_called_out(self):
         overlay = self.overlay(evidence={"vendor": "codex"}, mappings=[
             self.mapping("codex/gpt-6-astra", evidence_tier="selector-only"),
-            self.mapping("grok/grok-4-6", evidence_tier="billed-model",
+            self.mapping("grok/grok-4-6-xhigh", evidence_tier="billed-model",
                          pending_recheck={"reason": "CLI not found", "at": "2026-10-03T00:00:00+00:00",
                                           "consecutive_runs": 1}),
         ])
@@ -170,7 +170,7 @@ class OverlayHealthInProcessTests(unittest.TestCase):
 
     def test_pending_option_prints_only_pending_vendors(self):
         overlay = self.overlay(mappings=[
-            self.mapping("grok/grok-4-6", pending_recheck={"reason": "quota"}),
+            self.mapping("grok/grok-4-6-xhigh", pending_recheck={"reason": "quota"}),
             self.mapping("codex/gpt-6-astra"),
         ])
         code, lines = self.check(overlay, "--pending")

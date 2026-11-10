@@ -76,17 +76,17 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_frozen_registry_coverage_and_estimates(self):
         validated = aa_policy._validate_registry(copy.deepcopy(self.real))
-        self.assertEqual(len(validated["scored_configs"]), 136)
-        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 26)
+        self.assertEqual(len(validated["scored_configs"]), 68)
+        self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 0)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 63, "claude": 46, "gemini": 15, "grok": 12,
+            "codex": 26, "claude": 27, "gemini": 11, "grok": 4,
         })
 
     def test_same_score_is_allowed(self):
-        result = self.decide("codex/gpt-6-astra", "claude/claude-fable-5-1-xhigh")
+        result = self.decide("codex/gpt-6-astra", "claude/claude-opus-5-5-xhigh")
         self.assertTrue(result["allowed"])
         self.assertEqual(result["code"], "same-score-allowed")
-        self.assertEqual(result["target_score"], 53)
+        self.assertEqual(result["target_score"], 57)
 
     def test_unknown_model_lists_vendor_selectors_without_resign(self):
         for stale in (False, True):
@@ -155,7 +155,7 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertIn("找不到符合", result["message_zh_tw"])
 
     def test_known_unverified_plain_models_keep_transport_guidance(self):
-        for config_id in ("grok/grok-4-6", "codex/gpt-6-astra"):
+        for config_id in ("grok/grok-4-6-xhigh", "codex/gpt-6-astra"):
             row = self.row(config_id)
             mapping = row["transport_mapping"]
             for partial in (False, True):
@@ -266,15 +266,15 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertEqual(result["schema_version"], 1)
         self.assertEqual(result["target_request"], {
             "vendor": "gemini", "model": "missing-model", "effort": None})
-        self.assertEqual(result["caller_score"], 53)
-        self.assertEqual(result["effective_ceiling"], 53)
+        self.assertEqual(result["caller_score"], 57)
+        self.assertEqual(result["effective_ceiling"], 57)
         self.assertEqual(result["caller_context_sha256"], "caller-sha")
         self.assertIsNone(result["target_score"])
         self.assertIsNone(result["child_context"])
         self.assertFalse(result["allowed"])
 
     def test_within_display_grade_upward_is_denied(self):
-        result = self.decide("claude/claude-opus-5-xhigh", "codex/gpt-6-astra-xhigh")
+        result = self.decide("claude/claude-fable-5-1-xhigh", "codex/gpt-6-astra-medium")
         self.assertFalse(result["allowed"])
         self.assertEqual((result["caller_score"], result["target_score"]), (50, 52))
         self.assertEqual(result["code"], "target-above-effective-ceiling")
@@ -288,9 +288,11 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertFalse(up["allowed"])
 
     def test_estimated_row_keeps_score_and_estimated_flag(self):
-        result = self.decide("codex/gpt-6-astra", "codex/gpt-5-5-low")
+        # AA v5.0.1 marks no score as estimated, so the fixture marks one.
+        self.row("codex/gpt-6-1-sol-low").update(estimated=True, evidence_marker="estimated")
+        result = self.decide("codex/gpt-6-astra", "codex/gpt-6-1-sol-low")
         self.assertTrue(result["allowed"])
-        self.assertEqual(result["target_score"], 31)
+        self.assertEqual(result["target_score"], 35)
         self.assertTrue(result["target_estimated"])
 
     def test_unknown_caller_model_effort_reasoning_and_fallback_deny(self):
@@ -314,13 +316,13 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_caller_ceiling_propagates_and_inherited_ceiling_narrows(self):
         result = self.decide(
-            "codex/gpt-6-astra", "codex/gpt-5-6-sol-high", ceiling=43
+            "codex/gpt-6-astra", "codex/gpt-6-astra-low", ceiling=43
         )
         self.assertTrue(result["allowed"])
         self.assertEqual(result["effective_ceiling"], 43)
         self.assertEqual(result["child_context"]["inherited_ceiling"], 43)
         narrowed = self.decide(
-            "codex/gpt-6-astra", "codex/gpt-5-6-sol-xhigh", ceiling=43
+            "codex/gpt-6-astra", "codex/gpt-6-sol", ceiling=43
         )
         self.assertFalse(narrowed["allowed"])
         self.assertEqual((narrowed["target_score"], narrowed["effective_ceiling"]), (44, 43))
@@ -337,21 +339,21 @@ class ExactAAPolicyTests(unittest.TestCase):
     def test_unverified_transport_and_grok_discarded_effort_deny(self):
         caller = self.context("codex/gpt-6-astra")
         result = aa_policy.decide(
-            self.registry, "fixture-sha", vendor="codex", model="gpt-5.6-sol",
+            self.registry, "fixture-sha", vendor="codex", model="gpt-6.1-sol",
             effort="high", caller=caller, caller_sha256="caller-sha"
         )
         self.assertFalse(result["allowed"])
         self.assertEqual(result["code"], "runtime-mapping-unverified")
-        self.verify_mapping("grok/grok-4-6")
+        self.verify_mapping("grok/grok-4-6-xhigh")
         grok = aa_policy.decide(
             self.registry, "fixture-sha", vendor="grok", model="grok-4.6",
-            effort="high", caller=caller, caller_sha256="caller-sha"
+            effort="xhigh", caller=caller, caller_sha256="caller-sha"
         )
         self.assertFalse(grok["allowed"])
         self.assertEqual(grok["code"], "runtime-effort-discarded")
 
     def test_grok_overlay_requires_exact_selector_evidence(self):
-        row = self.row("grok/grok-4-6")
+        row = self.row("grok/grok-4-6-xhigh")
         evidence = self.base / "selector-proof.txt"
         evidence.write_text("fixture CLI selector evidence")
         mapping = dict(config_id=row["id"], identity=aa_policy._row_identity(row),
@@ -388,10 +390,10 @@ class ExactAAPolicyTests(unittest.TestCase):
                             aa_policy.apply_transport_overlay(registry)
 
     def test_grok_requires_verified_cli_effort_contract(self):
-        row = self.verify_mapping("grok/grok-4-6")
+        row = self.verify_mapping("grok/grok-4-6-xhigh")
         mapping = row["transport_mapping"]
         mapping.update(selector_type="cli_reasoning_effort", cli_flag="--reasoning-effort")
-        target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "high", None)
+        target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "xhigh", None)
         self.assertEqual(code, "runtime-mapping-verified")
         self.assertEqual(target["id"], row["id"])
         for field, value, expected in (
@@ -402,7 +404,7 @@ class ExactAAPolicyTests(unittest.TestCase):
             with self.subTest(field=field):
                 original = mapping[field]
                 mapping[field] = value
-                target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "high", None)
+                target, code, _ = aa_policy._runtime_target(self.registry, "grok", "grok-4.6", "xhigh", None)
                 self.assertIsNone(target)
                 self.assertEqual(code, expected)
                 mapping[field] = original
@@ -413,7 +415,7 @@ class ExactAAPolicyTests(unittest.TestCase):
     def test_grok_guard_rejects_verified_mapping_that_discards_effort(self):
         # This malformed mapping passes generic matching, so only the Grok
         # selector guard can deny it. The public overlay loader rejects it too.
-        row = self.verify_mapping("grok/grok-4-6", runtime_effort=None)
+        row = self.verify_mapping("grok/grok-4-6-xhigh", runtime_effort=None)
         row["transport_mapping"].update(
             selector_type="cli_reasoning_effort", cli_flag="--reasoning-effort")
         target, code, _ = aa_policy._runtime_target(
@@ -434,9 +436,9 @@ class ExactAAPolicyTests(unittest.TestCase):
 REGISTRY_PATH = ROOT / "config" / "aa-model-policy.json"
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TARGETS = {
-    "codex": ("codex/gpt-5-6-luna-low", "gpt-5.6-luna", "low", "model_and_effort"),
+    "codex": ("codex/gpt-6-luna-low", "gpt-6-luna", "low", "model_and_effort"),
     "claude": ("claude/claude-4-5-haiku-reasoning", "claude-haiku-4-5", None, "model_and_effort"),
-    "grok": ("grok/grok-4-5", "grok-4.5", "high", "cli_reasoning_effort"),
+    "grok": ("grok/grok-4-6-xhigh", "grok-4.6", "xhigh", "cli_reasoning_effort"),
     "gemini": ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "high", "model_id_encoded_effort"),
 }
 

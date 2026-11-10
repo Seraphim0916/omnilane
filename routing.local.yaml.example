@@ -2,13 +2,13 @@
 # Same format: lane: vendor model effort   (first match per lane wins)
 
 # Example: send triage to a cheaper local setup and disable the grok lane.
-# triage:      codex gpt-5.6-luna low
+# triage:      codex gpt-6-luna low
 # live-search: off - -
 
 # consult is a multi-vendor direct-target chain. configure.sh intentionally
 # skips it because that menu writes one candidate per lane. If overriding it,
 # retain every vendor you want to address by name:
-# consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-medium -
+# consult: codex gpt-6-astra xhigh | claude claude-fable-5-1 xhigh | grok grok-4.7 high | gemini gemini-3.8-flash-medium -
 
 # ── Starter profiles ─────────────────────────────────────────────
 # Uncomment ONE block that matches what you actually subscribe to.
@@ -16,13 +16,13 @@
 # in routing.yaml automatically.
 
 # Profile: Claude-only (no Codex/Gemini/Grok) — route everything to Claude.
-# hardest-coding:  claude claude-opus-5 xhigh
-# bulk-mechanical: claude claude-sonnet-5 high
+# hardest-coding:  claude claude-fable-5-2 xhigh
+# bulk-mechanical: claude claude-sonnet-5-5 high
 # triage:          claude claude-haiku-4-5 -
-# hard-judgment:   claude claude-opus-5 xhigh
-# ui-draft:        claude claude-opus-5 high
-# long-context:    claude claude-opus-5 high
-# fast-agentic:    claude claude-sonnet-5 high
+# hard-judgment:   claude claude-fable-5-2 xhigh
+# ui-draft:        claude claude-opus-5-5 high
+# long-context:    claude claude-opus-5-5 xhigh
+# fast-agentic:    claude claude-sonnet-5-5 medium
 # live-search:     off - -
 # coding-overflow: off - -
 
@@ -31,37 +31,34 @@
 # hard-judgment: claude claude-fable-5-1 xhigh
 # taste-final: claude claude-fable-5-1 xhigh
 
-# Profile: Opus 5 balanced controller / independent review (opt-in).
+# Profile: Opus 5.5 balanced controller / independent review (opt-in).
 # Keep cross-vendor fallbacks explicit; this does not create a controller lane.
-# hard-judgment: claude claude-opus-5 xhigh | codex gpt-6-astra max | grok grok-4.6 -
-# taste-final: claude claude-opus-5 high | codex gpt-6-astra xhigh | grok grok-4.6 - | gemini gemini-3.8-flash-high -
+# hard-judgment: claude claude-opus-5-5 xhigh | codex gpt-6-astra max | grok grok-4.7 high
+# taste-final: claude claude-opus-5-5 high | codex gpt-6-astra xhigh | grok grok-4.7 high | gemini gemini-3.8-flash-high -
 
 # Profile: Codex-heavy (Sol main) — keep the hard lanes on Codex, Claude for taste.
-# taste-final:     claude claude-opus-5 high
-# long-context:    codex gpt-5.6-sol high
+# taste-final:     claude claude-sonnet-5-5 xhigh
+# long-context:    codex gpt-6-astra medium
 
 # Profile: no Codex subscription — promote Claude/Gemini into the coding lanes.
-# hardest-coding:  claude claude-opus-5 xhigh
-# bulk-mechanical: gemini "Gemini 3.6 Flash (High)" -
-# triage:          gemini "Gemini 3.6 Flash (Low)" -
+# hardest-coding:  claude claude-fable-5-2 xhigh
+# bulk-mechanical: gemini gemini-3.8-flash-high -
+# triage:          gemini gemini-3.8-flash-low -
 
-# Profile: value — same vendors, one effort notch cheaper. Each reasoning lane
-# below gives up about one Artificial Analysis Intelligence Index point to save
-# 30-40% of the cost per task; the fast-agentic line gives up nothing but
-# throughput. Figures are in docs/model-capabilities-2026-07.md (AA leaderboard,
-# retrieved 2026-08-02, post the 2026-07-30 OpenAI reprice). Take this when you
-# pay per token and the work is not correctness-critical; the shipped defaults
-# buy that point back.
-# hardest-coding:  codex gpt-5.6-sol xhigh     # 57.7 pts @ $1.17 vs max 58.9 @ $1.86
-# hard-judgment:   claude claude-opus-5 high   # 58.9 pts @ $1.23 vs xhigh 60.1 @ $1.80
-# taste-final:     claude claude-opus-5 high   # already the value tier — unchanged
-# fast-agentic:    codex gpt-5.6-luna max      # 51.2 pts @ $0.07 vs Gemini 3.6 Flash 50.1 @ $0.56; costs 25% throughput
-# ui-draft:        claude claude-opus-5 high
-# bulk-mechanical is already the value pick at Terra (max), 55.0 pts @ $0.73 — leave it.
+# Profile: value — one effort notch or one model cheaper than the shipped first
+# candidate. Scores are AA Intelligence Index v5.0.1 (proposed snapshot
+# aa-v5.0.1-2026-11-10-v1); per-lane cost columns are in
+# docs/reports/aa-v5.0.1-lanes-2026-11-10.txt. Take this when you pay per token
+# and the work is not correctness-critical; the shipped defaults buy the points back.
+# hardest-coding:  codex gpt-6.1-sol xhigh      # 52 pts vs Fable 5.2 xhigh 62
+# hard-judgment:   claude claude-fable-5-2 medium # 56 pts vs xhigh 62
+# taste-final:     claude claude-sonnet-5-5 high # 42 pts vs xhigh 50
+# fast-agentic:    codex gpt-6.1-terra medium   # 38 pts vs GPT-6.1 Sol medium 46
+# ui-draft:        claude claude-opus-5-5 medium # 48 pts vs high 52
+# bulk-mechanical already leads with a value pick (GPT-6.1 Sol medium, 46 pts) — leave it.
 #
-# Cheaper still, and correspondingly riskier — these two are the current
-# Intelligence-vs-cost Pareto frontier but both are heavy hallucinators
-# (Grok 4.5 54%, DeepSeek V4 Flash 0731 84%), so route only work whose output
-# is mechanical rather than factual, and verify anything they assert:
-# bulk-mechanical: grok grok-4.5 -             # 53.8 pts @ $0.44, but 500K context, not 1M
+# Cheaper still, and correspondingly riskier — DeepSeek is outside the AA score
+# table here (figures from the 2026-08-02 leaderboard) and was a heavy
+# hallucinator then (V4 Flash 0731 84%), so route only work whose output is
+# mechanical rather than factual, and verify anything it asserts:
 # triage:          deepseek deepseek-v4-flash - # 49.9 pts @ $0.03, ~60% under post-cut Luna (advise-only: cannot edit files)

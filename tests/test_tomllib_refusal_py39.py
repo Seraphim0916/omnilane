@@ -80,11 +80,11 @@ class TomllibRefusalTests(unittest.TestCase):
 
     def test_model_flag_and_effort_remain_readable(self):
         for override in ([], ["-c", 'model="ignored-model"']):
-            argv = ["codex", "exec", "-m", "gpt-5.6-sol", *override,
+            argv = ["codex", "exec", "-m", "gpt-6.1-sol", *override,
                     "-c", 'model_reasoning_effort="high"']
             with self.subTest(override=override):
                 self.assertEqual(caller_identity.read_selector(argv),
-                                 ("codex", "gpt-5.6-sol", "high"))
+                                 ("codex", "gpt-6.1-sol", "high"))
                 for command in ("whoami", "native-context"):
                     with self.subTest(command=command):
                         code, stdout, stderr = self.run_command(command, argv)
@@ -98,7 +98,7 @@ class TomllibRefusalTests(unittest.TestCase):
         records = [
             {"type": "session_meta", "payload": {"id": self.thread}},
             {"type": "turn_context", "payload": {
-                "turn_id": "synthetic-turn", "model": "gpt-5.6-sol", "effort": "high"}},
+                "turn_id": "synthetic-turn", "model": "gpt-6.1-sol", "effort": "high"}},
         ]
         (sessions / ("rollout-synthetic-" + self.thread + ".jsonl")).write_text(
             "".join(json.dumps(record) + "\n" for record in records))
@@ -107,7 +107,7 @@ class TomllibRefusalTests(unittest.TestCase):
         self.assertEqual(caller_identity.read_selector(argv), ("codex", None, None))
         identity = caller_identity.read_caller(
             os.getpid(), self.lookup_for(argv), lambda pid: self.environment, self.environment)
-        self.assertEqual(identity[1], ("codex", "gpt-5.6-sol", "high"))
+        self.assertEqual(identity[1], ("codex", "gpt-6.1-sol", "high"))
         for command in ("whoami", "native-context"):
             with self.subTest(command=command):
                 code, stdout, stderr = self.run_command(command, argv)

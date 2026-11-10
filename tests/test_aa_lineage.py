@@ -30,7 +30,7 @@ class LineageTests(unittest.TestCase):
         # CLI tests use the exact approved bytes; only selector contracts are synthetic.
         self.policy = self.base/'registry.json'
         self.policy.write_bytes((ROOT/'config/aa-model-policy.json').read_bytes())
-        caller = next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-6-astra-medium')
+        caller = next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-6-1-sol-high')
         self.context_value = {'schema_version':1,'snapshot_id':self.registry['snapshot']['id'],
             'kind':'model','caller':{k:caller[k] for k in aa_policy.IDENTITY_FIELDS}, 'inherited_ceiling':50}
         self.context = self.base/'caller.json'; self.context.write_text(json.dumps(self.context_value))
@@ -55,21 +55,21 @@ if '-o' in sys.argv:
         self.runtime_overlay.write_text(json.dumps(overlay))
         self.env={k:v for k,v in fixture_environment_with_isolated_tools(self).items() if not k.startswith('OMNILANE_') and k not in ('CODEX_BIN','CLAUDE_BIN')}
         self.env.update(OMNILANE_HOME=str(self.home), CODEX_BIN=str(spy), AA_SPY=str(self.marker), PATH=str(self.bins)+os.pathsep+self.env['PATH'], OMNILANE_INBOX='0', OMNILANE_AA_TRANSPORT_OVERLAY=str(self.runtime_overlay))
-        (self.home/'routing.local.yaml').write_text('aa-unit: codex gpt-6-astra xhigh | codex gpt-5.6-sol high\naa-vote: vote codex,claude 2\n')
+        (self.home/'routing.local.yaml').write_text('aa-unit: codex gpt-6-astra xhigh | codex gpt-6.1-terra high\naa-vote: vote codex,claude 2\n')
 
     def run_dispatch(self, *args, lane='aa-unit'):
         return subprocess.run(['bash',str(ROOT/'scripts/dispatch.sh'),'--caller-context',str(self.context),'--aa-policy',str(self.policy),'--timeout','10',*args,lane,'Bounded offline test'],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
 
     def test_cli_allowed_propagates_exact_child_not_parent(self):
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertEqual(r.returncode,0,r.stderr)
         called=json.loads(self.marker.read_text().splitlines()[-1])
-        self.assertEqual(called['context']['caller']['model'],'gpt-5.6-sol')
+        self.assertEqual(called['context']['caller']['model'],'gpt-6.1-terra')
         self.assertEqual(called['context']['caller']['effort'],'high')
         self.assertEqual(called['context']['inherited_ceiling'],50)
         self.assertIsNone(called['human'])
         job=next((self.home/'jobs').iterdir())
-        self.assertEqual(json.loads((job/'aa-authorizer.json').read_text())['caller']['model'],'gpt-6-astra')
+        self.assertEqual(json.loads((job/'aa-authorizer.json').read_text())['caller']['model'],'gpt-6.1-sol')
         self.assertEqual((job/'aa-child-context.json').stat().st_mode & 0o777,0o600)
         self.assertEqual(hashlib.sha256((job/'aa-registry.json').read_bytes()).hexdigest(),aa_policy.APPROVED_REGISTRY_SHA256)
 
@@ -83,22 +83,22 @@ if '-o' in sys.argv:
         r=self.run_dispatch('--executor','cli')
         self.assertEqual(r.returncode,0,r.stderr)
         called=json.loads(self.marker.read_text().splitlines()[-1])
-        self.assertIn('gpt-5.6-sol',called['args'])
+        self.assertIn('gpt-6.1-terra',called['args'])
         self.assertNotIn('gpt-6-astra',called['args'])
 
     def test_retry_preserves_authorizer_target_and_ceiling(self):
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high','--target-config','codex/gpt-5-6-sol-high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high','--target-config','codex/gpt-6-1-terra-high')
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
         with patch.dict(os.environ, {'OMNILANE_AA_CALLER_CONTEXT':str(self.context),'OMNILANE_AA_OPERATOR_ASSERTED_HUMAN':'0'}):
-            self.assertIn('codex/gpt-5-6-sol-high',aa_retry.retry_args(job))
+            self.assertIn('codex/gpt-6-1-terra-high',aa_retry.retry_args(job))
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertEqual(r.returncode,0,r.stderr)
         self.assertEqual(len(self.marker.read_text().splitlines()),2)
         self.assertEqual(json.loads(self.marker.read_text().splitlines()[-1])['context']['inherited_ceiling'],50)
 
     def test_retry_tamper_fails_before_provider(self):
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
         (job/'aa-authorizer.json').write_text(json.dumps({**self.context_value,'inherited_ceiling':100}))
@@ -107,13 +107,13 @@ if '-o' in sys.argv:
         self.assertEqual(len(self.marker.read_text().splitlines()),1)
 
     def test_native_model_caller_handoff_has_atomic_child_context(self):
-        cap={'schema_version':1,'harness':'codex','vendor':'codex', 'requirements':{'tools':[],'isolation':'shared-inherited','lifecycle':'single-shot'},'capabilities':[{'model':'gpt-5.6-sol','efforts':['high'],'modes':['advise'],'workdirs':[str(ROOT)],'tools':[],'isolations':['shared-inherited'],'lifecycles':['single-shot']}]}
+        cap={'schema_version':1,'harness':'codex','vendor':'codex', 'requirements':{'tools':[],'isolation':'shared-inherited','lifecycle':'single-shot'},'capabilities':[{'model':'gpt-6.1-terra','efforts':['high'],'modes':['advise'],'workdirs':[str(ROOT)],'tools':[],'isolations':['shared-inherited'],'lifecycles':['single-shot']}]}
         path=self.base/'native-cap.json';path.write_text(json.dumps(cap))
-        r=self.run_dispatch('--executor','native','--native-context',str(path),'--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','native','--native-context',str(path),'--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertEqual(r.returncode,0,r.stderr)
         plan=json.loads(r.stdout)
         child=Path(plan['worker_contract']['caller_context_path'])
-        self.assertEqual(json.loads(child.read_text())['caller']['model'],'gpt-5.6-sol')
+        self.assertEqual(json.loads(child.read_text())['caller']['model'],'gpt-6.1-terra')
         self.assertFalse(self.marker.exists())
         self.assertEqual(plan['aa_policy']['target_score'],42)
 
@@ -185,10 +185,10 @@ if '-o' in sys.argv:
         self.assertFalse(self.marker.exists())
 
     def test_retry_current_lower_caller_cannot_replay_original_higher_target(self):
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
-        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-luna-high')
+        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-terra')
         lower={**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':32}
         self.context.write_text(json.dumps(lower))
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
@@ -197,7 +197,7 @@ if '-o' in sys.argv:
         self.assertEqual(len(self.marker.read_text().splitlines()),1)
 
     def test_retry_without_current_caller_fails_closed(self):
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
@@ -205,11 +205,11 @@ if '-o' in sys.argv:
         self.assertEqual(len(self.marker.read_text().splitlines()),1)
 
     def test_model_retry_does_not_inherit_original_human_exemption(self):
-        command=['bash',str(ROOT/'scripts/dispatch.sh'),'--operator-asserted-human','--aa-policy',str(self.policy),'--timeout','10','--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high','aa-unit','Human fixture launch']
+        command=['bash',str(ROOT/'scripts/dispatch.sh'),'--operator-asserted-human','--aa-policy',str(self.policy),'--timeout','10','--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high','aa-unit','Human fixture launch']
         r=subprocess.run(command,env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertEqual(r.returncode,0,r.stderr)
         job=next((self.home/'jobs').iterdir())
-        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-luna-high')
+        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-terra')
         self.context.write_text(json.dumps({**self.context_value,'caller':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},'inherited_ceiling':32}))
         r=subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'retry',job.name,'--caller-context',str(self.context)],env=self.env,cwd=ROOT,text=True,capture_output=True,timeout=30)
         self.assertNotEqual(r.returncode,0)
@@ -250,14 +250,14 @@ if '-o' in sys.argv:
     def test_public_hash_override_does_not_replace_approval_anchor(self):
         self.policy.write_bytes(self.policy.read_bytes()+b' ')
         self.env['OMNILANE_AA_REGISTRY_SHA256']=hashlib.sha256(self.policy.read_bytes()).hexdigest()
-        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-5.6-sol','--effort','high')
+        r=self.run_dispatch('--executor','cli','--vendor','codex','--model','gpt-6.1-terra','--effort','high')
         self.assertNotEqual(r.returncode,0)
         self.assertIn('unapproved AA registry',r.stderr)
         self.assertFalse(self.marker.exists())
 
     def overlay(self):
         evidence=self.base/'evidence.txt';evidence.write_text('exact selector fixture')
-        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-5-6-sol-high')
+        row=next(r for r in self.registry['scored_configs'] if r['id']=='codex/gpt-6-1-terra-high')
         overlay={'schema_version':1,'snapshot_id':self.registry['snapshot']['id'],'host':socket.gethostname(),
             'evidence':[{'path':str(evidence),'sha256':hashlib.sha256(evidence.read_bytes()).hexdigest()}],
             'mappings':[{'config_id':row['id'],'identity':{k:row[k] for k in aa_policy.IDENTITY_FIELDS},
@@ -271,7 +271,7 @@ if '-o' in sys.argv:
             registry,digest=aa_policy.load_registry(self.policy)
         self.assertEqual(before,digest)
         self.assertEqual(before,hashlib.sha256(self.policy.read_bytes()).hexdigest())
-        row=next(r for r in registry['scored_configs'] if r['id']=='codex/gpt-5-6-sol-high')
+        row=next(r for r in registry['scored_configs'] if r['id']=='codex/gpt-6-1-terra-high')
         self.assertEqual(row['score'],42)
         self.assertFalse(row['transport_mapping']['upstream_identity_verified'])
 

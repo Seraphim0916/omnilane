@@ -33,9 +33,9 @@ trap 'omnilane_exit_trap $? cleanup_temp_files' EXIT
 voter_spec() { # vendor -> "model<TAB>effort"
   case "$1" in
     codex)  printf 'gpt-6-astra\txhigh' ;;
-    claude) printf 'claude-fable-5-1\txhigh' ;;
+    claude) printf 'claude-fable-5-2\tlow' ;;
     gemini) printf 'gemini-3.8-flash-medium\t-' ;;
-    grok)   printf 'grok-4.6\t-' ;;
+    grok)   printf 'grok-4.7\thigh' ;;
     *)      return 1 ;;
   esac
 }

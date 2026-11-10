@@ -22,7 +22,7 @@ import build_overlay
 import transport_compat
 
 GROK = "grok/grok-4-7"
-CODEX = "codex/gpt-6-sol-high"
+CODEX = "codex/gpt-6-1-sol-high"
 UNSCORED = "claude/withdrawn-row"
 
 

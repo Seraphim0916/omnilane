@@ -90,7 +90,7 @@ class OverlayHealthTests(unittest.TestCase):
         env, overlay = self.vendor_fixture()
         value = json.loads(overlay.read_text())
         reasons = {"codex": "canary failed", "grok": "CLI not found"}
-        for vendor, config_id in (("codex", "codex/gpt-6-astra"), ("grok", "grok/grok-4-6")):
+        for vendor, config_id in (("codex", "codex/gpt-6-astra"), ("grok", "grok/grok-4-6-xhigh")):
             row = next(r for r in REGISTRY["scored_configs"] if r["id"] == config_id)
             value["mappings"].append({
                 "config_id": config_id,

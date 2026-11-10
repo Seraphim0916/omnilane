@@ -272,7 +272,7 @@ pairs once in `$OMNILANE_HOME/native-rows.json`:
 ```json
 {"schema_version": 1, "harnesses": {"claude-code": [
   {"model": "claude-opus-5-5", "efforts": ["medium", "high", "xhigh"]},
-  {"model": "claude-opus-5", "efforts": ["high"]}]}}
+  {"model": "claude-fable-5-2", "efforts": ["low"]}]}}
 ```
 
 `omnilane native-context` then appends one row per declared model for your
@@ -344,13 +344,15 @@ see how often it happens (`omnilane stats self-exec --since 7d`):
 omnilane self-exec record --refusal /…/refusals/20261020-110627-82f995ed.json --reason "why it could not be dispatched"
 ```
 
-The JSON looks like this:
+The JSON looks like this (a Claude Haiku 5.5 medium caller, ceiling 25, asking
+`consult` for Opus 5.5 xhigh on a host that has not proven Luna yet; fields abridged,
+`eligible_lanes` shows one of seven):
 
 ```json
 {"allowed": false, "code": "target-above-effective-ceiling", "failed_gate": "downward-ceiling",
  "required_caller_effort": "xhigh", "next_command": "omnilane list",
- "lane_requirement": {"lane": "hardest-coding", "target": "codex/gpt-6-astra-xhigh", "score": 52},
- "eligible_lanes": [{"lane": "bulk-mechanical", "target": "codex/gpt-5-6-sol-high", "score": 42, "transport_verified": true}]}
+ "lane_requirement": {"target": "gemini/gemini-3-8-flash", "score": 31, "required_caller_effort": "xhigh", "lane": "consult"},
+ "eligible_lanes": [{"lane": "triage", "target": "codex/gpt-6-luna-high", "score": 21, "transport_verified": false}]}
 ```
 
 `eligible_lanes` is every lane you can reach right now. Moving to one of them is
@@ -495,79 +497,95 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-- **Claude Opus 5.5:** leads hard-judgment (xhigh) and ui-draft
-  (high); its medium row stands behind GPT-6.1 Sol in hardest-coding and
-  bulk-mechanical until a host proves Sol, and it is the Claude row in consult
-  (xhigh) and the Claude fallback in live-search (low). Running at medium your
-  ceiling is 51: you reach GPT-6.1 Sol xhigh or Opus 5.5 medium in the hard lanes,
-  not its xhigh or high rows or Astra xhigh. Send long documents to Opus 5.
-- **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder; mid rungs
-  of hardest-coding and bulk-mechanical (high, medium), the quick Claude row in
-  fast-agentic (medium). Its low row is scored again in the operator-approved 2026-10-08 snapshot,
-  but Haiku 5.5 wins the cheap Claude rows. It has no published
-  visual or long-context result, and its knowledge score is low: keep it out of
-  ui-draft, long-context and live-search. A host has to prove it with `omnilane
-  resign` first; until then each chain serves the Opus row right behind it.
-- **Claude Fable 5.1:** its xhigh row is second in hard-judgment, where it is ahead of
-  Opus 5.5 high by more than a near-tie; its medium row is a mid rung of
-  hardest-coding and hard-judgment. Everywhere else a cheaper row is as good.
-- **Claude Opus 5:** leads long-context (high, down to low) and supplies mid rungs
-  of hardest-coding and hard-judgment; an independent reviewer when explicitly
-  selected.
-- **Claude Haiku 5.5:** operator-approved (2026-10-08) lower-ceiling value rows: xhigh in hardest-coding;
-  xhigh/high/medium/low in bulk-mechanical; medium/low in triage; xhigh/high in taste-final.
-  No fast-agentic placement: only low meets the 10-second first-token cap, and its
-  automation score falls outside even the lane's doubled quality-gap allowance.
-  MMMU-Pro and mlcrOverall are absent, so no UI or long-context promotion.
-  Haiku 4.5 stays only as the last low-ceiling / unproven-host triage fallback.
-  Haiku 5.5's `claude-haiku-5-5` ID and five efforts were officially confirmed on 2026-10-08; host transport remains unprobed, and max stays explicit-only.
-- **Claude Sonnet 5:** coordination and tools; a legacy Claude fallback behind Haiku 5.5 in triage.
-  Never self-assign judgment, coding or search: its effort rows score low
-  there.
-- **GPT Astra:** leads hardest-coding (xhigh) and consult (xhigh); its medium and low
-  rows are rungs of the coding, bulk and UI lanes, and Astra high stands behind
-  GPT-6.1 Sol xhigh as Codex's row in hard-judgment. Resolve your real effort first;
-  an explicit higher effort does not bypass the ceiling.
-- **GPT-6.1 Sol:** the best-value Codex row below Astra xhigh: leads bulk-mechanical
-  and fast-agentic (medium), is the second rung of hardest-coding (xhigh, then high
-  and medium) and ui-draft (high, then medium and low), and Codex's row in
-  hard-judgment (xhigh). A host has to prove it with `omnilane resign` first; until
-  then each chain serves the Opus, Astra or GPT-6 Sol row right behind it.
-- **GPT-6 Sol / Luna:** Sol low is the cheapest rung of fast-agentic and
-  bulk-mechanical, behind GPT-6.1 Sol low for every caller that can reach that row;
-  Sol high and medium stand behind GPT-6.1 Sol. Luna high
-  remains the low-cost first choice in triage. Do not promote Luna's low price into correctness-critical work.
-- **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol (approved 2026-10-27
-  snapshot): xhigh, high and medium in hardest-coding; high and medium in
-  bulk-mechanical; high and low in ui-draft; medium and low in fast-agentic. It
-  leads no lane. Max and the non-reasoning row are explicit-only. A host has to
-  prove it with `omnilane resign` first; until then each chain serves the row
+Ceilings below are the AA v5.0.1 scores of the proposed `aa-v5.0.1-2026-11-10-v1`
+snapshot; until the operator approves it the previous approved snapshot governs.
+They are score-only: an inherited ceiling, a failed host probe or a vendor quota
+can still move the chain further down.
+
+- **Claude Fable 5.2:** leads hardest-coding (xhigh) and hard-judgment (xhigh,
+  then medium and low); it appears in no other lane. Claude Code 2.1.321 or later
+  is required, and `fable` resolves to 5.2 only from 2.1.321. As the main model,
+  at max, xhigh or high your ceiling is 65/62/62 and every lane row is reachable;
+  hardest-coding and hard-judgment then start on Fable 5.2 itself (same model, not
+  a reason to self-execute). At medium (56) hardest-coding starts at Astra xhigh
+  and hard-judgment at Fable 5.2 medium (same model); at low (54) hardest-coding
+  starts at Opus 5.5 high, hard-judgment at Fable 5.2 low (same model) and consult
+  at Grok 4.7. The `vote` Claude voter is Fable 5.2 low.
+- **Claude Opus 5.5:** leads ui-draft (high); xhigh, high and medium are rungs of
+  hardest-coding, medium is second in bulk-mechanical and a rung of hard-judgment,
+  xhigh is the Claude row in consult and a Claude rung of long-context, and low is
+  the Claude fallback in live-search and fast-agentic. Running at medium your
+  ceiling is 48: hardest-coding and hard-judgment start at Opus 5.5 medium itself,
+  ui-draft and long-context at GPT-6.1 Sol medium. Running at xhigh (57)
+  hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium.
+- **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder;
+  rungs of hardest-coding (xhigh, high, medium, low) and bulk-mechanical (high,
+  medium), lower rungs of hard-judgment (medium, low), the Claude row in
+  fast-agentic (medium) and long-context (low). It has
+  no published visual result: keep it out of ui-draft and live-search. A host has
+  to prove it with `omnilane resign` first; until then each chain serves the row
   right behind it.
-- **GPT-5.6 Sol / Terra / Luna:** fallbacks behind their GPT-6 successors; GPT-5.6
-  Terra xhigh is still the Codex row in long-context.
-- **Grok 4.7 / 4.6:** first in live-search for native X/web search and in
-  coding-overflow for Codex-quota relief; the third family in the hard lanes.
-  4.7 precedes 4.6 within Grok. Verify API signatures and cited facts before shipping.
-- **Gemini 4 Argon:** High is measured (52.56, rounded 53) and selectable as
-  `gemini-4-argon-high` on Antigravity with Google AI Ultra. In bulk-mechanical,
-  triage, fast-agentic, live-search and coding-overflow, insert it in the Gemini
-  family slot immediately before Flash; retain the original value or purpose
-  default and every non-Argon row. The other six placements remain unchanged.
-  UI/long-context placements provide access without claiming measured superiority.
-  Grok remains first for native X search and Codex-quota relief; Argon is a
-  generic-web fallback. `consult --vendor gemini` selects Argon without crossing
-  vendors. A successful host probe is required. Medium/Low are unscored.
-- **Gemini 3.8 Flash:** the cross-vendor fallback after Argon: fast-agentic at medium, triage at
-  low, the tail of every other lane at high. Do not infer visual taste or
-  controller authority from coding benchmarks.
-- **Gemini 3.1 Pro:** directly selectable, not promoted; route hard coding and
-  judgment to the stronger lanes.
+- **Claude Fable 5.1:** xhigh is fourth in hard-judgment, behind the three Fable
+  5.2 rows; high, medium and low are lower rungs of hard-judgment, and high and
+  low are rungs of hardest-coding. Everywhere else a cheaper row is as good.
+- **Claude Opus 5:** only max is still scored (44) and it is in no lane; select it
+  explicitly as an independent reviewer. It no longer leads long-context.
+- **Claude Haiku 5.5:** lower-ceiling value rows: high, medium and low in
+  hardest-coding; low in bulk-mechanical; medium and low in triage; xhigh to low
+  in taste-final; high to low in hard-judgment; medium and low in long-context.
+  No fast-agentic or ui-draft placement. Haiku 4.5 stays only as the last
+  low-ceiling / unproven-host fallback; max stays explicit-only.
+- **Claude Sonnet 5:** unscored in v5.0.1 and in no lane; do not route to it.
+- **GPT-6 Astra:** leads consult (xhigh) and long-context (medium); xhigh is second
+  in hardest-coding and taste-final, medium and low are rungs of fast-agentic, low
+  is a rung of long-context and hard-judgment. Resolve your real effort first; an
+  explicit higher effort does not bypass the ceiling.
+- **GPT-6.1 Sol:** leads bulk-mechanical and fast-agentic (medium); xhigh, high,
+  medium and low are rungs of hardest-coding, xhigh is Codex's first row in
+  hard-judgment, it is second in ui-draft (xhigh) and long-context (medium), and
+  xhigh, high and medium are rungs of taste-final.
+  A host has to prove it with `omnilane resign` first.
+- **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol: second and third in
+  fast-agentic (medium, low), third in bulk-mechanical (high, then medium and
+  low), rungs of
+  hardest-coding, ui-draft and taste-final. It leads no lane. Max and the
+  non-reasoning row are explicit-only.
+- **GPT-6 Luna:** high leads triage; its other rows are low-ceiling tails of the
+  coding, judgment, taste, UI and long-context lanes. Do not promote Luna's low
+  price into correctness-critical work.
+- **GPT-6 Sol / GPT-5.6 Terra / GPT-5.6 Luna:** only max is still scored (44, 32,
+  24) and none is in a lane; GPT-5.6 Sol is unscored. Select them explicitly or
+  not at all.
+- **Grok 4.7:** first in live-search for native X/web search and in coding-overflow
+  for Codex-quota relief, third in consult, and the Grok tail of the hard lanes.
+  Grok 4.6 (xhigh 31) is in no lane. Verify API signatures and cited facts before
+  shipping.
+- **Gemini 4 Argon:** High is measured (50 in v5.0.1) and selectable as
+  `gemini-4-argon-high` on Antigravity with Google AI Ultra. It is in every lane
+  except arbitrate, normally in the Gemini slot right before Flash; since the
+  2026-11-10 re-rank hardest-coding places it in the Gemini tail. UI/long-context
+  placements provide access without claiming measured superiority. Grok remains
+  first for native X search and Codex-quota relief; Argon is a generic-web
+  fallback. `consult --vendor gemini` selects Argon without crossing vendors. A
+  successful host probe is required. Medium/Low are unscored.
+- **Gemini 3.8 Flash:** the cross-vendor fallback after Argon (high 31, medium 30,
+  low 23). Do not infer visual taste or controller authority from coding
+  benchmarks.
+- **Gemini 4 Carbon / Gemini 3.1 Pro:** reference rows only, kept for comparison:
+  Carbon has no published selector yet and Gemini 3.1 Pro has no approved local
+  mapping. They are in no lane and have no alias.
 
 ## Reference
 
 ### Model aliases
 
-Current approved snapshot `aa-v4.3.2-2026-10-28-v1` (2026-10-28): 136 scored rows, 9 unknown;
+Proposed snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, **proposed, awaiting operator approval**):
+AA Intelligence Index v5.0.1, 68 scored rows, 82 unknown, 4 reference. It adds Claude Fable 5.2
+(max/xhigh/high/medium/low; Claude Code 2.1.321 or later). Rows v5.0.1 no longer scores move to
+unknown without carrying their old score. Gemini 4 Carbon and Gemini 3.1 Pro are reference rows only.
+See `docs/reports/aa-rebaseline-2026-11-10.md`.
+
+Previous approved snapshot `aa-v4.3.2-2026-10-28-v1` (2026-10-28): 136 scored rows, 9 unknown;
 adds agy-hosted Claude (vendor `gemini`): `claude-opus-5-5-{high,medium,low}` and `claude-sonnet-5-5-{high,medium,low}`,
 scored with the same AA row as the native Claude config, listed in no lane, and needing host proof like every other row.
 
@@ -589,28 +607,25 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 
 | Alias | Vendor | Model | Effort |
 |---|---|---|---|
-| Opus | claude | claude-opus-5 | high |
+| Opus | claude | claude-opus-5 | max |
 | Opus 5.5 | claude | claude-opus-5-5 | xhigh |
+| Fable 5.2 | claude | claude-fable-5-2 | xhigh |
 | Fable 5.1 | claude | claude-fable-5-1 | xhigh |
-| Sonnet | claude | claude-sonnet-5 | high |
 | Sonnet 5.5 | claude | claude-sonnet-5-5 | high |
 | Haiku 5.5 | claude | claude-haiku-5-5 | medium |
 | Haiku / Haiku 4.5 (legacy) | claude | claude-haiku-4-5 | - |
-| Sol | codex | gpt-5.6-sol | high |
 | Terra | codex | gpt-5.6-terra | max |
-| Luna | codex | gpt-5.6-luna | high |
+| Luna | codex | gpt-5.6-luna | max |
 | Astra | codex | gpt-6-astra | xhigh |
 | GPT-6.1 Sol | codex | gpt-6.1-sol | xhigh |
 | GPT-6.1 Terra | codex | gpt-6.1-terra | high |
-| GPT-6 Sol | codex | gpt-6-sol | xhigh |
+| GPT-6 Sol | codex | gpt-6-sol | max |
 | GPT-6 Luna | codex | gpt-6-luna | high |
 | Grok 4.7 | grok | grok-4.7 | - |
-| Gemini 3.1 Pro | gemini | Gemini 3.1 Pro (High) | - |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
 | Gemini 4 Argon High | gemini | gemini-4-argon-high | - |
 | Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
 | Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
-| Gemini 3.7 Flash | gemini | gemini-3.7-flash-high | - |
 | Kimi | kimi | kimi-code/k3 | - |
 | Qwen | qwen | qwen3.8-max | - |
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
@@ -621,7 +636,7 @@ OpenRouter is direct API (`OPENROUTER_API_KEY`), **advise/consult only**, and it
 slug is mandatory: `omnilane route --vendor openrouter --model <slug> consult "<task>"`.
 
 Examples: "Ask Opus to challenge this architecture" →
-`omnilane route --vendor claude --model claude-opus-5 --effort high consult "challenge this architecture"`.
+`omnilane route --vendor claude --model claude-opus-5 --effort max consult "challenge this architecture"`.
 「請 Grok 查最新公開資訊」→ `omnilane route --vendor grok consult "查最新公開資訊"`.
 「哪個模型適合檢查大型 repo？」→ answer only.
 
@@ -663,7 +678,7 @@ exactly, and `snapshot_id` must equal that registry's `snapshot.id`:
 
 ```json
 {"schema_version": 1, "snapshot_id": "<registry snapshot.id>", "kind": "model",
- "caller": {"vendor": "claude", "model": "claude-opus-5", "effort": "high",
+ "caller": {"vendor": "claude", "model": "claude-opus-5-5", "effort": "high",
             "reasoning": "adaptive", "fallback": null},
  "inherited_ceiling": 52}
 ```

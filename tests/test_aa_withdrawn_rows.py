@@ -34,7 +34,7 @@ class WithdrawnRowTests(unittest.TestCase):
 
     def test_restored_row_has_score_alias_and_probe_candidate_but_no_runtime_proof(self):
         row = next(r for r in self.registry["scored_configs"] if r["id"] == WITHDRAWN)
-        self.assertEqual(row["score"], 36)
+        self.assertEqual(row["score"], 26)
         self.assertFalse(row["transport_mapping"]["runtime_verified"])
         self.assertIn(WITHDRAWN, build_overlay.PROVEN)
         alias = next(a for a in self.registry["aliases"] if a["catalog_model"] == "claude-sonnet-5-5")
@@ -43,15 +43,18 @@ class WithdrawnRowTests(unittest.TestCase):
                              for r in self.registry["unknown_configs"]))
 
     def test_withdrawal_is_idempotent_and_later_capture_can_restore_row(self):
-        extract = json.loads((REPO / "docs/reports/aa-v4.3.2-extract-2026-10-08.json").read_text())
+        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json").read_text())
         without = copy.deepcopy(extract)
         del without["records"]["claude-sonnet-5-5-low"]
+        # AA still lists the model without a score: its own page was captured.
+        without["sources"].append(dict(without["sources"][0], id="page-999",
+                                       source_url="https://artificialanalysis.ai/models/claude-sonnet-5-5-low"))
         with tempfile.TemporaryDirectory(dir=REPO / "tests") as tmp:
             output = Path(tmp) / "policy.json"
             captured = Path(tmp) / "extract.json"
             output.write_text(json.dumps(self.registry))
             captured.write_text(json.dumps(without))
-            args = SimpleNamespace(extract=str(captured), base=str(output), as_of="2026-10-08",
+            args = SimpleNamespace(extract=str(captured), base=str(output), as_of="2026-11-10",
                                    revision=1, approval="proposed")
             with patch.object(aa_rebaseline, "REGISTRY", output), contextlib.redirect_stdout(io.StringIO()):
                 aa_rebaseline.cmd_build(args)
@@ -69,6 +72,22 @@ class WithdrawnRowTests(unittest.TestCase):
                 aa_rebaseline.cmd_build(args)
                 self.assertIn(WITHDRAWN, {r["id"] for r in json.loads(output.read_text())["scored_configs"]})
 
+    def test_build_refuses_a_base_row_the_extract_never_saw(self):
+        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json").read_text())
+        del extract["records"]["claude-sonnet-5-5-low"]
+        with tempfile.TemporaryDirectory(dir=REPO / "tests") as tmp:
+            output = Path(tmp) / "policy.json"
+            captured = Path(tmp) / "extract.json"
+            output.write_text(json.dumps(self.registry))
+            captured.write_text(json.dumps(extract))
+            before = output.read_bytes()
+            args = SimpleNamespace(extract=str(captured), base=str(output), as_of="2026-11-10",
+                                   revision=1, approval="proposed")
+            with patch.object(aa_rebaseline, "REGISTRY", output):
+                with self.assertRaisesRegex(SystemExit, f"neither scores nor captured.*{WITHDRAWN}"):
+                    aa_rebaseline.cmd_build(args)
+            self.assertEqual(output.read_bytes(), before)
+
     def test_every_provable_row_is_scored(self):
         # build_overlay indexes the registry by every PROVEN id; an unscored one aborts resign.
         self.assertEqual(sorted(set(build_overlay.PROVEN) - self.scored), [])
@@ -77,7 +96,9 @@ class WithdrawnRowTests(unittest.TestCase):
 
     def test_fast_agentic_reaches_the_higher_scored_low_row_first(self):
         chain = self.chains["fast-agentic"]
-        self.assertLess(chain.index("codex gpt-6.1-sol low"), chain.index("codex gpt-6-sol low"))
+        # AA v5.0.1 no longer scores GPT-6 Sol low, so LANES-501 removed it; the scored GPT-6.1 Sol low row stays.
+        self.assertIn("codex gpt-6.1-sol low", chain)
+        self.assertNotIn("codex gpt-6-sol low", chain)
 
 
 if __name__ == "__main__":

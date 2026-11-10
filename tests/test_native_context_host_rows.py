@@ -76,7 +76,7 @@ class HostRowsTests(unittest.TestCase):
 
     def test_rows_for_the_caller_harness_are_appended(self):
         self.write_rows({"schema_version": 1, "harnesses": {
-            "claude-code": [{"model": "claude-sonnet-5", "efforts": ["low", "high"]},
+            "claude-code": [{"model": "claude-sonnet-5-5", "efforts": ["low", "high"]},
                             {"model": "claude-fable-5-1", "efforts": ["xhigh"]}],
             "codex": [{"model": "gpt-not-scored", "efforts": ["high"]}]}})
         code, _, stderr = self.run_main()
@@ -85,7 +85,7 @@ class HostRowsTests(unittest.TestCase):
         caps = value["capabilities"]
         self.assertEqual([(c["model"], c["efforts"]) for c in caps],
                          [("claude-opus-5-5", ["medium"]), ("claude-fable-5-1", ["xhigh"]),
-                          ("claude-sonnet-5", ["high", "low"])])
+                          ("claude-sonnet-5-5", ["high", "low"])])
         for cap in caps[1:]:
             self.assertEqual(cap["modes"], caps[0]["modes"])
             self.assertEqual(cap["workdirs"], caps[0]["workdirs"])
@@ -98,11 +98,11 @@ class HostRowsTests(unittest.TestCase):
     def test_the_callers_own_pair_is_not_duplicated(self):
         self.write_rows({"schema_version": 1, "harnesses": {"claude-code": [
             {"model": "claude-opus-5-5", "efforts": ["medium", "high", "low"]},
-            {"model": "claude-opus-5", "efforts": ["medium"]}]}})
+            {"model": "claude-haiku-5-5", "efforts": ["medium"]}]}})
         code, _, stderr = self.run_main()
         self.assertEqual(code, 0, stderr)
         self.assertEqual([(c["model"], c["efforts"]) for c in self.produced()["capabilities"]],
-                         [("claude-opus-5-5", ["medium"]), ("claude-opus-5", ["medium"]),
+                         [("claude-opus-5-5", ["medium"]), ("claude-haiku-5-5", ["medium"]),
                           ("claude-opus-5-5", ["high", "low"])])
 
     def test_a_model_left_with_no_efforts_adds_no_row(self):
@@ -155,7 +155,7 @@ class HostRowsTests(unittest.TestCase):
 
     def test_explicit_host_rows_file(self):
         path = self.write_rows({"schema_version": 1, "harnesses": {"claude-code": [
-            {"model": "claude-opus-5", "efforts": ["high"]}]}}, self.base / "elsewhere.json")
+            {"model": "claude-sonnet-5-5", "efforts": ["high"]}]}}, self.base / "elsewhere.json")
         code, _, stderr = self.run_main("--host-rows", str(path))
         self.assertEqual(code, 0, stderr)
         self.assertEqual(len(self.produced()["capabilities"]), 2)
@@ -179,7 +179,7 @@ class HostRowsTests(unittest.TestCase):
 
     def test_produced_file_validates_and_routes_a_host_row_natively(self):
         self.write_rows({"schema_version": 1, "harnesses": {"claude-code": [
-            {"model": "claude-sonnet-5", "efforts": ["high", "low"]}]}})
+            {"model": "claude-sonnet-5-5", "efforts": ["high", "low"]}]}})
         code, stdout, stderr = self.run_main()
         self.assertEqual(code, 0, stderr)
         self.assertEqual(stdout.strip(), str(self.out))
@@ -193,13 +193,13 @@ class HostRowsTests(unittest.TestCase):
                                    mode=mode, workdir=str(self.workdir.resolve()), background=False,
                                    session="auto", thread="", job_timeout="", idle_timeout="")
 
-        self.assertEqual(native.choose(lane("claude-sonnet-5", "high"), ctx),
-                         ("native", "exact-capability-match", "claude-sonnet-5"))
+        self.assertEqual(native.choose(lane("claude-sonnet-5-5", "high"), ctx),
+                         ("native", "exact-capability-match", "claude-sonnet-5-5"))
         self.assertEqual(native.choose(lane("claude-opus-5-5", "medium"), ctx)[0], "native")
-        self.assertEqual(native.choose(lane("claude-sonnet-5", "max"), ctx),
-                         ("cli", "effort-mismatch", "claude-sonnet-5"))
-        self.assertEqual(native.choose(lane("claude-sonnet-5", "high", mode="advise"), ctx),
-                         ("cli", "mode-mismatch", "claude-sonnet-5"))
+        self.assertEqual(native.choose(lane("claude-sonnet-5-5", "max"), ctx),
+                         ("cli", "effort-mismatch", "claude-sonnet-5-5"))
+        self.assertEqual(native.choose(lane("claude-sonnet-5-5", "high", mode="advise"), ctx),
+                         ("cli", "mode-mismatch", "claude-sonnet-5-5"))
 
 
 if __name__ == "__main__":

@@ -107,7 +107,7 @@ omnilane ui start     # optional: watch jobs live in your browser
 
 ### ステップ 2：「各 CLI が指定したモデルを本当に選ぶ」ことを一度だけ証明する
 
-モデルが呼び出し元の場合、ディスパッチできるのはこのマシンが**証明済み**のターゲットだけです。たとえば `codex -m gpt-5.6-sol` が本当に Sol を動かしている、ということです。この証明はローカルファイルで、**トランスポートオーバーレイ（transport overlay）** と呼びます。パッケージには同梱されません。これが無いと、すべてのレーンがモデルの呼び出し元を `runtime-mapping-unverified` で拒否し、`omnilane doctor` は `no overlay configured` と警告します。
+モデルが呼び出し元の場合、ディスパッチできるのはこのマシンが**証明済み**のターゲットだけです。たとえば `codex -m gpt-6.1-sol` が本当に Sol を動かしている、ということです。この証明はローカルファイルで、**トランスポートオーバーレイ（transport overlay）** と呼びます。パッケージには同梱されません。これが無いと、すべてのレーンがモデルの呼び出し元を `runtime-mapping-unverified` で拒否し、`omnilane doctor` は `no overlay configured` と警告します。
 
 通常のデスクトップターミナルで作成してください。（ssh ログインのセッションは、CLI がログインに使うキーチェーンを読めないため、すべてを未ログインと報告します。）
 
@@ -202,11 +202,11 @@ omnilane は、**どの** agentic CLI のメインループでも、サブタス
 ```mermaid
 flowchart LR
     M["メインループ<br/><i>任意の CLI</i>"] --> T{{"routing.yaml<br/>一枚の共有テーブル"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.1"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
-    T -->|taste-final| C3["Claude — Fable 5.1"]
-    T -->|long-context| C4["Gemini — 3.7 Flash"]
-    T -->|live-search| C5["Grok — 4.6"]
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
     T -->|"arbitrate(オプトイン)"| C6["vote — 1-4 モデルパネル"]
 ```
 
@@ -234,32 +234,34 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
+AA `aa-v5.0.1-2026-11-10-v1`：**proposed（提案中、操作者の承認待ち）**。AA Intelligence Index v5.0.1 に切り替え、採点済み構成は 68 件。Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54。Claude Code 2.1.321 以降が必要）を追加し、v5.0.1 で採点されなくなった構成を外しました。下の表はすでにこれに従っています：Fable 5.2 xhigh が hardest-coding と hard-judgment の第一候補になり、Claude Opus 5 がスコアを失ったため long-context は GPT-6 Astra (medium) が先頭です。Gemini 4 Carbon はスコアがありますがディスパッチ可能な ID がなく、どのレーンにも入っていません。承認後は各ホストで `omnilane resign` が必要です。[証拠](docs/reports/aa-rebaseline-2026-11-10.md)。
+
 AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り込むという同日の操作者の指示に基づきコントローラーが承認）**。130 件の採点済み構成と 9 件の未評価構成。GPT-6.1 Terra（6 構成、max 48）を追加し、価値ルールが選ぶ位置で hardest-coding・bulk-mechanical・ui-draft・fast-agentic に入れました。各レーンの第一候補は変わりません。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-rebaseline-2026-10-27.md)。`aa-v4.3.2-2026-10-18-v1`（2026-10-19 承認）を置き換えます。
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
-| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6.1 Terra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | デザインシステム／参照画像がある場合だけの UI ドラフト |
-| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | デザインシステム／参照画像がある場合だけの UI ドラフト |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
 | 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
 | 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. The other six placements are unchanged; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
 
 **バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
 ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
 何もインストールされていなければレーンは `off` に降格します。
 
-> **Fable 5.1 はデフォルトに入りました——Opus 5 が今も適する場所。** 3 者比較と Opus の override は [FAQ](#-faq) を参照してください。
+> **Claude Fable 5.2 が hardest-coding と hard-judgment の先頭になりました（AA v5.0.1 スナップショット、提案中）。** スコアと並べ替えは[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-10.md)を参照してください。レーンごとの比較は [FAQ](#-faq) にあります。
 
 ### 自然言語コンサルテーション
 
@@ -276,21 +278,28 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
   ベンダーやモデルファミリーへフォールバックしません。
 
 <details>
-<summary><b>👉 どのレーンを自分で実行する?メインモデルを選択</b></summary>
+<summary><b>モデルの役割ガイド（それでも委任は必要）</b></summary>
 
 <br/>
 
-上の表はベンダー非依存です——レーンの*最適*モデルは、誰が操縦していても
-変わりません。変わるのは、どのレーンを**自分で実行**するか(すでにそのモデル
-なので追加コールなし)、どれを**ディスパッチ**するか。CLI の `omnilane` スキルが
-該当行を自動適用します。これはその人間向けビューです。
+レーンに最適なモデルは、誰がコントローラーかによって変わりません。以下は役割の
+目安であり、自分で実行してよいという例外ではありません。同じモデルでも委任します。
+ネイティブエージェントを使えるのは、呼び出し側がモデル、effort、モード、作業
+ディレクトリ、ツール、分離方式、ライフサイクルがすべて一致すると明示した場合だけで、
+それ以外は CLI を使います。コントローラーは編成と検証を担い、ワーカーは再委任しません。
+以下の開始位置はスコア上限だけから求めたものです（AA v5.0.1 の提案スナップショット）。
+継承された上限、ホストでのプローブ失敗、クォータによって、チェーンがさらに下へ進む
+ことがあります。
 
-- **Claude Code · Fable 5.1**——自分で実行：taste-final、hardest-coding。ディスパッチ：hard-judgment → Opus 5、bulk → Codex Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Claude Code · Opus 5**——自分で実行：hard-judgment(これがデフォルトのレーン)。低いハルシネーション率や価格を優先するときはローカル override で taste-final も担当。最難関コーディング → Fable 5.1 または Sol、bulk → Sol high、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Codex · Sol**——自分で実行：hardest-coding、bulk-mechanical、hard-judgment、ui-draft。ディスパッチ：taste-final → Claude、long-context／高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Codex · Terra**——long-context の Codex フォールバックを自分で実行。bulk-mechanical のデフォルトは Sol high に移動。最難関は Sol xhigh、taste → Claude、高速ループ → Gemini 3.7 Flash、live-search → Grok。
-- **Grok Build · Grok 4.7 / 4.6**——live-search と coding-overflow を自分で実行し、hardest-coding・hard-judgment・taste-final のフォールバックも兼任。第一候補が使えるときは難しいコーディング／判断／文章を Codex、Claude、Gemini へ送り、API シグネチャと引用事実は検証します。
-- **Antigravity · Gemini 3.7 Flash**——Medium の long-context／高速ループ、High の bulk／overflow、Low の triage を自分で実行し、High で hardest-coding・taste-final・ui-draft・live-search のフォールバックも兼任。第一候補が使えるときは最難関のコーディング／判断／文章を Codex、Claude へ。
+- **Claude Code · Fable 5.2**——上限が最も高いプロンプトレベルのコントローラー（Claude Code 2.1.321 以降が必要）。max、xhigh、high では hardest-coding と hard-judgment の第一候補が Fable 5.2 自身ですが、それでもディスパッチします。medium では最初に届くのが Astra xhigh（hardest-coding）と Fable 5.2 medium（hard-judgment）、low では Opus 5.5 high と Fable 5.2 low です。
+- **Claude Code · Fable 5.1**——xhigh（50）では、hard-judgment は Fable 5.1 xhigh 自身から始まります（それでも委任します）。hardest-coding と taste-final は Sonnet 5.5 xhigh から、bulk-mechanical、fast-agentic、long-context は GPT-6.1 Sol medium から始まります。
+- **Claude Code · Opus 5.5**——ui-draft の先頭は Opus 5.5 high です。xhigh（57）では hardest-coding が Astra xhigh から、hard-judgment が Fable 5.2 medium から始まります。medium（48）では hardest-coding と hard-judgment が Opus 5.5 medium 自身から、ui-draft と long-context が GPT-6.1 Sol medium から始まります。
+- **Claude Code · Opus 5**——スコアが残っているのは max（44）だけなので、`max` で明示的に指名する独立レビュー役であり、どのレーンのデフォルトでもありません。この上限では hardest-coding が Sonnet 5.5 high から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。
+- **Codex · GPT-6.1 Sol**——bulk-mechanical と fast-agentic の先頭は GPT-6.1 Sol medium です。xhigh（52）では hardest-coding が Opus 5.5 high から、hard-judgment が Fable 5.1 xhigh から、long-context が Astra medium から始まります。high（50）では hardest-coding が Sonnet 5.5 xhigh から始まります。
+- **Codex · Astra**——consult（xhigh）と long-context（medium）の第一候補で、xhigh は hardest-coding と taste-final の 2 番手でもあります。xhigh（55）では hard-judgment が Fable 5.2 low から始まります。必要なら `--vendor codex --effort max` を明示的に指定してください。明示した model／effort が常に優先されます。
+- **Codex · GPT-6.1 Terra**——Codex のコスパ枠です。fast-agentic の 2・3 番手（medium、low）、bulk-mechanical の 3 番手（high）。xhigh（45）では hardest-coding が Terra xhigh 自身から、hard-judgment が Fable 5.1 medium から、long-context が Astra low から始まります。GPT-5.6 Terra はスコアが max だけで、どのレーンにも入っていません。
+- **Grok Build · Grok 4.7**——live-search と coding-overflow の第一候補、consult の 3 番手で、hardest-coding、hard-judgment、taste-final では Grok の末尾を担います。上限が 35 なので、難しいレーンの多くは Opus 5.5 low から始まります。Grok 4.6 はどのレーンにも入っていません。API シグネチャと引用した事実は必ず検証してください。
+- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）はすべてのレーンで Gemini の枠を占め、Flash より前に並びます。Flash はその後ろのベンダー横断フォールバックで、consult、ui-draft、hard-judgment、live-search、coding-overflow では High、hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic では Medium、triage では Low を使います。エージェント／コーディングのベンチマークから、見た目のセンスやコントローラーとしての適性を推し量らないでください。
 
 </details>
 
@@ -631,52 +640,37 @@ advise 専用で、ファイルを編集しません。
 </details>
 
 <details>
-<summary><b>Fable 5.1 はデフォルトに入りました——Opus 5 が今も適する場所</b></summary>
+<summary><b>なぜ今は Fable 5.2 が難しい作業の先頭なのですか?</b></summary>
 
 <br/>
 
-Fable 5.1 は現在 `hardest-coding`、`taste-final` の第一候補です。同じ xhigh
-では知能、agentic 作業、コーディングで Opus 5 を上回ります。Sol max は、
-はるかに安価な別ベンダーの判断用フォールバックです。`hard-judgment` 自体は
-現在 Opus 5 xhigh がデフォルトです:Fable の agentic スコアの 97.7% を
-コスト 68% で達成し、ハルシネーション率も低いため、このレーン自身の
-コスト基準では安い方が勝ちます。
+2026-11-10 の提案スナップショット（AA Intelligence Index v5.0.1）では、Fable 5.2
+xhigh が 62 点で、レーンがディスパッチできる他のどの行よりも高くなっています
+（Opus 5.5 xhigh 57、Astra xhigh 55）。`hardest-coding` では Terminal-Bench 4.0
+も最高（0.616。Astra と Opus 5.5 xhigh はどちらも 0.596）で、SciCode は 0.656
+（他の 2 つは 0.557、0.650）です。`hard-judgment` では HLE（0.689）、Briefcase
+analytical Elo（1927）、CritPt（0.357）のいずれもチェーン内で最高で、最初の Codex
+行である GPT-6.1 Sol xhigh はそれぞれ 0.526、1691、0.317 です。一方で最も高価な行
+でもあり、AA のインデックス 1 回分の費用は Fable 5.2 xhigh が約 $11,742、Opus 5.5
+xhigh が約 $4,766、Astra xhigh が約 $3,746 です。
 
-| 評価（AA、2026-09-02 取得） | Claude Fable 5.1 (xhigh) | Claude Opus 5 (xhigh) | GPT-5.6 Sol (max) |
-|---|---:|---:|---:|
-| Intelligence | 64.8 | 62.5 | 60.9 |
-| Agentic | 59.8 | 58.4 | 57.8 |
-| Coding | 80.7 | 77.0 | 77.4 |
-| ハルシネーション率（低いほど良い） | .71 | **.60** | .92 |
-| AA $/task | $2.65 | $1.80 | **$0.95** |
-
-Fable 5.1 は bulk と triage のデフォルトではありません。トークン単価が
-Opus 5 の 2 倍で、Claude Code のサブスクリプションクォータも 1 ターン当たり
-最も多く消費するためです。Opus 5 は現在 `hard-judgment` のデフォルトを担い、
-medium で `long-context` にも残り、`~/.omnilane/routing.local.yaml` で
-任意のレーンへいつでも戻せます——例えば Fable を呼び戻すには:
-
-```yaml
-hard-judgment: claude claude-fable-5-1 xhigh
-```
+Astra xhigh は引き続き `hardest-coding` の 2 番手、`consult` の第一候補で、
+`ui-draft` の先頭は Opus 5.5 high です。Fable 5.2 には Claude Code 2.1.321 以降が
+必要です。このスナップショットは運用者が承認するまで提案段階のままです。レーンごとの
+数値は [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt) にあります。
 
 </details>
 
 <details>
-<summary><b>Claude のレーンはなぜ <code>max</code> ではなく <code>xhigh</code> なのですか?</b></summary>
+<summary><b>なぜどのレーンも <code>max</code> を使わないのですか?</b></summary>
 
 <br/>
 
-努力度は高ければ高いほど良い、というものではないからです。Anthropic は `xhigh` を
-コーディングとエージェント作業の出発点、`high` をそれ以外の知能を要する作業の下限、
-`max` を正確性がコストに優先する場合の設定として文書化しています。第三者の計測も
-一致しており、Vals.ai の Vibe Code Bench では Opus 5 は `high` で 89.8%、`xhigh` で
-88.3%、`max` で 88.4% —— 上位ティアはより手の込んだ解を出し、その分だけ失敗も増えます。
-ワークロードが違うならレーン単位で上げてください:
-
-```bash
-omnilane configure set hard-judgment "claude claude-opus-5 max"
-```
+effort はタスクごとに選ぶもので、高いほど良いとは限りません。2026-11-10 の並べ替え
+以降、`hardest-coding` を含めてどのレーンのチェーンにも `max` の行はありません。
+各レーンはコスパ優先で並んでおり、`max` は最も高価なわりに伸びが小さいためです
+（Fable 5.2 は max で 65 点、xhigh で 62 点）。`max` は `--effort max` で明示すれば
+今も使えます。明示した `--model` と `--effort` は常にこれらの既定より優先されます。
 
 </details>
 
@@ -748,13 +742,51 @@ work の別名ではありません。サービス管理など、work の境界�
 マニフェストのようなタグなしの証拠はゲート全体を閉じます。doctor がファイルと
 ベンダーを示し、再署名の手順はディスパッチスキルにあります。
 
+`target-above-effective-ceiling`——どこも壊れていません。ターゲットのスコアが
+呼び出し側より高いだけです。`required_caller_effort` には、呼び出し側のセッションに
+必要な effort が入ります。`caller_degraded` が付いた呼び出し側は、effort を記録
+しないハーネス（Codex のハートビート自動化など）から起動されたもので、そのモデルの
+最低ラインとして扱われます。
+
+</details>
+
+<details>
+<summary><b>マッピングの証拠ティアは何を意味しますか？</b></summary>
+
+<br/>
+
+プローブが「誰が応答したか」をどれだけ確実に突き止めたかを示します。ディスパッチ
+できるかどうかには影響しません。
+
+`billed-model`——プロバイダーが課金対象のモデル名を返したもの。Claude は
+`modelUsage` に、grok は `--output-format json` で同じように返します。これは
+プロバイダー側の領収書にあたります。
+
+`client-echo`——CLI が要求したモデルを記録しており、それがリクエストと一致した
+もの。Codex はセッションのロールアウトに、agy は `cli.log` に書きます。これは
+CLI 側の注文控えで、プロバイダーの領収書ではありません。リクエストが意図どおりに
+出たことは証明しますが、誰が応答したかまでは証明しません。
+
+`selector-only`——CLI がセレクターを受け付けただけで、それ以上の報告がないもの。
+v0.42.6 より前にプローブしたマッピングはすべてこれになります。ディスパッチは
+できますが、3 つの中で最も弱く、`omnilane doctor` が再プローブする価値のある
+ベンダーを示します。
+
+どのティアも上流プロバイダーの身元を保証するものではなく、どれもレーンを拒否する
+ことはありません。ティアはベンダーではなくプローブの結果から決まるため、CLI が
+課金モデルを報告するようになれば、omnilane を変更しなくても次回のスイープで
+昇格します。
+
 </details>
 
 ## 📊 デフォルト値と出典
 
-デフォルトのレーン割当は Artificial Analysis の 2026-07 スナップショット
-(AA サイトの生レコードと各社公式価格ページで照合済み)と公開の比較レビューに
-基づきます。これは意見であって法則ではありません——設定メニューと
+デフォルトのレーン割当は Artificial Analysis Intelligence Index v5.0.1 の
+スナップショット `aa-v5.0.1-2026-11-10-v1`（2026-11-10、提案中、運用者の承認待ち）
+に基づきます。AA のモデルページ 85 件を統合したもので、各レーンはこのスコアと
+レーンごとの指標でコスパ優先に並べ、v5.0.1 で採点されなくなった行は旧スコアを
+引き継がずに外しています（[証拠](docs/reports/aa-rebaseline-2026-11-10.md)）。
+これは意見であって法則ではありません——設定メニューと
 `routing.local.yaml` はそのためにあります。ベンチマークごとの但し書きを含む
 作業ノートは [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) にあります。
 

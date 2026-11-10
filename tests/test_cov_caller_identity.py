@@ -29,7 +29,8 @@ class ResolveTests(unittest.TestCase):
     def test_refusal_reasons_name_what_is_missing_or_ambiguous(self):
         registry = {"scored_configs": [row("m", "high"), row("m", "high", suffix="-dup"),
                                        row("c", None, vendor="claude", reasoning="non-reasoning"),
-                                       row("g", "low", vendor="gemini")]}
+                                       row("g", "low", vendor="gemini")],
+                    "snapshot": {"id": "aa-fixture-v1"}}
         cases = [
             (("codex", None, "high"), "codex was launched without a model flag"),
             (("codex", "", "high"), "codex was launched without a model flag"),
@@ -37,7 +38,9 @@ class ResolveTests(unittest.TestCase):
             (("claude", "c", None), "the only scored c row at effort None is non-reasoning, which a "
                                     "Claude launch cannot select"),
             (("claude", "x", None), "x was launched without --effort and no default is scored for it"),
-            (("codex", "m", "none"), "no scored configuration for codex m at effort None"),
+            (("codex", "m", "none"),
+             "no scored configuration for codex m at effort None: the score table (aa-fixture-v1) "
+             "has no row for this model or this effort, and a family match is not accepted"),
         ]
         for selector, reason in cases:
             with self.subTest(selector=selector):

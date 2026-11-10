@@ -58,9 +58,9 @@ PROTECTED_SHA256 = {
     "scripts/lib/probe_sweep.py":
         "5b98a7facc460e94cfab573a88c4835df06b55f56f6f56d6576d0c5975d14bc7",
     "scripts/lib/transport_compat.py":
-        "27738e53553c3109eebfafb5c7b169cc7f95d9ad6901a60c9e9fea0af36b2e92",
+        "10d4f4c94423eb3a82c683f5a1ff22de4513c6c21c9b25ae5ac3e8c38f033f67",
     "config/transport-compatibility.json":
-        "26b1ce02fdb633948a6bd73394eff756fa2632d038a4fc0bdf0616513f001d39",
+        "a5d1a0c354f16fa6afdbd7306ba7c3e970f9a1ddb47d9b0dd4ce7c15437198a6",
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
@@ -91,7 +91,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-qwen.sh":
         "aed846b06a287291c210b153f727153a537aae8bfc9b49894f431298db24183d",
     "scripts/runners/run-vote.sh":
-        "59ee974d39e2683a8eb1acaa6143b63ad313696879e08e7332b75272032bddd2",
+        "656d42797e76123d919a6181c9fedf1a24310adcd406e72b57886794116fe034",
     "scripts/runners/run-zai.sh":
         "45a05bf343ec4523d5f51ae1491ee444b26246576e8366c92a8f7238217833bc",
 }

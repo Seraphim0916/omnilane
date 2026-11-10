@@ -158,6 +158,9 @@ def read_selector(argv: list[str]) -> Selector | None:
     return None
 
 
+NO_ROW = "no scored configuration for"
+
+
 def resolve(registry: dict, vendor: str, model: str | None,
             effort: str | None) -> tuple[dict | None, str]:
     """The one scored row a launch selector lands on, or None and the reason."""
@@ -190,7 +193,9 @@ def resolve(registry: dict, vendor: str, model: str | None,
                       f"Claude launch cannot select")
     if vendor == "claude" and effort is None:
         return None, f"{model} was launched without --effort and no default is scored for it"
-    return None, f"no scored configuration for {vendor} {model} at effort {effort}"
+    snapshot = registry.get("snapshot", {}).get("id", "unknown snapshot")
+    return None, (f"{NO_ROW} {vendor} {model} at effort {effort}: the score table ({snapshot}) "
+                  f"has no row for this model or this effort, and a family match is not accepted")
 
 
 def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
@@ -723,6 +728,12 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         degraded = row is not None
     if row is None:
         print(f"omnilane: cannot read the caller identity from pid {pid}: {reason}", file=sys.stderr)
+        if reason.startswith(NO_ROW):
+            print(f"omnilane: to hand work to your own sub-agent instead, state the runtime: "
+                  f"omnilane native-context --vendor {vendor} --model {model} "
+                  f"--inherits-caller-runtime --workdir <dir>, then omnilane route --inherit "
+                  f"--native-context <file> <lane> \"<task>\" (serves --inherit only; lanes need "
+                  f"a snapshot that scores this model at this effort)", file=sys.stderr)
         return 3
     home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
     path = write_context(row, registry, home, effort_unverified=degraded)

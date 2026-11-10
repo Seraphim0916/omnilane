@@ -343,15 +343,15 @@ class ProbeAndOverlayTests(unittest.TestCase):
         self.evidence("fail", "fail")
         proven = {
             "claude/claude-opus-5": ("model_and_effort", "claude-opus-5", "pass"),
-            "claude/claude-sonnet-5": ("model_and_effort", "claude-sonnet-5", "fail"),
+            "claude/claude-sonnet-5-5": ("model_and_effort", "claude-sonnet-5-5", "fail"),
         }
         overlay, manifest, _ = self.build(proven)
         self.assertEqual([row["config_id"] for row in overlay["mappings"]], ["claude/claude-opus-5"])
         self.assertEqual(list(manifest["probe_runs"]), ["claude/claude-opus-5"])
-        self.assertEqual(overlay["unproven"], [{"config_id": "claude/claude-sonnet-5",
+        self.assertEqual(overlay["unproven"], [{"config_id": "claude/claude-sonnet-5-5",
                                               "verdict_reason": "fixture-reason", "observed_model": "fixture-model",
                                               "probed_at": "2026-09-09T00:00:00+00:00"}])
-        self.assertIn("claude/claude-sonnet-5", manifest["failed_probe_runs"])
+        self.assertIn("claude/claude-sonnet-5-5", manifest["failed_probe_runs"])
         # Failure evidence is sealed for retry integrity, never dispatch authority.
         with patch.dict(os.environ, {"OMNILANE_AA_TRANSPORT_OVERLAY": str(self.root / "transport-contracts.local.json")}, clear=False):
             with patch.dict(os.environ):
@@ -364,7 +364,7 @@ class ProbeAndOverlayTests(unittest.TestCase):
                     aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
         rows = {row["id"]: row for row in registry["scored_configs"]}
         self.assertTrue(rows["claude/claude-opus-5"]["transport_mapping"]["runtime_verified"])
-        self.assertIsNot(rows["claude/claude-sonnet-5"]["transport_mapping"].get("runtime_verified"), True)
+        self.assertIsNot(rows["claude/claude-sonnet-5-5"]["transport_mapping"].get("runtime_verified"), True)
 
     def test_legacy_negative_response_is_unproven_after_rejudging(self):
         self.evidence("old-format", None, exit_code=1, probed_at=None)

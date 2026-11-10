@@ -198,10 +198,12 @@ class ClaudeTranscriptTests(unittest.TestCase):
                 self.assertNotIn(self.MARKER, stderr)
 
     def test_latest_main_record_missing_effort_uses_current_model_floor(self):
-        model = "claude-sonnet-5"
-        older = self.record(message={"model": model}, effort="low", perTurnEffort="low")
+        # AA v5.0.1 scores no Claude non-reasoning row, so a model's floor is its low row;
+        # the older record ran at medium so that it still scores above the floor.
+        model = "claude-sonnet-5-5"
+        older = self.record(message={"model": model}, effort="medium", perTurnEffort="medium")
         registry, _ = caller_identity.load_registry(ROOT / "config/aa-model-policy.json")
-        previous, _ = caller_identity.resolve(registry, "claude", model, "low")
+        previous, _ = caller_identity.resolve(registry, "claude", model, "medium")
         floor = caller_identity.floor_row(registry, "claude", model)
         for fields in ({}, {"effort": None, "perTurnEffort": None},
                        {"effort": "", "perTurnEffort": ""}):
@@ -227,9 +229,9 @@ class ClaudeTranscriptTests(unittest.TestCase):
                 target = next(row for row in gate_registry["scored_configs"]
                               if row["id"] == previous["id"])
                 target["transport_mapping"].update(status="verified", runtime_verified=True,
-                                                   runtime_model=model, runtime_effort="low")
+                                                   runtime_model=model, runtime_effort="medium")
                 decision = caller_identity.aa_policy.decide(
-                    gate_registry, "0" * 64, vendor="claude", model=model, effort="low",
+                    gate_registry, "0" * 64, vendor="claude", model=model, effort="medium",
                     caller=caller, caller_sha256=digest)
                 self.assertFalse(decision["allowed"])
                 self.assertEqual(decision["code"], "target-above-effective-ceiling")
@@ -277,8 +279,8 @@ class ClaudeTranscriptTests(unittest.TestCase):
         self.assertEqual(model, result["caller"]["model"])
 
     def test_matching_launch_without_effort_is_still_marked_unverified(self):
-        self.tree[20] = (1, ["claude", "--model", "claude-sonnet-5"])
-        self.write_records(self.record(message={"model": "claude-sonnet-5"},
+        self.tree[20] = (1, ["claude", "--model", "claude-sonnet-5-5"])
+        self.write_records(self.record(message={"model": "claude-sonnet-5-5"},
                                        effort=None, perTurnEffort=None))
         self.assertIn("matches launch flags", self.read()[2])
         status, stdout, stderr = self.run_main()
@@ -385,6 +387,9 @@ class ClaudeTranscriptTests(unittest.TestCase):
         self.assertEqual(status, 3)
         self.assertEqual(stdout, "")
         self.assertIn("no scored configuration", stderr)
+        self.assertIn("omnilane native-context --vendor claude --model claude-unscored-model "
+                      "--inherits-caller-runtime", stderr)
+        self.assertIn("omnilane route --inherit --native-context", stderr)
 
     def test_injected_lookup_without_seams_never_attempts_overlay(self):
         fake_home = self.home / "fake-home"

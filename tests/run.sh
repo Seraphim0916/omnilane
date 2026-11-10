@@ -4595,8 +4595,8 @@ test_configure_model_catalogs() {
     fi
   done <<'EOF'
 codex|1|13|1|gpt-5.3-codex-spark
-claude|2|15|1|claude-haiku-5-5
-claude|2|24|1|claude-haiku-4-5-20251001
+claude|2|16|1|claude-haiku-5-5
+claude|2|25|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official
 gemini|4|1||gemini-4-argon-high
 gemini|4|9||gpt-oss-120b-medium

@@ -18,16 +18,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DISPATCH = ROOT / "scripts" / "dispatch.sh"
 
 
-# Retirement removes fallback entries only; every first choice stays unchanged.
+# 2026-11-10 AA v5.0.1 re-rank (LANES-501 "now"): hardest-coding and hard-judgment lead with
+# Claude Fable 5.2 xhigh; long-context moves to the Codex family because Opus 5 lost its score.
 EXPECTED_DEFAULTS = {
-    "hardest-coding": "codex gpt-6-astra xhigh",
+    "hardest-coding": "claude claude-fable-5-2 xhigh",
     "bulk-mechanical": "codex gpt-6.1-sol medium",
     "triage": "codex gpt-6-luna high",
-    "hard-judgment": "claude claude-opus-5-5 xhigh",
+    "hard-judgment": "claude claude-fable-5-2 xhigh",
     "taste-final": "claude claude-sonnet-5-5 xhigh",
     "consult": "codex gpt-6-astra xhigh",
     "ui-draft": "claude claude-opus-5-5 high",
-    "long-context": "claude claude-opus-5 high",
+    "long-context": "codex gpt-6-astra medium",
     "fast-agentic": "codex gpt-6.1-sol medium",
     "live-search": "grok grok-4.7 high",
     "coding-overflow": "grok grok-4.7 high",
@@ -196,14 +197,21 @@ class AARoutingUpdateTests(unittest.TestCase):
             "gemini-3.8-flash-medium",
             "gemini-3.8-flash-low",
             "claude-fable-5-1",
+            "claude-fable-5-2",
         ):
             self.assertIn(model, configure)
 
         vote = (ROOT / "scripts" / "runners" / "run-vote.sh").read_text(encoding="utf-8")
         self.assertIn("printf 'gpt-6-astra\\txhigh'", vote)
-        self.assertIn("printf 'claude-fable-5-1\\txhigh'", vote)
+        self.assertIn("printf 'claude-fable-5-2\\tlow'", vote)
         self.assertIn("printf 'gemini-3.8-flash-medium\\t-'", vote)
-        self.assertIn("printf 'grok-4.6\\t-'", vote)
+        self.assertIn("printf 'grok-4.7\\thigh'", vote)
+        self.assertNotIn("grok-4.6", vote)
+        # dispatch.sh pre-checks the panel with its own copy of the voter table; keep it in step.
+        dispatch = DISPATCH.read_text(encoding="utf-8")
+        self.assertIn("claude) printf 'claude-fable-5-2\\tlow\\n' ;;", dispatch)
+        self.assertIn("grok) printf 'grok-4.7\\thigh\\n' ;;", dispatch)
+        self.assertNotIn("printf 'grok-4.6", dispatch)
 
 
 if __name__ == "__main__":

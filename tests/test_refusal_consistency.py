@@ -55,11 +55,22 @@ def ceiling_callers(registry):
     """Scored rows at the lowest, a middle and the highest registry score.
 
     A row that is its model's floor is also listed as a degraded caller (the
-    harness recorded no effort), which has its own reason text.
+    harness recorded no effort), which has its own reason text. The middle pick is
+    the score nearest the median that is the floor of a model with more than one
+    scored effort: only such a degraded caller can name a higher effort to relaunch
+    at, so the pick does not depend on which scores a snapshot happens to contain.
     """
-    scores = sorted({row["score"] for row in registry["scored_configs"]})
+    rows = registry["scored_configs"]
+    scores = sorted({row["score"] for row in rows})
+    efforts = {}
+    for row in rows:
+        efforts[(row["vendor"], row["model"])] = efforts.get((row["vendor"], row["model"]), 0) + 1
+    floors = {row["score"] for row in rows if efforts[(row["vendor"], row["model"])] > 1
+              and caller_identity.floor_row(registry, row["vendor"], row["model"])["id"] == row["id"]}
+    median = scores[len(scores) // 2]
+    middle = min(floors, key=lambda score: (abs(score - median), score)) if floors else median
     callers = []
-    for score in (scores[0], scores[len(scores) // 2], scores[-1]):
+    for score in dict.fromkeys((scores[0], middle, scores[-1])):
         for row in sorted((r for r in registry["scored_configs"] if r["score"] == score),
                           key=lambda r: r["id"]):
             callers.append((row, False))
@@ -299,7 +310,7 @@ class RefusalTableTests(unittest.TestCase):
 
     def test_the_checker_flags_each_kind_of_inconsistency(self):
         caller = next(row for row in self.registry["scored_configs"]
-                      if row["id"] == "codex/gpt-5-6-sol-low")
+                      if row["id"] == "codex/gpt-6-1-terra-low")
         good = {"allowed": False, "code": ABOVE, "target_score": 46, "effective_ceiling": 33,
                 "caller": {key: caller[key] for key in aa_policy.IDENTITY_FIELDS},
                 "message": "target score 46 exceeds effective caller ceiling 33",

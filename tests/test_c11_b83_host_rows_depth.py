@@ -29,9 +29,9 @@ class HostRowsDepthTests(unittest.TestCase):
 
     def test_normal_rows_are_preserved(self):
         path = self.write_rows({"schema_version": 1, "harnesses": {
-            "claude-code": [{"model": "claude-sonnet-5", "efforts": ["high"]}]}})
+            "claude-code": [{"model": "claude-sonnet-5-5", "efforts": ["high"]}]}})
         self.assertEqual(native_context.load_host_rows(path),
-                         {"claude-code": [("claude-sonnet-5", ["high"])]})
+                         {"claude-code": [("claude-sonnet-5-5", ["high"])]})
         code, stdout, stderr = self.run_main("--host-rows", str(path))
         self.assertEqual(code, 0, stderr)
         self.assertEqual(stdout.strip(), str(self.out))

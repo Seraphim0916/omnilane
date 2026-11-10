@@ -116,7 +116,7 @@ that tells it how to pick a lane and dispatch. Four steps, once per machine.
 ### Step 2 — Prove, once, that each CLI selects the model it is asked for
 
 A model caller is only allowed to dispatch to a target this machine has *proven*:
-that `codex -m gpt-5.6-sol` really runs Sol, and so on. The proof is a local file,
+that `codex -m gpt-6.1-sol` really runs Sol, and so on. The proof is a local file,
 the **transport overlay**. Nothing ships with one. Without it every lane refuses
 a model caller with `runtime-mapping-unverified`, and `omnilane doctor` warns
 `no overlay configured`.
@@ -228,11 +228,11 @@ key with no extra CLI at all):
 ```mermaid
 flowchart LR
     M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.1"]
-    T -->|bulk-mechanical| C2["Codex — GPT-5.6 Sol"]
-    T -->|taste-final| C3["Claude — Fable 5.1"]
-    T -->|long-context| C4["Gemini — 3.7 Flash"]
-    T -->|live-search| C5["Grok — 4.6"]
+    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
+    T -->|taste-final| C3["Claude — Sonnet 5.5"]
+    T -->|long-context| C4["Codex — GPT-6 Astra"]
+    T -->|live-search| C5["Grok — 4.7"]
     T -->|"arbitrate (opt-in)"| C6["vote — 1-4 model panel"]
 ```
 
@@ -263,32 +263,34 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
+AA `aa-v5.0.1-2026-11-10-v1`: **proposed, awaiting operator approval**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` after it is approved. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md).
+
 AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6 Astra (xhigh) | Gemini 4 Argon (High) → GPT-6.1 Sol (xhigh) → Claude Opus 5.5 (medium) → GPT-6.1 Sol (high) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Sonnet 5.5 (high) → GPT-6 Astra (low) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Opus 5 (low) → Grok 4.7 (high) → Gemini 3.8 Flash (High) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6 Sol (high) → GPT-5.6 Sol (high) → Claude Opus 5.5 (low) → Claude Haiku 5.5 (xhigh) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Sol (medium) → Claude Opus 5 (low) → GPT-6 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Refactors, migrations, tests, review sweeps — mechanical endurance |
-| 🧹 triage | GPT-6 Luna (high) | GPT-5.6 Luna (high) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Sonnet 5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Opus 5.5 (xhigh) | Claude Fable 5.1 (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (medium) → Claude Opus 5 (high) → Claude Opus 5 (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (xhigh) → GPT-6 Astra (high) → Grok 4.7 → Gemini 3.8 Flash (High) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (high) → Claude Opus 5.5 (medium) → Grok 4.7 (high) → GPT-6 Astra (xhigh) → Claude Haiku 5.5 (xhigh) → Gemini 4 Argon (High) → Claude Haiku 5.5 (high) → Gemini 3.8 Flash (High) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 🔥 hardest-coding | Claude Fable 5.2 (xhigh) | GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → Claude Opus 5.5 (medium) → GPT-6 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.1 Sol (low) → Claude Opus 5.5 (low) → GPT-6 Astra (low) → GPT-6.1 Terra (low) → GPT-6 Sol (medium) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
-| 📚 long-context | Claude Opus 5 (high) | Claude Opus 5 (medium) → Claude Opus 5 (low) → GPT-5.6 Terra (xhigh) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) | Long-document synthesis; context size alone does not prove task quality |
-| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
+| 🎨 ui-draft | Claude Opus 5.5 (high) | GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
+| ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
 | 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
 | 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. The other six placements are unchanged; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
 dispatch falls back to when the first-choice vendor CLI is not installed. Every
 lane is such a chain; when nothing in it is installed the lane degrades to `off`.
 
-> **Fable 5.1 and Astra now lead hard work.** See the current same-condition evidence in [FAQ](#-faq).
+> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (proposed AA v5.0.1 snapshot).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
 
 ### Natural-language consultation
 
@@ -367,14 +369,19 @@ hints, not self-execution exemptions: even a same-model task is delegated.
 A native agent is eligible only when the caller explicitly confirms the exact
 model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
 The commander orchestrates and validates; workers do not delegate again.
+Starting rows below come from the score ceiling alone (proposed AA v5.0.1
+snapshot); an inherited ceiling, a failed host probe or a quota can move the
+chain further down.
 
-- **Claude Code · Fable 5.1** — recommended prompt-level controller for quality-sensitive work; this is a role, not a lane or automatic selector. Delegate hardest-coding at max and judgment/taste at xhigh; use Astra for an independent Codex review, Sol for bulk, Gemini 3.8 Flash for long/fast work, and Grok for live search.
-- **Claude Code · Opus 5** — balanced prompt-level controller and independent reviewer when explicitly selected (`high`, or `xhigh` for deeper review), plus long-context fallback. This is an opt-in role, not a new lane or the default hard-judgment route.
-- **Codex · Sol** — delegate bulk-mechanical and constrained ui-draft at high. Escalate hardest coding and judgment to Fable/Astra; route long/fast work to Gemini 3.8 Flash and live search to Grok.
-- **Codex · Astra** — prompt-level controller backup and independent reviewer. Use xhigh by default for hardest coding/judgment and consult/taste; explicitly select `--vendor codex --effort max` when needed. Explicit model/effort always win.
-- **Codex · Terra** — delegate the Codex long-context fallback at max. Bulk stays on Sol high; escalate hard work to Fable/Astra.
-- **Grok Build · Grok 4.7 / 4.6** — delegate live-search and coding-overflow, plus fallback duty in hardest-coding, hard-judgment, and taste-final. Dispatch primary hard coding/judgment/taste work to Codex/Claude/Gemini when available; verify API signatures and cited facts.
-- **Antigravity · Gemini 3.8 Flash** — delegate long-context Medium, fast-agentic/triage Low, and bulk/overflow/web fallbacks High. Do not infer visual taste or controller authority from agent/coding benchmarks.
+- **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later). At max, xhigh or high, hardest-coding and hard-judgment start on Fable 5.2 itself; still delegate. At medium the first reachable rows are Astra xhigh (hardest-coding) and Fable 5.2 medium (hard-judgment); at low, Opus 5.5 high and Fable 5.2 low.
+- **Claude Code · Fable 5.1** — at xhigh (50), hard-judgment starts on Fable 5.1 xhigh itself (still delegate); hardest-coding and taste-final start at Sonnet 5.5 xhigh; bulk-mechanical, fast-agentic and long-context at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5.5** — leads ui-draft at high. At xhigh (57), hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium; at medium (48), hardest-coding and hard-judgment start on Opus 5.5 medium itself, and ui-draft and long-context at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5** — only max is still scored (44), so it is an explicitly selected independent reviewer at `max`, not a lane default. At that ceiling hardest-coding starts at Sonnet 5.5 high, hard-judgment at Fable 5.1 medium and long-context at Astra low.
+- **Codex · GPT-6.1 Sol** — leads bulk-mechanical and fast-agentic at medium. At xhigh (52), hardest-coding starts at Opus 5.5 high, hard-judgment at Fable 5.1 xhigh and long-context at Astra medium; at high (50), hardest-coding starts at Sonnet 5.5 xhigh.
+- **Codex · Astra** — leads consult (xhigh) and long-context (medium), and xhigh is second in hardest-coding and taste-final. At xhigh (55), hard-judgment starts at Fable 5.2 low. Select `--vendor codex --effort max` explicitly when needed; explicit model/effort always win.
+- **Codex · GPT-6.1 Terra** — the value Codex rows: second and third in fast-agentic (medium, low), third in bulk-mechanical (high). At xhigh (45), hardest-coding starts on Terra xhigh itself, hard-judgment at Fable 5.1 medium and long-context at Astra low. GPT-5.6 Terra is scored only at max and is in no lane.
+- **Grok Build · Grok 4.7** — leads live-search and coding-overflow, is third in consult, and is the Grok tail of hardest-coding, hard-judgment and taste-final. Its ceiling is 35, so most hard lanes start at Opus 5.5 low. Grok 4.6 is in no lane. Verify API signatures and cited facts.
+- **Antigravity · Gemini 4 Argon / 3.8 Flash** — Argon High (50) holds the Gemini slot in every lane, ahead of Flash. Flash is the cross-vendor fallback after it: High in consult, ui-draft, hard-judgment, live-search and coding-overflow; Medium in hardest-coding, bulk-mechanical, taste-final, long-context and fast-agentic; Low in triage. Do not infer visual taste or controller authority from agent/coding benchmarks.
 
 </details>
 
@@ -769,36 +776,38 @@ with the key you set — those are advise-only and never edit files.
 </details>
 
 <details>
-<summary><b>Why do Fable 5.1 and Astra now lead hard work?</b></summary>
+<summary><b>Why does Fable 5.2 now lead hard work?</b></summary>
 
 <br/>
 
-The 2026-09-05 refresh compares the two on AA v4.2 under matching effort:
-Fable/Astra score 57/55 at max and 54/54 at xhigh; AA Briefcase is
-1666/1566 at max and 1657/1540 at xhigh. In the native coding-agent comparison,
-Fable max completes 70 at $9.18/task in 24 minutes and Astra max completes 67
-at $4.72/task in 26.8 minutes. That supports Fable max for
-`hardest-coding`, Fable xhigh for `hard-judgment`/`taste-final`, and Astra as
-the Codex-family fallback or independent reviewer.
+The proposed 2026-11-10 snapshot (AA Intelligence Index v5.0.1) scores Fable
+5.2 xhigh at 62, above every other row a lane can dispatch (Opus 5.5 xhigh 57,
+Astra xhigh 55). In `hardest-coding` it also leads Terminal-Bench 4.0 (0.616
+against 0.596 for both Astra and Opus 5.5 xhigh) and SciCode (0.656 against
+0.557 and 0.650). In `hard-judgment` it leads every row in the chain on HLE
+(0.689), Briefcase analytical Elo (1927) and CritPt (0.357); the first Codex
+row, GPT-6.1 Sol xhigh, has 0.526, 1691 and 0.317. It is also the most
+expensive row: an AA index run costs about $11,742 at Fable 5.2 xhigh, against
+$4,766 for Opus 5.5 xhigh and $3,746 for Astra xhigh.
 
-Fable max is the quality-first prompt-level controller. Opus high/xhigh is
-the balanced controller and independent-review option; Astra is the existing-
-Codex-quota backup/reviewer. These are role recommendations, not a new lane or
-automatic controller selector. Opus also remains the Claude `long-context`
-fallback.
+Astra xhigh stays second in `hardest-coding` and first in `consult`; Opus 5.5
+high leads `ui-draft`. Fable 5.2 needs Claude Code 2.1.321 or later. The
+snapshot stays proposed until the operator approves it; the full per-lane
+tables are in [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt).
 
 </details>
 
 <details>
-<summary><b>Why does hardest coding use <code>max</code> while other Claude lanes use <code>xhigh</code>?</b></summary>
+<summary><b>Why do the lanes never use <code>max</code>?</b></summary>
 
 <br/>
 
-Effort is selected per task, not assumed to improve monotonically. The current
-same-condition and native coding evidence justifies max for correctness-first
-`hardest-coding`; xhigh remains the quality/cost default for
-`hard-judgment`, `taste-final`, and named Fable consultation. Explicit
-`--model` and `--effort` always override these route defaults.
+Effort is selected per task, not assumed to improve monotonically. Since the
+2026-11-10 re-rank no lane chain contains a `max` row, `hardest-coding`
+included: every lane is ordered value-first, and `max` costs the most for a
+small gain (Fable 5.2 scores 65 at max, 62 at xhigh). `max` is still available
+when you select it with `--effort max`; explicit `--model` and `--effort`
+always override these route defaults.
 
 </details>
 
@@ -915,9 +924,12 @@ next sweep with no change to omnilane.
 
 ## 📊 Defaults and provenance
 
-Default lane assignments follow Artificial Analysis coding/intelligence data
-(2026-07 snapshot, cross-checked against AA site records and vendor pricing
-pages) plus published head-to-head reviews; they are opinions, not laws — the
+Default lane assignments follow the Artificial Analysis Intelligence Index
+v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, proposed, awaiting
+operator approval), merged from 85 AA model pages; each lane is ordered
+value-first on those scores and its own measures, and rows v5.0.1 no longer
+scores are left out rather than carried over
+([evidence](docs/reports/aa-rebaseline-2026-11-10.md)). They are opinions, not laws — the
 configurator and `routing.local.yaml` exist so you can disagree. The full
 working notes, including per-benchmark caveats, live in
 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).

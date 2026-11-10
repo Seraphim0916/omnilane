@@ -190,14 +190,14 @@ class SweepTests(unittest.TestCase):
                 return "fail", "upstream 400: model is not supported", ""
             return "pass", "", ""
         refused = [entry["name"] for entry in probe_sweep.plan("codex") if "5_6-terra" in entry["name"]]
-        self.assertIn("cx-gpt-5_6-terra-none", refused)
+        self.assertIn("cx-gpt-5_6-terra-max", refused)
         run, calls = self.prober(verdicts)
         report = probe_sweep.sweep("codex", self.root, run_probe=run,
                                    manager=lambda: "Aqua", log=lambda _: None)
         self.assertEqual(report["outcome"], "done")
         self.assertEqual(len(report["failed"]), len(refused))
-        self.assertEqual(calls.count("cx-gpt-5_6-terra-none"), 1)
-        self.assertTrue((self.root / "evidence/cx-gpt-5_6-terra-none.json").exists())
+        self.assertEqual(calls.count("cx-gpt-5_6-terra-max"), 1)
+        self.assertTrue((self.root / "evidence/cx-gpt-5_6-terra-max.json").exists())
 
     def test_only_missing_probes_just_the_rows_without_evidence(self):
         names = [entry["name"] for entry in probe_sweep.plan("grok")]
@@ -608,10 +608,8 @@ class ResignTests(unittest.TestCase):
 
     def test_retired_agy_selectors_drop_without_allow_shrink(self):
         retired = {
-            "gemini/gemini-3-6-flash": "gemini-3.6-flash-high",
-            "gemini/gemini-3-7-flash": "gemini-3.7-flash-high",
-            "gemini/gemini-3-7-flash-medium": "gemini-3.7-flash-medium",
-            "gemini/gemini-3-7-flash-low": "gemini-3.7-flash-low",
+            # AA v5.0.1 scores no 3.6/3.7 Flash row; 3.5 Flash-Lite is the scored agy row PROVEN omits.
+            "gemini/gemini-3-5-flash-lite": "gemini-3.5-flash-lite-high",
         }
         legacy = {cid: ("model_id_encoded_effort", model, "retired-" + model)
                   for cid, model in retired.items()}
@@ -629,8 +627,8 @@ class ResignTests(unittest.TestCase):
         self.assertEqual(after, before - retired.keys())
 
     def test_retired_grok_selectors_drop_without_allow_shrink(self):
-        retired = {"grok/grok-4-5", "grok/grok-4-6", "grok/grok-4-6-low",
-                   "grok/grok-4-6-medium", "grok/grok-4-6-xhigh"}
+        # AA v5.0.1 still scores grok-4.6 only at xhigh, the one grok row PROVEN no longer lists.
+        retired = {"grok/grok-4-6-xhigh"}
         legacy = {cid: ("cli_reasoning_effort", build_overlay.ROWS[cid]["model"],
                         "retired-" + cid.replace("/", "-")) for cid in retired}
         with patch.dict(build_overlay.PROVEN, legacy):

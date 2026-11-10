@@ -26,9 +26,9 @@ MAX_BYTES = 1_048_576
 # Approval anchor for the frozen AA source bytes. Updating these constants is a
 # governance change, never a caller argument/environment override.
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
-APPROVED_BENCHMARK_VERSION = "4.3.2"
-APPROVED_AS_OF = "2026-10-28"
-APPROVED_REGISTRY_SHA256 = "312ad06ee0189b3385005ac4f223189ab3fe44382a42e20cc4267be5b07c1c3e"
+APPROVED_BENCHMARK_VERSION = "5.0.1"
+APPROVED_AS_OF = "2026-11-10"
+APPROVED_REGISTRY_SHA256 = "af518566e61a67685789d55bf09478818f7fa55f18e31fde8917ed376f2ae974"
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))

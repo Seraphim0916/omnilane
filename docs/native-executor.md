@@ -129,7 +129,7 @@ A host declares the extra model/effort pairs its sub-agent tool can run once, in
 ```json
 {"schema_version": 1, "harnesses": {"claude-code": [
   {"model": "claude-opus-5-5", "efforts": ["medium", "high", "xhigh"]},
-  {"model": "claude-opus-5", "efforts": ["high"]}]}}
+  {"model": "claude-fable-5-2", "efforts": ["low"]}]}}
 ```
 
 `native-context` appends one capability row per declared model for the caller's

@@ -33,8 +33,8 @@ class UnmappedModelTests(unittest.TestCase):
             registry.write_text(json.dumps(base))
             args = argparse.Namespace(
                 base=str(registry),
-                extract=str(ROOT / "docs/reports/aa-v4.3.2-extract-2026-10-14.json"),
-                as_of="2026-10-14", revision=1, approval="proposed",
+                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-10.json"),
+                as_of="2026-11-10", revision=1, approval="proposed",
             )
             with patch.object(aa, "REGISTRY", registry), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(aa.cmd_build(args), 0)
@@ -43,7 +43,7 @@ class UnmappedModelTests(unittest.TestCase):
                 self.assertEqual(first, registry.read_bytes())
             result = json.loads(first)
         row = next(r for r in result["scored_configs"] if r["id"] == cid)
-        self.assertEqual((row["score_raw"], row["score"], row["estimated"]), (52.56, 53, False))
+        self.assertEqual((row["score_raw"], row["score"], row["estimated"]), (50.41, 50, False))
         self.assertEqual(row["transport_mapping"]["candidate_model_ids"], ["gemini-4-argon-high"])
         self.assertEqual(row["transport_mapping"]["status"], "unknown")
         self.assertFalse(row["transport_mapping"]["runtime_verified"])

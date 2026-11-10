@@ -498,9 +498,9 @@ aa_policy_decide() {
 aa_vote_child_spec() {
   case "$1" in
     codex) printf 'gpt-6-astra\txhigh\n' ;;
-    claude) printf 'claude-fable-5-1\txhigh\n' ;;
+    claude) printf 'claude-fable-5-2\tlow\n' ;;
     gemini) printf 'gemini-3.8-flash-medium\t-\n' ;;
-    grok) printf 'grok-4.6\t-\n' ;;
+    grok) printf 'grok-4.7\thigh\n' ;;
     *) return 1 ;;
   esac
 }

@@ -36,21 +36,17 @@ IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 # config_id -> (selector_type, runtime_model, probe evidence basename)
 PROVEN: dict[str, tuple[str, str, str]] = {}
 
-for model, slug in [("gpt-6-astra", "gpt-6-astra"), ("gpt-6.1-sol", "gpt-6_1-sol"), ("gpt-6-sol", "gpt-6-sol"),
-                    ("gpt-6-luna", "gpt-6-luna"),
-                    ("gpt-5.6-sol", "gpt-5_6-sol"), ("gpt-5.6-luna", "gpt-5_6-luna"),
-                    ("gpt-5.6-terra", "gpt-5_6-terra"), ("gpt-6.1-terra", "gpt-6_1-terra")]:
-    base = model.replace(".", "-").replace("gpt-", "gpt-")
-    for effort in ["max", "xhigh", "high", "medium", "low"]:
+# AA v5.0.1 (2026-11-10) scores only the max row of gpt-6-sol, gpt-5.6-luna and
+# gpt-5.6-terra, and no row of gpt-5.6-sol; unscored rows have nothing to prove.
+ALL_EFFORTS = ["max", "xhigh", "high", "medium", "low"]
+for model, efforts in [("gpt-6-astra", ALL_EFFORTS), ("gpt-6.1-sol", ALL_EFFORTS), ("gpt-6-sol", ["max"]),
+                       ("gpt-6-luna", ALL_EFFORTS),
+                       ("gpt-5.6-luna", ["max"]),
+                       ("gpt-5.6-terra", ["max"]), ("gpt-6.1-terra", ALL_EFFORTS)]:
+    for effort in efforts:
         cid = f"codex/{model.replace('.', '-')}" + ("" if effort == "max" else f"-{effort}")
         ev = f"cx-avail-{model.replace('.', '_')}" if effort == "high" else f"cx-{model.replace('.', '_')}-{effort}"
         PROVEN[cid] = ("model_and_effort", model, ev)
-
-# Back in the score table 2026-10-18. A host whose account gets HTTP 400 records the
-# probe as unproven; a host that can call the model proves it here.
-for effort in ["xhigh", "medium"]:
-    PROVEN[f"codex/gpt-5-4-mini" + ("" if effort == "xhigh" else f"-{effort}")] = (
-        "model_and_effort", "gpt-5.4-mini", f"cx-gpt-5_4-mini-{effort}")
 
 # AA scores grok-4.7 at xhigh and high only; its base row is the xhigh one.
 PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhigh")
@@ -69,13 +65,16 @@ for cid, rid, ev in [
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 
-for model in ["claude-opus-5", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]:
-    for effort in ["max", "xhigh", "high", "medium", "low"]:
+# AA v5.0.1 scores claude-opus-5 at max only.
+for model, efforts in [("claude-opus-5", ["max"]), ("claude-opus-5-5", ALL_EFFORTS),
+                       ("claude-sonnet-5-5", ALL_EFFORTS), ("claude-haiku-5-5", ALL_EFFORTS)]:
+    for effort in efforts:
         cid = f"claude/{model}" + ("" if effort == "max" else f"-{effort}")
         PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-{effort}")
 # gpt-6-astra rejects effort "none" upstream ("Unsupported value: 'none' is not
 # supported with the 'gpt-6-astra' model"), so it has no non-reasoning selector.
-for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini", "gpt-6.1-terra"]:
+# Of the non-reasoning rows, AA v5.0.1 scores only gpt-6.1-terra's here.
+for model in ["gpt-6.1-terra"]:
     PROVEN[f"codex/{model.replace('.', '-')}-non-reasoning"] = (
         "model_and_effort", model, f"cx-{model.replace('.', '_')}-none")
 
@@ -84,18 +83,8 @@ for model in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.4-mini", "g
 PROVEN["claude/claude-4-5-haiku-reasoning"] = (
     "model_and_effort", "claude-haiku-4-5", "cl-rmode-claude-haiku-4-5-noeffort")
 
-for cid, model in [("claude/claude-sonnet-5", "claude-sonnet-5"),
-                   ("claude/claude-opus-4-8", "claude-opus-4-8"),
-                   ("claude/claude-opus-4-7", "claude-opus-4-7"),
-                   ("claude/claude-opus-4-6-adaptive", "claude-opus-4-6"),
-                   ("claude/claude-sonnet-4-6-adaptive", "claude-sonnet-4-6")]:
-    PROVEN[cid] = ("model_and_effort", model, f"cl-{model}-max")
-# Targets resolve on vendor/model/effort alone, so claude-sonnet-5-non-reasoning
-# (also effort high) must never be listed here: two verified rows at one
-# selector make every sonnet-5 high dispatch ambiguous-runtime-mapping.
-for effort in ["xhigh", "high", "medium", "low"]:
-    PROVEN[f"claude/claude-sonnet-5-{effort}"] = (
-        "model_and_effort", "claude-sonnet-5", f"cl-claude-sonnet-5-{effort}")
+# AA v5.0.1 no longer scores claude-sonnet-5, claude-opus-4-8/4-7/4-6 or
+# claude-sonnet-4-6, so they left PROVEN with the 2026-11-10 snapshot.
 
 # Fable is listed so its failures reach unproven[] rather than vanishing. Its
 # probes were refused for quota on 2026-09-07 and again on 2026-09-09; the
@@ -103,8 +92,8 @@ for effort in ["xhigh", "high", "medium", "low"]:
 for effort in ["max", "xhigh", "high", "medium", "low"]:
     cid = "claude/claude-fable-5-1" + ("" if effort == "max" else f"-{effort}")
     PROVEN[cid] = ("model_and_effort", "claude-fable-5-1", f"cl-claude-fable-5-1-{effort}")
-PROVEN["claude/claude-fable-5"] = (
-    "model_and_effort", "claude-fable-5", "cl-claude-fable-5-max")
+    cid = "claude/claude-fable-5-2" + ("" if effort == "max" else f"-{effort}")
+    PROVEN[cid] = ("model_and_effort", "claude-fable-5-2", f"cl-claude-fable-5-2-{effort}")
 
 # The same per-host overrides scripts/lib/common.sh vendor_bin() gives the runners.
 @lru_cache(maxsize=None)

@@ -7,9 +7,14 @@
     report  write per-vendor evidence tables and the old-vs-new score diff
     matrix  show, per controller, the first reachable target of every lane
     lanes   print, per lane, each candidate with the measurements the lane is ordered on
+    compat-entry
+            check (default) or --write the registry's snapshot entry in
+            config/transport-compatibility.json
 
 The registry is an approval artifact: build only rewrites the file. Pinning its
 sha256 in scripts/lib/aa_policy.py and re-signing the host overlay stay manual.
+After compat-entry --write, pin the archive's new sha256 in transport_compat.APPROVED_ARCHIVE_SHA256
+and in tests/test_origin_integration.py PROTECTED_SHA256.
 """
 from __future__ import annotations
 
@@ -124,12 +129,27 @@ NEW_ROWS = [
     *[(f"gemini/{model}-{effort}", "gemini", model, effort, "adaptive", f"{model}-{effort}",
        "gemini/gemini-3-8-flash" + ("" if effort == "high" else f"-{effort}"))
       for model in ("claude-opus-5-5", "claude-sonnet-5-5") for effort in ("high", "medium", "low")],
+    *[(f"claude/claude-fable-5-2{suffix}", "claude", "claude-fable-5-2", effort, "adaptive",
+       f"claude-fable-5-2{suffix}", f"claude/claude-fable-5-1{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
+# Scored by AA but with no runtime selector the vendor has published: kept in
+# reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
+# or caller resolves to them. (config id, vendor, model, effort, reasoning, AA slug, reason)
+CARBON_REASON = ("Google has published no model id or effort selector for Gemini 4 Carbon "
+                 "and agy 1.5.3 lists none (checked 2026-11-10); comparison only until one ships")
+REFERENCE_ROWS = [
+    (f"gemini/gemini-4-carbon{suffix}", "gemini", "gemini-4-carbon", effort, "unspecified",
+     f"gemini-4-carbon{suffix}", CARBON_REASON)
+    for effort in ("high", "medium", "low") for suffix in ["" if effort == "high" else f"-{effort}"]]
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
                "gemini-4-argon-high": "gemini-3.8-flash-high",
-               "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra"}  # catalog selector -> alias to clone
+               "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra",
+               "claude-fable-5-2": "claude-fable-5-1"}  # catalog selector -> alias to clone
+# AA labels every Fable 5.2 row "Default Fallback", as it does Fable 5.1.
+NEW_ROW_FALLBACKS = {"claude-fable-5-2": "default"}
 # AA's family slug and agy's effort-encoded selector are different identities.
 # A known selector is a probe target, never proof that this host can use it.
 RUNTIME_SELECTORS = {"gemini-4-argon": "gemini-4-argon-high"}
@@ -351,6 +371,17 @@ def cmd_build(args) -> int:
     tag = as_of if args.revision == 1 else f"{as_of}-v{args.revision}"
     report = lambda vendor: f"docs/reports/aa-{vendor}-evidence-{tag}.md"  # noqa: E731
 
+    # fetch keeps only scored records, so a scoreless model shows up only as its own captured page.
+    pages = {urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+             for url in [page["source_url"] for page in extract.get("sources", [])]
+             + ([extract["source_url"]] if "source_url" in extract else [])}
+    unseen = sorted(row["id"] for row in old["scored_configs"]
+                    if row["id"] not in RETIRED_ROWS
+                    and row["aa_slug"] not in records and row["aa_slug"] not in pages)
+    if unseen:
+        sys.exit("build: the extract neither scores nor captured the page of these base rows "
+                 f"(fetch their pages or retire them): {', '.join(unseen)}")
+
     scored, dropped = [], []
     for row in new["scored_configs"]:
         record = records.get(row["aa_slug"])
@@ -360,6 +391,17 @@ def cmd_build(args) -> int:
         rescore(row, record, version, as_of, report(row["vendor"]))
         scored.append(row)
     by_id = {row["id"]: row for row in old["scored_configs"]}
+
+    def shape_of(cid: str, vendor: str, shape: str) -> dict:
+        if shape in by_id:
+            return by_id[shape]
+        # The named sibling lost its score; any scored row of the vendor has the same transport shape.
+        sibling = next((row for row in old["scored_configs"]
+                        if row["vendor"] == vendor and row["model"] not in RUNTIME_SELECTORS), None)
+        if sibling is None:
+            sys.exit(f"build: {cid} copies {shape}, which the base does not score, "
+                     f"and the base scores no other {vendor} row")
+        return sibling
     already_unknown = {(row["vendor"], row["model"], row["effort"], row["reasoning"])
                        for row in old["unknown_configs"]}
     withdrawn: set[tuple] = set()
@@ -373,9 +415,9 @@ def cmd_build(args) -> int:
             continue
         if slug not in records:
             sys.exit(f"build: {slug} is not in the extract")
-        row = copy.deepcopy(by_id[shape])
+        row = copy.deepcopy(shape_of(cid, vendor, shape))
         row.update(id=cid, vendor=vendor, model=model, effort=effort, reasoning=reasoning,
-                   fallback=None, aa_slug=slug, source_urls=[PAGE.format(slug=slug)])
+                   fallback=NEW_ROW_FALLBACKS.get(model), aa_slug=slug, source_urls=[PAGE.format(slug=slug)])
         # gemini selectors carry the effort in the model id, as target_row reads them
         row["transport_mapping"]["candidate_model_ids"] = [f"{model}-{effort}" if vendor == "gemini" else model]
         rescore(row, records[slug], version, as_of, report(vendor))
@@ -432,6 +474,21 @@ def cmd_build(args) -> int:
     for row in new["reference_configs"]:
         if row["aa_slug"] in records:
             rescore(row, records[row["aa_slug"]], version, as_of, report(row["vendor"]))
+    have_reference = {row["id"] for row in new["reference_configs"]}
+    for cid, vendor, model, effort, reasoning, slug, reason in REFERENCE_ROWS:
+        if cid in have_reference:
+            continue
+        if slug not in records:
+            sys.exit(f"build: {slug} is not in the extract")
+        if not old["reference_configs"]:
+            sys.exit(f"build: {cid} needs a reference row in the base to copy its shape")
+        row = copy.deepcopy(old["reference_configs"][0])
+        row.update(id=cid, vendor=vendor, model=model, effort=effort, reasoning=reasoning,
+                   fallback=None, aa_slug=slug, source_urls=[PAGE.format(slug=slug)],
+                   authority_eligible=False, reference_reason=reason)
+        row["transport_mapping"]["candidate_model_ids"] = []
+        rescore(row, records[slug], version, as_of, report(vendor))
+        new["reference_configs"].append(row)
 
     live_ids = {row["id"] for row in scored}
     # An alias made entirely of retired rows also leaves the configure catalog.
@@ -624,8 +681,10 @@ VALUE_LANES = {
 # A tool loop waits for every first token, so a slow starter is no fast row whatever it scores.
 VALUE_CAPS = {"fast-agentic": ("first answer token (s)", 10)}
 STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context", "coding-overflow"}
-VALUE_FAMILIES = {"claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5", "claude-sonnet-5",
-                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra",
+# AA v5.0.1 scores no below-max reasoning row of claude-opus-5, claude-sonnet-5, gpt-6-sol
+# or gpt-5.6-sol/luna/terra, so those families left the rule with that snapshot.
+VALUE_FAMILIES = {"claude-opus-5-5", "claude-fable-5-2", "claude-fable-5-1", "claude-sonnet-5-5",
+                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
@@ -717,6 +776,53 @@ def cmd_lanes(args) -> int:
     return 0
 
 
+COMPAT_ARCHIVE = REPO / "config/transport-compatibility.json"
+
+
+def compat_entry(registry_bytes: bytes) -> dict:
+    """The archive entry for one registry, built only from transport_compat's contract functions.
+
+    selector_contract reads build_overlay.PROVEN, so an old entry reproduces only against the
+    PROVEN of the commit that last wrote it; a row with no probe evidence is recorded as null.
+    """
+    sys.path.insert(0, str(REPO / "scripts/lib"))
+    import transport_compat
+
+    rows = json.loads(registry_bytes)["scored_configs"]
+    return {"engine": transport_compat.engine_contract(),
+            "registry_sha256": hashlib.sha256(registry_bytes).hexdigest(),
+            "rows": [transport_compat.row_contract(row) for row in rows],
+            "selectors": {row["id"]: transport_compat.selector_contract(row) for row in rows}}
+
+
+def dump_archive(value: dict) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode()
+
+
+def cmd_compat_entry(args) -> int:
+    registry = Path(args.registry).read_bytes()
+    snapshot = json.loads(registry)["snapshot"]["id"]
+    archive_path = Path(args.archive)
+    archive = json.loads(archive_path.read_bytes())
+    entry = compat_entry(registry)
+    if args.write:
+        archive["snapshots"][snapshot] = entry
+        archive_path.write_bytes(dump_archive(archive))
+        print(f"compat-entry: wrote {snapshot}; archive sha256 "
+              f"{hashlib.sha256(archive_path.read_bytes()).hexdigest()}")
+        return 0
+    have = archive["snapshots"].get(snapshot)
+    if have is None:
+        print(f"compat-entry: the archive has no {snapshot} entry")
+        return 1
+    differing = sorted(key for key in entry if entry[key] != have.get(key))
+    if differing:
+        print(f"compat-entry: {snapshot} differs in {', '.join(differing)}")
+        return 1
+    print(f"compat-entry: {snapshot} matches the archive")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -750,9 +856,15 @@ def main() -> int:
     lanes.add_argument("--extract", required=True)
     lanes.add_argument("--registry", default=str(REGISTRY))
     lanes.add_argument("--routing", default=str(REPO / "routing.yaml"))
+    compat = sub.add_parser("compat-entry")
+    compat.add_argument("--registry", default=str(REGISTRY))
+    compat.add_argument("--archive", default=str(COMPAT_ARCHIVE))
+    compat.add_argument("--write", action="store_true",
+                        help="add or replace the registry's entry instead of checking it")
     args = parser.parse_args()
     return {"fetch": cmd_fetch, "build": cmd_build, "report": cmd_report, "matrix": cmd_matrix,
-            "lanes": cmd_lanes, "value": cmd_value, "fill": cmd_fill, "merge": cmd_merge}[args.command](args)
+            "lanes": cmd_lanes, "value": cmd_value, "fill": cmd_fill, "merge": cmd_merge,
+            "compat-entry": cmd_compat_entry}[args.command](args)
 
 
 if __name__ == "__main__":

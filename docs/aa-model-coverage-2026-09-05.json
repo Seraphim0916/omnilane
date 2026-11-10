@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 118,
+    "catalogEntries": 119,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -726,6 +726,38 @@
         "claude-fable-5"
       ],
       "mappingReason": "AA family/effort rows matched after punctuation normalization; AA slugs are not runtime IDs"
+    },
+    {
+      "vendor": "claude",
+      "access": "cli",
+      "catalogModel": "claude-fable-5-2",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "primary",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "primary",
+          "effort": "xhigh"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "medium"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "low"
+        }
+      ],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "Not among the 643 rows of this historical v4.2 inventory; config/aa-model-policy.json scores it from AA v5.0.1 (docs/reports/aa-v5.0.1-extract-2026-11-10.json, captured 2026-11-10) as claude-fable-5-2 (max), claude-fable-5-2-xhigh, -high, -medium and -low. Host transport remains to be proven by omnilane resign."
     },
     {
       "vendor": "claude",
