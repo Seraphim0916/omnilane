@@ -274,7 +274,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
     def restore(name, saved):
         for suffix, content in saved.items():
             (root / "evidence" / f"{name}.{suffix}").write_bytes(content)
-    originals, skipped, captured = {}, {}, {}
+    originals, skipped, captured, answered_again = {}, {}, {}, set()
     for cid in (*retry_failed, *refresh_expired):
         entry = entries[cid]
         if cid in retry_failed:
@@ -304,6 +304,23 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
                 return previous
         with advisor_disabled(vendor):
             record = probe_sweep.probe_module.probe(name, argv, **kwargs)
+        # Claude sometimes answers with text injected into the session (a hook's
+        # context, an MCP server's instructions) instead of the token, with the
+        # right model and exit code. Ask once more; any other failure is a finding.
+        if (vendor == "claude" and cid not in answered_again and record.get("verdict") == "fail"
+                and record.get("verdict_reason") == "missing-expected-token"):
+            answered_again.add(cid)
+            kept = root / "retried"
+            kept.mkdir(parents=True, exist_ok=True)
+            for suffix in suffixes:
+                path = root / "evidence" / f"{name}.{suffix}"
+                if path.is_file():
+                    path.replace(kept / f"{name}.first-attempt.{suffix}")
+            log(f"{name}: answered without the token; first answer kept in {kept}, asking once more")
+            with advisor_disabled(vendor):
+                record = probe_sweep.probe_module.probe(name, argv, **kwargs)
+            log(f"{name}: passed on retry" if record.get("verdict") == "pass"
+                else f"{name}: failed twice ({str(record.get('verdict_reason'))[:80]})")
         if record.get("verdict") == "fail":
             streams = [(root / "evidence" / f"{name}.{suffix}").read_text(errors="replace")
                        for suffix in ("stdout", "stderr")]

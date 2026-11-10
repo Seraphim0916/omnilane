@@ -8,6 +8,7 @@ semantic version tags.
 
 ### Fixed
 - `resign` keeps this run's failed probe output when it holds a vendor. The held vendor's old evidence is copied back after the failed output is set aside as `<name>.failed.*`, and an older run's `.failed.*` files in that evidence (for example from a quota failure weeks earlier) overwrote today's, so the only record of why the probe failed was the wrong one. Older `.failed.*` files are no longer copied over this run's, and the unchanged copies of them that came in with the old evidence are dropped from the new root, so its `.failed.*` files describe one failure. The originals stay in the old evidence root.
+- A Claude selector probe that answers with the right model and exit code but without `CLAUDE_SELECTOR_OK` is asked once more before the row counts as failed. Claude occasionally answers with text injected into the session (hook context, MCP server instructions) instead of the token, which held the whole vendor at `resign`. The first answer is kept as `retried/<name>.first-attempt.*` in the sweep root, and the log says `passed on retry` or `failed twice`. Only this reason is retried, at most once per row; quota, login, model-mismatch and other failures are not. The proof engine (`probe.py`, `probe_sweep.py`) is unchanged, so existing evidence stays valid.
 
 ## [0.60.1] - 2026-11-09
 
