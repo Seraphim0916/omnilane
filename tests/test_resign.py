@@ -484,6 +484,28 @@ class ResignTests(unittest.TestCase):
         self.assertTrue(any(f"kept this run's output for {failing}" in line for line in self.lines),
                         self.lines)
 
+    def test_an_older_failed_output_in_the_restored_evidence_does_not_replace_this_runs(self):
+        self.update("grok")
+        failing = "grok/grok-4-7-high"
+        name = next(e["name"] for e in probe_sweep.plan("grok") if e["config_id"] == failing)
+        source = resign.previous_root(json.loads(self.live.read_text())) / "evidence"
+        (source / f"{name}.failed.json").write_text(json.dumps({"verdict": "fail", "older_run": True}))
+        (source / f"{name}.failed.stdout").write_text("older run's output\n")
+        (source / f"{name}.failed.stderr").write_text("older run's stderr\n")
+        before = {p.name for p in (self.home / "transport-evidence").iterdir()}
+        self.assertEqual(self.run_resign(vendor=["grok"], failing=(failing,)), resign.EXIT_OPERATOR)
+        new_roots = [p for p in (self.home / "transport-evidence").iterdir() if p.name not in before]
+        self.assertEqual(len(new_roots), 1, new_roots)
+        evidence = new_roots[0] / "evidence"
+        self.assertEqual(json.loads((evidence / f"{name}.json").read_text())["verdict"], "pass")
+        kept = json.loads((evidence / f"{name}.failed.json").read_text())
+        self.assertEqual(kept["verdict"], "fail")
+        self.assertNotIn("older_run", kept)
+        self.assertNotEqual((evidence / f"{name}.failed.stdout").read_text(), "older run's output\n")
+        # The older run's other files would sit beside this run's and read as one failure.
+        self.assertEqual(sorted(p.name for p in evidence.glob("*.failed.*")),
+                         sorted(f"{name}.failed.{suffix}" for suffix in ("json", "stdout")))
+
     def test_missing_cli_retirement_requires_two_consecutive_missing_reasons(self):
         before = self.vendor_mappings("grok")
         with self.missing_cli("grok"):

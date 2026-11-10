@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+- `resign` keeps this run's failed probe output when it holds a vendor. The held vendor's old evidence is copied back after the failed output is set aside as `<name>.failed.*`, and an older run's `.failed.*` files in that evidence (for example from a quota failure weeks earlier) overwrote today's, so the only record of why the probe failed was the wrong one. Older `.failed.*` files are no longer copied over this run's, and the unchanged copies of them that came in with the old evidence are dropped from the new root, so its `.failed.*` files describe one failure. The originals stay in the old evidence root.
+
 ## [0.60.1] - 2026-11-09
 
 ### Fixed

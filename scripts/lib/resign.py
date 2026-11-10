@@ -229,6 +229,10 @@ def keep_failed_output(source: Path, target: Path, name: str) -> list[Path]:
     A held vendor gets its old evidence copied back over the new sweep, and that
     copy erases the only record of why the probe failed. Files still identical to
     the old evidence were not rewritten by this run and are left for the copy.
+
+    An older run's `.failed.*` files arrive with the old evidence; once this run
+    keeps its own, the unchanged copies of those are dropped so the `.failed.*`
+    set describes one failure. The originals stay in the old evidence root.
     """
     kept = []
     for new in sorted(target.glob(name + ".*")):
@@ -240,6 +244,12 @@ def keep_failed_output(source: Path, target: Path, name: str) -> list[Path]:
         failed = new.with_name(f"{name}.failed.{new.name[len(name) + 1:]}")
         new.replace(failed)
         kept.append(failed)
+    if kept:
+        names = {path.name for path in kept}
+        for stale in target.glob(name + ".failed.*"):
+            old = source / stale.name
+            if stale.name not in names and old.is_file() and filecmp.cmp(old, stale, shallow=False):
+                stale.unlink()
     return kept
 
 
@@ -834,12 +844,16 @@ def _resign(args, live: Path, anchors, log) -> int:
             for vendor in unfinished:
                 failed_now = set(sweeps[vendor].get("failed", []))
                 for entry in probe_sweep.plan(vendor):
+                    kept = []
                     if entry["config_id"] in failed_now:
                         kept = keep_failed_output(source / "evidence", root / "evidence", entry["name"])
                         if kept:
                             log(f"omnilane: {vendor}: kept this run's output for {entry['config_id']} "
                                 f"as {', '.join(path.name for path in kept)}")
                     for old in (source / "evidence").glob(entry["name"] + ".*"):
+                        # An older run's .failed.* would overwrite or sit beside this run's.
+                        if kept and old.name.startswith(entry["name"] + ".failed."):
+                            continue
                         shutil.copy2(old, root / "evidence" / old.name)
     if proceed:
         try:
