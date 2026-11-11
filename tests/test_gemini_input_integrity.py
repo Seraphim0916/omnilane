@@ -114,13 +114,12 @@ class GeminiInputIntegrityTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn(f"task is {len(payload)} bytes".encode(), result.stderr)
         self.assertIn(f"limit is {GEMINI_MAX_TASK_BYTES} bytes".encode(), result.stderr)
-        self.assertIn(b"split", result.stderr)
+        self.assertIn(b"sent to gemini", result.stderr)
+        self.assertIn(b"absolute path", result.stderr)
         self.assertFalse(Path(str(self.capture) + '.called').exists())
-        jobs = list((self.home / "jobs").iterdir())
-        self.assertEqual(len(jobs), 1)
-        saved = (jobs[0] / "task.txt").read_bytes()
-        self.assertEqual(saved, payload)
-        self.assertNotIn(b"TRUNCATED", saved)
+        # Refused before any job directory exists: nothing is left to clean up.
+        jobs = self.home / "jobs"
+        self.assertEqual(list(jobs.iterdir()) if jobs.exists() else [], [])
 
     def test_foreground_over_limit(self):
         self.assert_rejected()

@@ -804,25 +804,64 @@ release_cwd_lock() {
   rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true
 }
 
-# agy 1.4.2 measured 2026-10-18: 184605 bytes arrived intact; truncation
-# began around 192000 bytes. Reject conservatively before invoking agy.
-validate_gemini_task_size() {
-  local file="$1" size
-  local GEMINI_MAX_TASK_BYTES=180000
-  if [[ "$(uname -s)" == "Linux" ]]; then
-    # agy receives the prompt as one argv argument: MAX_ARG_STRLEN is
-    # 131072 bytes including NUL; leave a safety margin below that limit.
-    GEMINI_MAX_TASK_BYTES=130000
+# Prompt byte limits for the dispatch pre-flight. They must equal the literal
+# caps in the runners, whose bytes are pinned in the signed transport evidence
+# (tests/test_brief_too_long_reject.py checks this). A task over its limit is
+# refused before any worker starts; it is never cut.
+prompt_cap_bytes() { # vendor [session_mode] -> prints the byte limit
+  local vendor="$1" session_mode="${2:-single-shot}"
+  if [[ "$vendor" == "gemini" ]]; then
+    # agy 1.4.2 measured 2026-10-18: 184605 bytes arrived intact; truncation
+    # began around 192000 bytes. On Linux agy gets the prompt as one argv
+    # argument: MAX_ARG_STRLEN is 131072 bytes including NUL.
+    if [[ "$(uname -s)" == "Linux" ]]; then echo 130000; else echo 180000; fi
+    return 0
   fi
-  size=$(wc -c < "$file") || return 2
+  # The first live message carries the worker rules and is held to 102400.
+  if [[ "$session_mode" == "live" ]]; then echo 102400; return 0; fi
+  case "$vendor" in
+    claude) echo 102400 ;;
+    vote) echo 100000 ;;
+    *) echo 140000 ;;
+  esac
+}
+
+# Runners that put the worker rules in front of the task send them inside the
+# same limit; the others send the task bytes alone.
+prompt_counts_worker_rules() { # vendor [session_mode]
+  [[ "$1" != "gemini" ]] || return 1
+  [[ "${2:-single-shot}" != "live" ]] || return 0
+  case "$1" in claude|codex|grok) return 0 ;; *) return 1 ;; esac
+}
+
+worker_rules_bytes() {
+  local header
+  printf -v header '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES"
+  printf '%s' "$header" | wc -c | tr -d ' '
+}
+
+prompt_too_long_message() { # vendor size cap
+  echo "omnilane: task is $2 bytes as sent to $1; limit is $3 bytes. No worker was started and nothing was cut. Put the long content in a file and give its absolute path in the task." >&2
+}
+
+enforce_prompt_cap() { # file vendor [session_mode]
+  local f="$1" vendor="$2" session_mode="${3:-single-shot}" size cap
+  size=$(wc -c < "$f") || return 2
   size=$((size))
-  if [[ "$size" -gt "$GEMINI_MAX_TASK_BYTES" ]]; then
-    echo "omnilane: Gemini task is $size bytes; limit is $GEMINI_MAX_TASK_BYTES bytes; split the task into smaller parts. task.txt was preserved in full." >&2
+  cap="$(prompt_cap_bytes "$vendor" "$session_mode")"
+  if [[ "$size" -gt "$cap" ]]; then
+    prompt_too_long_message "$vendor" "$size" "$cap"
     return 2
   fi
 }
 
-# Cap payload so a runaway prompt cannot blow a worker's context.
+validate_gemini_task_size() {
+  enforce_prompt_cap "$1" gemini
+}
+
+# Inside a job, job-worker.sh overrides this so a task copy over its cap is
+# refused; only files outside the job's private copy directory (vote's generated
+# Round 2 prompt, or a runner run by hand) are still cut here.
 # Cut points move to UTF-8 character boundaries (head back, tail forward) so a
 # multibyte character is never split; job-worker.sh owned_prompt_operation
 # carries the same algorithm and must stay byte-identical with this one.

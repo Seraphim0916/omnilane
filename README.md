@@ -1392,8 +1392,9 @@ macOS Grok work: the operator may enable single-shot work **without isolation** 
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
   `jobs.sh status` reports `dead` instead of `running` forever.
-- **Payload caps** — oversized task text is truncated head+tail before it can
-  blow a worker's context.
+- **Payload limits** — a task over its vendor's byte limit is refused before
+  any worker starts (exit 2), never cut. Put long content in a file and give
+  its absolute path in the task.
 
 ## 📬 Live mailbox
 
