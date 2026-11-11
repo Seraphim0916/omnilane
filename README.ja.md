@@ -1439,3 +1439,5 @@ deepseek、zai、mistral、groq、cerebras)——すべて統一 runner 契約�
 
 プロジェクト文書：[コントリビューション](CONTRIBUTING.md) ·
 [セキュリティ](SECURITY.md) · [変更履歴](CHANGELOG.md)
+
+macOS の SSH セッションで再署名する場合、まず対象の一つを試験してから探測不能かを判定します。[非 Aqua セッションと環境変数による上書き](docs/transport-overlay.md#non-aqua-probe-sessions)を参照してください。

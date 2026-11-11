@@ -1335,3 +1335,5 @@ omnilane 现有 13 个派工 vendor——4 个框架原生(codex、claude、grok
 
 项目文档：[贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [变更记录](CHANGELOG.md)
+
+macOS 从 SSH 重签时，会先试探一个可用选项，再判定会话是否无法探测。详见[非 Aqua 会话与环境变量覆盖](docs/transport-overlay.md#non-aqua-probe-sessions)。

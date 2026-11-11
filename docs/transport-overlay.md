@@ -281,3 +281,54 @@ request selectors using exact identities and hashed local contract evidence. It 
 not change frozen AA scores or certify upstream provider identity. The explicit
 `--operator-asserted-human` exemption is cooperative operator metadata, not automatic
 model detection or OS authentication; model callers must not assert it for themselves.
+
+### Non-Aqua probe sessions
+
+The re-sign wrapper first tries one eligible selector in a non-Aqua macOS
+session (such as SSH) for Claude, Gemini/agy, or Grok. It uses the same cheapest
+selector convention as the smoke check: lowest registry score, then config ID;
+this is not a live price lookup. A passing preflight permits the normal sweep,
+which still has to prove every target separately. Any preflight failure leaves
+the vendor `unprobeable` with a safe failure category and GUI/login guidance
+as one possible cause, not a diagnosis of every failure. Preflight output
+is separate from the sweep evidence and cannot verify a mapping. Rows excluded
+by cooldown/skip selection are not used for this preflight.
+
+`OMNILANE_PROBE_ANY_SESSION=1` explicitly bypasses the launchd session heuristic
+(and the wrapper preflight). It does not bypass authentication, model/effort
+proof, signer, trust, or approval checks. Set it only for a host whose CLI can
+authenticate outside Aqua; unset it to restore automatic session handling.
+The wrapper's automatic override is scoped to one successful preflight/sweep
+and restores the caller's environment afterward.
+
+### Probe child environment boundary
+
+The wrapper admits only `HOME`, `PATH`, and `TMPDIR` from its caller. `HOME`
+keeps the existing home location (including on-disk login/config lookup), `PATH`
+allows the selected CLI and its interpreter to run, and `TMPDIR` keeps temporary
+files in the caller's designated temporary location. `LANG=C` and `LC_ALL=C`
+are fixed, not inherited. Claude additionally receives
+`CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1`; Grok receives
+`GROK_CURSOR_MCPS_ENABLED=0`, `GROK_CURSOR_HOOKS_ENABLED=0`,
+`GROK_CLAUDE_MCPS_ENABLED=0`, and `GROK_CLAUDE_HOOKS_ENABLED=0`.
+Gemini/agy preparation receives only the three common keys and fixed locale.
+No other environment values pass through: this includes credential variables,
+endpoint/proxy overrides, alternate config roots, and Python/Node/dynamic-loader
+injection variables. The caller's environment is restored after each probe.
+
+This allowlist is verified with offline fake children, not authenticated vendor
+CLIs. Environment-based API-key/token login is deliberately unsupported rather
+than forwarding unverified credential variables; live keychain/on-disk login
+compatibility has not been established. No `SECURITYSESSIONID` or other presumed
+keychain variable is forwarded without evidence. `HOME` and `PATH` are trusted
+caller inputs, not a filesystem sandbox. User configuration, hooks, MCP servers,
+or credentials reachable through the home directory may still be loaded by a
+CLI; the allowlist does not claim to isolate those files.
+
+Both Gemini preparation paths use Python `-I`, `stdin=DEVNULL`, the explicit
+child environment, and a 30-second deadline. On POSIX, timed-out preparation
+kills its process group; descendants that deliberately create another session
+can escape that group. The pinned probe engine remains unchanged: its existing
+180-second probe timeout kills only the direct CLI child, not its descendants.
+The environment scope serializes cooperating wrapper calls, but callers must
+not spawn unrelated children concurrently in this synchronous process.

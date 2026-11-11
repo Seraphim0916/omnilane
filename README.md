@@ -1692,3 +1692,5 @@ vary across CLI versions. Issues and PRs welcome.
 
 Project policies: [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
 [Changelog](CHANGELOG.md)
+
+On macOS, re-signing from SSH first probes an eligible selector before deciding the session is unprobeable. See [non-Aqua sessions and the environment override](docs/transport-overlay.md#non-aqua-probe-sessions).

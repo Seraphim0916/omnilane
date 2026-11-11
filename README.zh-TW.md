@@ -1370,3 +1370,5 @@ MCP stdio server 介面(`omnilane mcp`)。直連 API 與聚合 runner 皆以假
 
 專案文件：[貢獻指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) ·
 [變更紀錄](CHANGELOG.md)
+
+macOS 從 SSH 重簽時，會先試探一個可用選項，再判定工作階段是否無法探測。詳見[非 Aqua 工作階段與環境變數覆寫](docs/transport-overlay.md#non-aqua-probe-sessions)。

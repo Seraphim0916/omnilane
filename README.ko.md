@@ -1415,3 +1415,5 @@ kimi, qwen, opencode, openrouter 의 runner 는 페이크 바이너리로 계약
 
 프로젝트 문서: [기여 가이드](CONTRIBUTING.md) · [보안 정책](SECURITY.md) ·
 [변경 기록](CHANGELOG.md)
+
+macOS의 SSH 세션에서 재서명할 때는 먼저 대상 하나를 시험한 뒤 탐지 불가 여부를 판단합니다. [비 Aqua 세션과 환경 변수 재정의](docs/transport-overlay.md#non-aqua-probe-sessions)를 참고하세요.

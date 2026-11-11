@@ -5,6 +5,11 @@ import contextlib
 import json
 import os
 import re
+import signal
+import threading
+from types import SimpleNamespace
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -329,6 +334,109 @@ def advisor_disabled(vendor: str):
             os.environ[ADVISOR_KILL_SWITCH] = previous
 
 
+# Official Grok settings reference: these disable only compatibility imports,
+# not Grok-native/plugin hooks or MCP. Do not claim complete isolation.
+# https://docs.x.ai/build/settings/reference#cursor--claude-compatibility-scanners
+GROK_COMPAT_SWITCHES = (
+    "GROK_CURSOR_MCPS_ENABLED", "GROK_CURSOR_HOOKS_ENABLED",
+    "GROK_CLAUDE_MCPS_ENABLED", "GROK_CLAUDE_HOOKS_ENABLED",
+)
+
+
+# Deliberately no credential, endpoint, proxy, loader or config-override variables.
+# Live provider authentication requirements have not been verified. HOME retains
+# the existing on-disk/keychain identity; it is not a filesystem sandbox.
+PROBE_ENV_KEYS = ("HOME", "PATH", "TMPDIR")
+PREPARATION_TIMEOUT = 30
+_ENVIRONMENT_LOCK = threading.RLock()
+
+
+def child_environment(vendor=None):
+    environment = {key: os.environ[key] for key in PROBE_ENV_KEYS if key in os.environ}
+    # Fixed values, never inherited user locale overrides.
+    environment.update(LANG="C", LC_ALL="C")
+    if vendor == "claude":
+        environment[ADVISOR_KILL_SWITCH] = "1"
+    if vendor == "grok":
+        environment.update({key: "0" for key in GROK_COMPAT_SWITCHES})
+    return environment
+
+
+@contextlib.contextmanager
+def probe_environment(vendor: str):
+    """Let the pinned probe copy only an explicit allowlist, restoring on exit.
+
+    This CLI wrapper is synchronous. The lock serializes cooperating wrapper
+    calls; unrelated threads must not spawn children while this scope is active.
+    """
+    with _ENVIRONMENT_LOCK:
+        previous = dict(os.environ)
+        environment = child_environment(vendor)
+        try:
+            os.environ.clear()
+            os.environ.update(environment)
+            yield
+        finally:
+            os.environ.clear()
+            os.environ.update(previous)
+
+
+def prepare_agy(argv, **_):
+    """Bound Python preparation, with no terminal input or inherited Python knobs."""
+    command = list(argv)
+    if not command or command[0] != sys.executable:
+        raise ValueError("preparation must use this Python interpreter")
+    command.insert(1, "-I")
+    with subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=True, env=child_environment(),
+                          start_new_session=(os.name == "posix")) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=PREPARATION_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            else:
+                process.kill()
+            # Do not wait for pipes held by a descendant that escaped the group.
+            process.stdout.close()
+            process.stderr.close()
+            process.wait()
+            raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
+@contextlib.contextmanager
+def controlled_preparation(vendor):
+    """Adapt only the pinned sweep's preparation dependency, not its code/argv.
+
+    The engine has no preparation callback. Its subprocess.run is used solely
+    for prepare-agy-mode. A local facade keeps the standard subprocess module
+    unchanged and restores the dependency even when preparation raises.
+    """
+    import probe_sweep
+    if vendor != "gemini":
+        yield
+        return
+    with _ENVIRONMENT_LOCK:
+        original = probe_sweep.subprocess
+        probe_sweep.subprocess = SimpleNamespace(run=prepare_agy)
+        try:
+            yield
+        finally:
+            probe_sweep.subprocess = original
+
+
+SAFE_PREFLIGHT_REASONS = frozenset((
+    "timeout", "model-mismatch", "client-record-mismatch", "effort-silently-defaulted",
+    "model-account-mismatch", "evidence-tier-regression", "rate-limited",
+    "quota-exhausted", "not-authenticated", "connection-error", "api-error",
+    "missing-expected-token", "invalid-json", "invalid-json-result",
+))
+
+
 def engine_view(vendor: str, record: dict) -> dict:
     """What the pinned engine may read of a failed codex probe: codex's final error, if any.
 
@@ -355,7 +463,96 @@ def not_authenticated(vendor: str, record: dict) -> bool:
     return bool(probe_sweep.NOT_AUTHENTICATED.search(probe_sweep._text(engine_view(vendor, record))))
 
 
+@contextlib.contextmanager
+def any_session_allowed():
+    """Bypass only the session heuristic, after a separate passing preflight."""
+    key = "OMNILANE_PROBE_ANY_SESSION"
+    previous = os.environ.get(key)
+    os.environ[key] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
+
+
+def session_preflight(vendor: str, root: Path, entry: dict) -> str | None:
+    """One unchanged probe request, separate from installable sweep evidence.
+
+    No retries here: every failure, including preparation/launch errors, leaves
+    the non-Aqua session unprobeable. A pass says nothing about any other row.
+    """
+    import probe_sweep
+    preflight = root / "session-preflight"
+    work = preflight / "work"
+    try:
+        work.mkdir(parents=True, exist_ok=True)
+        app_root = app_data = None
+        if vendor == "gemini":
+            home = Path.home()
+            app_root = home / ".omnilane" / "agy-app" / f"preflight-{root.name}-{entry['name']}"
+            prepared = prepare_agy(
+                [sys.executable, str(probe_sweep.build_overlay.REPO / "scripts/lib/prepare-agy-mode.py"),
+                 "--mode", "advise", "--workdir", str(work), "--app-root", str(app_root),
+                 "--gemini-dir", str(home / ".gemini")], capture_output=True, text=True)
+            if prepared.returncode != 0:
+                return "preparation-failed"
+            app_data = prepared.stdout.strip()
+        argv = probe_sweep.command(vendor, entry["model"], entry["effort"], app_data)
+        with probe_environment(vendor):
+            record = probe_sweep.probe_module.probe(
+                entry["name"], argv, root=preflight,
+                vendor="agy" if vendor == "gemini" else vendor,
+                expected_token=probe_sweep.TOKENS[vendor], app_root=app_root)
+        if record.get("verdict") == "pass":
+            return None
+        reason = str(record.get("verdict_reason") or "").split(":", 1)[0]
+        return reason if reason in SAFE_PREFLIGHT_REASONS else "probe-failed"
+    except subprocess.TimeoutExpired:
+        return "timeout"
+    except OSError:
+        return "launch-failed"
+    except Exception:
+        # Do not expose exception text: it may include provider/user data.
+        return "probe-failed"
+
+
 def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
+              retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False,
+              per_selector=False, refresh_invalidated=()) -> dict:
+    """Test actual reachability before rejecting a non-Aqua session heuristic."""
+    import probe_sweep
+    options = dict(log=log, only_missing=only_missing, retry_failed=retry_failed,
+                   refresh_expired=refresh_expired, skip_configs=skip_configs, retry_now=retry_now,
+                   per_selector=per_selector, refresh_invalidated=refresh_invalidated)
+    if (vendor in probe_sweep.KEYCHAIN_VENDORS and sys.platform == "darwin"
+            and os.environ.get("OMNILANE_PROBE_ANY_SESSION") != "1"):
+        manager = probe_sweep.session_manager()
+        if manager and manager != "Aqua":
+            entries = [entry for entry in probe_sweep.plan(vendor)
+                       if entry["config_id"] not in skip_configs and
+                       (not only_missing or entry["config_id"] in (*retry_failed, *refresh_expired, *refresh_invalidated)
+                        or not (root / "evidence" / f"{entry['name']}.json").is_file())]
+            if entries:
+                # Same cheapest-row convention as resign.smoke: registry score,
+                # then stable ID. The registry does not contain monetary prices.
+                entry = min(entries, key=lambda e: (
+                    probe_sweep.build_overlay.ROWS[e["config_id"]]["score"], e["config_id"]))
+                failure = session_preflight(vendor, root, entry)
+                if failure is not None:
+                    return dict(vendor=vendor, outcome="unprobeable", passed=[], failed=[],
+                                detail=(f"{vendor} session preflight failed ({failure}); "
+                                        "a non-Aqua session or unavailable login keychain is one "
+                                        "possible cause. Check CLI login/access, then re-run; "
+                                        "an Aqua (GUI) login may help."))
+                with any_session_allowed():
+                    return _run_sweep(vendor, root, **options)
+    return _run_sweep(vendor, root, **options)
+
+
+def _run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
               retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False,
               per_selector=False, refresh_invalidated=()) -> dict:
     """Reuse the pinned sweep engine, exposing only eligible staged gaps to it.
@@ -404,7 +601,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
             if previous.get("verdict") == "fail" and environment_reason(previous.get("verdict_reason")):
                 log(f"{name}: environment probe already failed; unattended cooldown prevents another call")
                 return previous
-        with advisor_disabled(vendor):
+        with probe_environment(vendor):
             record = probe_sweep.probe_module.probe(name, argv, **kwargs)
         # Claude sometimes answers with text injected into the session (a hook's
         # context, an MCP server's instructions) instead of the token, with the
@@ -419,7 +616,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
                 if path.is_file():
                     path.replace(kept / f"{name}.first-attempt.{suffix}")
             log(f"{name}: answered without the token; first answer kept in {kept}, asking once more")
-            with advisor_disabled(vendor):
+            with probe_environment(vendor):
                 record = probe_sweep.probe_module.probe(name, argv, **kwargs)
             log(f"{name}: passed on retry" if record.get("verdict") == "pass"
                 else f"{name}: failed twice ({str(record.get('verdict_reason'))[:80]})")
@@ -461,7 +658,8 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
         return engine_view(vendor, record)
 
     try:
-        result = probe_sweep.sweep(vendor, root, log=log, only_missing=only_missing, run_probe=run_probe)
+        with controlled_preparation(vendor):
+            result = probe_sweep.sweep(vendor, root, log=log, only_missing=only_missing, run_probe=run_probe)
         if (per_selector and result.get("detail") == "no selector of this vendor passed"
                 and result["failed"] and all(cid in captured and environment_reason(
                     json.loads(captured[cid]["json"]).get("verdict_reason")) for cid in result["failed"])):
