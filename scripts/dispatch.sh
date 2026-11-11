@@ -1338,6 +1338,30 @@ if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
   exit 1
 fi
 
+# Stage the exact task.txt bytes before any job directory exists, so an
+# over-limit task fails the same way in --dry-run, foreground and background,
+# with nothing left behind. Goal stdin keeps its $(cat) bytes (see below).
+if [[ -n "$GOAL_INTENT_REF" && "$TASK" == "-" ]]; then TASK="$(cat)"; GOAL_STDIN_CAPTURED=1; fi
+TASK_STAGE="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-task.XXXXXX")" || exit 1
+trap 'rm -f "$TASK_STAGE"' EXIT
+if [[ "$GOAL_STDIN_CAPTURED" -eq 1 ]]; then
+  printf '%s' "$TASK" > "$TASK_STAGE"
+elif [[ "$TASK" == "-" ]]; then
+  cat > "$TASK_STAGE"
+else
+  printf '%s\n' "$TASK" > "$TASK_STAGE"
+fi
+TASK_SEND_BYTES=$(wc -c < "$TASK_STAGE") || exit 1
+TASK_SEND_BYTES=$((TASK_SEND_BYTES))
+if prompt_counts_worker_rules "$VENDOR" "$SESSION_MODE"; then
+  TASK_SEND_BYTES=$((TASK_SEND_BYTES + $(worker_rules_bytes)))
+fi
+TASK_CAP_BYTES="$(prompt_cap_bytes "$VENDOR" "$SESSION_MODE")"
+if [[ "$TASK_SEND_BYTES" -gt "$TASK_CAP_BYTES" ]]; then
+  prompt_too_long_message "$VENDOR" "$TASK_SEND_BYTES" "$TASK_CAP_BYTES"
+  exit 2
+fi
+
 quota_emit_notice
 if [[ "$DRY_RUN" -eq 1 ]]; then
   print_dry_run_plan
@@ -1379,9 +1403,8 @@ JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
 if [[ -n "$GOAL_INTENT_REF" ]]; then
   [[ "$BACKGROUND" == "1" ]] || { rmdir "$JOB_DIR"; echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
-  # Goal stdin was already captured by goal-loop; keep the same task bytes for
-  # both its fingerprint and execution. Do not consume normal dispatch stdin.
-  if [[ "$TASK" == "-" ]]; then TASK="$(cat)"; GOAL_STDIN_CAPTURED=1; fi
+  # Goal stdin was captured before the size check; the same task bytes serve
+  # both its fingerprint and execution.
   GOAL_TASK_FINGERPRINT="$(python3 -c 'import hashlib,sys; print(hashlib.sha256((sys.argv[1] + "\0" + sys.argv[2]).encode("utf-8")).hexdigest())' "$LANE" "$TASK")"
   if ! python3 "$OMNILANE_REPO/scripts/lib/goal_dispatch.py" claim \
     "$OMNILANE_HOME" "$GOAL_INTENT_REF" "$JOB_ID" "$LANE" "$GOAL_TASK_FINGERPRINT"; then
@@ -1453,18 +1476,11 @@ elif resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
   FOREMAN_SESSION="$resolved_foreman_session"
 fi
 
-if [[ "$GOAL_STDIN_CAPTURED" -eq 1 ]]; then
-  (umask 077; printf '%s' "$TASK" > "$JOB_DIR/task.txt")
-elif [[ "$TASK" == "-" ]]; then
-  (umask 077; cat > "$JOB_DIR/task.txt")
-else
-  (umask 077; printf '%s\n' "$TASK" > "$JOB_DIR/task.txt")
-fi
+(umask 077; cat "$TASK_STAGE" > "$JOB_DIR/task.txt") || exit 1
+rm -f "$TASK_STAGE"
+trap - EXIT
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
-if [[ "$VENDOR" == "gemini" ]]; then
-  validate_gemini_task_size "$JOB_DIR/task.txt" || exit $?
-fi
 
 THREAD_TURN_JSON="${THREAD_TURN:-null}"
 META_TMP="$JOB_DIR/.meta.tmp.$$-$RANDOM"

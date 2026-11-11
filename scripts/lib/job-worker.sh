@@ -260,14 +260,23 @@ worker_prompt_file() {
 untracked_truncate_definition="$(declare -f truncate_payload)"
 eval "${untracked_truncate_definition/truncate_payload/untracked_truncate_payload}"
 unset untracked_truncate_definition
+# The runners keep their truncate_payload lines (their bytes are pinned in the
+# signed transport evidence), but a task copy over its cap is refused here, not
+# cut: dispatch already refused it before the job, so this is only a backstop.
+# Files outside the private copy directory (vote's generated Round 2 prompt)
+# keep the old cut.
 truncate_payload() {
-  local size
+  local size cap="${2:-140000}"
   if [[ ! "${1%/*}" -ef "$PROMPT_COPY_DIR" ]]; then
     untracked_truncate_payload "$@"
     return $?
   fi
-  size="$(wc -c < "$1")" || return 1
-  owned_prompt_operation truncate "$1" "${2:-140000}:$size"
+  size="$(wc -c < "$1")" || return 2
+  size=$((size))
+  if [[ "$size" -gt "$cap" ]]; then
+    prompt_too_long_message "${OMNILANE_PROMPT_VENDOR:-${VENDOR:-worker}}" "$size" "$cap"
+    return 2
+  fi
 }
 
 # Keep the runner in a fresh Bash process, including its own PID and traps.
@@ -293,7 +302,8 @@ run_job_runner() {
   if ! grep -Eq '^[[:space:]]*source .*common[.]sh' "$runner"; then
     exec "$RUNNER" "$@"
   fi
-  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_IDENTITIES
+  OMNILANE_PROMPT_VENDOR="$VENDOR"
+  export PROMPT_COPY_DIR PROMPT_COPY_ID PROMPT_IDENTITIES OMNILANE_PROMPT_VENDOR
   exec bash -c '
     overrides="$1"
     runner="$2"
@@ -604,10 +614,8 @@ fi
 # sends; later sends reach the worker through the inbox and stay verbatim.
 owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt || exit 1
 FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_COPY_DIR/task.txt")" || exit 1
-# Cap only the copy that is sent: task.txt is the preserved record. The rules
-# sit at the head of the copy, which truncate_payload keeps.
 if [[ "$VENDOR" != "gemini" ]]; then
-  truncate_payload "$FIRST_MESSAGE_FILE" 102400
+  enforce_prompt_cap "$FIRST_MESSAGE_FILE" "$VENDOR" live || exit $?
 fi
 # Codex input must not be consumed by Bash read: an interrupted partial read
 # can discard bytes before the close trap runs. Pump raw bytes instead. The

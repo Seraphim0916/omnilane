@@ -900,25 +900,38 @@ PY
 }
 
 case_codex_live_large_task() {
-  # A live task over the 102400-byte cap: only what is sent is truncated;
-  # task.txt, the preserved record, keeps every byte. This checks the first
-  # turn/start the fake Codex actually received, not task.txt.worker: run-codex.sh
-  # rebuilds that file from the full task after job-worker.sh has read it.
+  # A live first message over the 102400-byte cap is refused before any job
+  # exists; a task that fills the cap exactly is sent whole, never cut. The
+  # check reads the turn/start the fake Codex received, not task.txt.worker.
   # The fixture is ASCII, so LC_ALL=C does not change the bytes sent. json_escape
   # hands a ~100 KB first message to Python, so it is not slow in any locale.
   local home="$TEST_ROOT/codex-live-large" bin="$TEST_ROOT/codex-live-large/bin"
   local fake="$bin/codex" input="$home/codex.input" task="$home/task.src" job job_dir close_out tries=0
+  local over="$home/over.src" refused rc=0 rules
   mkdir -p "$home" "$bin"
   make_codex "$fake"
   printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
-  python3 - "$task" <<'PY'
+  rules="$(source "$ROOT/scripts/lib/common.sh"; worker_rules_bytes)"
+  python3 - "$task" "$over" "$((102400 - rules))" <<'PY'
 import pathlib
 import sys
-body = "".join(f"{i:06d} large live task line\n" for i in range(4400))
-pathlib.Path(sys.argv[1]).write_bytes(("HEAD-MARKER\n" + body + "TAIL-MARKER\n").encode())
+size = int(sys.argv[3])
+body = "".join(f"{i:06d} large live task line\n" for i in range(4400)).encode()
+head, tail = b"HEAD-MARKER\n", b"TAIL-MARKER\n"
+pathlib.Path(sys.argv[1]).write_bytes(head + body[:size - len(head) - len(tail)] + tail)
+pathlib.Path(sys.argv[2]).write_bytes(head + body + tail)
 PY
-  [[ "$(wc -c < "$task")" -gt 102400 && "$(wc -c < "$task")" -lt 140000 ]] ||
-    fail "fixture task must sit between the live cap and the runner cap"
+  [[ "$(wc -c < "$over")" -gt 102400 && "$(wc -c < "$over")" -lt 140000 ]] ||
+    fail "over-cap fixture must sit between the live cap and the runner cap"
+
+  refused="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" FAKE_CODEX_INPUT="$input" \
+    FAKE_CODEX_COUNTER="$home/codex.counter" "$ROOT/scripts/dispatch.sh" --background --live \
+    --idle-timeout 0 --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    triage - < "$over" 2>&1)" || rc=$?
+  [[ "$rc" -eq 2 ]] || fail "over-cap live task was not refused (exit $rc): $refused"
+  [[ "$refused" == *"as sent to codex; limit is 102400 bytes"* ]] || fail "refusal message: $refused"
+  [[ ! -e "$input" ]] || fail "over-cap live task reached Codex"
+  [[ ! -d "$home/jobs" || -z "$(ls -A "$home/jobs")" ]] || fail "over-cap live task left a job directory"
 
   job="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" \
     FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="done" \
@@ -948,8 +961,7 @@ PY
     [[ ! -e "$copy" && ! -L "$copy" ]] || fail "Codex live close left prompt copy: $copy"
   done
 
-  cmp -s "$task" "$job_dir/task.txt" ||
-    fail "task.txt was rewritten by live truncation ($(wc -c < "$job_dir/task.txt") of $(wc -c < "$task") bytes left)"
+  cmp -s "$task" "$job_dir/task.txt" || fail "task.txt differs from the task sent"
   TASK="$task" INPUT="$input" python3 - <<'PY' || fail "Codex large live first message mismatch"
 import json
 import os
@@ -962,10 +974,11 @@ assert len(turns) == 1, len(turns)
 sent = turns[0]["params"]["input"][0]["text"]
 assert sent.startswith(marker), sent[:80]
 assert sent.count(marker) == 1, sent.count(marker)
-assert "--- TRUNCATED (original: " in sent, "first message is not truncated"
-assert "HEAD-MARKER" in sent and "TAIL-MARKER" in sent
-assert len(sent.encode()) <= 102400 + 200, len(sent.encode())
-assert len(sent.encode()) < pathlib.Path(os.environ["TASK"]).stat().st_size
+assert "--- TRUNCATED" not in sent, "first message was cut"
+task = pathlib.Path(os.environ["TASK"]).read_bytes()
+# The live JSON text drops the task's final newline; every other byte arrives.
+assert task.endswith(b"\n") and sent.encode().endswith(task[:-1]), (len(sent.encode()), len(task), sent[-60:])
+assert len(sent.encode()) == 102400 - 1, len(sent.encode())
 PY
 }
 
@@ -2755,7 +2768,7 @@ case "$CASE" in
   run_case codex-live-rpc
   printf 'ok - Codex live JSON-RPC mailbox and incremental output\n'
   run_case codex-live-large-task
-  printf 'ok - Codex live large task truncates only the worker copy\n'
+  printf 'ok - Codex live task over the cap is refused; one at the cap is sent whole\n'
   run_case codex-live-large-task-cleanup
   printf 'ok - Codex live large task stops its job when a step fails\n'
     run_case codex-live-fallback
