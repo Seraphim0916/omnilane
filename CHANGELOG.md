@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- **A task over its vendor's byte limit is now refused, never truncated.** Before any job directory or worker exists, dispatch measures exactly what the worker would receive (the task bytes, plus the worker rules for Claude, Codex, Grok and every live first message) and exits **2** with one stderr line giving the byte count, the limit, the vendor and the fix: put long content in a file and give its absolute path in the task. `--dry-run` reports the same error, and a refused `--background` dispatch leaves no job behind. Limits are unchanged: Claude 102400, live first message 102400, vote 100000, Gemini 180000 (130000 on Linux), others 140000. Gemini now refuses before creating a job instead of keeping a job with `task.txt`. Inside a job, the worker refuses an over-cap task copy as a backstop; runner files are unchanged, so no re-sign is needed. Only the generated Round 2 prompt of `vote` is still cut, because it holds model opinions rather than the task.
+
 ### Fixed
 - Keep row-local evidence integrity handling outside the release-pinned transport compatibility module, preserving its approved bytes and the existing origin-protection tests.
 - Damaged evidence for a failed selector retired from the current score snapshot no longer blocks re-sign checks or repairs for other vendors. Maintenance retains the complete validation-time damage set separately from current-row diagnostics, while still refusing newly damaged failure evidence after validation.

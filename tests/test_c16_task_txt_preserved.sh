@@ -38,10 +38,11 @@ printf '\nacquire_cwd_lock() { :; }\naa_policy_gate() { :; }\nrun_with_timeout()
 # Reuse the aggregate suite's fake CLIs, adding byte-exact input capture.
 python3 -B -c 'import pathlib,sys; root,out=map(pathlib.Path,sys.argv[1:]); src=(root/"tests/run.sh").read_text(); capture="python3 -B -c '\''import os,pathlib,sys; a=sys.argv[1:]; data=sys.stdin.buffer.read() if \"-o\" in a else a[-1].encode(); pathlib.Path(os.environ[\"CAPTURE\"]).write_bytes(data)'\'' \"$@\"\n"; [(out/ ("fake-"+v)).write_text("#!/usr/bin/env bash\n"+capture+"if [[ ${FAKE_CLI_EXIT:-0} -ne 0 ]]; then exit \"$FAKE_CLI_EXIT\"; fi\n"+src.split("cat > \"$bin/fake-"+v+"\" <<'\''EOF'\''\n",1)[1].split("\nEOF",1)[0].split("\n",1)[1]) for v in ("codex","claude")]' "$ROOT" "$TEST_ROOT"
 chmod +x "$TEST_ROOT/fake-codex" "$TEST_ROOT/fake-claude"
+rules_bytes="$(source "$TEST_ROOT/runtime/scripts/lib/common.sh"; worker_rules_bytes)"
 for vendor in codex claude; do
   case "$vendor" in codex) cap=140000 ;; claude) cap=102400 ;; esac
   for expected_rc in 0 23; do
-    for size in 4096 "$cap" "$((cap + 1))" 200000; do
+    for size in 4096 "$((cap - rules_bytes))" "$cap" "$((cap + 1))" 200000; do
       job="$TEST_ROOT/$vendor-$size-$expected_rc"
       mkdir -p "$job"
       python3 -B -c 'import pathlib,sys; pathlib.Path(sys.argv[1]).write_bytes((b"0123456789abcdef"*20000)[:int(sys.argv[2])])' "$job/task.txt" "$size"
@@ -52,7 +53,12 @@ for vendor in codex claude; do
         FAKE_CLI_EXIT="$expected_rc" CAPTURE="$job/received" bash "$TEST_ROOT/runtime/scripts/lib/job-worker.sh" \
         "$vendor" advise "$job" fixture low "$job/task.txt" "$job/out.txt" \
         > "$job/stdout" 2> "$job/stderr" || rc=$?
-      [[ "$rc" -eq "$expected_rc" ]] || { echo "FAIL unexpected exit: $rc (expected $expected_rc)" >&2; tail -n 10 "$job/stderr" >&2; exit 1; }
+      # The runner sends the worker rules ahead of the task; over the cap it
+      # refuses (exit 2) and the fake CLI receives nothing.
+      source "$TEST_ROOT/runtime/scripts/lib/common.sh"
+      want_rc="$expected_rc"; over=0
+      if [[ $((size + $(worker_rules_bytes))) -gt "$cap" ]]; then want_rc=2; over=1; fi
+      [[ "$rc" -eq "$want_rc" ]] || { echo "FAIL unexpected exit: $rc (expected $want_rc)" >&2; tail -n 10 "$job/stderr" >&2; exit 1; }
       cmp "$job/original" "$job/task.txt" || exit 1
       for copy in task.txt.worker task.txt.runner task.txt.runner.worker; do
         [[ ! -e "$job/$copy" && ! -L "$job/$copy" ]] || { echo "FAIL leftover $copy" >&2; exit 1; }
@@ -60,20 +66,21 @@ for vendor in codex claude; do
       for copy in "$job"/task.txt.copies.*; do
         [[ ! -e "$copy" && ! -L "$copy" ]] || { echo "FAIL leftover private copies: $copy" >&2; exit 1; }
       done
-      # The received payload still contains exactly one header.
-      source "$TEST_ROOT/runtime/scripts/lib/common.sh"
+      if [[ "$over" -eq 1 ]]; then
+        [[ ! -e "$job/received" ]] || { echo "FAIL over-cap task reached the CLI" >&2; exit 1; }
+        grep -q "task is $((size + $(worker_rules_bytes))) bytes as sent to $vendor; limit is $cap bytes" "$job/stderr" || { echo "FAIL refusal message" >&2; exit 1; }
+        printf 'PASS %s %s bytes refused exit=2\n' "$vendor" "$size"
+        continue
+      fi
+      # The received payload is the header plus the task, byte for byte.
       printf '%s\n%s\n\n' "$OMNILANE_WORKER_RULES_MARKER" "$OMNILANE_WORKER_RULES" > "$job/expected"
       cat "$job/original" >> "$job/expected"
-      python3 -B -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); cap=int(sys.argv[2]); data=p.read_bytes()
-h=cap*7//10; t=len(data)-cap//4
-while len(data)>cap and h>0 and data[h]&0xC0==0x80: h-=1
-while len(data)>cap and t<len(data) and data[t]&0xC0==0x80: t+=1
-expected=data if len(data)<=cap else data[:h]+("\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n"%(len(data),cap,t-h)).encode()+data[t:]; actual=pathlib.Path(sys.argv[3]).read_bytes(); assert actual==expected,"CLI truncation mismatch"' "$job/expected" "$cap" "$job/received" "$(wc -c < "$job/expected")" || exit 1
+      cmp "$job/expected" "$job/received" || { echo "FAIL CLI payload differs" >&2; exit 1; }
       printf 'PASS %s %s bytes exit=%s\n' "$vendor" "$size" "$expected_rc"
     done
   done
 done
-printf 'PASS task.txt preserved; existing CLI truncation verified and copies removed (16 success/failure cases)\n'
+printf 'PASS task.txt preserved; exact-cap tasks sent whole, over-cap tasks refused, copies removed (20 cases)\n'
 
 # Exercise the real worker/Claude runner lifecycle without dispatch policy or
 # process inspection. Readiness and bounded process waits are the oracle;
@@ -356,30 +363,31 @@ def direct_api_case(vendor, size):
     job = new_job("direct-api-%s-%s" % (vendor, size), size)
     env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], **{vendor.upper() + "_API_KEY": "fixture-key"})
     result = subprocess.run(command(vendor, job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
-    assert result.returncode == 0, (result.returncode, result.stderr)
     data = payload[:size]
     assert (job / "task.txt").read_bytes() == data
-    assert (job / "out.txt").read_text() == "fixture result"
     assert not private_dirs(job), [sorted(p.name for p in d.iterdir()) for d in private_dirs(job)]
+    if size > cap:
+        # Over the cap the runner refuses before any request; nothing is cut.
+        assert result.returncode == 2, (result.returncode, result.stderr)
+        assert b"limit is %d bytes" % cap in result.stderr, result.stderr
+        assert not (job / "received").exists(), "over-cap task reached the API"
+        return
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    assert (job / "out.txt").read_text() == "fixture result"
     sent = json.loads((job / "received").read_text())["messages"][0]["content"].encode()
-    head, tail = cap * 7 // 10, len(data) - cap // 4
-    while size > cap and head > 0 and data[head] & 0xC0 == 0x80:
-        head -= 1
-    while size > cap and tail < len(data) and data[tail] & 0xC0 == 0x80:
-        tail += 1
-    expected = data if size <= cap else data[:head] + ("\n\n--- TRUNCATED (original: %d bytes, cap %d, dropped %d bytes) ---\n\n" % (len(data), cap, tail - head)).encode() + data[tail:]
-    assert sent == expected, "direct API truncation mismatch"
+    assert sent == data, "direct API payload differs"
 for vendor in ("openrouter", "deepseek", "zai", "mistral", "groq", "cerebras"):
-    check("direct API %s over the cap removes its copies" % vendor, direct_api_case, vendor, 200000)
+    check("direct API %s over the cap is refused and removes its copies" % vendor, direct_api_case, vendor, 200000)
 for size in (4096, 140000, 140001):
     check("direct API groq %s bytes removes its copies" % size, direct_api_case, "groq", size)
 def wrapper_with_extra_line_case():
     # Identity checks must keep what an untracked runner replaced; only a pure wrapper is rerouted.
     source = (runtime / "scripts/runners/run-groq.sh").read_text()
     custom = runtime / "scripts/runners/run-groqplus.sh"
-    custom.write_text(source.replace("export OMNILANE_OAI_VENDOR=groq\n", "export OMNILANE_OAI_VENDOR=groq\necho wrapper-extra-line >&2\n"))
+    # The extra line replaces the prompt copy (a new inode), as a cutting runner once did.
+    custom.write_text(source.replace("export OMNILANE_OAI_VENDOR=groq\n", "export OMNILANE_OAI_VENDOR=groq\necho wrapper-extra-line >&2\n/bin/cp \"$5\" \"$5.new\" && /bin/mv \"$5.new\" \"$5\"\n"))
     custom.chmod(0o755)
-    job = new_job("direct-api-extra-line", 200000)
+    job = new_job("direct-api-extra-line", 4096)
     env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], GROQ_API_KEY="fixture-key")
     result = subprocess.run(command("groqplus", job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
     assert result.returncode == 0, (result.returncode, result.stderr)
@@ -557,7 +565,8 @@ worker = runtime / "scripts/lib/job-worker.sh"
 original_worker = worker.read_text()
 # Stop after writing to the parent-registered inode for both copy producers.
 # The actual worker EXIT path must remove all parent-registered targets.
-for operation in ("decorate", "truncate"):
+# Runners no longer cut a task, so only the decorate producer remains.
+for operation in ("decorate",):
     seam = "        out.flush()"
     assert original_worker.count(seam) == 1
     worker.write_text(original_worker.replace(seam, seam + "\n        if action == " + json.dumps(operation) + ": sys.exit(23)"))
