@@ -323,14 +323,21 @@ class FalseAllowTests(RetryFixture, unittest.TestCase):
         self.assertEqual(self.live.read_bytes(), before)
         self.assert_unverified(entry)
 
-    def test_false_allow_verified_evidence_tampering_is_refused_before_retry(self):
+    def test_damaged_positive_proof_requires_a_fresh_probe_alongside_failed_retry(self):
         entry = self.fail_row()
         other = probe_sweep.plan("claude")[0]
         (self.sweep_root / "evidence" / f"{other['name']}.stdout").write_text("tampered")
-        before = self.live.read_bytes()
-        self.assertEqual(self.run_retry(retry_failed=True), 40)
-        self.assertEqual(self.calls, [])
-        self.assertEqual(before, self.live.read_bytes())
+        self.behavior[other['config_id']] = 'wrong-model'
+        # Like an unprobed row, a fresh conclusive failure is reported without
+        # blocking installation of the sibling that recovered in this run.
+        self.assertEqual(self.run_retry(retry_failed=True), 0, self.lines)
+        self.assertEqual(set(self.calls), {entry['config_id'], other['config_id']})
+        self.assert_unverified(other)
+        self.assertTrue(self.decision(entry)['allowed'])
+        self.assertEqual(self.args.status_summary['deterministic_failures']['claude']
+                         [other['config_id']], 'model-mismatch')
+        self.assertIn('1 row(s) invalidated', '\n'.join(self.lines))
+        self.assertIn('omnilane resign --vendor claude', '\n'.join(self.lines))
 
     def test_false_allow_conclusive_row_with_retry_flag_is_not_called(self):
         entry = self.fail_row("wrong-model")
@@ -398,14 +405,13 @@ def tampered_hint_case(kind):
             overlay["unproven"].append(duplicate)
         self.live.write_text(json.dumps(overlay))
         before = self.live.read_bytes()
-        self.assertEqual(self.run_retry(retry_failed=True), 40, self.lines)
+        # Damaged raw proof loses retry eligibility rather than taking down
+        # every row. Contradictory trusted metadata still rejects globally.
+        self.assertEqual(self.run_retry(retry_failed=kind != 'reason-and-descriptor'),
+                         20 if kind == 'reason-and-descriptor' else 40, self.lines)
         self.assertEqual(self.calls, [])
         self.assertEqual(before, self.live.read_bytes())
-        if kind == "reason-and-descriptor":
-            with self.assertRaisesRegex(aa_policy.PolicyError, "failed probe evidence changed"):
-                self.decision(entry)
-        else:
-            self.assert_unverified(entry)
+        self.assert_unverified(entry)
     return test
 
 

@@ -4,9 +4,8 @@
 Prints `LEVEL<TAB>message[<TAB>row JSON]` lines for `omnilane doctor`. Always exits 0; the
 caller decides how to grade the level. Nothing here contacts a provider.
 
-Exists because no other doctor check observes the AA gate: every vendor CLI can
-be reachable and every lane resolvable while `load_registry` refuses the whole
-registry over one drifted evidence hash.
+Observes the same AA gate as dispatch: individual raw proof loss degrades only
+its rows, while a broken shared anchor or contract still rejects the overlay.
 """
 import hashlib
 import json
@@ -74,7 +73,10 @@ def pending_summary(overlay: dict) -> str:
 
 def snapshot_summary(overlay: dict, registry: dict) -> str:
     from resign import VENDORS, unprobed
-    gaps = {vendor: unprobed(overlay, vendor) for vendor in VENDORS}
+    invalidated = registry.get("_transport_invalidated_evidence", {})
+    gaps = {vendor: unprobed(overlay, vendor, invalidated=invalidated) if invalidated
+            else unprobed(overlay, vendor)
+            for vendor in VENDORS}
     vendors = [vendor for vendor, rows in gaps.items() if rows]
     carried = registry.get("_transport_carry_forward", [])
     older = overlay.get("snapshot_id") != registry["snapshot"]["id"]
@@ -158,8 +160,16 @@ def main() -> None:
         extra += (f"; reused {len(carried)} unchanged row(s) from "
                   f"{carried[0]['source_snapshot_id']} to {carried[0]['target_snapshot_id']}")
     changed = registry.get("_transport_unverified", {})
-    if changed:
-        extra += "; request contracts need verification: " + ", ".join(sorted(changed))
+    invalidated = registry.get("_transport_invalidated_evidence", {})
+    if invalidated:
+        configs = {row["id"]: row for row in registry["scored_configs"]}
+        counts = Counter(configs[cid]["vendor"] for cid in invalidated)
+        extra += f"; {len(invalidated)} row(s) invalidated by missing or changed probe evidence: "
+        extra += "; ".join(f"{vendor} {count}; Next: omnilane resign --vendor {vendor}"
+                           for vendor, count in sorted(counts.items()))
+    contracts = set(changed) - set(invalidated)
+    if contracts:
+        extra += "; request contracts need verification: " + ", ".join(sorted(contracts))
     stale = registry.get("_stale_transport_vendors", [])
     # The gate hashes the path the overlay recorded. An update that installs beside
     # the old executable leaves that path intact, so only this comparison sees it.

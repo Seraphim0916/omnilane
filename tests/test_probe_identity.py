@@ -339,6 +339,8 @@ class ProbeAndOverlayTests(unittest.TestCase):
         self.assertFalse((self.root / "evidence").exists())
 
     def test_failed_probe_is_hashed_without_granting_dispatch_authority(self):
+        import probe_failure
+
         self.evidence("pass")
         self.evidence("fail", "fail")
         proven = {
@@ -357,14 +359,31 @@ class ProbeAndOverlayTests(unittest.TestCase):
             with patch.dict(os.environ):
                 os.environ.pop("OMNILANE_AA_OVERLAY_SHA256", None)
                 registry, _ = aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
+                validated = set(registry["_transport_invalidated_evidence_all"])
                 (self.root / "evidence/fail.stdout").write_text("changed unproven evidence")
-                # This module loads aa_policy independently; both policy-error
-                # classes inherit ValueError even when their module objects differ.
+                # Reuse the pre-damage baseline as resign.detect does; a fresh load isolates damage.
                 with self.assertRaisesRegex(ValueError, "failed probe evidence changed"):
-                    aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
-        rows = {row["id"]: row for row in registry["scored_configs"]}
-        self.assertTrue(rows["claude/claude-opus-5"]["transport_mapping"]["runtime_verified"])
-        self.assertIsNot(rows["claude/claude-sonnet-5-5"]["transport_mapping"].get("runtime_verified"), True)
+                    probe_failure.failed_probes(overlay, "claude", invalidated=validated)
+                reloaded, digest = aa_policy.load_registry(ROOT / "config/aa-model-policy.json")
+        failed_id = "claude/claude-sonnet-5-5"
+        for snapshot in (registry, reloaded):
+            rows = {row["id"]: row for row in snapshot["scored_configs"]}
+            self.assertTrue(rows["claude/claude-opus-5"]["transport_mapping"]["runtime_verified"])
+            self.assertIsNot(rows[failed_id]["transport_mapping"].get("runtime_verified"), True)
+        self.assertIn(failed_id, reloaded["_transport_invalidated_evidence"])
+        caller = max(reloaded["scored_configs"], key=lambda row: row["score"])
+        decision = aa_policy.decide(
+            reloaded, digest, vendor="claude", model="claude-sonnet-5-5",
+            effort=rows[failed_id]["effort"], target_config=failed_id,
+            caller={"caller": aa_policy._row_identity(caller), "inherited_ceiling": caller["score"]},
+            caller_sha256="offline")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["failed_gate"], "target-transport")
+        failures = probe_failure.failed_probes(
+            overlay, "claude", invalidated=set(reloaded["_transport_invalidated_evidence_all"]))
+        self.assertTrue(failures[failed_id]["evidence_invalidated"])
+        self.assertEqual(probe_failure.cooldown(failures[failed_id]["last_failed_at"]),
+                         (True, "invalid failure timestamp"))
 
     def test_legacy_negative_response_is_unproven_after_rejudging(self):
         self.evidence("old-format", None, exit_code=1, probed_at=None)

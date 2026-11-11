@@ -51,6 +51,7 @@ import probe_sweep  # noqa: E402
 import probe_failure  # noqa: E402
 import selector_recheck  # noqa: E402
 from overlay_diagnostics import recovery_guidance  # noqa: E402
+from evidence_integrity import INVALIDATED_REASON, FAILED_INVALIDATED_REASON  # noqa: E402
 
 EXIT_OK, EXIT_DRIFT, EXIT_OPERATOR, EXIT_ROLLED_BACK, EXIT_UNCONFIGURED = 0, 10, 20, 30, 2
 EXIT_HOST_CONFIG = 40
@@ -80,16 +81,21 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
     report = {}
     registry_snapshot = build_overlay.REGISTRY["snapshot"]["id"]
     cross_snapshot = overlay.get("snapshot_id") != registry_snapshot
-    compatible, expired_ids, verified_counts = set(), set(), {}
+    compatible, expired_ids, invalidated_ids, verified_counts = set(), set(), set(), {}
+    validated_invalidated_ids = set()
     candidate = copy.deepcopy(build_overlay.REGISTRY)
     try:
         aa_policy.validate_transport_overlay(candidate, overlay, "maintenance-inspection")
         compatible = {item["config_id"] for item in candidate["_transport_carry_forward"]}
         expired_ids = {cid for cid, reason in candidate["_transport_unverified"].items()
                        if reason == "evidence-expired"}
+        invalidated_ids = set(candidate.get("_transport_invalidated_evidence", {}))
+        validated_invalidated_ids = set(candidate.get("_transport_invalidated_evidence_all", {}))
         verified_counts = {vendor: sum(row["vendor"] == vendor and
                                        row["transport_mapping"].get("runtime_verified") is True
                                        for row in candidate["scored_configs"]) for vendor in VENDORS}
+    except aa_policy.EvidenceDirectoryError:
+        raise  # A foreign sweep must not be reported as current or re-sealed.
     except (aa_policy.PolicyError, OSError, KeyError, TypeError):
         pass  # Unknown or damaged sources cannot save any probe work.
     for vendor in VENDORS:
@@ -116,13 +122,15 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
         executables_unchanged = not reasons
         changed = [m["config_id"] for m in overlay.get("mappings", [])
                    if m["identity"]["vendor"] == vendor and m["config_id"] in build_overlay.ROWS
-                   and m["config_id"] not in compatible | expired_ids] if cross_snapshot else []
+                   and m["config_id"] not in compatible | expired_ids | invalidated_ids] if cross_snapshot else []
         snapshot_only = False
         if changed:
             reasons.append(f"{len(changed)} request contract(s) need verification after the score registry "
                            f"moved from {overlay.get('snapshot_id')} to {registry_snapshot}")
-        missing = unprobed(overlay, vendor)
-        failed = probe_failure.failed_probes(overlay, vendor)
+        missing = (unprobed(overlay, vendor, invalidated=invalidated_ids) if invalidated_ids
+                   else unprobed(overlay, vendor))
+        invalidated = sorted(cid for cid in invalidated_ids if build_overlay.ROWS[cid]["vendor"] == vendor)
+        failed = probe_failure.failed_probes(overlay, vendor, invalidated=validated_invalidated_ids)
         pending_selectors = selector_recheck.pending_rows(overlay, vendor)
         stale = bool(reasons or changed)
         expired = sorted(cid for cid in expired_ids if build_overlay.ROWS[cid]["vendor"] == vendor)
@@ -139,6 +147,9 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
         if missing:
             reasons.append(f"{len(missing)} configuration(s) never probed on this host: "
                            + ", ".join(missing))
+        if invalidated:
+            reasons.append(f"{len(invalidated)} row(s) invalidated by missing or changed probe evidence; "
+                           f"run omnilane resign --vendor {vendor}")
         if any(m.get("pending_recheck") and m["identity"]["vendor"] == vendor
                for m in overlay.get("mappings", [])):
             reasons.append("pending re-check")
@@ -158,6 +169,8 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
             "recorded_cli_path": recorded_cli["path"] if recorded_cli else None,
             "recorded_codesign": recorded_signer(recorded_cli),
         }
+        if invalidated:
+            report[vendor]["invalidated_evidence"] = invalidated
         deterministic = selector_recheck.deterministic_rows(overlay, vendor)
         if deterministic:
             report[vendor]["deterministic_failures"] = deterministic
@@ -173,7 +186,7 @@ def detect(overlay: dict, anchors: dict[str, dict[str, Path]]) -> dict[str, dict
 NOT_PROBED = "not probed on this host"
 
 
-def unprobed(overlay: dict, vendor: str) -> list[str]:
+def unprobed(overlay: dict, vendor: str, *, invalidated=()) -> list[str]:
     """Configurations this vendor could run here that no probe ever answered.
 
     A row the probe plan gained after the last sweep either appears in unproven[]
@@ -183,17 +196,17 @@ def unprobed(overlay: dict, vendor: str) -> list[str]:
     verified mapping was never set up on this host, which is not drift either.
     """
     changed_ids = {u["config_id"] for u in overlay.get("unproven", [])
-                   if u.get("verdict_reason") == "request contract changed"}
+                   if u.get("verdict_reason") in ("request contract changed", INVALIDATED_REASON)}
     if not any(build_overlay.ROWS[m["config_id"]]["vendor"] == vendor
                for m in overlay.get("mappings", []) if m.get("config_id") in build_overlay.ROWS) \
             and not any(build_overlay.ROWS.get(cid, {}).get("vendor") == vendor for cid in changed_ids):
         return []
-    mapped = {m.get("config_id") for m in overlay.get("mappings", [])}
+    mapped = {m.get("config_id") for m in overlay.get("mappings", [])} - set(invalidated)
     reasons = {u.get("config_id"): u.get("verdict_reason") for u in overlay.get("unproven", [])}
     return sorted(cid for cid in build_overlay.PROVEN
                   if cid in build_overlay.ROWS
                   and build_overlay.ROWS[cid]["vendor"] == vendor and cid not in mapped
-                  and reasons.get(cid, NOT_PROBED) in (NOT_PROBED, "request contract changed"))
+                  and reasons.get(cid, NOT_PROBED) in (NOT_PROBED, "request contract changed", INVALIDATED_REASON))
 
 
 def recorded_signer(entry: dict | None) -> dict | None:
@@ -564,7 +577,7 @@ def load_host_configuration(*, inherit_overlay: bool = True) -> tuple[str, dict]
 
 
 def retain_held(staged: dict, overlay: dict, keep: list[str],
-                held: dict[str, str], checked_at: str) -> dict[str, dict]:
+                held: dict[str, str], checked_at: str, *, invalidated=()) -> dict[str, dict]:
     """Carry verified contracts forward; only repeated CLI absence retires them."""
     import transport_compat as compat
     status = {}
@@ -585,6 +598,7 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
         old = [m for m in overlay.get("mappings", [])
                if m["identity"]["vendor"] == vendor and m.get("config_id") in build_overlay.ROWS]
         original_ids = {m["config_id"] for m in old}
+        old = [m for m in old if m["config_id"] not in invalidated]
         if cross_snapshot:
             old = [m for m in old if m["config_id"] in source_rows and compat.equivalent(
                 source_rows[m["config_id"]], build_overlay.ROWS[m["config_id"]], source)]
@@ -629,7 +643,8 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
         staged["unproven"] += [u for u in overlay.get("unproven", [])
                                if row_vendor(u) == vendor]
         retained_ids = {m["config_id"] for m in old}
-        staged["unproven"] += [dict(config_id=cid, verdict_reason="request contract changed",
+        staged["unproven"] += [dict(config_id=cid, verdict_reason=INVALIDATED_REASON if cid in invalidated
+                                    else "request contract changed",
                                     observed_model=None, probed_at=None)
                                 for cid in sorted(original_ids - retained_ids)]
         if removed:
@@ -640,10 +655,11 @@ def retain_held(staged: dict, overlay: dict, keep: list[str],
 
 
 def install_pending(live: Path, overlay: dict, held: dict[str, str],
-                    root: Path, checked_at: str, log) -> tuple[int, dict]:
+                    root: Path, checked_at: str, log, *, invalidated=()) -> tuple[int, dict]:
     """Metadata-only transaction when no vendor could finish; never rebuild probes."""
     staged = json.loads(json.dumps(overlay))
-    status = retain_held(staged, overlay, list(held), held, checked_at)
+    status = retain_held(staged, overlay, list(held), held, checked_at,
+                         invalidated=invalidated)
     # A metadata-only run preserves existing array order and all evidence bytes.
     by_id = {m["config_id"]: m for m in staged["mappings"]}
     staged["mappings"] = [by_id[m["config_id"]] for m in overlay["mappings"]
@@ -844,7 +860,8 @@ def _resign(args, live: Path, anchors, log) -> int:
         pending_rows = selector_recheck.pending_rows(overlay, vendor)
         retry, cooling = [], {}
         for cid, failure in failed.items():
-            blocked, until = (probe_failure.pending_cooldown(pending_rows[cid]) if cid in pending_rows else
+            blocked, until = (probe_failure.pending_cooldown(pending_rows[cid])
+                              if cid in pending_rows and not failure.get("evidence_invalidated") else
                               probe_failure.cooldown(failure["last_failed_at"]))
             bypass = interactive if cid in pending_rows else immediate
             if blocked and not bypass:
@@ -893,19 +910,37 @@ def _resign(args, live: Path, anchors, log) -> int:
         sweep_id += "-" + os.urandom(2).hex()  # two runs in one second
     root = home / "transport-evidence" / sweep_id
     outcome = EXIT_OK
+    invalidated = {cid for entry in report.values() for cid in entry.get("invalidated_evidence", [])}
     if proceed:
         source = previous_root(overlay)
-        if source is None or not (source / "evidence").is_dir():
+        if source is None or not (source / "evidence").is_dir() and not invalidated:
             summary.update(held=proceed + held, evidence_missing=True)
             log("omnilane: the live overlay's probe evidence is gone; a full sweep is needed "
                 "(scripts/lib/probe_sweep.py --root NEW, then build_overlay.py --root NEW)")
             return EXIT_OPERATOR
         root.mkdir(parents=True)
-        shutil.copytree(source / "evidence", root / "evidence")
+        if (source / "evidence").is_dir():
+            shutil.copytree(source / "evidence", root / "evidence")
+        else:
+            (root / "evidence").mkdir()
+        # Never let build_overlay re-hash damaged bytes into fresh authority,
+        # including rows belonging to a vendor not selected for this re-sign.
+        # Moving only staged copies preserves the live evidence for rollback.
+        for cid in sorted(invalidated):
+            name = build_overlay.PROVEN[cid][2]
+            for suffix in ("json", "stdout", "stderr", "rollout", "cli_log"):
+                path = root / "evidence" / f"{name}.{suffix}"
+                if path.exists():
+                    saved = root / "invalidated-before"
+                    saved.mkdir(exist_ok=True)
+                    path.rename(saved / path.name)
         shutil.copy2(live, root / "live-overlay.BEFORE.json")
         sweeps = {vendor: probe_failure.run_sweep(vendor, root, log=log,
                                            only_missing=report[vendor]["only_missing"],
-                                           retry_failed=report[vendor]["retry_failed"],
+                                           retry_failed=[cid for cid in report[vendor]["retry_failed"]
+                                                         if cid not in invalidated],
+                                           refresh_invalidated=[cid for cid in report[vendor]["retry_failed"]
+                                                                if cid in invalidated],
                                            refresh_expired=report[vendor]["expired"],
                                            skip_configs=report[vendor]["cooldown"], retry_now=immediate,
                                            per_selector=not report[vendor]["only_missing"]
@@ -920,7 +955,8 @@ def _resign(args, live: Path, anchors, log) -> int:
                 continue
             try:
                 environmental, conclusive = selector_recheck.regressions(
-                    root, overlay, vendor, result, expired=report[vendor]["expired"],
+                    root, overlay, vendor, result,
+                    expired=set(report[vendor]["expired"]) | invalidated,
                     deferred=report[vendor]["cooldown"])
                 probe_failure.validate_retry_results(root, vendor, list(environmental), result)
             except (OSError, ValueError, KeyError, TypeError) as error:
@@ -951,6 +987,8 @@ def _resign(args, live: Path, anchors, log) -> int:
                             log(f"omnilane: {vendor}: kept this run's output for {entry['config_id']} "
                                 f"as {', '.join(path.name for path in kept)}")
                     for old in (source / "evidence").glob(entry["name"] + ".*"):
+                        if entry["config_id"] in invalidated:
+                            continue
                         # An older run's .failed.* would overwrite or sit beside this run's.
                         if kept and old.name.startswith(entry["name"] + ".failed."):
                             continue
@@ -990,13 +1028,22 @@ def _resign(args, live: Path, anchors, log) -> int:
                                           for c in channels):
                     entry["operator_trust"] = old["operator_trust"]
                     entry["operator_trust_recorded_at"] = old.get("operator_trust_recorded_at")
-        pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"])
+        pending = retain_held(staged, overlay, pins_kept, hold_reasons, summary["checked_at"],
+                              invalidated=invalidated)
         unattempted = {cid for v in proceed for cid in selector_recheck.pending_rows(overlay, v)
                        if cid not in set(sweeps[v]["passed"]) | set(sweeps[v]["failed"])}
         selector_recheck.retain_pending(staged, overlay, proceed, summary["checked_at"],
                                         allow_shrink=args.allow_shrink,
-                                        expired={cid for v in proceed for cid in report[v]["expired"]},
+                                        expired={cid for v in proceed for cid in report[v]["expired"]} | invalidated,
                                         deferred=unattempted | {cid for v in proceed for cid in report[v]["cooldown"]})
+        attempted = {cid for vendor, result in sweeps.items() for cid in result["passed"] + result["failed"]
+                     if cid not in report[vendor]["cooldown"]}
+        lost_failures = {cid for entry in report.values()
+                         for cid, failure in entry["failed_environment"].items()
+                         if failure.get("evidence_invalidated") and cid not in attempted}
+        staged["unproven"] = [u for u in staged.get("unproven", []) if u["config_id"] not in lost_failures]
+        staged["unproven"] += [dict(config_id=cid, verdict_reason=FAILED_INVALIDATED_REASON,
+                                    observed_model=None, probed_at=None) for cid in sorted(lost_failures)]
         staged_path.write_text(json.dumps(staged, indent=2, ensure_ascii=False) + "\n")
         try:
             try:
@@ -1116,7 +1163,7 @@ def _resign(args, live: Path, anchors, log) -> int:
                     + (" (this run also skipped the smoke dispatch)" if args.no_smoke else ""))
     if held and not proceed and outcome == EXIT_OK:
         outcome, pending = install_pending(live, overlay, hold_reasons, root,
-                                           summary["checked_at"], log)
+                                           summary["checked_at"], log, invalidated=invalidated)
         installed = outcome == EXIT_OK
     if deferred and outcome in (EXIT_OK, EXIT_PARTIAL):
         current = json.loads(live.read_text())

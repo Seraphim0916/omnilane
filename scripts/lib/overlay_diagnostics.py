@@ -8,6 +8,7 @@ import shlex
 from pathlib import Path
 
 from probe_failure import environment_reason, public_reason
+from evidence_integrity import INVALIDATED_REASON, FAILED_INVALIDATED_REASON
 
 
 def read_object(path: Path) -> dict:
@@ -72,17 +73,23 @@ def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
             entry = next((e for e in probe_sweep.plan(vendor) if e["config_id"] == cid), None)
             if entry:
                 descriptor_path = str(manifests[0].parent / "evidence" / f"{entry['name']}.json")
-        descriptor = read_object(Path(descriptor_path)) if descriptor_path else {}
+        invalidated = cid in registry.get("_transport_invalidated_evidence", {})
+        descriptor = read_object(Path(descriptor_path)) if descriptor_path and not invalidated else {}
         reason = item.get("verdict_reason") or "unknown"
+        if invalidated and reason != INVALIDATED_REASON:
+            reason = FAILED_INVALIDATED_REASON
         failure_class = "environment" if environment_reason(reason) else "conclusive"
         if item.get("pending_recheck"):
             reason = public_reason(reason)
-        if reason in ("not probed on this host", "vendor CLI is not installed"):
+        if reason in ("not probed on this host", "vendor CLI is not installed", INVALIDATED_REASON,
+                      FAILED_INVALIDATED_REASON):
             failure_class = "unprobed"
         if failure_class == "environment":
             next_step = f"omnilane resign --retry-failed --vendor {shlex.quote(vendor)}"
         elif failure_class == "unprobed":
             next_step = f"check CLI availability, then omnilane resign --vendor {shlex.quote(vendor)}"
+            if reason == FAILED_INVALIDATED_REASON:
+                next_step += " in an interactive terminal; unverified failure timestamps cannot authorize automatic retry"
         else:
             next_step = ("will not retry automatically; inspect the original request, CLI model/effort "
                          "selectors and provider model mapping before arranging fresh verification")
@@ -91,10 +98,10 @@ def unproven_rows(overlay: dict, registry: dict) -> list[dict]:
             paths.add(descriptor_path)
         rows.append(dict(config_id=cid, vendor=vendor,
                          requested_model=config.get("model"), requested_effort=config.get("effort"),
-                         observed_model=item.get("observed_model") or descriptor.get("observed_model"),
-                         observed_effort=item.get("observed_effort") or descriptor.get("observed_effort"),
+                         observed_model=None if invalidated else item.get("observed_model") or descriptor.get("observed_model"),
+                         observed_effort=None if invalidated else item.get("observed_effort") or descriptor.get("observed_effort"),
                          failure_class=failure_class, reason=reason,
-                         last_probe_at=item.get("probed_at") or descriptor.get("probed_at")
+                         last_probe_at=None if invalidated else item.get("probed_at") or descriptor.get("probed_at")
                          or item.get("last_failed_at"),
                          evidence_paths=sorted(paths), next_step=next_step))
     return rows

@@ -189,13 +189,14 @@ def judge(root: Path, entry: dict, vendor: str, command: list[str], token: str, 
     return descriptor, verdict
 
 
-def pinned_failures(overlay):
+def pinned_failures(overlay, *, invalidated=None):
     """Validate negative evidence with the same manifest anchor as passing proof.
 
     None denotes a genuinely old manifest with no failure-metadata contract.
     The version and nested file digests seal timestamp presence as well as value.
     """
     import aa_policy
+    from evidence_integrity import damaged_files
     manifests = [e for e in overlay.get("evidence", [])
                  if "vendor" not in e and Path(e["path"]).name == "probe-manifest.json"]
     protected = None
@@ -211,27 +212,29 @@ def pinned_failures(overlay):
         protected = manifest["failed_probe_runs"]
         aa_policy._check(not (set(protected) & set(manifest.get("probe_runs", {}))),
                          "contradictory passing and failed probe evidence")
-        for files in protected.values():
-            aa_policy._check(isinstance(files, dict) and "json" in files,
-                             "incomplete failed probe evidence")
-            for entry in files.values():
-                aa_policy._check(isinstance(entry, dict) and
-                                 aa_policy.evidence_digest(entry["path"]) == entry["sha256"],
+        for cid, files in protected.items():
+            damaged = damaged_files(files)
+            if damaged:
+                aa_policy._check(invalidated is not None,
                                  "failed probe evidence changed; timestamp integrity cannot be verified: "
-                                 + str(entry.get("path", "<missing path>")
-                                       if isinstance(entry, dict) else "<invalid entry>"))
+                                 + ", ".join(damaged))
+                invalidated[cid] = damaged
     return protected
 
 
-def failed_probes(overlay: dict, vendor: str) -> dict[str, dict]:
+def failed_probes(overlay: dict, vendor: str, *, invalidated=None) -> dict[str, dict]:
     """Cross-check retry hints against the original failed request and response."""
     import probe_sweep
+    from evidence_integrity import FAILED_INVALIDATED_REASON
     entries = {entry["config_id"]: entry for entry in probe_sweep.plan(vendor)}
     mapped = {mapping.get("config_id") for mapping in overlay.get("mappings", [])}
     seen, failures = set(), {}
     manifests = [Path(e["path"]) for e in overlay.get("evidence", [])
                  if "vendor" not in e and Path(e["path"]).name == "probe-manifest.json"]
-    protected = pinned_failures(overlay)
+    damaged = {} if invalidated is not None else None
+    protected = pinned_failures(overlay, invalidated=damaged)
+    if damaged and not set(damaged) <= set(invalidated):
+        raise ValueError("failed probe evidence changed after validation")
     for item in overlay.get("unproven", []):
         cid = item.get("config_id")
         if cid not in entries:
@@ -239,6 +242,13 @@ def failed_probes(overlay: dict, vendor: str) -> dict[str, dict]:
         if cid in seen or cid in mapped:
             raise ValueError("duplicate or contradictory failed probe row")
         seen.add(cid)
+        if (cid in (invalidated or ()) and cid in (protected or {})) \
+                or item.get("verdict_reason") == FAILED_INVALIDATED_REASON:
+            # Lost timestamps cannot qualify for unattended retry, including
+            # after another vendor's repair has retired the raw failure files.
+            failures[cid] = dict(reason=FAILED_INVALIDATED_REASON,
+                                 last_failed_at="invalid failure timestamp", evidence_invalidated=True)
+            continue
         reason = environment_reason(item.get("verdict_reason"))
         if not reason:
             continue
@@ -347,7 +357,7 @@ def not_authenticated(vendor: str, record: dict) -> bool:
 
 def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
               retry_failed=(), refresh_expired=(), skip_configs=(), retry_now=False,
-              per_selector=False) -> dict:
+              per_selector=False, refresh_invalidated=()) -> dict:
     """Reuse the pinned sweep engine, exposing only eligible staged gaps to it.
 
     The original live evidence never changes. The pinned engine's handling of a
@@ -369,7 +379,7 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
             (root / "evidence" / f"{name}.{suffix}").write_bytes(content)
     originals, skipped, captured, answered_again = {}, {}, {}, set()
     authenticated = False
-    for cid in (*retry_failed, *refresh_expired):
+    for cid in (*retry_failed, *refresh_expired, *refresh_invalidated):
         entry = entries[cid]
         if cid in retry_failed:
             _, verdict = judge(root, entry, vendor,
@@ -389,8 +399,6 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
 
     def real_probe(name, argv, **kwargs):
         cid = by_name[name]["config_id"]
-        if cid in skipped:
-            return json.loads(skipped[cid]["json"])
         if cid in captured and not retry_now:
             previous = json.loads(captured[cid]["json"])
             if previous.get("verdict") == "fail" and environment_reason(previous.get("verdict_reason")):
@@ -431,9 +439,9 @@ def run_sweep(vendor: str, root: Path, *, log=print, only_missing=False,
 
     def run_probe(name, argv, **kwargs):
         nonlocal authenticated
-        record = real_probe(name, argv, **kwargs)
         if by_name[name]["config_id"] in skipped:
             return {"verdict": "fail", "verdict_reason": "deferred-by-cooldown"}
+        record = real_probe(name, argv, **kwargs)
         if record.get("verdict") == "fail" and str(record.get("verdict_reason", "")).split(":", 1)[0] in CONCLUSIVE_REASONS:
             # The engine also searches raw streams for login/transient phrases.
             # A model mismatch must not acquire those classifications from noise.

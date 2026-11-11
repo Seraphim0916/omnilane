@@ -265,7 +265,7 @@ class CarryTests(unittest.TestCase):
         fixture_bin.mkdir()
         shim = self.root / "python-fixture.py"
         shim.write_text(
-            "import sys, runpy, pathlib, re\n"
+            "import sys, runpy, pathlib, re, types\n"
             "script, *args = sys.argv[1:]\n"
             "sys.argv = [script] + args\n"
             "if script.endswith('/aa_policy.py'):\n"
@@ -273,7 +273,11 @@ class CarryTests(unittest.TestCase):
             "    text = re.sub(r'APPROVED_REGISTRY_SHA256 = \\\"[a-f0-9]+\\\"', "
             + repr('APPROVED_REGISTRY_SHA256 = "' + digest(registry_path) + '"') + ", text)\n"
             "    sys.path.insert(0, str(pathlib.Path(script).parent))\n"
-            "    exec(compile(text, script, 'exec'), {'__name__':'__main__', '__file__':script})\n"
+            # Mirror a real script module so imported helpers share its classes.
+            "    module = types.ModuleType('__main__')\n"
+            "    module.__file__ = script\n"
+            "    sys.modules['__main__'] = module\n"
+            "    exec(compile(text, script, 'exec'), module.__dict__)\n"
             "else:\n"
             "    runpy.run_path(script, run_name='__main__')\n")
         python = fixture_bin / "python3"
@@ -332,7 +336,7 @@ ATTACKS = {
     "selector": "DENY: candidate selector set changed",
     "reasoning": "DENY: reasoning identity changed",
     "fallback": "DENY: fallback identity changed",
-    "probe_tamper": "REJECT: raw probe descriptor differs from the anchored manifest",
+    "probe_tamper": "DENY: damaged raw proof invalidates only its referencing row",
 }
 
 
@@ -363,7 +367,7 @@ def attack_test(vendor, attack):
             row[attack] = "changed"
         elif attack == "probe_tamper":
             self.probes[vendor].write_text('{"verdict":"pass","forged":true}')
-        if attack in ("forged_carry", "duplicate", "probe_tamper", "effort"):
+        if attack in ("forged_carry", "duplicate", "effort"):
             with self.assertRaises(aa_policy.PolicyError, msg=ATTACKS[attack]):
                 self.apply()
             return
@@ -372,6 +376,10 @@ def attack_test(vendor, attack):
         self.assertFalse(decision["allowed"], ATTACKS[attack])
         if attack == "score_ceiling":
             self.assertEqual(decision["code"], "target-above-effective-ceiling")
+        elif attack == "probe_tamper":
+            self.assertEqual(decision["code"], "runtime-mapping-unverified")
+            for intact in set(TARGETS) - {vendor}:
+                self.assertTrue(self.allowed(result, intact)["allowed"])
     test.__doc__ = ATTACKS[attack]
     return test
 

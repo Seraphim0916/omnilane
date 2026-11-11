@@ -326,7 +326,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(len(self.calls), 10)
         self.assertEqual(resign.verified(self.live)["gemini"], 10)
 
-    def test_corrupted_pending_proof_never_retries_or_grants_dispatch(self):
+    def test_corrupted_pending_proof_is_reported_and_cannot_dispatch(self):
         self.update("gemini")
         self.assertEqual(self.run_case(), 60, self.lines)
         pending = next(e for e in self.entries if e["config_id"] in self.pending())
@@ -335,11 +335,17 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         evidence.write_text(evidence.read_text() + " changed")
         before = self.live.read_bytes()
         self.calls.clear()
-        self.assertEqual(self.run_case(), 40, self.lines)
+        # It was already pending; intact siblings keep the existing partial
+        # status, while damaged failure evidence adds a row-local diagnosis.
+        self.assertEqual(self.run_case("--check"), 60, self.lines)
         self.assertEqual(self.calls, [])
         self.assertEqual(self.live.read_bytes(), before)
-        with self.assertRaises(aa_policy.PolicyError):
-            self.decision(pending)
+        self.assertFalse(self.decision(pending)['allowed'])
+        self.assertEqual(resign.verified(self.live)['gemini'], 4)
+        self.assertEqual(self.summary['vendors']['gemini']['invalidated_evidence'],
+                         [pending['config_id']])
+        self.assertIn('1 row(s) invalidated', '\n'.join(self.lines))
+        self.assertIn('omnilane resign --vendor gemini', '\n'.join(self.lines))
 
 
 class SelectorFixTests(SelectorFixture, unittest.TestCase):

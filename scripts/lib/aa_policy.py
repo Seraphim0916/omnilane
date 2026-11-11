@@ -10,6 +10,7 @@ cooperative workflow metadata, not operating-system authentication.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -41,6 +42,10 @@ IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}\Z")
 
 class PolicyError(ValueError):
     """A public, non-sensitive policy validation error."""
+
+
+class EvidenceDirectoryError(PolicyError):
+    """The raw directory no longer contains this overlay's descriptor anchors."""
 
 
 def _check(condition: bool, message: str) -> None:
@@ -167,8 +172,28 @@ def _validate_registry(value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _reset_transport_overlay(registry: dict[str, Any]) -> None:
+    """Revoke prior overlay authority, retaining the registry's selector contract."""
+    fields = ("status", "runtime_verified", "runtime_model", "runtime_effort", "selector_type",
+              "cli_flag", "verification", "upstream_identity_verified", "overlay_sha256", "overlay_host")
+    originals = registry.setdefault("_transport_overlay_originals", {})
+    for row in registry["scored_configs"]:
+        mapping = row["transport_mapping"]
+        original = originals.setdefault(row["id"], copy.deepcopy(mapping))
+        for field in fields:
+            if field in original:
+                mapping[field] = copy.deepcopy(original[field])
+            else:
+                mapping.pop(field, None)
+    for key in list(registry):
+        if (key.startswith("_transport_") and key != "_transport_overlay_originals") \
+                or key == "_stale_transport_vendors":
+            registry.pop(key)
+
+
 def apply_transport_overlay(registry: dict[str, Any]) -> None:
     """Host-local request selector proof, independent of frozen AA scores."""
+    _reset_transport_overlay(registry)
     path = os.environ.get("OMNILANE_AA_TRANSPORT_OVERLAY")
     if not path:
         return
@@ -180,7 +205,16 @@ def apply_transport_overlay(registry: dict[str, Any]) -> None:
 
 def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any], digest: str) -> None:
     """Shared read-only validation for dispatch, maintenance, and diagnostic tools."""
+    _reset_transport_overlay(registry)
+    candidate = copy.deepcopy(registry)
+    _validate_transport_overlay(candidate, overlay, digest)
+    registry.update(candidate)
+
+
+def _validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any], digest: str) -> None:
+    """Build fresh authority transactionally; an error cannot leave a partial pass."""
     import transport_compat as compat
+    import evidence_integrity as integrity
     _check(type(overlay.get("schema_version")) is int and overlay["schema_version"] in (1, 2),
            "unsupported transport overlay")
     _check(not ({"carried_forward", "runtime_verified"} & set(overlay)),
@@ -227,9 +261,16 @@ def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any]
                 _check(False, "transport contract evidence changed")
             stale_vendors.add(vendor)
     _check(bool(overlay.get("evidence")), "transport overlay requires local evidence")
-    records = compat.proof_records(overlay, source_rows, source) if cross_snapshot or overlay["schema_version"] == 2 else {}
+    invalidated = {}
+    needs_records = cross_snapshot or overlay["schema_version"] == 2 or any(
+        e.get("vendor") is None and Path(e["path"]).name == "probe-manifest.json"
+        for e in overlay["evidence"])
+    records = integrity.proof_records(overlay, source_rows, source, invalidated=invalidated) \
+        if needs_records else {}
     from probe_failure import pinned_failures
-    pinned_failures(overlay)
+    failed_records = pinned_failures(overlay, invalidated=invalidated)
+    integrity.reject_replaced_directories(
+        {**{cid: files for cid, (files, _) in records.items()}, **(failed_records or {})}, invalidated)
     mapped_ids = {m.get("config_id") for m in overlay["mappings"] if isinstance(m, dict)}
     _check(not any(u.get("config_id") in mapped_ids for u in overlay.get("unproven", [])
                    if isinstance(u, dict)), "contradictory verified and unproven transport row")
@@ -278,7 +319,7 @@ def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any]
             _check(mapping.get("source_row_digest") == compat.digest(compat.row_contract(row)),
                    "overlay source row digest mismatch")
             _check(mapping.get("evidence_refs") == files and
-                   mapping.get("verified_at") == descriptor.get("probed_at"),
+                   (cid in invalidated or mapping.get("verified_at") == descriptor.get("probed_at")),
                    "overlay proof reference mismatch")
             # Use the source engine, not the newly installed engine, when validating provenance.
             source_engine = source["engine"] if source else compat.engine_contract()
@@ -289,10 +330,14 @@ def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any]
                    "overlay transport contract digest mismatch")
         if cid not in current_rows:
             continue  # A valid proof for a retired row is not an error or dispatch authority.
+        mapping_expired = compat.expired(mapping.get("expires_at"))
+        if cid in invalidated:
+            unverified[cid] = "evidence-invalidated"
+            continue
         if cross_snapshot and not compat.equivalent(row, current_rows[cid], source):
             unverified[cid] = "request-contract-changed"
             continue
-        if compat.expired(mapping.get("expires_at")) or compat.expired(descriptor.get("expires_at")):
+        if mapping_expired or compat.expired(descriptor.get("expires_at")):
             unverified[cid] = "evidence-expired"
             continue
         row = current_rows[cid]
@@ -318,6 +363,22 @@ def validate_transport_overlay(registry: dict[str, Any], overlay: dict[str, Any]
     registry["_transport_evidence_tiers"] = tiers
     registry["_transport_carry_forward"] = audit
     registry["_transport_unverified"] = unverified
+    # Maintenance rechecks historical failures too, including retired rows.
+    # Keep its validation baseline separate from current-row diagnostics.
+    registry["_transport_invalidated_evidence_all"] = dict(invalidated)
+    registry["_transport_invalidated_evidence"] = {
+        cid: paths for cid, paths in invalidated.items() if cid in current_rows}
+    unverified.update({cid: "evidence-invalidated" for cid in invalidated if cid in current_rows})
+    # A repair of another vendor may have retired the damaged mapping already.
+    # This negative marker preserves retry/diagnostic visibility, never authority.
+    for item in overlay.get("unproven", []):
+        if not isinstance(item, dict):
+            continue
+        cid = item.get("config_id")
+        if cid in current_rows and item.get("verdict_reason") in (
+                integrity.INVALIDATED_REASON, integrity.FAILED_INVALIDATED_REASON):
+            registry["_transport_invalidated_evidence"][cid] = []
+            unverified[cid] = "evidence-invalidated"
     from probe_failure import CONCLUSIVE_REASONS, environment_reason, public_reason
     # Display-only hints; never feed failure metadata into verified mappings.
     registry["_transport_environment_failures"] = {
@@ -423,6 +484,7 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
         if not model_match:
             continue
         verified = mapping.get("runtime_verified") is True and mapping.get("status") in ("verified", "resolved")
+        verified = verified and row["id"] not in registry.get("_transport_invalidated_evidence", {})
         # A known alias can expose a conflicting effort before transport proof
         # exists. This inference only diagnoses; it never verifies a mapping.
         if not verified and runtime_effort and model.endswith(f"-{runtime_effort}"):
@@ -611,6 +673,14 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
             requires_gui_session=guidance["requires_gui_session"],
             message_zh_tw=guidance["message_zh_tw"],
             **detail)
+        invalidated = registry.get("_transport_invalidated_evidence", {})
+        affected = sorted(cid for cid in detail.get("candidate_config_ids", []) if cid in invalidated)
+        if affected:
+            count = sum(row["id"] in invalidated and row["vendor"] == vendor
+                        for row in registry["scored_configs"])
+            reason = f"{count} row(s) invalidated by missing or changed probe evidence for {vendor}"
+            base.update(reason=reason, message=reason, invalidated_config_ids=affected,
+                        next_command=f"omnilane resign --vendor {vendor}")
         return base
     target_score = target_row["score"]
     target_identity = _row_identity(target_row)
@@ -885,4 +955,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Helpers import aa_policy; use the CLI's exception classes, not a second copy.
+    sys.modules["aa_policy"] = sys.modules[__name__]
     sys.exit(main())

@@ -117,9 +117,10 @@ class ReviewTests(RetryFixture, unittest.TestCase):
                 rewrite(self.probe_path(entry), change)
                 self.change_overlay(lambda o: change(next(u for u in o['unproven'] if u['config_id'] == entry['config_id'])))
                 before = self.live.read_bytes()
-                self.assertEqual(self.run_retry(), resign.EXIT_HOST_CONFIG, self.lines)
+                self.assertEqual(self.run_retry(), resign.EXIT_OPERATOR, self.lines)
                 self.assertEqual(self.calls, [])
                 self.assertEqual(self.live.read_bytes(), before)
+                self.assertFalse(self.decision(entry)['allowed'])
 
     def test_expired_mapping_reprobes_only_that_row(self):
         entry = probe_sweep.plan('claude')[-1]
@@ -190,12 +191,14 @@ class ReviewTests(RetryFixture, unittest.TestCase):
                 with self.assertRaisesRegex(aa_policy.PolicyError, 'transport proof did not pass'):
                     aa_policy.validate_transport_overlay(registry, old, 'offline')
 
-    def test_retry_override_cannot_bypass_failure_integrity(self):
+    def test_retry_override_cannot_turn_damaged_failure_into_a_pass(self):
         entry = self.fail_row(stamp=datetime.now(timezone.utc).isoformat())
         rewrite(self.probe_path(entry), lambda d: d.pop('last_failed_at'))
         self.change_overlay(lambda o: next(u for u in o['unproven'] if u['config_id'] == entry['config_id']).pop('last_failed_at'))
-        self.assertEqual(self.run_retry(interactive=True, retry_failed=True), 40, self.lines)
-        self.assertEqual(self.calls, [])
+        self.behavior[entry['config_id']] = 'api'
+        self.assertEqual(self.run_retry(interactive=True, retry_failed=True), 20, self.lines)
+        self.assertEqual(self.calls, [entry['config_id']])
+        self.assert_unverified(entry)
 
     def test_deleted_failure_manifest_metadata_is_not_legacy(self):
         self.fail_row(stamp=datetime.now(timezone.utc).isoformat())

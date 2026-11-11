@@ -34,9 +34,65 @@ The *transport overlay* (`~/.omnilane/transport-contracts.local.json`) is this
 host's proof that each vendor CLI really selects the model a lane names. It pins
 the sha256 of every vendor executable and runner script it was proven against. A
 model caller is refused with `runtime-mapping-unverified` for any target the
-overlay does not currently verify. A refusal of `invalid-policy-input` with
+overlay does not currently verify. A missing or hash-mismatched raw probe file
+invalidates only the rows that cite that file. Other rows, including siblings
+from the same vendor, remain available. Refusals, `omnilane doctor` and
+overlay-health name the invalidated row count and the affected vendor's recovery
+command: `omnilane resign --vendor <vendor>`.
+
+This applies to both passing and failed probe files. A failed row stays refused;
+damage to its evidence does not disable intact rows. Re-verifying an in-memory
+registry first revokes the previous overlay's authority and diagnostics. New
+authority is published only after validation completes, so a skipped row or a
+validation error cannot retain an earlier pass.
+
+Re-signing treats lost positive proof as unprobed. With unchanged executables, it probes
+only missing selectors, preserves intact evidence and sets aside damaged staged
+copies before rebuilding. Repairing one vendor cannot turn another vendor's
+damaged output into new proof. The original overlay and evidence stay available
+for rollback; a fresh passing probe is required to regain authority.
+Lost failure evidence has no trustworthy retry timestamp. It stays deferred in
+unattended runs. An operator can explicitly retry an ordinary failed row with
+`--retry-failed` or use an interactive terminal. Retained per-selector pending
+rows keep their existing interactive-only cooldown override; `--retry-failed`
+does not bypass it. The executable-origin and signer gates still apply.
+This deferral survives repairing another vendor, even after the damaged failure
+files have been set aside. Diagnostics do not display damaged descriptors as
+verified observations or timestamps.
+
+A refusal of `invalid-policy-input` with
 "transport contract evidence changed" means the overlay itself will not load; run
 `omnilane doctor`, whose `transport-overlay` check names the file and the vendor.
+The manifest is a shared integrity anchor, not an individual probe: a missing,
+changed or malformed manifest, a different sweep substituted for the evidence
+directory, invalid schema/source/engine bindings, or an overlay digest mismatch
+still rejects the whole overlay.
+
+The directory rule is content-based: group all manifest-listed passing and
+failed descriptors by their recorded parent directory. If **every descriptor in
+one group** has a mismatched digest, is still readable JSON, and has a nonempty
+string-array `command`, integer `exit_code`, Boolean `timed_out`, and parseable
+timezone-bearing `probed_at`, reject the entire overlay with
+`transport evidence directory does not belong to this overlay`. These are a
+complete set of recognizable replacement probe records with no surviving
+descriptor anchor. They are inspected only to reject, never to grant authority.
+This deliberately conservative rule also rejects a complete rewrite that merely
+reformats every descriptor (including a directory containing one descriptor).
+It does not assert that a particular directory rename or a different sweep ID
+was observed: the existing format pins file contents, not directory identities.
+
+A subset of changed descriptors, missing/truncated descriptors, or damaged
+streams is row-level loss instead. Removing the entire raw directory therefore
+invalidates its rows while retaining the trusted manifest; replacing it with a
+complete set of recognizable unanchored records fails globally. A byte-identical
+copy is still the same pinned evidence. Malformed shared metadata and unsafe file
+types are never downgraded to row-level loss.
+
+For stable files during validation, deleting or changing raw proof can only
+remove available rows; it never grants a row, changes a score, or bypasses an
+executable-origin or caller-ceiling check. Concurrent mutation between hashing
+and reading remains an existing limitation of the evidence format/reader; this
+change does not provide an immutable evidence snapshot or fix that separate race.
 
 ## Why it goes stale
 

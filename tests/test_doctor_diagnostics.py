@@ -72,19 +72,24 @@ class DoctorDiagnosticsTests(RetryFixture, unittest.TestCase):
         self.assertNotIn('"modelUsage"', result.stdout)
         self.assertEqual(self.calls, [])
 
-    def test_tampered_evidence_names_path_and_both_recovery_routes(self):
+    def test_tampered_failed_evidence_warns_without_disabling_intact_rows(self):
         entry = self.fail_row("api")
         path = self.sweep_root / "evidence" / f"{entry['name']}.json"
         path.write_text(path.read_text() + " ")
         before = self.live.read_bytes()
-        self.assertEqual(self.run_retry(retry_failed=True), 40, self.lines)
+        self.assertEqual(self.run_retry(), 20, self.lines)
         self.assertEqual(self.calls, [])
         doctor = self.doctor("omnilane doctor", "--json")
-        self.assertNotEqual(doctor.returncode, 0)
-        for message in ("\n".join(self.lines), doctor.stdout):
-            for value in (str(path), "known-good backup", "probe_sweep.py",
-                          "build_overlay.py", "--root", "REPROBE_ROOT"):
-                self.assertIn(value, message)
+        self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
+        report = json.loads(doctor.stdout)
+        overlay = next(c for c in report["checks"] if c["check"] == "transport-overlay")
+        self.assertEqual(overlay["level"], "WARN")
+        self.assertIn("1 row(s) invalidated", overlay["message"])
+        self.assertIn("omnilane resign --vendor claude", overlay["message"])
+        row = next(c["details"] for c in report["checks"] if c["check"] == "transport-unproven")
+        self.assertIn(str(path), row["evidence_paths"])
+        self.assertIsNone(row["last_probe_at"])
+        self.assertIn("cannot authorize automatic retry", row["next_step"])
         self.assertEqual(self.live.read_bytes(), before)
 
     def test_mixed_failures_keep_separate_classes_and_recorded_observed_effort(self):

@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+- Keep row-local evidence integrity handling outside the release-pinned transport compatibility module, preserving its approved bytes and the existing origin-protection tests.
+- Damaged evidence for a failed selector retired from the current score snapshot no longer blocks re-sign checks or repairs for other vendors. Maintenance retains the complete validation-time damage set separately from current-row diagnostics, while still refusing newly damaged failure evidence after validation.
+
+- Missing or hash-mismatched raw probe evidence now invalidates only the overlay rows that cite it, including already-failed probes. Intact rows remain usable; affected rows are refused as unprobed. Re-verification revokes prior in-memory authority before rebuilding it. Refusals and doctor report the affected count and `omnilane resign --vendor <vendor>` recovery command. Re-signing probes the affected selectors again without reusing or re-sealing damaged output, including output for vendors not selected for repair; unverifiable failure timestamps cannot authorize unattended retries. A complete directory of recognizable replacement descriptors is rejected globally. Shared manifest integrity, overlay/schema/snapshot/engine checks, executable-origin gates and caller ceilings remain strict.
+
 ## [0.61.0] - 2026-11-11
 
 ### Changed
