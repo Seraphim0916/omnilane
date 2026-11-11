@@ -44,6 +44,12 @@ ARGS+=(-c 'approval_policy="never"')
 # live app-server through --codex-arg. A worker that spawns its own sub-agents
 # escapes the one-dispatch budget.
 SHARED_ARGS=(--disable multi_agent -c 'shell_environment_policy.set.OMNILANE_DEPTH="1"')
+# Keep the job marker in tool children so a manual continuation can list
+# any old writers. This also preserves the outer supervisor's cleanup marker.
+if [[ -n "${OMNILANE_JOB_TOKEN:-}" ]]; then
+  [[ "$OMNILANE_JOB_TOKEN" =~ ^[a-f0-9]{32}$ ]] || exit 125
+  SHARED_ARGS+=(-c "shell_environment_policy.set.OMNILANE_JOB_TOKEN=\"$OMNILANE_JOB_TOKEN\"")
+fi
 
 # Optional, off unless both are set: the built-in `openai` provider id cannot
 # be overridden, so extra request headers need a provider of our own that keeps

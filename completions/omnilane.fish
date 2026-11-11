@@ -68,8 +68,8 @@ complete -c omnilane -n '__omnilane_command_path goal close' -l summary -x -d 'f
 
 # jobs subcommands (only before a jobs subcommand is chosen).
 complete -c omnilane -f \
-  -n '__fish_seen_subcommand_from jobs; and not __fish_seen_subcommand_from list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help' \
-  -a 'list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help' -d 'jobs subcommand'
+  -n '__fish_seen_subcommand_from jobs; and not __fish_seen_subcommand_from list status result complete-native tail send watch close retry resume stats recommend wait cancel rm threads audit prune help' \
+  -a 'list status result complete-native tail send watch close retry resume stats recommend wait cancel rm threads audit prune help' -d 'jobs subcommand'
 complete -c omnilane -n '__fish_seen_subcommand_from jobs; and not __omnilane_command_path jobs threads rm' -l json -d 'JSON output'
 # Nested thread actions remain static; no provider/session state is loaded.
 complete -c omnilane -f \

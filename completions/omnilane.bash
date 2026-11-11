@@ -68,7 +68,7 @@ _omnilane_goal_ids() {
 }
 
 _omnilane() {
-  local cur prev command sub words sub_index reply_line thread_sub thread_index
+  local cur prev command sub words sub_index reply_line thread_sub thread_index jobs_json=0
   local goal_dispatch=0
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
@@ -126,15 +126,20 @@ _omnilane() {
       jobs)
         sub="${COMP_WORDS[2]:-}"
         sub_index=2
+        jobs_json=0
         if [[ "$sub" == "--json" ]]; then
+          jobs_json=1
           sub_index=3
           sub="${COMP_WORDS[3]:-}"
         fi
         if [[ "$COMP_CWORD" -eq "$sub_index" ]]; then
-          words="list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help"
+          words="list status result complete-native tail send watch close retry resume stats recommend wait cancel rm threads audit prune help"
+          # jobs.sh refuses resume with --json; do not offer it there.
+          [[ "$jobs_json" -eq 0 ]] || words="${words/ resume / }"
         elif [[ "$COMP_CWORD" -eq $((sub_index + 1)) &&
                 ( "$sub" == status || "$sub" == result || "$sub" == wait ||
-                  "$sub" == tail || "$sub" == retry || "$sub" == complete-native ||
+                  "$sub" == tail || "$sub" == retry || ( "$sub" == resume && "$jobs_json" -eq 0 ) ||
+                  "$sub" == complete-native ||
                   "$sub" == send || "$sub" == watch || "$sub" == close ||
                   "$sub" == cancel || "$sub" == rm ) ]]; then
           words="$(_omnilane_job_ids)"

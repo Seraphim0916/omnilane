@@ -65,8 +65,9 @@ PROTECTED_SHA256 = {
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":
         "df7f0c623b412bd9912b00a6d0d9d2ab8104ce8ed32b9ccbc7caa4e7a1e86e8b",
+    # Manual EOF continuation tracks the exact job marker in tool children.
     "scripts/runners/run-codex.sh":
-        "1532b0b60dedcdee038257fdd9c4897fcd3f6bddf8222fd97322d380cb202b9e",
+        "41df8f843ca9f73aabc42e78b5d6d1b505d26203feb8410d7efe66caecf73107",
     "scripts/runners/run-deepseek.sh":
         "8aaf03eaeb3fc1c8d6a8ce7d2db2cf4dfb5a098b014a0cad73a91fb645b8b064",
     "scripts/runners/run-exec.sh":

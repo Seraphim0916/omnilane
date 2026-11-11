@@ -322,15 +322,22 @@ emit_mode_notice() {
 }
 
 run_single_shot() {
-  local notice="$1" rc
+  local notice="$1" rc tracked=0 marker=""
+  local resume_helper="$OMNILANE_REPO/scripts/lib/codex_resume.py" job="${OUTPUT_FILE%/*}"
   aa_policy_gate "$VENDOR" "$MODEL" "$EFFORT" || return $?
-  set +e
-  (
+  if [[ "$VENDOR" == "codex" && -f "$job/meta.json" ]]; then
+    if marker="$(python3 "$resume_helper" start "$job" 1)"; then tracked=1; fi
+  fi
+  if (
     unset OMNILANE_INBOX
+    [[ "$tracked" -eq 0 ]] || export OMNILANE_JOB_TOKEN="$marker"
     run_job_runner "$MODE" "$WORKDIR" "$MODEL" "$EFFORT" "$PROMPT_FILE" "$OUTPUT_FILE"
-  )
-  rc=$?
-  set -e
+  ); then rc=0; else rc=$?; fi
+  if [[ "$tracked" -eq 1 ]]; then
+    python3 "$resume_helper" end "$job" "$rc" >/dev/null || true
+    rc="$(python3 "$resume_helper" result-exit "$job" "$rc")" || rc=75
+    python3 "$resume_helper" human "$job" >&2 || true
+  fi
   emit_mode_notice "$notice"
   return "$rc"
 }
