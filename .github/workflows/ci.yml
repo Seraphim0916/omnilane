@@ -118,7 +118,7 @@ jobs:
   # Both hosts that run omnilane are macOS; this job runs the behaviour checks on macOS (BSD tools).
   macos-behavior:
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: set up Python 3.9
