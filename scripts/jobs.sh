@@ -33,7 +33,7 @@ die() {
   exit "$rc"
 }
 
-USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
+USAGE_TEXT="usage: jobs.sh [--json] list [--lane L] [--vendor V] [--status running|done|dead|pending|cancelled|expired]|status ID|result ID|complete-native ID FILE|tail ID [--lines N]|send ID TEXT|watch ID|close ID|retry ID [--background]|resume ID [--background]|stats [--last N] [--lane L] [--vendor V]|recommend [--last N] [--lane L] [--min-samples N]|wait ID [--timeout N]|cancel ID|rm ID|threads [list] [--json]|threads show NAME [--json]|threads rm NAME|audit [--last N]|prune [--keep N] [--older-than DAYS] [--apply]|help"
 
 usage() {
   die 2 "$USAGE_TEXT"
@@ -438,6 +438,12 @@ parse_stats_metadata() {
 
 parse_audit_metadata() {
   local value="$1" current_re legacy_re native_re
+  # Optional generated recovery summary; the detailed attempts are a separate
+  # artifact. Remove only this exact bounded suffix before the existing check.
+  local recovery_re=',"attempt":[12],"reason_class":(null|"transport-interrupted"),"transport_reason":(null|"upstream_eof"|"upstream_error"),"elapsed_seconds":[0-9]+\}$'
+  if [[ "$value" =~ $recovery_re ]]; then
+    value="${value%"${BASH_REMATCH[0]}"}}"
+  fi
   local json_string='([^"\\]|\\["\\/bfnrt]|\\u[0-9a-fA-F]{4})*'
   current_re="^\\{\"lane\":\"[a-z][a-z0-9-]*\",\"vendor\":\"(${OMNILANE_VENDOR_ALT})\",\"session_mode\":\"(live|single-shot)\",\"idle_timeout\":(0|[1-9][0-9]*),\"model\":\"${json_string}\",\"effort\":\"${json_string}\",\"timeout\":(0|[1-9][0-9]*),\"job_timeout\":(null|0|[1-9][0-9]*),\"mode\":\"(advise|work|sysops)\",\"workdir\":\"${json_string}\",\"foreman_session\":\"${json_string}\",(\"thread\":\"${json_string}\",\"thread_turn\":[1-9][0-9]*,)?\"candidate\":\"[1-9][0-9]*/[1-9][0-9]*\",\"started\":\"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\"(,\"executor\":\"cli\",\"executor_reason\":\"${json_string}\")?(,\"isolation\":\"none\")?(,\"worker_interpreter_path\":\"${json_string}\",\"worker_interpreter_version\":\"${json_string}\",(\"job_worker_source_path\":\"${json_string}\",\"job_worker_source_sha256\":\"[0-9a-f]{64}\",\"job_worker_path\":\"${json_string}\",)?\"job_worker_sha256\":\"[0-9a-f]{64}\")?\\}$"
   # A native handoff has no worker, timeout or candidate of its own.
@@ -921,12 +927,13 @@ case "${1:-}" in
       die 1 "no output yet"
     fi
     tail -n "$lines" -- "$out_path" ;;
-  retry)
+  retry|resume)
     # Re-dispatch a COMPLETED job with its recorded route and original task
     # text. Metadata parsing is fail-closed: any value that needed JSON
     # escaping does not match the strict patterns below and refuses to retry,
     # so corrupted or hand-edited metadata can never smuggle flags or paths.
     [[ "$JSON_MODE" -eq 0 && $# -ge 2 ]] || usage
+    retry_action="$1"
     retry_id="$2"
     retry_background=0
     shift 2
@@ -952,7 +959,20 @@ case "${1:-}" in
     read_public_metadata "$JOB_DIR/meta.json" || {
       die 1 "cannot retry: unreadable job metadata"
     }
-    retry_fields_text="$(python3 "$OMNILANE_REPO/scripts/lib/aa_retry.py" --metadata "$JOB_DIR")" || exit $?
+    retry_metadata_flag="--metadata"
+    resume_id=""
+    if [[ "$retry_action" == "resume" ]]; then
+      resume_id="$(python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" manual-session "$JOB_DIR")" || exit $?
+      retry_metadata_flag="--resume-metadata"
+      # Use the same verified caller discovery as dispatch; never assert human
+      # authority on behalf of the operator or borrow the old caller's identity.
+      if [[ -z "${OMNILANE_AA_CALLER_CONTEXT:-}" && "${OMNILANE_AA_OPERATOR_ASSERTED_HUMAN:-0}" != "1" &&
+            "${OMNILANE_AA_CALLER_FROM_PROCESS:-1}" != "0" ]]; then
+        OMNILANE_AA_CALLER_CONTEXT="$(python3 "$OMNILANE_REPO/scripts/lib/caller_identity.py" --registry "$JOB_DIR/aa-registry.json")" || exit $?
+        export OMNILANE_AA_CALLER_CONTEXT
+      fi
+    fi
+    retry_fields_text="$(python3 "$OMNILANE_REPO/scripts/lib/aa_retry.py" "$retry_metadata_flag" "$JOB_DIR")" || exit $?
     retry_fields=()
     while IFS= read -r retry_field; do retry_fields+=("$retry_field"); done <<< "$retry_fields_text"
     [[ "${#retry_fields[@]}" -eq 8 ]] || die 1 "invalid retry metadata fields"
@@ -982,6 +1002,16 @@ case "${1:-}" in
     [[ -z "$retry_model" ]] || retry_args+=(--model "$retry_model")
     [[ -z "$retry_effort" ]] || retry_args+=(--effort "$retry_effort")
     [[ "$retry_background" -eq 0 ]] || retry_args+=(--background)
+    if [[ "$retry_action" == "resume" ]]; then
+      # Reuse the existing runner's explicit session surface. A new dispatch
+      # rechecks authority and locks; it never resubmits the original task.
+      export OMNILANE_THREAD_MODE=resume OMNILANE_THREAD_ID="$resume_id"
+      unset OMNILANE_THREAD_NAME
+      retry_args+=(--executor cli --no-resume)
+      [[ "$retry_background" -eq 0 ]] || retry_args+=(--single-shot)
+      exec bash "$OMNILANE_REPO/scripts/dispatch.sh" "${retry_args[@]}" \
+        "$retry_lane" - < <(python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" continue-prompt)
+    fi
     exec bash "$OMNILANE_REPO/scripts/dispatch.sh" "${retry_args[@]}" \
       "$retry_lane" - < "$task_path" ;;
   audit)
@@ -1432,6 +1462,15 @@ case "${1:-}" in
     [[ "$JSON_MODE" -eq 1 ]] || print_isolation_notice
     read_cli_job_state "$JOB_DIR"
     [[ "$JOB_STATE" != "invalid" && "$JOB_STATE" != "removed" ]] || die 1 "$JOB_STATE_REASON"
+    recovery_json="$(python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" fields "$JOB_DIR" 2>/dev/null)" || recovery_json='{}'
+    recovery_json="${recovery_json#\{}"; recovery_json="${recovery_json%\}}"
+    [[ -z "$recovery_json" ]] || recovery_json=",$recovery_json"
+    recovery_state="done"
+    if [[ "$recovery_json" == *'"outcome":"interrupted-needs-decision"'* ]]; then
+      recovery_state=interrupted
+    elif [[ "$recovery_json" == *'"outcome":"completed-with-transport-error"'* ]]; then
+      recovery_state="completed-with-transport-error"
+    fi
     if [[ "$JOB_STATE" == "done" ]]; then
       # The supervisor records processes found by the job marker after the group stopped.
       leftovers_json="" leftovers_text=""
@@ -1446,19 +1485,19 @@ case "${1:-}" in
         fi
       fi
       if [[ "$JSON_MODE" -eq 1 ]]; then
-        printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"done","exit_code":%s%s}}\n' \
-          "$(json_escape "$2")" "$JOB_STATE_EXIT" "$leftovers_json"
+        printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"%s","exit_code":%s%s}}\n' \
+          "$(json_escape "$2")" "$recovery_state" "$JOB_STATE_EXIT" "$leftovers_json$recovery_json"
       else
-        echo "done exit=$JOB_STATE_EXIT$leftovers_text"
+        echo "$recovery_state exit=$JOB_STATE_EXIT$leftovers_text"
       fi
     else
       if [[ "$JSON_MODE" -eq 1 ]]; then
         if [[ -n "$JOB_STATE_REASON" ]]; then
-          printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"%s","exit_code":null,"reason":"%s"}}\n' \
-            "$(json_escape "$2")" "$JOB_STATE" "$(json_escape "$JOB_STATE_REASON")"
+          printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"%s","exit_code":null,"reason":"%s"%s}}\n' \
+            "$(json_escape "$2")" "$JOB_STATE" "$(json_escape "$JOB_STATE_REASON")" "$recovery_json"
         else
-          printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"running","exit_code":null}}\n' \
-            "$(json_escape "$2")"
+          printf '{"schema_version":1,"command":"status","ok":true,"job":{"id":"%s","state":"running","exit_code":null%s}}\n' \
+            "$(json_escape "$2")" "$recovery_json"
         fi
       elif [[ -n "$JOB_STATE_REASON" ]]; then
         printf '%s (%s)\n' "$JOB_STATE" "$JOB_STATE_REASON"
@@ -1467,6 +1506,9 @@ case "${1:-}" in
       fi
     fi
     if [[ "$JSON_MODE" -eq 0 ]]; then
+      if [[ "$JOB_STATE" == "done" ]]; then
+        python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" human "$JOB_DIR" 2>/dev/null || true
+      fi
       print_mode_notice
     fi ;;
   wait)

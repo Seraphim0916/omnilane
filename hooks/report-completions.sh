@@ -128,6 +128,14 @@ report_completions() {
         my $exit = defined($record->{exit}) && $record->{exit} =~ /\A-?[0-9]+\z/
           ? 0 + $record->{exit} : 1;
         my $failed = $exit == 0 ? "" : $exit == 142 ? " CALL_TIMEOUT" : " FAILED";
+        if ($exit != 0 && defined($record->{reason_class}) && !ref($record->{reason_class})
+            && $record->{reason_class} eq "transport-interrupted") {
+          $failed = " TRANSPORT_INTERRUPTED NEEDS_DECISION";
+          if (defined($record->{outcome}) && !ref($record->{outcome})
+              && $record->{outcome} eq "completed-with-transport-error") {
+            $failed = " COMPLETED_WITH_TRANSPORT_ERROR";
+          }
+        }
         my $job = defined($record->{job_id}) && !ref($record->{job_id})
           ? $record->{job_id} : "unknown";
         my $lane = defined($record->{lane}) && !ref($record->{lane})

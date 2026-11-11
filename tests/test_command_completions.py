@@ -14,8 +14,8 @@ from offline_env import isolated_environment
 ROOT = Path(__file__).resolve().parents[1]
 TOP_COMMANDS = set("version list route dispatch goal jobs mcp completion release-audit doctor which-bin whoami native-context resign self-exec stats benchmark ui configure help".split())
 GOAL_COMMANDS = set("open dispatch note status close".split())
-JOB_COMMANDS = set("list status result complete-native tail send watch close retry stats recommend wait cancel rm threads audit prune help".split())
-ID_COMMANDS = set("status result complete-native tail send watch close retry wait cancel rm".split())
+JOB_COMMANDS = set("list status result complete-native tail send watch close retry resume stats recommend wait cancel rm threads audit prune help".split())
+ID_COMMANDS = set("status result complete-native tail send watch close retry resume wait cancel rm".split())
 
 
 class CommandCompletionTests(unittest.TestCase):
@@ -172,14 +172,16 @@ _omnilane
         self.check_jobs_hierarchy("zsh")
 
     def check_jobs_hierarchy(self, shell):
-        for prefix in (("jobs",), ("jobs", "--json")):
+        # jobs.sh refuses resume with --json, so that prefix does not offer it.
+        for prefix, expected in ((("jobs",), JOB_COMMANDS), (("jobs", "--json"), JOB_COMMANDS - {"resume"})):
             with self.subTest(prefix=prefix):
-                self.assertEqual(self.complete(shell, *prefix, ""), JOB_COMMANDS)
+                self.assertEqual(self.complete(shell, *prefix, ""), expected)
                 self.assertEqual(self.complete(shell, *prefix, "threads", ""), {"list", "show", "rm"})
         self.assertEqual(self.complete(shell, "jobs", "threads", "--json", ""), {"list", "show", "rm"})
         for action in ID_COMMANDS:
             with self.subTest(action=action):
                 self.assertEqual(self.complete(shell, "jobs", action, ""), {self.job})
+        self.assertNotIn(self.job, self.complete(shell, "jobs", "--json", "resume", ""))
         for action in ("list",):
             flags = "\n".join(self.complete(shell, "jobs", "threads", action, ""))
             self.assertIn("--json", flags)

@@ -62,12 +62,15 @@ def retry_args(directory):
     return result
 
 
-def metadata_fields(directory):
+def metadata_fields(directory, continuation=False):
     value, _ = aa_policy._read_json(Path(directory) / "meta.json")
     keys = ("lane", "vendor", "model", "effort", "timeout", "job_timeout", "mode", "workdir")
     for key in keys:
         aa_policy._check(key in value, f"invalid retry metadata: missing required field {key}")
-    aa_policy._check(value.get("mode") in ("advise", "work"), "invalid retry mode")
+    modes = ("advise", "work", "sysops") if continuation else ("advise", "work")
+    aa_policy._check(value.get("mode") in modes, "invalid retry mode")
+    if continuation:
+        aa_policy._check(value.get("vendor") == "codex", "invalid retry vendor")
     aa_policy._check(type(value.get("timeout")) is int and value["timeout"] > 0, "invalid retry timeout")
     aa_policy._check(value.get("job_timeout") is None or (type(value["job_timeout"]) is int and value["job_timeout"] > 0), "invalid retry job timeout")
     result = []
@@ -81,9 +84,10 @@ def metadata_fields(directory):
 
 if __name__ == "__main__":
     try:
-        print("\n".join(metadata_fields(sys.argv[2]) if sys.argv[1] == "--metadata" else retry_args(sys.argv[1])))
+        print("\n".join(metadata_fields(sys.argv[2], sys.argv[1] == "--resume-metadata")
+                        if sys.argv[1] in ("--metadata", "--resume-metadata") else retry_args(sys.argv[1])))
     except (aa_policy.PolicyError, OSError, KeyError, TypeError) as error:
-        if sys.argv[1] == "--metadata":
+        if sys.argv[1] in ("--metadata", "--resume-metadata"):
             detail = str(error)
             print("omnilane: " + (detail if detail.startswith("invalid retry") else "invalid retry metadata: " + detail),
                   file=sys.stderr)

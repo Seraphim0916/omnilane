@@ -85,6 +85,12 @@ def alive(pid):
                      "job_marker.py reads process environments only on macOS and Linux")
 class JobEnvMarkerReapTests(unittest.TestCase):
     def setUp(self):
+        try:
+            check = subprocess.run(['ps', '-p', str(os.getpid()), '-o', 'pid='], capture_output=True, text=True)
+        except OSError:
+            self.skipTest('process inspection denied by this execution environment')
+        if check.returncode or check.stdout.strip() != str(os.getpid()):
+            self.skipTest('supervised runtime requires process inspection; denied in this sandbox')
         self.temporary = tempfile.TemporaryDirectory(prefix="omnilane-marker-reap-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)

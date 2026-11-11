@@ -12,6 +12,25 @@ semantic version tags.
 
 - Missing or hash-mismatched raw probe evidence now invalidates only the overlay rows that cite it, including already-failed probes. Intact rows remain usable; affected rows are refused as unprobed. Re-verification revokes prior in-memory authority before rebuilding it. Refusals and doctor report the affected count and `omnilane resign --vendor <vendor>` recovery command. Re-signing probes the affected selectors again without reusing or re-sealing damaged output, including output for vendors not selected for repair; unverifiable failure timestamps cannot authorize unattended retries. A complete directory of recognizable replacement descriptors is rejected globally. Shared manifest integrity, overlay/schema/snapshot/engine checks, executable-origin gates and caller ceilings remain strict.
 
+- Codex single-shot jobs classify exact `upstream_eof` / `upstream_error`
+  connection cuts separately from task failures. Interrupted jobs exit 75 and
+  retain the vendor exit and transport reason in status and receipts. Completion
+  evidence preserves the available output and contradictory original exit;
+  ordinary failures, cancellation and timeouts keep their original exits.
+- Codex never resumes automatically in `work`, `sysops` or `advise`, including
+  persisted advise threads. Removed the per-attempt guard and host-wide stable
+  scan. A fixed, sanitised receipt explains the cut and prints the job's exact
+  `omnilane jobs resume ID` command; file-changing modes explicitly explain why
+  nothing was restarted. `--no-resume` remains a compatibility option.
+- Explicit `jobs resume ID` checks only processes carrying that job's exact
+  marker, listing PID and start time and refusing when any remain. It validates
+  the original session and reuses the policy-checked dispatch/runner with a
+  continuation instruction, never the original brief. It keeps the recorded
+  route and mode (including sysops), existing authority ceilings and timeouts.
+  It creates a new job record for the same vendor session; `jobs retry` retains
+  its separate fresh-execution behaviour. Unavailable process inspection or
+  invalid provenance/authority still refuses without starting a provider.
+
 ## [0.61.0] - 2026-11-11
 
 ### Changed

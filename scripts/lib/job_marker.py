@@ -179,6 +179,35 @@ def scan(token: str, supervisor: int, after_us: int, source=None):
     return matches
 
 
+def live_matches(token, source=None):
+    """Manual continuation checks exact ownership without requiring host stability.
+
+    No supervisor/start cutoff is needed: this unguessable marker belongs to a
+    completed job. Unrelated unreadable/disappearing PIDs are not refusal votes.
+    Never expose an environment entry, and recheck only matched identities.
+    """
+    if source is None:
+        source = _darwin() if sys.platform == "darwin" else _linux() if sys.platform.startswith("linux") else None
+    if source is None:
+        raise Unavailable("unsupported platform")
+    pids, info, environment = source
+    wanted = b"OMNILANE_JOB_TOKEN=" + token.encode()
+    matches = []
+    for pid in pids():
+        if pid == os.getpid():
+            continue
+        try:
+            before = info(pid)
+            if before is None or wanted not in (environment(pid) or []):
+                continue
+            after = info(pid)
+            if after is not None and after[1] == before[1]:
+                matches.append((pid, before[1]))
+        except (OSError, ValueError, IndexError, struct.error):
+            continue
+    return sorted(matches)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="job_marker.py")
     sub = parser.add_subparsers(dest="command", required=True)

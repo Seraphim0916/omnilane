@@ -98,6 +98,14 @@ accepted 表示主控已作驗收判定，**不是固定等同 PASS**。沒有 d
 同一租約內相同 acknowledgement 可重試；驗收結果或證據衝突被拒絕。
 binding 或終態退出碼在 poll 後改動，ack 也會拒絕。
 
+Codex 單次執行遇到已確認的傳輸中斷時，`work`、`sysops` 與 `advise`（含持久對話）均不自動續接。沒有完成證據時退出 75，狀態為 `interrupted`、`outcome=interrupted-needs-decision`，回條標記 `TRANSPORT_INTERRUPTED NEEDS_DECISION`，並列出該工作可執行的 `omnilane jobs resume ID`。可改檔模式的固定通知明說因模式可改檔而未自動重啟。
+
+手動接續表示操作者已判斷安全。它只查此工作的精確標記；仍存活者列出程序編號與建立時間並拒絕，不要求全主機程序集合穩定。程序檢查權限被拒、對話來源不可靠或授權失效時仍拒絕，不把未查證當成已停止。通過後以原對話與接續指示建立新工作，再驗原路由、模式與目前呼叫者的權限；`jobs retry ID` 是另外的從頭重跑操作。
+
+最後一個回合／項目事件（`turn.started`、`turn.completed`、`item.*`）是 `turn.completed`，或最終回覆非空時，保留輸出與原退出碼，回條標記 `COMPLETED_WITH_TRANSPORT_ERROR`，下一步為 `jobs result ID`；之後的 `turn.started`、任何 `item.*` 活動，或一列無法解析或超過 1 MiB 的進度列，都會撤銷先前的 `turn.completed`；每個 `turn.started` 開一個回合，`turn.completed`、`turn.failed` 各關一個，最少到 0；`turn.completed` 關掉一個回合後，若沒有未結束的回合，才建立完成證據（沒有 `turn.started` 的 `turn.completed` 也算）；仍有未結束的回合時（較舊回合遲到的完成、被遺棄的回合），這個 `turn.completed` 不證明完成。只有合格的非零退出、精確的傳輸錯誤、最終回覆檔 0 位元組且沒有完成證據時，才以 75 結束。一般失敗、逾時、取消的退出碼不變。完成回條只發布一次，喚醒橋接不可把中斷當成成功。
+
+用 `omnilane jobs status ID --json` 查 `attempts`、`reason_class`、`outcome`、`auto_resume_eligible`（固定 false）與 `continuation_blocked_reason`。詳見 [連線中斷處理](codex-transport-recovery.md)。
+
 ## 停用
 
 所有登錄工作均已作驗收判定時，poll 回 needs_disable=true。

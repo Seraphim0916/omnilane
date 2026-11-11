@@ -36,6 +36,7 @@ fi
 
 # Private goal capability must never reach runners or provider environments.
 GOAL_INTENT_REF="${OMNILANE_GOAL_INTENT:-}"
+DISPATCH_NO_RESUME_ENV="${OMNILANE_NO_RESUME:-0}"
 unset OMNILANE_GOAL_INTENT
 export -n GOAL_INTENT_REF
 GOAL_STDIN_CAPTURED=0
@@ -64,6 +65,8 @@ source "$OMNILANE_REPO/scripts/lib/live-protocol.sh"
 source "$OMNILANE_REPO/scripts/lib/quota-preflight.sh"
 
 MODE="advise"; WORKDIR="$PWD"; BACKGROUND=0; DRY_RUN=0
+NO_RESUME="${OMNILANE_NO_RESUME:-0}"
+[[ "$DISPATCH_NO_RESUME_ENV" != "1" ]] || NO_RESUME=1
 OVERRIDE_VENDOR=""; OVERRIDE_MODEL=""; OVERRIDE_EFFORT=""; OVERRIDE_TIMEOUT=""
 OVERRIDE_JOB_TIMEOUT=""; OVERRIDE_IDLE_TIMEOUT=""; SESSION_REQUEST="auto"
 THREAD_NAME=""; THREAD_MODE=""; THREAD_ID=""; THREAD_TURN=""; THREAD_CREATED=""
@@ -117,6 +120,8 @@ flags:
   --effort E             override the routed effort
   --timeout SECONDS      cap each CLI call (default 600)
   --job-timeout SECONDS  cap the whole dispatch (lock wait plus all calls)
+  --no-resume            compatibility flag; Codex never resumes automatically
+                        (also OMNILANE_NO_RESUME=1; use jobs resume ID explicitly)
 
 read-only queries (no provider call, no job state; --json for one envelope):
   --list                 effective routing table (local overrides win)
@@ -844,6 +849,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --list|--explain|--validate|--json) usage_error ;;
     --background) BACKGROUND=1; shift ;;
+    --no-resume) NO_RESUME=1; shift ;;
     --live)
       [[ "$SESSION_REQUEST" != "single-shot" ]] || {
         echo "omnilane: --live and --single-shot are mutually exclusive" >&2; exit 2
@@ -915,6 +921,8 @@ fi
 
 LANE="$1"
 TASK="$2"
+[[ "$NO_RESUME" == "0" || "$NO_RESUME" == "1" ]] || { echo 'omnilane: OMNILANE_NO_RESUME must be 0 or 1' >&2; exit 2; }
+export OMNILANE_NO_RESUME="$NO_RESUME"
 [[ "$LANE" =~ ^[a-z][a-z0-9-]*$ ]] || { echo "omnilane: invalid lane name" >&2; exit 2; }
 # A typo like --mode advice must not fall through to the write-enabled branch.
 [[ "$MODE" == "advise" || "$MODE" == "work" || "$MODE" == "sysops" ]] || { echo "omnilane: invalid --mode (advise|work|sysops)" >&2; exit 2; }
@@ -1611,6 +1619,9 @@ write_completion_record() {
       "$rc" "$(json_escape "$finished")" "$(json_escape "$tail_value")" "$isolation_json" \
       > "$tmp" || write_rc=$?
   fi
+  if [[ "$write_rc" -eq 0 && "$VENDOR" == "codex" ]]; then
+    python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" receipt "$JOB_DIR" "$tmp" || true
+  fi
   if [[ "$write_rc" -eq 0 ]] && ! json_file_round_trip_valid "$tmp"; then
     write_rc=1
   fi
@@ -1639,6 +1650,9 @@ finish_job() {
     elif [[ "$THREAD_MODE" == "resume" ]]; then
       append_thread_notice "omnilane: thread $THREAD_NAME could not be continued; stored $VENDOR session $THREAD_ID was preserved"
     fi
+  fi
+  if [[ "$VENDOR" == "codex" ]]; then
+    python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" finalize "$JOB_DIR" "$rc" >&2 || true
   fi
   secure_job_files
   # Preserve early non-timeout results used by cancellation recovery if a stuck

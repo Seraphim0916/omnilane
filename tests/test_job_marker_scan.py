@@ -120,6 +120,12 @@ class LinuxProcSourceTests(unittest.TestCase):
                      "real process listing is read only on macOS and Linux")
 class ScanRealProcessesTests(unittest.TestCase):
     def test_command_line_exits_zero_with_unreadable_processes_present(self):
+        try:
+            check = subprocess.run(['ps', '-p', str(os.getpid()), '-o', 'pid='], capture_output=True, text=True)
+        except OSError:
+            self.skipTest('process inspection denied by this execution environment')
+        if check.returncode or check.stdout.strip() != str(os.getpid()):
+            self.skipTest('process inspection denied; do not bypass it through platform APIs')
         # pid 1 belongs to root, so its environment cannot be read; the scan must still succeed.
         result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/lib/job_marker.py"), "scan",
                                  "--token", TOKEN, "--supervisor", str(os.getpid()), "--after", "0"],
