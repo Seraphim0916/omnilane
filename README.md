@@ -1390,9 +1390,7 @@ macOS Grok work: the operator may enable single-shot work **without isolation** 
 - **Background lifecycle** — `--background` workers run in their own process
   group and survive the caller's exit; killed workers record an exit code, and
   `jobs.sh status` reports `dead` instead of `running` forever.
-- **Payload limits** — a task over its vendor's byte limit is refused before
-  any worker starts (exit 2), never cut. Put long content in a file and give
-  its absolute path in the task.
+- **Lossless task transport** — pure API targets receive the complete task; a provider context-length error exits 2. Claude, Codex, Grok, Gemini and vote use a private file under `<workdir>/.omnilane-tmp/job-<UUID>/` when the task plus worker rules exceeds the transport limit. Native handoffs and `--inherit` use the same byte checks. Other targets refuse over-limit tasks (exit 2). All tiers have a 1,048,576-byte runaway-input guard, not a model-context guarantee. `--dry-run` never stages and lists the tier only when the task would go by file. Staged files and pure API request bodies keep a stdin task byte for byte, trailing newlines included; as on main, an argument task keeps the one newline `task.txt` adds for runners that read the task file (Codex, Grok, exec, pure API), while runners that pass the task as one CLI argument (Claude, Gemini, OpenCode, Kimi, Qwen) and the first live message drop trailing newlines. Files have mode 0600 in 0700 directories, and are removed when the job/turn ends; live follow-up files last until close. Only model opinions in vote round 2 may be shortened. See [task transport](docs/task-transport.md) for limits, receipts and crash recovery.
 
 ## 📬 Live mailbox
 

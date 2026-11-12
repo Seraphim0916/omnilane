@@ -804,10 +804,9 @@ release_cwd_lock() {
   rmdir "$OMNILANE_LOCKDIR" 2>/dev/null || true
 }
 
-# Prompt byte limits for the dispatch pre-flight. They must equal the literal
-# caps in the runners, whose bytes are pinned in the signed transport evidence
-# (tests/test_brief_too_long_reject.py checks this). A task over its limit is
-# refused before any worker starts; it is never cut.
+# Historical transport budgets mirrored by prompt_transport.py. Dispatch uses
+# the three-tier planner before any runner. These checks are backstops for
+# already-planned payloads; task text is never shortened by dispatch.
 prompt_cap_bytes() { # vendor [session_mode] -> prints the byte limit
   local vendor="$1" session_mode="${2:-single-shot}"
   if [[ "$vendor" == "gemini" ]]; then
@@ -819,6 +818,9 @@ prompt_cap_bytes() { # vendor [session_mode] -> prints the byte limit
   fi
   # The first live message carries the worker rules and is held to 102400.
   if [[ "$session_mode" == "live" ]]; then echo 102400; return 0; fi
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    case "$vendor" in opencode|kimi|qwen) echo 131071; return 0 ;; esac
+  fi
   case "$vendor" in
     claude) echo 102400 ;;
     vote) echo 100000 ;;
@@ -829,9 +831,8 @@ prompt_cap_bytes() { # vendor [session_mode] -> prints the byte limit
 # Runners that put the worker rules in front of the task send them inside the
 # same limit; the others send the task bytes alone.
 prompt_counts_worker_rules() { # vendor [session_mode]
-  [[ "$1" != "gemini" ]] || return 1
   [[ "${2:-single-shot}" != "live" ]] || return 0
-  case "$1" in claude|codex|grok) return 0 ;; *) return 1 ;; esac
+  case "$1" in claude|codex|grok|gemini) return 0 ;; *) return 1 ;; esac
 }
 
 worker_rules_bytes() {
@@ -856,7 +857,10 @@ enforce_prompt_cap() { # file vendor [session_mode]
 }
 
 validate_gemini_task_size() {
-  enforce_prompt_cap "$1" gemini
+  local size cap
+  size=$(wc -c < "$1"); size=$((size + $(worker_rules_bytes)))
+  cap="$(prompt_cap_bytes gemini)"
+  if [[ "$size" -gt "$cap" ]]; then prompt_too_long_message gemini "$size" "$cap"; return 2; fi
 }
 
 # Inside a job, job-worker.sh overrides this so a task copy over its cap is

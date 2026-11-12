@@ -39,7 +39,6 @@ GOAL_INTENT_REF="${OMNILANE_GOAL_INTENT:-}"
 DISPATCH_NO_RESUME_ENV="${OMNILANE_NO_RESUME:-0}"
 unset OMNILANE_GOAL_INTENT
 export -n GOAL_INTENT_REF
-GOAL_STDIN_CAPTURED=0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 # shellcheck disable=SC1091
 source "$OMNILANE_REPO/scripts/lib/grok-work.sh"
@@ -1161,9 +1160,6 @@ if [[ -n "$THREAD_NAME" ]]; then
   if [[ -L "$THREADS_ROOT" || ( -e "$THREADS_ROOT" && ! -d "$THREADS_ROOT" ) ]]; then
     thread_refuse "omnilane: unsafe thread store path (want real directory): $THREADS_ROOT"
   fi
-  if [[ "$DRY_RUN" -ne 1 ]]; then
-    prepare_threads_store || thread_refuse "omnilane: thread store could not be prepared"
-  fi
   THREAD_STATE_FILE="$THREADS_ROOT/$THREAD_NAME.json"
   if [[ -e "$THREAD_STATE_FILE" || -L "$THREAD_STATE_FILE" ]]; then
     read_thread_state "$THREAD_STATE_FILE" "$THREAD_NAME" || {
@@ -1271,6 +1267,7 @@ IDLE_TIMEOUT="$OVERRIDE_IDLE_TIMEOUT"
 export OMNILANE_IDLE_TIMEOUT="$IDLE_TIMEOUT"
 # The idle cap only exists inside a live mailbox, so a single-shot dispatch
 # would be told about a limit that never applies to it.
+emit_dispatch_limit_notices() {
 if [[ "$SESSION_MODE" == "live" && "$IDLE_TIMEOUT" -gt 0 && "$TIMEOUT" -gt "$IDLE_TIMEOUT" ]]; then
   echo "omnilane: --timeout is ${TIMEOUT}s, but the independent live mailbox idle cap remains ${IDLE_TIMEOUT}s; adjust it with --idle-timeout SECONDS" >&2
 elif [[ "$SESSION_MODE" == "live" && "$SESSION_REQUEST" != "live" && "$IDLE_TIMEOUT" -gt 0 ]]; then
@@ -1278,6 +1275,8 @@ elif [[ "$SESSION_MODE" == "live" && "$SESSION_REQUEST" != "live" && "$IDLE_TIME
 elif [[ "$SESSION_MODE" == "live" && "$SESSION_REQUEST" != "live" ]]; then
   echo "omnilane: --idle-timeout 0 disables the idle cap; only the per-call timeout or jobs close ends it; the foreman should jobs close ID after reading the answer or use --single-shot" >&2
 fi
+}
+
 
 JOB_SUPERVISOR="$OMNILANE_REPO/scripts/lib/job-timeout.pl"
 JOB_WORKER_SOURCE="$OMNILANE_REPO/scripts/lib/job-worker.sh"
@@ -1346,44 +1345,52 @@ if [[ -L "$JOBS_ROOT" || ( -e "$JOBS_ROOT" && ! -d "$JOBS_ROOT" ) ]]; then
   exit 1
 fi
 
-# Stage the exact task.txt bytes before any job directory exists, so an
-# over-limit task fails the same way in --dry-run, foreground and background,
-# with nothing left behind. Goal stdin keeps its $(cat) bytes (see below).
-if [[ -n "$GOAL_INTENT_REF" && "$TASK" == "-" ]]; then TASK="$(cat)"; GOAL_STDIN_CAPTURED=1; fi
-TASK_STAGE="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-task.XXXXXX")" || exit 1
-trap 'rm -f "$TASK_STAGE"' EXIT
-if [[ "$GOAL_STDIN_CAPTURED" -eq 1 ]]; then
-  printf '%s' "$TASK" > "$TASK_STAGE"
-elif [[ "$TASK" == "-" ]]; then
+# Capture once, including all trailing newlines; the receipt is never the task.
+TASK_STAGE="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-task.XXXXXX")" || exit 2
+TASK_PLAN=""
+cleanup_task_stage() {
+  [[ ! -s "$TASK_PLAN" ]] || python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" cleanup "$TASK_PLAN" || true
+  rm -f "$TASK_STAGE"
+  [[ -z "$TASK_PLAN" ]] || rm -f "$TASK_PLAN"
+}
+trap cleanup_task_stage EXIT
+TASK_PLAN="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-plan.XXXXXX")" || exit 2
+TASK_SOURCE=argument
+if [[ "$TASK" == "-" ]]; then
+  TASK_SOURCE=stdin
   cat > "$TASK_STAGE"
 else
   printf '%s\n' "$TASK" > "$TASK_STAGE"
 fi
-TASK_SEND_BYTES=$(wc -c < "$TASK_STAGE") || exit 1
-TASK_SEND_BYTES=$((TASK_SEND_BYTES))
-if prompt_counts_worker_rules "$VENDOR" "$SESSION_MODE"; then
-  TASK_SEND_BYTES=$((TASK_SEND_BYTES + $(worker_rules_bytes)))
-fi
-TASK_CAP_BYTES="$(prompt_cap_bytes "$VENDOR" "$SESSION_MODE")"
-if [[ "$TASK_SEND_BYTES" -gt "$TASK_CAP_BYTES" ]]; then
-  prompt_too_long_message "$VENDOR" "$TASK_SEND_BYTES" "$TASK_CAP_BYTES"
-  exit 2
-fi
+TASK_PREFIX_BYTES=0
+if prompt_counts_worker_rules "$VENDOR" "$SESSION_MODE"; then TASK_PREFIX_BYTES="$(worker_rules_bytes)"; fi
+PROMPT_PLAN_ARGS=(plan "$TASK_STAGE" --vendor "$VENDOR" --mode "$MODE" --session "$SESSION_MODE"
+  --workdir "$WORKDIR" --prefix "$TASK_PREFIX_BYTES")
+python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" "${PROMPT_PLAN_ARGS[@]}" > "$TASK_PLAN" || exit 2
 
-quota_emit_notice
 if [[ "$DRY_RUN" -eq 1 ]]; then
+  # Internal goal transaction: stage before its lock/intent, then transfer the
+  # receipt to the real dispatch. Ordinary --dry-run never stages anything.
+  if [[ -n "${OMNILANE_GOAL_PREPARE_FILE:-}" ]]; then
+    python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" "${PROMPT_PLAN_ARGS[@]}" --stage > "$TASK_PLAN" || exit 2
+    [[ -f "$OMNILANE_GOAL_PREPARE_FILE" && ! -L "$OMNILANE_GOAL_PREPARE_FILE" ]] || exit 2
+    cat "$TASK_PLAN" > "$OMNILANE_GOAL_PREPARE_FILE" || exit 2
+    rm -f "$TASK_STAGE" "$TASK_PLAN"
+    trap - EXIT
+    exit 0
+  fi
+  quota_emit_notice
+  emit_dispatch_limit_notices
   print_dry_run_plan
+  python3 - "$TASK_PLAN" <<'BRIEF_PLAN'
+import json,sys
+p=json.load(open(sys.argv[1]))
+# Absent lines mean inline delivery, so ordinary previews keep their bytes.
+if p["delivery"]!="inline": print("task_tier=%s\ntask_delivery=%s\ntask_bytes=%s\ntask_sha256=%s" % (p["tier"],p["delivery"],p["bytes"],p["sha256"]))
+BRIEF_PLAN
   exit 0
 fi
 
-printf 'omnilane: executor=cli reason=%s\n' "$EXECUTOR_REASON" >&2
-if [[ "$EXECUTOR_REASON" == "no-native-context" && -n "$AA_CALLER_CONTEXT" && -r "$AA_CALLER_CONTEXT" ]]; then
-  CALLER_VENDOR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["caller"]["vendor"])' "$AA_CALLER_CONTEXT" 2>/dev/null || true)"
-  if [[ -n "$CALLER_VENDOR" && "$CALLER_VENDOR" == "$VENDOR" ]]; then
-    # Same vendor is not same model, so this is an offer, never a silent switch.
-    echo "omnilane: the target is this harness's own vendor, yet it goes out through an external CLI because no capability file was given. To use your own sub-agent tool: omnilane native-context --workdir \"$WORKDIR\", then pass --native-context FILE (or --inherit for a worker on your own model and effort)" >&2
-  fi
-fi
 # Without a recorded start time a job can never be signalled safely. A background
 # dispatch reports its ID before the worker writes one, so refuse here while the
 # caller can still see the reason and no job directory exists.
@@ -1392,6 +1399,25 @@ can_record_start_time || {
   echo "omnilane: ps cannot read process start times here, so no job was started. A sandbox usually causes this; rerun outside the sandbox (from a normal terminal, or by approving the unsandboxed run)." >&2
   exit 1
 }
+# Stage before thread/job/goal state, but only after the process-identity gate.
+if [[ -n "${OMNILANE_PREPARED_BRIEF:-}" ]]; then
+  PROMPT_PLAN_ARGS+=(--prepared "$OMNILANE_PREPARED_BRIEF")
+fi
+python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" "${PROMPT_PLAN_ARGS[@]}" --stage > "$TASK_PLAN" || exit 2
+unset OMNILANE_PREPARED_BRIEF OMNILANE_GOAL_PREPARE_FILE
+quota_emit_notice
+emit_dispatch_limit_notices
+printf 'omnilane: executor=cli reason=%s\n' "$EXECUTOR_REASON" >&2
+if [[ "$EXECUTOR_REASON" == "no-native-context" && -n "$AA_CALLER_CONTEXT" && -r "$AA_CALLER_CONTEXT" ]]; then
+  CALLER_VENDOR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["caller"]["vendor"])' "$AA_CALLER_CONTEXT" 2>/dev/null || true)"
+  if [[ -n "$CALLER_VENDOR" && "$CALLER_VENDOR" == "$VENDOR" ]]; then
+    # Same vendor is not same model, so this is an offer, never a silent switch.
+    echo "omnilane: the target is this harness's own vendor, yet it goes out through an external CLI because no capability file was given. To use your own sub-agent tool: omnilane native-context --workdir \"$WORKDIR\", then pass --native-context FILE (or --inherit for a worker on your own model and effort)" >&2
+  fi
+fi
+if [[ -n "$THREAD_NAME" ]]; then
+  prepare_threads_store || thread_refuse "omnilane: thread store could not be prepared"
+fi
 mkdir -p "$OMNILANE_HOME"
 if [[ ! -d "$JOBS_ROOT" ]]; then
   mkdir -m 700 "$JOBS_ROOT"
@@ -1411,9 +1437,14 @@ JOB_DIR="$JOBS_ROOT/$JOB_ID"
 mkdir -m 700 "$JOB_DIR"
 if [[ -n "$GOAL_INTENT_REF" ]]; then
   [[ "$BACKGROUND" == "1" ]] || { rmdir "$JOB_DIR"; echo "omnilane: goal intent requires background dispatch" >&2; exit 2; }
-  # Goal stdin was captured before the size check; the same task bytes serve
-  # both its fingerprint and execution.
-  GOAL_TASK_FINGERPRINT="$(python3 -c 'import hashlib,sys; print(hashlib.sha256((sys.argv[1] + "\0" + sys.argv[2]).encode("utf-8")).hexdigest())' "$LANE" "$TASK")"
+  # The worker gets the exact stdin bytes, but the fingerprint keeps the
+  # pre-1 MiB rule ($(cat) semantics) so existing failures.json still match.
+  # goal-loop.sh computes the same value with the same expression.
+  if [[ "$TASK_SOURCE" == "stdin" ]]; then
+    GOAL_TASK_FINGERPRINT="$(python3 -c 'import hashlib,sys; d=sys.stdin.buffer.read(); d=d.replace(b"\0",b"").rstrip(b"\n") if sys.argv[2]=="stdin" else d; print(hashlib.sha256(sys.argv[1].encode("utf-8")+b"\0"+d).hexdigest())' "$LANE" stdin < "$TASK_STAGE")"
+  else
+    GOAL_TASK_FINGERPRINT="$(printf '%s' "$TASK" | python3 -c 'import hashlib,sys; d=sys.stdin.buffer.read(); d=d.replace(b"\0",b"").rstrip(b"\n") if sys.argv[2]=="stdin" else d; print(hashlib.sha256(sys.argv[1].encode("utf-8")+b"\0"+d).hexdigest())' "$LANE" argument)"
+  fi
   if ! python3 "$OMNILANE_REPO/scripts/lib/goal_dispatch.py" claim \
     "$OMNILANE_HOME" "$GOAL_INTENT_REF" "$JOB_ID" "$LANE" "$GOAL_TASK_FINGERPRINT"; then
     # Remove only our new, still-empty scaffold. Never fabricate an exit:
@@ -1484,9 +1515,18 @@ elif resolved_foreman_session="$(find_foreman_session "$$" 2>/dev/null)"; then
   FOREMAN_SESSION="$resolved_foreman_session"
 fi
 
-(umask 077; cat "$TASK_STAGE" > "$JOB_DIR/task.txt") || exit 1
-rm -f "$TASK_STAGE"
+(umask 077; cat "$TASK_STAGE" > "$JOB_DIR/task.txt"; cat "$TASK_PLAN" > "$JOB_DIR/brief.json") || exit 1
+python3 - "$JOB_DIR" <<'BRIEF_DELIVER'
+import json,sys
+from pathlib import Path
+j=Path(sys.argv[1]); p=json.loads((j/'brief.json').read_text())
+if p['delivery']=='file':
+    f=j/'transport-task.txt'; f.write_bytes(p['pointer'].encode()); f.chmod(0o600)
+BRIEF_DELIVER
+rm -f "$TASK_STAGE" "$TASK_PLAN"
 trap - EXIT
+# job-worker drops the one newline task.txt adds after an argument task.
+export OMNILANE_TASK_SOURCE="$TASK_SOURCE"
 
 # meta "timeout" is the resolved per-CLI-call watchdog cap, not a whole-job total.
 
@@ -1670,6 +1710,7 @@ finish_job() {
   if [[ "$VENDOR" == "codex" ]]; then
     python3 "$OMNILANE_REPO/scripts/lib/codex_resume.py" finalize "$JOB_DIR" "$rc" >&2 || true
   fi
+  python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" cleanup-job "$JOB_DIR" || true
   secure_job_files
   # Preserve early non-timeout results used by cancellation recovery if a stuck
   # finalizer needs SIGKILL. Whole-job timeout waits for the receipt attempt below.

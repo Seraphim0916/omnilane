@@ -263,11 +263,12 @@ class NativeExecutorTests(unittest.TestCase):
                 self.route(expected=2)
         self.assert_no_jobs()
 
-    def test_native_dry_run_no_state_or_stdin_consumption(self):
-        plan = json.loads(self.route("--dry-run", task="-").stdout)
+    def test_native_dry_run_validates_stdin_without_state(self):
+        result = self.run_cli("scripts/dispatch.sh", ["--workdir", str(ROOT), "--native-context", str(self.context), "--dry-run", "native-unit", "-"], input="fixture task\n\n")
+        plan = json.loads(result.stdout)
         self.assertEqual(plan["state"], "planned")
         self.assertIsNone(plan["job_id"])
-        self.assertEqual(plan["task"], "-")
+        self.assertEqual(plan["task"], "fixture task\n\n")
         self.assert_no_jobs()
 
     def test_valid_completion_and_duplicate(self):

@@ -98,6 +98,7 @@ def _append_exclude(common):
 
 def tmpdir(workdir):
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | os.O_NOFOLLOW
+    staged_task = os.environ.get("OMNILANE_TASK_FILE_STAGED") == "1"
     try:
         parent = os.open(workdir, flags)
     except OSError as error:
@@ -113,9 +114,19 @@ def tmpdir(workdir):
             info = os.fstat(fd)
             if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
                 fail(125, "unsafe Codex work temp path")
-            os.fchmod(fd, 0o700)
+            if not staged_task:
+                os.fchmod(fd, 0o700)
             job = "job-" + uuid.uuid4().hex
             os.mkdir(job, 0o700, dir_fd=fd)
+            if staged_task:
+                job_fd = os.open(job, flags, dir_fd=fd)
+                try:
+                    ignore = os.open('.gitignore', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                     0o600, dir_fd=job_fd)
+                    with os.fdopen(ignore, 'wb') as handle:
+                        handle.write(b'*\n')
+                finally:
+                    os.close(job_fd)
         except OSError as error:
             fail(125, "unsafe Codex work temp path: %s" % error)
         finally:
@@ -123,7 +134,8 @@ def tmpdir(workdir):
                 os.close(fd)
     finally:
         os.close(parent)
-    add_exclude(workdir)
+    if not staged_task:
+        add_exclude(workdir)
     print(os.path.join(workdir, TMP_NAME, job))
 
 

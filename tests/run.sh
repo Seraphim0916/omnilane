@@ -3041,6 +3041,8 @@ make_fake_vote_repo() {
   cp "$ROOT/scripts/runners/run-vote.sh" "$repo/scripts/runners/run-vote.sh"
   cp "$ROOT/scripts/lib/common.sh" "$repo/scripts/lib/common.sh"
   cp "$ROOT/scripts/lib/aa_policy.py" "$repo/scripts/lib/aa_policy.py"
+  # run-vote.sh builds Round 2 through the shared lossless planner.
+  cp "$ROOT/scripts/lib/prompt_transport.py" "$repo/scripts/lib/prompt_transport.py"
   mkdir -p "$repo/config"
   cp "$ROOT/config/aa-model-policy.json" "$repo/config/aa-model-policy.json"
   cat > "$repo/scripts/runners/fake-voter.sh" <<'EOF'

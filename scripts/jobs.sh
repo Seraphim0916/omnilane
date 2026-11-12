@@ -686,12 +686,52 @@ case "${1:-}" in
     else
       foreman_value="${foreman_session-}"
     fi
-    payload="$(live_encode_message "$JOB_VENDOR" "$2" "$foreman_value" "$3")"
+    SEND_RAW="$3"
+    if [[ "$SEND_RAW" == "-" ]]; then SEND_RAW="$(cat; printf .)"; SEND_RAW="${SEND_RAW%.}"; fi
+    SEND_PLAN="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-send.XXXXXX")"
+    trap '[[ ! -s "$SEND_PLAN" ]] || python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" cleanup "$SEND_PLAN"; rm -f "$SEND_PLAN"' EXIT
+    printf '%s' "$SEND_RAW" | python3 -c '
+import json,sys,os,uuid
+from pathlib import Path
+sys.path.insert(0,sys.argv[1]+"/scripts/lib")
+import prompt_transport as t
+job=Path(sys.argv[2])
+try:
+ meta=json.loads((job/"meta.json").read_text())
+ route=[meta.get(k) for k in ("vendor","mode","workdir")]
+ # An incomplete route cannot stage: send inline as before, or refuse.
+ staged=all(isinstance(v,str) and v for v in route)
+ p=t.plan(sys.stdin.buffer.read(t.MAX_TASK_BYTES+1),route[0] if staged else sys.argv[3],route[1] if staged else "","live",route[2] if staged else ".",prefix=0,stage=staged)
+ print(json.dumps(p))
+except (OSError,ValueError,AttributeError,TypeError) as e:
+ print("omnilane: "+str(e).replace("\n"," "),file=sys.stderr);sys.exit(2)
+' "$OMNILANE_REPO" "$JOB_DIR" "$JOB_VENDOR" > "$SEND_PLAN" || exit 2
+    SEND_TEXT="$SEND_RAW"
+    if [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["delivery"])' "$SEND_PLAN")" == "file" ]]; then
+      SEND_TEXT="$(python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" deliver "$SEND_PLAN"; printf .)"
+      SEND_TEXT="${SEND_TEXT%.}"
+    fi
+    payload="$(live_encode_message "$JOB_VENDOR" "$2" "$foreman_value" "$SEND_TEXT")"
     set +e
     write_fifo_with_timeout "$JOB_DIR/inbox.fifo" "$payload"
     send_rc=$?
     set -e
     [[ "$send_rc" -eq 0 ]] || die "$send_rc" "send timed out or failed; the live worker may be gone"
+    # A unique private receipt lets the controller clean every accepted message.
+    SEND_RECEIPT="$(python3 -c '
+import os,sys,tempfile
+from pathlib import Path
+fd,path=tempfile.mkstemp(prefix="brief-message-",suffix=".json",dir=sys.argv[1])
+try:
+ with os.fdopen(fd,"wb") as f:
+  f.write(Path(sys.argv[2]).read_bytes());f.flush();os.fsync(f.fileno())
+except BaseException:
+ os.unlink(path);raise
+print(path)
+' "$JOB_DIR" "$SEND_PLAN")"
+    rm -f "$SEND_PLAN"
+    trap - EXIT
+    if [[ -e "$JOB_DIR/exit" ]]; then python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" cleanup "$SEND_RECEIPT"; fi
     echo "sent $2"
     ;;
   watch)

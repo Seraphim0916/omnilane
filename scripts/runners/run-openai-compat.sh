@@ -45,14 +45,16 @@ RUN_TIMEOUT="${OMNILANE_TIMEOUT:-600}"
 command -v curl >/dev/null 2>&1 || fail "curl not found"
 command -v python3 >/dev/null 2>&1 || fail "python3 not found"
 
-truncate_payload "$PROMPT_FILE" 140000
+python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" plan "$PROMPT_FILE" --vendor "$VENDOR" >/dev/null
 
 REQUEST_FILE="${OUTPUT_FILE}.request.json"
 RESPONSE_FILE="${OUTPUT_FILE}.response.json"
 # Keep the API key out of the process argument list (ps-visible): curl reads the
 # Authorization header from a 0600 file, not a -H command-line flag.
 HEADER_FILE="${OUTPUT_FILE}.headers"
-cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" "$HEADER_FILE" 2>/dev/null || true; }
+# Response headers (0600, removed on exit); only the status line is read.
+STATUS_FILE="${OUTPUT_FILE}.status-headers"
+cleanup() { rm "$REQUEST_FILE" "$RESPONSE_FILE" "$HEADER_FILE" ${STATUS_FILE:+"$STATUS_FILE"} 2>/dev/null || true; }
 trap 'omnilane_exit_trap $? cleanup' EXIT
 private_job_files "$HEADER_FILE"
 ( umask 077; printf 'Authorization: Bearer %s\n' "$API_KEY" > "$HEADER_FILE" )
@@ -61,16 +63,16 @@ private_job_files "$REQUEST_FILE"
 python3 - "$MODEL" "$PROMPT_FILE" > "$REQUEST_FILE" <<'PY'
 import json, sys
 model, prompt_file = sys.argv[1], sys.argv[2]
-with open(prompt_file, encoding="utf-8", errors="replace") as f:
+with open(prompt_file, encoding="utf-8", newline="") as f:
     prompt = f.read()
 json.dump({"model": model, "messages": [{"role": "user", "content": prompt}]},
           sys.stdout)
 PY
 
-private_job_files "$RESPONSE_FILE" "${OUTPUT_FILE}.stderr.log"
+private_job_files "$RESPONSE_FILE" "$STATUS_FILE" "${OUTPUT_FILE}.stderr.log"
 set +e
 run_with_timeout "$RUN_TIMEOUT" curl -sS --fail-with-body \
-  --max-time "$RUN_TIMEOUT" \
+  --max-time "$RUN_TIMEOUT" -D "$STATUS_FILE" \
   -H "@$HEADER_FILE" \
   -H "Content-Type: application/json" \
   -X POST "$BASE_URL/chat/completions" \
@@ -78,6 +80,16 @@ run_with_timeout "$RUN_TIMEOUT" curl -sS --fail-with-body \
   > "$RESPONSE_FILE" 2> "${OUTPUT_FILE}.stderr.log"
 RC=$?
 set -e
+HTTP_STATUS="$(LC_ALL=C awk '/^HTTP\//{code=$2} END{print code}' "$STATUS_FILE" 2>/dev/null || true)"
+
+# No guessed token budget: normalize the provider's own context-length error.
+CONTEXT_RC=0
+CONTEXT_MESSAGE="$(python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" api-error "$RESPONSE_FILE" --vendor "$VENDOR" --status "$HTTP_STATUS")" || CONTEXT_RC=$?
+if [[ "$CONTEXT_RC" -eq 2 ]]; then
+  printf '%s\n' "$CONTEXT_MESSAGE" > "${OUTPUT_FILE}.stderr.log"
+  printf '%s\n' "$CONTEXT_MESSAGE" >&2
+  exit 2
+fi
 
 if [[ "$RC" -ne 0 ]]; then
   # Surface the API error body (never the key) alongside curl's own stderr.

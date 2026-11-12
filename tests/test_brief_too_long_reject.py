@@ -1,4 +1,4 @@
-"""A task over its vendor limit is refused before any worker starts; never cut."""
+"""Dispatch tier planning and runaway refusals before any worker starts."""
 
 import os
 from pathlib import Path
@@ -22,9 +22,10 @@ def common(script, env=None):
 class PromptCapTableTests(unittest.TestCase):
     def test_limits_match_the_former_runner_caps(self):
         gemini = "130000" if platform.system() == "Linux" else "180000"
+        argument_cap = "131071" if platform.system() == "Linux" else "140000"
         expected = {
             "claude": "102400", "codex": "140000", "grok": "140000", "exec": "140000",
-            "kimi": "140000", "opencode": "140000", "qwen": "140000", "groq": "140000",
+            "kimi": argument_cap, "opencode": argument_cap, "qwen": argument_cap, "groq": "140000",
             "openrouter": "140000", "vote": "100000", "gemini": gemini,
         }
         for vendor, cap in expected.items():
@@ -51,7 +52,7 @@ class PromptCapTableTests(unittest.TestCase):
             for line in runner.read_text().splitlines():
                 m = re.match(r'\s*truncate_payload "\$PROMPT_FILE" (\d+)$', line)
                 if m:
-                    self.assertEqual(common(f"prompt_cap_bytes {vendor}").stdout.strip(), m.group(1),
+                    self.assertEqual(common(f"prompt_cap_bytes {vendor}").stdout.strip(), str(min(int(m.group(1)), 131071)) if platform.system() == "Linux" and vendor in ("opencode", "kimi", "qwen") else m.group(1),
                                      runner.name)
 
 
@@ -90,49 +91,66 @@ class DispatchPreflightTests(unittest.TestCase):
     def assert_refused(self, result, size, vendor, cap):
         self.assertEqual(result.returncode, 2, result.stderr.decode(errors="replace")[-2000:])
         err = result.stderr.decode()
-        self.assertIn(f"task is {size} bytes as sent to {vendor}; limit is {cap} bytes", err)
-        self.assertIn("absolute path", err)
+        self.assertIn(f"task is {size} bytes", err)
+        self.assertIn(str(cap), err)
+        self.assertIn("nothing was cut", err.lower())
         self.assertEqual(err.count("task is "), 1)
         self.assertFalse(self.called.exists(), "a worker CLI was started")
         self.assertEqual(self.jobs(), [], "a job directory was left behind")
 
-    def test_dry_run_exact_limit_passes_and_one_more_byte_fails(self):
+    def test_dry_run_exact_limit_inline_and_one_more_byte_staged(self):
         task = 140000 - self.rules
         ok = self.dispatch(b"a" * task, "--dry-run")
         self.assertEqual(ok.returncode, 0, ok.stderr.decode(errors="replace")[-2000:])
         self.assertIn(b"dry_run=yes", ok.stdout)
-        self.assert_refused(self.dispatch(b"a" * (task + 1), "--dry-run"), 140001, "codex", 140000)
+        over = self.dispatch(b"a" * (task + 1), "--dry-run")
+        self.assertEqual(over.returncode, 0, over.stderr)
+        self.assertIn(b"task_delivery=file", over.stdout)
+        self.assertEqual(self.jobs(), [])
+        # A preview reports the file tier without staging anything.
+        self.assertFalse((self.work / ".omnilane-tmp").exists())
 
     def test_multibyte_character_across_the_limit(self):
         task = 140000 - self.rules
         # A 3-byte character whose last byte lands one past the limit.
         payload = b"a" * (task - 2) + "灌".encode()
         self.assertEqual(len(payload), task + 1)
-        self.assert_refused(self.dispatch(payload, "--dry-run"), 140001, "codex", 140000)
+        over = self.dispatch(payload, "--dry-run")
+        self.assertEqual(over.returncode, 0, over.stderr)
+        self.assertIn(b"task_delivery=file", over.stdout)
         exact = b"a" * (task - 3) + "灌".encode()
         self.assertEqual(self.dispatch(exact, "--dry-run").returncode, 0)
 
     def test_claude_counts_the_worker_rules_inside_102400(self):
         task = 102400 - self.rules
         self.assertEqual(self.dispatch(b"b" * task, "--dry-run", lane="review").returncode, 0)
-        self.assert_refused(self.dispatch(b"b" * (task + 1), "--dry-run", lane="review"),
-                            102401, "claude", 102400)
+        over = self.dispatch(b"b" * (task + 1), "--dry-run", lane="review")
+        self.assertEqual(over.returncode, 0, over.stderr)
+        self.assertIn(b"task_delivery=file", over.stdout)
 
     def test_background_refusal_leaves_no_job(self):
-        self.assert_refused(self.dispatch(b"c" * 200000, "--background"),
-                            200000 + self.rules, "codex", 140000)
+        self.assert_refused(self.dispatch(b"c" * 1048577, "--background"),
+                            1048577, "codex", 1048576)
+
+    def test_live_refusal_is_one_line_even_when_timeout_would_warn(self):
+        result=self.dispatch(b"x"*1048577,"--background","--live","--idle-timeout","1")
+        self.assertEqual(result.returncode,2,result.stderr)
+        self.assertEqual(result.stderr.count(b"\n"),1,result.stderr)
+        self.assertIn(b"tier 3 refusal",result.stderr)
+        self.assertEqual(self.jobs(),[])
 
     def test_foreground_refusal_leaves_no_job(self):
-        self.assert_refused(self.dispatch(b"d" * 200000), 200000 + self.rules, "codex", 140000)
+        self.assert_refused(self.dispatch(b"d" * 1048577), 1048577, "codex", 1048576)
 
     def test_argument_task_counts_its_newline(self):
-        task = 140000 - self.rules - 1
+        task = 102400 - self.rules - 1
         args = ["bash", str(ROOT / "scripts/dispatch.sh"), "--workdir", str(self.work),
-                "--timeout", "30", "--dry-run", "consult"]
+                "--timeout", "30", "--dry-run", "review"]
         ok = subprocess.run(args + ["e" * task], env=self.env, capture_output=True, timeout=90)
         self.assertEqual(ok.returncode, 0, ok.stderr.decode(errors="replace")[-2000:])
         over = subprocess.run(args + ["e" * (task + 1)], env=self.env, capture_output=True, timeout=90)
-        self.assert_refused(over, 140001, "codex", 140000)
+        self.assertEqual(over.returncode, 0, over.stderr)
+        self.assertIn(b"task_delivery=file", over.stdout)
 
 
 if __name__ == "__main__":

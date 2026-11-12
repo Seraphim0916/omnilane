@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
 import host_context  # noqa: E402
 import json_depth  # noqa: E402
+import prompt_transport  # noqa: E402
 
 
 MAX_BYTES = 262144
@@ -506,12 +507,37 @@ def publish_plan(args, plan, policy_decision, registry, caller):
     quota_decision = getattr(args, "quota_decision", None)
     if quota_decision:
         plan["quota_preflight"] = json_depth.loads(quota_decision)
-    if args.dry_run:
-        print(json_text(plan), end="")
-        return 0
-    if args.task == "-":
-        plan["task"] = sys.stdin.read(MAX_BYTES + 1)
-    text_value(plan["task"], "task", 65536, multiline=True)
+    # Staging needs the full route. Without it, keep the original inline path:
+    # a preview reads nothing, and a real handoff gets the inline limit.
+    routed = all(isinstance(plan.get(k), str) and plan.get(k) for k in ("vendor", "mode", "workdir"))
+    if not routed:
+        if args.dry_run:
+            print(json_text(plan), end="")
+            return 0
+        if args.task == "-":
+            plan["task"] = sys.stdin.read(MAX_BYTES + 1)
+        text_value(plan["task"], "task", 65536, multiline=True)
+        data = None
+    else:
+        if args.task == "-":
+            data = getattr(sys.stdin, "buffer", sys.stdin).read(prompt_transport.MAX_TASK_BYTES + 1)
+            if isinstance(data, str):
+                data = data.encode("utf-8")
+        else:
+            data = plan["task"].encode("utf-8")
+        # Byte ceilings apply before the dry-run return, including --inherit.
+        receipt = prompt_transport.plan(data, plan["vendor"], plan["mode"], "native",
+                                        plan["workdir"], native=True)
+        text_value(data.decode("utf-8"), "task", prompt_transport.MAX_TASK_BYTES, multiline=True)
+        plan["task"] = data.decode("utf-8")
+        # Absent task_transport means inline, so ordinary previews keep their bytes.
+        if receipt['delivery'] == 'file':
+            plan['task'] = prompt_transport.worker_rules() + receipt['pointer']
+            plan['task_transport'] = receipt
+        if args.dry_run:
+            check(len(json_text(plan).encode("utf-8")) <= MAX_BYTES, "handoff too large")
+            print(json_text(plan), end="")
+            return 0
     job_id = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + f"-{os.getpid()}-{secrets.randbelow(10**9)}"
     plan.update(job_id=job_id, task_id=job_id, created=stamp(), job_state_created=True)
     if "quota_preflight" in plan:
@@ -523,11 +549,25 @@ def publish_plan(args, plan, policy_decision, registry, caller):
                     aa_effective_ceiling=policy_decision["effective_ceiling"])
     metadata.update(started=plan["created"], session_mode="native")
     check(len(json_text(metadata).encode("utf-8")) <= 4096, "metadata too large")
-    root = jobs_root(args.home, create=True)
-    if policy_decision.get("child_context") is not None:
-        plan["worker_contract"]["caller_context_path"] = str(root / job_id / "aa-child-context.json")
-        plan["worker_contract"]["caller_context"] = policy_decision["child_context"]
-    publish_job(root, job_id, plan, metadata, registry, caller, args.policy)
+    receipt = {}
+    try:
+        if data is not None:
+            receipt = prompt_transport.plan(data, plan['vendor'], plan['mode'], 'native',
+                                            plan['workdir'], native=True, stage=True)
+            if receipt['delivery'] == 'file':
+                plan['task'] = prompt_transport.worker_rules() + receipt['pointer']
+                plan['task_transport'] = receipt
+        root = Path(args.home) / "jobs"
+        if policy_decision.get("child_context") is not None:
+            plan["worker_contract"]["caller_context_path"] = str(root / job_id / "aa-child-context.json")
+            plan["worker_contract"]["caller_context"] = policy_decision["child_context"]
+        check(len(json_text(plan).encode("utf-8")) <= MAX_BYTES, "handoff too large")
+        check(len(json_text(metadata).encode("utf-8")) <= 4096, "metadata too large")
+        root = jobs_root(args.home, create=True)
+        publish_job(root, job_id, plan, metadata, registry, caller, args.policy)
+    except BaseException:
+        prompt_transport.cleanup(receipt)
+        raise
     print(json_text(plan), end="")
     return 0
 
@@ -617,8 +657,11 @@ def job_command(args):
                 # any agent already spawned and must stop it with its own tool.
                 state.update(state="cancelled", exit_code=143, finished=stamp())
             atomic_json(job / "native.json", state)
+            prompt_transport.cleanup(state.get("task_transport", {}))
     # Everything below can block on a reader that stopped reading, so it stays outside the lock.
     public_state, reason = observed_job_state(job, state)
+    if public_state == "expired":
+        prompt_transport.cleanup(state.get("task_transport", {}))
     if args.action == "read-state":
         # A single observation for the shell's list/stats/recommend/wait.
         print(f"{public_state}\t{json.dumps(state.get('exit_code'))}\t{reason}")

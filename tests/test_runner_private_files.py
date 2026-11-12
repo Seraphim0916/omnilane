@@ -106,7 +106,8 @@ while not Path(os.environ["FIXTURE_RELEASE"]).exists():
             if vendor == "vote":
                 running = {"out.txt"}
             if vendor == "openai-compat":
-                running.update({"out.txt.headers", "out.txt.request.json", "out.txt.response.json"})
+                running.update({"out.txt.headers", "out.txt.request.json", "out.txt.response.json",
+                                "out.txt.status-headers"})
             self.assert_private(running)
             self.assertEqual(stat.S_IMODE(self.project_file.stat().st_mode), 0o644)
             self.release.touch()

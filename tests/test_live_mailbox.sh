@@ -14,7 +14,7 @@ unset OMNILANE_JOB_SUPERVISED OMNILANE_IDLE_TIMEOUT
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 CASE="${1:-}"
-TEST_BASE="$ROOT/.test-scratch"
+TEST_BASE="${TMPDIR:-$ROOT/.test-scratch}"
 mkdir -p "$TEST_BASE"
 # One root per run: the cases and the cases they run nested share it and nothing else
 # does, so jobs and processes of another run in this checkout are never counted or touched.
@@ -919,24 +919,23 @@ size = int(sys.argv[3])
 body = "".join(f"{i:06d} large live task line\n" for i in range(4400)).encode()
 head, tail = b"HEAD-MARKER\n", b"TAIL-MARKER\n"
 pathlib.Path(sys.argv[1]).write_bytes(head + body[:size - len(head) - len(tail)] + tail)
-pathlib.Path(sys.argv[2]).write_bytes(head + body + tail)
+pathlib.Path(sys.argv[2]).write_bytes(b"x" * 1048577)
 PY
-  [[ "$(wc -c < "$over")" -gt 102400 && "$(wc -c < "$over")" -lt 140000 ]] ||
-    fail "over-cap fixture must sit between the live cap and the runner cap"
+  [[ "$(wc -c < "$over")" -eq 1048577 ]] || fail "runaway fixture size"
 
   refused="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" FAKE_CODEX_INPUT="$input" \
     FAKE_CODEX_COUNTER="$home/codex.counter" "$ROOT/scripts/dispatch.sh" --background --live \
-    --idle-timeout 0 --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    --idle-timeout 0 --workdir "$home" --vendor codex --model gpt-5.6-luna --effort medium \
     triage - < "$over" 2>&1)" || rc=$?
   [[ "$rc" -eq 2 ]] || fail "over-cap live task was not refused (exit $rc): $refused"
-  [[ "$refused" == *"as sent to codex; limit is 102400 bytes"* ]] || fail "refusal message: $refused"
+  [[ "$refused" == *"runaway-input limit is 1048576 bytes"* ]] || fail "refusal message: $refused"
   [[ ! -e "$input" ]] || fail "over-cap live task reached Codex"
   [[ ! -d "$home/jobs" || -z "$(ls -A "$home/jobs")" ]] || fail "over-cap live task left a job directory"
 
   job="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" \
     FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="done" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
-    --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    --workdir "$home" --vendor codex --model gpt-5.6-luna --effort medium \
     triage - < "$task")"
   job_dir="$home/jobs/$job"
   register_job "$home" "$job"
@@ -952,6 +951,30 @@ PY
   if [[ "${LIVE_LARGE_FAIL_SEND:-0}" == 1 ]]; then send_job="no-such-job"; fi
   OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$send_job" "done" >/dev/null
   wait_for_lines "$job_dir/out.txt" 2 || fail "Codex steered reply did not complete the turn"
+  # A follow-up over the live transport cap is staged for the resident job.
+  local follow="$home/follow.src"
+  python3 - "$follow" <<'PYFOLLOW'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_bytes(b"followup " * 23000 + b"\n\n")
+PYFOLLOW
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" - < "$follow" >/dev/null
+  tries=0
+  while [[ "$(grep -c '"method":"turn/start"' "$input")" -lt 2 && "$tries" -lt 100 ]]; do
+    sleep .1; tries=$((tries + 1))
+  done
+  python3 - "$job_dir" "$follow" <<'PYCHECK'
+import hashlib,json,sys
+from pathlib import Path
+job,source=map(Path,sys.argv[1:]);data=source.read_bytes()
+receipts=[json.loads(p.read_text()) for p in job.glob('brief-message-*.json')]
+staged=[p for p in receipts if p['delivery']=='file']
+assert len(staged)==1,staged
+p=staged[0];assert Path(p['path']).read_bytes()==data
+assert p['sha256']==hashlib.sha256(data).hexdigest()
+PYCHECK
+  OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" send "$job" "done" >/dev/null
+  wait_for_lines "$job_dir/out.txt" 4 || fail "Codex staged follow-up did not complete"
   close_out="$(OMNILANE_HOME="$home" "$ROOT/scripts/jobs.sh" close "$job" 2>&1)" ||
     fail "Codex live close failed: $close_out"
   [[ "$(cat "$job_dir/exit")" == "0" ]] || fail "Codex large live job did not exit zero"
@@ -962,6 +985,13 @@ PY
   done
 
   cmp -s "$task" "$job_dir/task.txt" || fail "task.txt differs from the task sent"
+  python3 - "$job_dir" <<'PYCLEAN'
+import json,sys
+from pathlib import Path
+for f in Path(sys.argv[1]).glob('brief-message-*.json'):
+    p=json.loads(f.read_text())
+    if p['path']:assert not Path(p['path']).exists(),p['path']
+PYCLEAN
   TASK="$task" INPUT="$input" python3 - <<'PY' || fail "Codex large live first message mismatch"
 import json
 import os
@@ -970,15 +1000,16 @@ import pathlib
 marker = "[omnilane worker rules]"
 requests = [json.loads(l) for l in pathlib.Path(os.environ["INPUT"]).read_text(encoding="utf-8").splitlines()]
 turns = [r for r in requests if r.get("method") == "turn/start"]
-assert len(turns) == 1, len(turns)
+assert len(turns) == 2, len(turns)
+assert "Absolute path:" in turns[1]["params"]["input"][0]["text"]
 sent = turns[0]["params"]["input"][0]["text"]
 assert sent.startswith(marker), sent[:80]
 assert sent.count(marker) == 1, sent.count(marker)
 assert "--- TRUNCATED" not in sent, "first message was cut"
 task = pathlib.Path(os.environ["TASK"]).read_bytes()
-# The live JSON text drops the task's final newline; every other byte arrives.
-assert task.endswith(b"\n") and sent.encode().endswith(task[:-1]), (len(sent.encode()), len(task), sent[-60:])
-assert len(sent.encode()) == 102400 - 1, len(sent.encode())
+# Preserve every task byte, including its final newline.
+assert task.endswith(b"\n") and sent.encode().endswith(task), (len(sent.encode()), len(task), sent[-60:])
+assert len(sent.encode()) == 102400, len(sent.encode())
 PY
 }
 

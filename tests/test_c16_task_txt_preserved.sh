@@ -18,8 +18,9 @@ if [[ -z "${OMNILANE_TEST_SIGINT_DEFAULT:-}" ]]; then
 fi
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-mkdir -p "$ROOT/.test-scratch"
-TEST_ROOT="$(mktemp -d "$ROOT/.test-scratch/c16-trunc.XXXXXX")"
+TEST_BASE="${TMPDIR:-$ROOT/.test-scratch}"
+mkdir -p "$TEST_BASE"
+TEST_ROOT="$(mktemp -d "$TEST_BASE/c16-trunc.XXXXXX")"
 test_completed=0
 # Assigned again from $? as the trap starts; declared here for shellcheck (SC2154).
 test_rc=0
@@ -359,27 +360,37 @@ fake_bin.mkdir()
 (fake_bin / "curl").write_text("#!/bin/bash\nfor arg in \"$@\"; do case \"$arg\" in @*.request.json) /bin/cp \"${arg#@}\" \"$CAPTURE\" ;; esac; done\n/bin/cat \"" + str(base / "direct-api-response.json") + "\"\n")
 (fake_bin / "curl").chmod(0o755)
 def direct_api_case(vendor, size):
-    cap = 140000
     job = new_job("direct-api-%s-%s" % (vendor, size), size)
     env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], **{vendor.upper() + "_API_KEY": "fixture-key"})
     result = subprocess.run(command(vendor, job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
     data = payload[:size]
     assert (job / "task.txt").read_bytes() == data
     assert not private_dirs(job), [sorted(p.name for p in d.iterdir()) for d in private_dirs(job)]
-    if size > cap:
-        # Over the cap the runner refuses before any request; nothing is cut.
-        assert result.returncode == 2, (result.returncode, result.stderr)
-        assert b"limit is %d bytes" % cap in result.stderr, result.stderr
-        assert not (job / "received").exists(), "over-cap task reached the API"
-        return
+    # Tier 1: a pure API target gets the complete task at any size up to the
+    # runaway ceiling, including past the former 140000-byte transport cap.
     assert result.returncode == 0, (result.returncode, result.stderr)
     assert (job / "out.txt").read_text() == "fixture result"
     sent = json.loads((job / "received").read_text())["messages"][0]["content"].encode()
     assert sent == data, "direct API payload differs"
+def direct_api_ceiling_case(vendor):
+    job = base / ("direct-api-%s-ceiling" % vendor)
+    job.mkdir()
+    data = b"0123456789abcdef" * 65536 + b"x"
+    assert len(data) == 1048577
+    (job / "task.txt").write_bytes(data)
+    env = environment(job, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"], **{vendor.upper() + "_API_KEY": "fixture-key"})
+    result = subprocess.run(command(vendor, job), env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+    assert (job / "task.txt").read_bytes() == data
+    assert not private_dirs(job), [sorted(p.name for p in d.iterdir()) for d in private_dirs(job)]
+    # Past the runaway ceiling the runner refuses before any request.
+    assert result.returncode == 2, (result.returncode, result.stderr)
+    assert b"runaway-input limit is 1048576 bytes" in result.stderr, result.stderr
+    assert not (job / "received").exists(), "over-ceiling task reached the API"
 for vendor in ("openrouter", "deepseek", "zai", "mistral", "groq", "cerebras"):
-    check("direct API %s over the cap is refused and removes its copies" % vendor, direct_api_case, vendor, 200000)
+    check("direct API %s over the old cap is sent whole and removes its copies" % vendor, direct_api_case, vendor, 200000)
 for size in (4096, 140000, 140001):
     check("direct API groq %s bytes removes its copies" % size, direct_api_case, "groq", size)
+check("direct API groq over the runaway ceiling is refused before any request", direct_api_ceiling_case, "groq")
 def wrapper_with_extra_line_case():
     # Identity checks must keep what an untracked runner replaced; only a pure wrapper is rerouted.
     source = (runtime / "scripts/runners/run-groq.sh").read_text()

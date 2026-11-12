@@ -35,6 +35,19 @@ RUNNER="$OMNILANE_REPO/scripts/runners/run-$VENDOR.sh"
 # copy raw: the vendor runners (and the first live message)
 # add worker rules themselves. Passing the decorated copy would double them.
 TASK_PROMPT_FILE="$PROMPT_FILE"
+# dispatch writes an argument task to task.txt with one added newline. Only
+# the first live message's copy removes it; single-shot runner copies keep it.
+# Stdin tasks and staged pointers stay byte for byte. Unset (a direct caller)
+# also means byte for byte.
+TASK_COPY_ACTION=copy
+[[ "${OMNILANE_TASK_SOURCE:-}" != "argument" ]] || TASK_COPY_ACTION=copy-argument
+unset OMNILANE_TASK_SOURCE
+unset OMNILANE_TASK_FILE_STAGED
+if [[ -f "${PROMPT_FILE%/*}/transport-task.txt" ]]; then
+  TASK_PROMPT_FILE="${PROMPT_FILE%/*}/transport-task.txt"
+  TASK_COPY_ACTION=copy
+  export OMNILANE_TASK_FILE_STAGED=1
+fi
 PROMPT_COPY_DIR=""
 PROMPT_COPY_ID=""
 PROMPT_IDENTITIES=""
@@ -153,6 +166,7 @@ finally:
     os.close(fd)
 ' "$PROMPT_COPY_DIR" "$PROMPT_COPY_ID" "$PROMPT_IDENTITIES" || true
   fi
+  prompt_cleanup_run python3 "$OMNILANE_REPO/scripts/lib/prompt_transport.py" cleanup-job "${OUTPUT_FILE%/*}" || true
   release_cwd_lock || true
   exit "$rc"
 }
@@ -208,9 +222,11 @@ try:
         sys.exit("omnilane: prompt directory identity changed")
     owned = dict(record.split("=", 1) for record in receipts.split())
     src = pathlib.Path(source)
-    if action == "copy":
+    if action in ("copy", "copy-argument"):
         target = root / argument
         data = src.read_bytes()
+        if action == "copy-argument" and data.endswith(b"\n"):
+            data = data[:-1]
     else:
         if src.parent.resolve() != root:
             sys.exit("omnilane: prompt outside private directory")
@@ -262,9 +278,9 @@ eval "${untracked_truncate_definition/truncate_payload/untracked_truncate_payloa
 unset untracked_truncate_definition
 # The runners keep their truncate_payload lines (their bytes are pinned in the
 # signed transport evidence), but a task copy over its cap is refused here, not
-# cut: dispatch already refused it before the job, so this is only a backstop.
-# Files outside the private copy directory (vote's generated Round 2 prompt)
-# keep the old cut.
+# cut: dispatch has already selected inline or file delivery; this is a backstop.
+# Legacy non-task payloads keep the old cutter. Vote round 2 uses the shared
+# planner to preserve its original task.
 truncate_payload() {
   local size cap="${2:-140000}"
   if [[ ! "${1%/*}" -ef "$PROMPT_COPY_DIR" ]]; then
@@ -619,7 +635,7 @@ if [[ "$VENDOR" == "codex" ]]; then
 fi
 # The first live message gets the same worker rules a single-shot runner
 # sends; later sends reach the worker through the inbox and stay verbatim.
-owned_prompt_operation copy "$TASK_PROMPT_FILE" task.txt || exit 1
+owned_prompt_operation "$TASK_COPY_ACTION" "$TASK_PROMPT_FILE" task.txt || exit 1
 FIRST_MESSAGE_FILE="$(worker_prompt_file "$PROMPT_COPY_DIR/task.txt")" || exit 1
 if [[ "$VENDOR" != "gemini" ]]; then
   enforce_prompt_cap "$FIRST_MESSAGE_FILE" "$VENDOR" live || exit $?
@@ -700,7 +716,8 @@ message = {"event": "user", "message": {"role": "user", "content": [
 Path(sys.argv[2]).write_bytes((json.dumps(message, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8"))
 PY
 else
-  INITIAL_TEXT="$(cat "$FIRST_MESSAGE_FILE")"
+  INITIAL_TEXT="$(cat "$FIRST_MESSAGE_FILE"; printf .)"
+  INITIAL_TEXT="${INITIAL_TEXT%.}"
 fi
 if [[ "${FOREMAN_SESSION+x}" == "x" ]]; then
   FOREMAN_SESSION_VALUE="$FOREMAN_SESSION"
