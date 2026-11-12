@@ -21,19 +21,25 @@ DISPATCH = ROOT / "scripts" / "dispatch.sh"
 # 2026-11-10 AA v5.0.1 re-rank (LANES-501 "now"): hardest-coding and hard-judgment lead with
 # Claude Fable 5.2 xhigh; long-context moves to the Codex family because Opus 5 lost its score.
 EXPECTED_DEFAULTS = {
-    "hardest-coding": "claude claude-fable-5-2 xhigh",
+    # 2026-11-12: Carbon heads hardest-coding and ui-draft. --list shows chain heads only; a host without
+    # Carbon transport proof skips it at dispatch (test_human_lane_dispatch_skips_unproven_carbon).
+    "hardest-coding": "gemini gemini-4-carbon-high -",
     "bulk-mechanical": "codex gpt-6.1-sol medium",
     "triage": "codex gpt-6-luna high",
     "hard-judgment": "claude claude-fable-5-2 xhigh",
     "taste-final": "claude claude-sonnet-5-5 xhigh",
     "consult": "codex gpt-6-astra xhigh",
-    "ui-draft": "claude claude-opus-5-5 high",
+    "ui-draft": "gemini gemini-4-carbon-medium -",
     "long-context": "codex gpt-6-astra medium",
     "fast-agentic": "codex gpt-6.1-sol medium",
     "live-search": "grok grok-4.7 high",
     "coding-overflow": "grok grok-4.7 high",
     "arbitrate": "off - -",
 }
+CARBON_FIRST = {"hardest-coding": ["gemini gemini-4-carbon-high -", "gemini gemini-4-carbon-low -"],
+                "ui-draft": ["gemini gemini-4-carbon-medium -"]}
+# The 2026-11-10 first choices, still next in line on a host without Carbon proof.
+BEFORE_CARBON = {"hardest-coding": "claude claude-fable-5-2 xhigh", "ui-draft": "claude claude-opus-5-5 high"}
 
 
 class AARoutingUpdateTests(unittest.TestCase):
@@ -121,11 +127,58 @@ class AARoutingUpdateTests(unittest.TestCase):
         result = self._run("--list", env=env)
         self.assertEqual(0, result.returncode, result.stderr)
         selected = self._listed(result.stdout)
+        # --list shows the first installed vendor's row; Carbon heads two lanes, Argon every other one.
+        carbon = {"hardest-coding": "gemini gemini-4-carbon-high -", "ui-draft": "gemini gemini-4-carbon-medium -"}
         for lane in EXPECTED_DEFAULTS.keys() - {"arbitrate"}:
-            self.assertEqual(selected[lane].split("#", 1)[0].strip(), "gemini gemini-4-argon-high -", lane)
+            self.assertEqual(selected[lane].split("#", 1)[0].strip(),
+                             carbon.get(lane, "gemini gemini-4-argon-high -"), lane)
+        # Dispatch, unlike --list, needs Carbon's transport proof even for the human exemption.
+        for lane in ("hardest-coding", "ui-draft"):
+            dry = self._run("--dry-run", lane, "fixture", env=env)
+            self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+            self.assertIn("model=gemini-4-argon-high\n", dry.stdout, lane)
         consult = self._run("--dry-run", "--vendor", "gemini", "consult", "fixture", env=env)
         self.assertEqual(0, consult.returncode, consult.stdout + consult.stderr)
         self.assertIn("model=gemini-4-argon-high\n", consult.stdout)
+
+    def test_carbon_heads_its_two_lanes_in_routing_yaml(self) -> None:
+        lanes = {}
+        for line in (ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
+            if match:
+                lanes[match.group(1)] = [item.strip() for item in match.group(2).split("|")]
+        for lane, head in CARBON_FIRST.items():
+            self.assertEqual(head + [BEFORE_CARBON[lane]], lanes[lane][:len(head) + 1], lane)
+        for lane, chain in lanes.items():
+            if lane not in CARBON_FIRST:
+                self.assertFalse(any("gemini-4-carbon" in item for item in chain), lane)
+
+    def test_human_lane_dispatch_skips_unproven_carbon(self) -> None:
+        expected = {"hardest-coding": ("claude-fable-5-2", "xhigh"), "ui-draft": ("claude-opus-5-5", "high")}
+        for lane, (model, effort) in expected.items():
+            with self.subTest(lane=lane):
+                dry = self._run("--dry-run", lane, "fixture")
+                self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+                self.assertIn(f"model={model}\n", dry.stdout)
+                self.assertIn(f"effort={effort}\n", dry.stdout)
+                self.assertNotIn("gemini-4-carbon", dry.stdout)
+
+    def test_human_exemption_refuses_unproven_carbon_selectors(self) -> None:
+        # Quick start exports the human assertion and agy exists, but no probe has proven Carbon.
+        cases = [("--model", "gemini-4-carbon-high"), ("--model", "gemini-4-carbon-medium"),
+                 ("--model", "gemini-4-carbon-low"),
+                 ("--target-config", "gemini/gemini-4-carbon")]
+        for lane in ("hardest-coding", "ui-draft", "consult"):
+            for flag, value in cases:
+                with self.subTest(lane=lane, flag=flag, value=value):
+                    args = ["--dry-run", "--vendor", "gemini", flag, value]
+                    if flag == "--target-config":
+                        args += ["--model", "gemini-4-carbon-high"]
+                    result = self._run(*args, lane, "fixture")
+                    self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+                    self.assertNotIn("dry_run=yes", result.stdout)
+                    self.assertIn("target-transport", result.stderr)
+                    self.assertIn("omnilane resign --vendor gemini", result.stderr)
 
     def test_local_whole_lane_precedence(self) -> None:
         (self.home / "routing.local.yaml").write_text(

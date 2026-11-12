@@ -132,22 +132,25 @@ NEW_ROWS = [
     *[(f"claude/claude-fable-5-2{suffix}", "claude", "claude-fable-5-2", effort, "adaptive",
        f"claude-fable-5-2{suffix}", f"claude/claude-fable-5-1{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
+    # Gemini 4 Carbon left reference_configs on 2026-11-12: Google opened it to AI Ultra in
+    # Antigravity and agy 1.5.5 ships Low/Medium/High. Unlike Argon, AA scores each effort,
+    # so the effort-encoded selector (gemini-4-carbon-medium) is built like the Flash rows.
+    *[(f"gemini/gemini-4-carbon{suffix}", "gemini", "gemini-4-carbon", effort, "unspecified",
+       f"gemini-4-carbon{suffix}", "gemini/gemini-3-8-flash" + suffix)
+      for effort in ("high", "medium", "low") for suffix in ["" if effort == "high" else f"-{effort}"]],
 ]
 # Scored by AA but with no runtime selector the vendor has published: kept in
 # reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
 # or caller resolves to them. (config id, vendor, model, effort, reasoning, AA slug, reason)
-CARBON_REASON = ("Google has published no model id or effort selector for Gemini 4 Carbon "
-                 "and agy 1.5.3 lists none (checked 2026-11-10); comparison only until one ships")
-REFERENCE_ROWS = [
-    (f"gemini/gemini-4-carbon{suffix}", "gemini", "gemini-4-carbon", effort, "unspecified",
-     f"gemini-4-carbon{suffix}", CARBON_REASON)
-    for effort in ("high", "medium", "low") for suffix in ["" if effort == "high" else f"-{effort}"]]
+REFERENCE_ROWS: list[tuple] = []
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
                "gemini-4-argon-high": "gemini-3.8-flash-high",
                "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra",
-               "claude-fable-5-2": "claude-fable-5-1"}  # catalog selector -> alias to clone
+               "claude-fable-5-2": "claude-fable-5-1",
+               **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
+               }  # catalog selector -> alias to clone
 # AA labels every Fable 5.2 row "Default Fallback", as it does Fable 5.1.
 NEW_ROW_FALLBACKS = {"claude-fable-5-2": "default"}
 # AA's family slug and agy's effort-encoded selector are different identities.
@@ -471,6 +474,9 @@ def cmd_build(args) -> int:
             })
     new["unknown_configs"] = unknown
 
+    # A reference row that NEW_ROWS now scores is no longer comparison-only.
+    new["reference_configs"] = [row for row in new["reference_configs"]
+                                if row["id"] not in {r[0] for r in NEW_ROWS}]
     for row in new["reference_configs"]:
         if row["aa_slug"] in records:
             rescore(row, records[row["aa_slug"]], version, as_of, report(row["vendor"]))
@@ -510,8 +516,10 @@ def cmd_build(args) -> int:
         if (template["catalog_vendor"], model) not in have:
             clone = copy.deepcopy(template)
             clone["catalog_model"] = model
-            clone["candidate_config_ids"] = [cid for cid, _, m, *_ in NEW_ROWS
-                                             if RUNTIME_SELECTORS.get(m, m) == model]
+            # a gemini selector carries the effort (gemini-4-carbon-medium), as target_row reads it
+            clone["candidate_config_ids"] = [cid for cid, v, m, e, *_ in NEW_ROWS
+                                             if RUNTIME_SELECTORS.get(m, m) == model
+                                             or (v == "gemini" and f"{m}-{e}" == model)]
             new["aliases"].insert(new["aliases"].index(template), clone)
 
     vendors: dict[str, int] = {}
@@ -685,7 +693,8 @@ STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context"
 # or gpt-5.6-sol/luna/terra, so those families left the rule with that snapshot.
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-fable-5-2", "claude-fable-5-1", "claude-sonnet-5-5",
                   "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
-                  "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon"}
+                  "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon",
+                  "gemini-4-carbon"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
 

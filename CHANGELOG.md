@@ -6,6 +6,11 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+- **Gemini 4 Carbon** is now a scored, selectable model (snapshot `aa-v5.0.1-2026-11-12-v1`, approved by the operator on 2026-11-12). Google opened it to Google AI Ultra subscribers in Antigravity, and agy 1.5.5 lists Low, Medium and High for Ultra/ADC sign-ins. Select `gemini-4-carbon-high`, `gemini-4-carbon-medium` or `gemini-4-carbon-low` (scores **60, 58 and 54**) with `--vendor gemini --model …`, or pick them in the configurator. The selector strings are inferred from agy's effort-in-model-id convention and still need a host probe to confirm. The snapshot reuses the 2026-11-10 AA v5.0.1 capture; no other row changes.
+- Carbon is placed only where the value rule puts it: **high, then low, lead `hardest-coding`** and **medium leads `ui-draft`**. Every other rung is unchanged, so a host that has not proven Carbon skips it and selects exactly as before. After upgrading, run `omnilane resign --vendor gemini` on a host with Ultra access to prove it.
+- The human-operator exemption (`--operator-asserted-human`, the quick start's `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`) no longer dispatches Carbon without transport proof: lanes skip it and an explicit Carbon selector is refused with `runtime-mapping-unverified`. Other models keep the exemption unchanged.
+
 ### Fixed
 - Keep row-local evidence integrity handling outside the release-pinned transport compatibility module, preserving its approved bytes and the existing origin-protection tests.
 - Damaged evidence for a failed selector retired from the current score snapshot no longer blocks re-sign checks or repairs for other vendors. Maintenance retains the complete validation-time damage set separately from current-row diagnostics, while still refusing newly damaged failure evidence after validation.

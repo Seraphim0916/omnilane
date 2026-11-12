@@ -76,10 +76,10 @@ class ExactAAPolicyTests(unittest.TestCase):
 
     def test_frozen_registry_coverage_and_estimates(self):
         validated = aa_policy._validate_registry(copy.deepcopy(self.real))
-        self.assertEqual(len(validated["scored_configs"]), 68)
+        self.assertEqual(len(validated["scored_configs"]), 71)
         self.assertEqual(sum(row["estimated"] for row in validated["scored_configs"]), 0)
         self.assertEqual(validated["coverage"]["by_vendor"], {
-            "codex": 26, "claude": 27, "gemini": 11, "grok": 4,
+            "codex": 26, "claude": 27, "gemini": 14, "grok": 4,
         })
 
     def test_same_score_is_allowed(self):
@@ -431,6 +431,59 @@ class ExactAAPolicyTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["code"], "operator-asserted-human-exemption")
         self.assertIn("not authentication", result["evidence_limit"])
+
+    CARBON = (("gemini/gemini-4-carbon", "gemini-4-carbon-high"),
+              ("gemini/gemini-4-carbon-medium", "gemini-4-carbon-medium"),
+              ("gemini/gemini-4-carbon-low", "gemini-4-carbon-low"))
+
+    def human(self, model, target_config=None, vendor="gemini"):
+        return aa_policy.decide(
+            self.registry, "fixture-sha", vendor=vendor, model=model, effort=None,
+            caller=None, caller_sha256=None, operator_asserted_human=True,
+            target_config=target_config)
+
+    def test_human_exemption_does_not_dispatch_carbon_without_transport_proof(self):
+        for config_id, selector in self.CARBON:
+            for target_config in (None, config_id):
+                with self.subTest(selector=selector, target_config=target_config):
+                    result = self.human(selector, target_config)
+                    self.assertFalse(result["allowed"])
+                    self.assertEqual(result["failed_gate"], "target-transport")
+                    self.assertEqual(result["code"], "runtime-mapping-unverified")
+                    self.assertIn("omnilane resign --vendor gemini", result["next_command"])
+            with self.subTest(selector=selector, alias="target-config only"):
+                self.assertFalse(self.human("gemini-4-argon-high", config_id)["allowed"])
+
+    def test_human_exemption_refuses_pending_or_invalidated_carbon_proof(self):
+        self.registry["_transport_pending_recheck"] = {"gemini/gemini-4-carbon": "quota"}
+        pending = self.human("gemini-4-carbon-high")
+        self.assertFalse(pending["allowed"])
+        self.assertEqual(pending["code"], "selector-pending-recheck")
+        self.registry.pop("_transport_pending_recheck")
+        self.verify_mapping("gemini/gemini-4-carbon", runtime_model="gemini-4-carbon-high")[
+            "transport_mapping"]["selector_type"] = "model_id_encoded_effort"
+        self.assertTrue(self.human("gemini-4-carbon-high")["allowed"])
+        self.registry["_transport_invalidated_evidence"] = {"gemini/gemini-4-carbon": ["json"]}
+        invalidated = self.human("gemini-4-carbon-high")
+        self.assertFalse(invalidated["allowed"])
+        self.assertEqual(invalidated["failed_gate"], "target-transport")
+
+    def test_human_exemption_dispatches_carbon_once_transport_is_proven(self):
+        for config_id, selector in self.CARBON:
+            self.verify_mapping(config_id, runtime_model=selector)["transport_mapping"][
+                "selector_type"] = "model_id_encoded_effort"
+            with self.subTest(selector=selector):
+                result = self.human(selector)
+                self.assertTrue(result["allowed"])
+                self.assertEqual(result["code"], "operator-asserted-human-exemption")
+
+    def test_human_exemption_unchanged_for_other_unproven_models(self):
+        for vendor, model in (("gemini", "gemini-4-argon-high"), ("gemini", "gemini-3.8-flash-high"),
+                              ("codex", "gpt-6-astra"), ("claude", "claude-fable-5-2")):
+            with self.subTest(model=model):
+                result = self.human(model, vendor=vendor)
+                self.assertTrue(result["allowed"])
+                self.assertEqual(result["code"], "operator-asserted-human-exemption")
 
 
 REGISTRY_PATH = ROOT / "config" / "aa-model-policy.json"

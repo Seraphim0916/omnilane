@@ -4599,7 +4599,8 @@ claude|2|16|1|claude-haiku-5-5
 claude|2|25|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official
 gemini|4|1||gemini-4-argon-high
-gemini|4|9||gpt-oss-120b-medium
+gemini|4|3||gemini-4-carbon-medium
+gemini|4|12||gpt-oss-120b-medium
 kimi|5|5||kimi-k2.5
 qwen|6|9||qwen3-coder-flash
 opencode|7|13||openrouter/qwen/qwen3-coder-plus

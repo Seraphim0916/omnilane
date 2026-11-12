@@ -517,7 +517,9 @@ can still move the chain further down.
   a reason to self-execute). At medium (56) hardest-coding starts at Astra xhigh
   and hard-judgment at Fable 5.2 medium (same model); at low (54) hardest-coding
   starts at Opus 5.5 high, hard-judgment at Fable 5.2 low (same model) and consult
-  at Grok 4.7. The `vote` Claude voter is Fable 5.2 low.
+  at Grok 4.7. The `vote` Claude voter is Fable 5.2 low. On a host that has proven
+  Gemini 4 Carbon (2026-11-12 snapshot), hardest-coding starts at Carbon high
+  for ceilings 60 and up and Carbon low for 54–59 instead.
 - **Claude Opus 5.5:** leads ui-draft (high); xhigh, high and medium are rungs of
   hardest-coding, medium is second in bulk-mechanical and a rung of hard-judgment,
   xhigh is the Claude row in consult and a Claude rung of long-context, and low is
@@ -525,6 +527,8 @@ can still move the chain further down.
   ceiling is 48: hardest-coding and hard-judgment start at Opus 5.5 medium itself,
   ui-draft and long-context at GPT-6.1 Sol medium. Running at xhigh (57)
   hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium.
+  On a host that has proven Gemini 4 Carbon, ui-draft starts at Carbon medium for
+  ceilings 58 and up, and at xhigh (57) hardest-coding starts at Carbon low.
 - **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder;
   rungs of hardest-coding (xhigh, high, medium, low) and bulk-mechanical (high,
   medium), lower rungs of hard-judgment (medium, low), the Claude row in
@@ -578,13 +582,26 @@ can still move the chain further down.
 - **Gemini 3.8 Flash:** the cross-vendor fallback after Argon (high 31, medium 30,
   low 23). Do not infer visual taste or controller authority from coding
   benchmarks.
-- **Gemini 4 Carbon / Gemini 3.1 Pro:** reference rows only, kept for comparison:
-  Carbon has no published selector yet and Gemini 3.1 Pro has no approved local
-  mapping. They are in no lane and have no alias.
+- **Gemini 4 Carbon:** scored in the approved `aa-v5.0.1-2026-11-12-v1` snapshot
+  (high 60, medium 58, low 54) and selectable as `gemini-4-carbon-high`, `-medium`
+  or `-low` on Antigravity with Google AI Ultra (agy 1.5.5 lists it for Ultra/ADC
+  sign-ins only). The selector strings are inferred from agy's effort-in-model-id
+  convention, not published by Google; a host probe at `omnilane resign` confirms
+  them. Without that proof Carbon is never dispatched, even under the human-operator
+  exemption. The value rule puts high first and low second in hardest-coding
+  and medium first in ui-draft; it is in no other lane. A host that has not proven
+  it with `omnilane resign` skips it and selects as before.
+- **Gemini 3.1 Pro:** reference row only, kept for comparison: it has no approved
+  local mapping, is in no lane and has no alias.
 
 ## Reference
 
 ### Model aliases
+
+Snapshot `aa-v5.0.1-2026-11-12-v1` (2026-11-12, **approved** by the operator on 2026-11-12): same AA v5.0.1
+capture, 71 scored rows, 82 unknown, 1 reference. Gemini 4 Carbon high/medium/low leave the reference rows and are
+scored (60/58/54), with the effort in the agy selector; they need host proof like every other row.
+See `docs/reports/aa-rebaseline-2026-11-12.md`.
 
 Current approved snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the operator on 2026-11-10):
 AA Intelligence Index v5.0.1, 68 scored rows, 82 unknown, 4 reference. It adds Claude Fable 5.2
@@ -631,6 +648,9 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Grok 4.7 | grok | grok-4.7 | - |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
 | Gemini 4 Argon High | gemini | gemini-4-argon-high | - |
+| Gemini 4 Carbon High | gemini | gemini-4-carbon-high | - |
+| Gemini 4 Carbon Medium | gemini | gemini-4-carbon-medium | - |
+| Gemini 4 Carbon Low | gemini | gemini-4-carbon-low | - |
 | Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
 | Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
 | Kimi | kimi | kimi-code/k3 | - |

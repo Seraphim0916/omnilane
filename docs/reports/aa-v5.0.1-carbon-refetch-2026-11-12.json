@@ -1,0 +1,250 @@
+{
+ "compare_to": "docs/reports/aa-v5.0.1-extract-2026-11-10.json",
+ "differences": {
+  "gemini-4-carbon": {
+   "intelligenceIndexTimePerTask": {
+    "capture_2026_11_10": 1631.7543294963434,
+    "refetch_2026_11_12": 1564.8171263008812
+   },
+   "mlcrOverall": {
+    "capture_2026_11_10": null,
+    "refetch_2026_11_12": 0.194444444444444
+   }
+  },
+  "gemini-4-carbon-low": {
+   "intelligenceIndexTimePerTask": {
+    "capture_2026_11_10": 1340.707128129523,
+    "refetch_2026_11_12": 1399.702608882796
+   }
+  },
+  "gemini-4-carbon-medium": {
+   "intelligenceIndexTimePerTask": {
+    "capture_2026_11_10": 1420.6301350829876,
+    "refetch_2026_11_12": 1427.1512282802291
+   }
+  }
+ },
+ "fetches": {
+  "gemini-4-carbon": {
+   "benchmark_version": "5.0.1",
+   "fetch_file_sha256": "38e97bf442ea6c538813f53666adbe52a507e133c9621258f2486780de946373",
+   "fetched_at": "2026-11-12T00:16:20+08:00",
+   "page_sha256": "5d5ff822a3d7f3d6b910ae696843011b567c629f546994aa93796d8faf044d39",
+   "record": {
+    "apexAgents": null,
+    "automationBenchPartialScore": 0.7781660572624064,
+    "briefcaseBreakdown": {
+     "analyticalQuality": {
+      "elo": 1671.7,
+      "lower95ci": 1652.44,
+      "upper95ci": 1690.14
+     },
+     "overall": {
+      "elo": 1610.63,
+      "lower95ci": 1600.75,
+      "upper95ci": 1621.24
+     },
+     "presentation": {
+      "elo": 1600.8,
+      "lower95ci": 1583.2,
+      "upper95ci": 1620.47
+     },
+     "rubricPassRate": 0.6181818181818182
+    },
+    "contextWindowTokens": 1000000,
+    "critpt": null,
+    "deprecated": false,
+    "effort_label": "high",
+    "gdpvalNormalized": null,
+    "gpqa": null,
+    "hle": null,
+    "ifbench": null,
+    "intelligenceIndex": 60.025738829526,
+    "intelligenceIndexCost": {
+     "answer": 737.65256,
+     "cacheRead": 1386.642440349888,
+     "cacheWrite": 2426.845629002246,
+     "input": 4144.494657352134,
+     "nonCacheInput": 331.006588,
+     "output": 4095.1933999999997,
+     "reasoning": 3357.5408399999997,
+     "total": 8239.688057352134
+    },
+    "intelligenceIndexIsEstimated": null,
+    "intelligenceIndexOutputTokensPerTask": {
+     "answer": 50589.93929747802,
+     "output": 122767.79587430622,
+     "reasoning": 72177.8565768282
+    },
+    "intelligenceIndexTimePerTask": 1564.8171263008812,
+    "itBenchSre": null,
+    "lcr": 0.793333333333333,
+    "mlcrOverall": 0.194444444444444,
+    "mmmuPro": null,
+    "name": "Gemini 4 Carbon",
+    "omniscience": 53.5,
+    "omniscienceBreakdown": null,
+    "price1mBlended7To2To1": 2.94,
+    "price1mInputTokens": 4,
+    "price1mOutputTokens": 20,
+    "releaseDate": "2026-10-28",
+    "scicode": null,
+    "tau2": null,
+    "tauBanking": null,
+    "terminalBench21": null,
+    "terminalBench40": 0.651515151515151,
+    "terminalbenchHard": null,
+    "timeToFirstAnswerToken": null
+   },
+   "source_url": "https://artificialanalysis.ai/models/gemini-4-carbon"
+  },
+  "gemini-4-carbon-low": {
+   "benchmark_version": "5.0.1",
+   "fetch_file_sha256": "173a3a49b34519f0781a4324e89fa08b1426568dc7f14ca936bfd5b288ea3fc2",
+   "fetched_at": "2026-11-12T00:16:22+08:00",
+   "page_sha256": "ba834c61710cce836f307d90f12a83ab0016340c911b3bec94a9c9b5e0affe2c",
+   "record": {
+    "apexAgents": null,
+    "automationBenchPartialScore": 0.6345940610087639,
+    "briefcaseBreakdown": {
+     "analyticalQuality": {
+      "elo": 1578.81,
+      "lower95ci": 1559.59,
+      "upper95ci": 1599.24
+     },
+     "overall": {
+      "elo": 1567.14,
+      "lower95ci": 1556.43,
+      "upper95ci": 1578.45
+     },
+     "presentation": {
+      "elo": 1586.28,
+      "lower95ci": 1566.79,
+      "upper95ci": 1607.69
+     },
+     "rubricPassRate": 0.601010101010101
+    },
+    "contextWindowTokens": 1000000,
+    "critpt": null,
+    "deprecated": false,
+    "effort_label": "low",
+    "gdpvalNormalized": null,
+    "gpqa": null,
+    "hle": null,
+    "ifbench": null,
+    "intelligenceIndex": 54.2206114502924,
+    "intelligenceIndexCost": {
+     "answer": 1135.99646,
+     "cacheRead": 1520.2745398364552,
+     "cacheWrite": 2381.1412432708935,
+     "input": 4046.143851107349,
+     "nonCacheInput": 144.728068,
+     "output": 1678.8729200000002,
+     "reasoning": 542.8764600000001,
+     "total": 5725.016771107349
+    },
+    "intelligenceIndexIsEstimated": null,
+    "intelligenceIndexOutputTokensPerTask": {
+     "answer": 53769.45183242579,
+     "output": 86165.2380856942,
+     "reasoning": 32395.786253268423
+    },
+    "intelligenceIndexTimePerTask": 1399.702608882796,
+    "itBenchSre": null,
+    "lcr": null,
+    "mlcrOverall": null,
+    "mmmuPro": null,
+    "name": "Gemini 4 Carbon (Low)",
+    "omniscience": 39.2,
+    "omniscienceBreakdown": null,
+    "price1mBlended7To2To1": 2.94,
+    "price1mInputTokens": 4,
+    "price1mOutputTokens": 20,
+    "releaseDate": "2026-10-28",
+    "scicode": null,
+    "tau2": null,
+    "tauBanking": null,
+    "terminalBench21": null,
+    "terminalBench40": 0.626262626262626,
+    "terminalbenchHard": null,
+    "timeToFirstAnswerToken": null
+   },
+   "source_url": "https://artificialanalysis.ai/models/gemini-4-carbon-low"
+  },
+  "gemini-4-carbon-medium": {
+   "benchmark_version": "5.0.1",
+   "fetch_file_sha256": "e739fe857d67234f5f9921bed65b83b86333ef4b10306470a0395e8a18814403",
+   "fetched_at": "2026-11-12T00:16:21+08:00",
+   "page_sha256": "a151ce9965ab30d70bbcdbec4764072a8d1999acdb7df15e9e83ccb7def0c2a1",
+   "record": {
+    "apexAgents": null,
+    "automationBenchPartialScore": 0.7759585317030244,
+    "briefcaseBreakdown": {
+     "analyticalQuality": {
+      "elo": 1634.69,
+      "lower95ci": 1614.72,
+      "upper95ci": 1654.95
+     },
+     "overall": {
+      "elo": 1601.74,
+      "lower95ci": 1590.49,
+      "upper95ci": 1612.33
+     },
+     "presentation": {
+      "elo": 1587.56,
+      "lower95ci": 1569.48,
+      "upper95ci": 1606.94
+     },
+     "rubricPassRate": 0.6232323232323232
+    },
+    "contextWindowTokens": 1000000,
+    "critpt": null,
+    "deprecated": false,
+    "effort_label": "medium",
+    "gdpvalNormalized": null,
+    "gpqa": null,
+    "hle": null,
+    "ifbench": null,
+    "intelligenceIndex": 58.2587824022788,
+    "intelligenceIndexCost": {
+     "answer": 681.93172,
+     "cacheRead": 1178.0671592716494,
+     "cacheWrite": 2098.830842567013,
+     "input": 3422.9518938386623,
+     "nonCacheInput": 146.053892,
+     "output": 2480.07398,
+     "reasoning": 1798.1422599999999,
+     "total": 5903.025873838662
+    },
+    "intelligenceIndexIsEstimated": null,
+    "intelligenceIndexOutputTokensPerTask": {
+     "answer": 46808.197019624364,
+     "output": 103012.4954382641,
+     "reasoning": 56204.29841863973
+    },
+    "intelligenceIndexTimePerTask": 1427.1512282802291,
+    "itBenchSre": null,
+    "lcr": null,
+    "mlcrOverall": null,
+    "mmmuPro": 0.892485549132948,
+    "name": "Gemini 4 Carbon (Medium)",
+    "omniscience": 46.766666666666666,
+    "omniscienceBreakdown": null,
+    "price1mBlended7To2To1": 2.94,
+    "price1mInputTokens": 4,
+    "price1mOutputTokens": 20,
+    "releaseDate": "2026-10-28",
+    "scicode": null,
+    "tau2": null,
+    "tauBanking": null,
+    "terminalBench21": null,
+    "terminalBench40": 0.606060606060606,
+    "terminalbenchHard": null,
+    "timeToFirstAnswerToken": null
+   },
+   "source_url": "https://artificialanalysis.ai/models/gemini-4-carbon-medium"
+  }
+ },
+ "purpose": "2026-11-12 re-fetch of the three Gemini 4 Carbon AA pages, to check the 2026-11-10 capture still holds for Carbon",
+ "tool": "python3 scripts/aa_rebaseline.py fetch --slug <slug>"
+}

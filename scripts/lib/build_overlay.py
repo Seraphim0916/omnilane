@@ -62,6 +62,9 @@ for cid, rid, ev in [
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),
     *[(f"gemini/{model}-{effort}", f"{model}-{effort}", f"agy-{model}-{effort}")
       for model in ("claude-opus-5-5", "claude-sonnet-5-5") for effort in ("high", "medium", "low")],
+    # agy 1.5.5 lists Carbon only for Ultra / ADC sign-ins; a host without that access fails the probe.
+    *[("gemini/gemini-4-carbon" + ("" if effort == "high" else f"-{effort}"), f"gemini-4-carbon-{effort}",
+       f"agy-gemini-4-carbon-{effort}") for effort in ("high", "medium", "low")],
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 

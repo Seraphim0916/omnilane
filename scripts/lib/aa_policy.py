@@ -28,8 +28,15 @@ MAX_BYTES = 1_048_576
 # governance change, never a caller argument/environment override.
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "5.0.1"
-APPROVED_AS_OF = "2026-11-10"
-APPROVED_REGISTRY_SHA256 = "f29328d86e08bbfc6088d97a58e38d9a379c513811177a62e7ec1c47f287673a"
+APPROVED_AS_OF = "2026-11-12"
+APPROVED_REGISTRY_SHA256 = "753709bb79e32ed565df250640fd5ce1c078a261f3ee8fe0dad59824416f5a25"
+
+# Google sells Gemini 4 Carbon only to AI Ultra / ADC sign-ins (agy 1.5.5), so an installed agy
+# says nothing about whether this host may run it. The human-operator exemption lifts the
+# score ceiling only; these rows still need transport proof on every path.
+HUMAN_TRANSPORT_PROOF_REQUIRED = frozenset((
+    "gemini/gemini-4-carbon", "gemini/gemini-4-carbon-medium", "gemini/gemini-4-carbon-low",
+))
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")
 TRANSPORT_EVIDENCE_VENDORS = frozenset(("codex", "claude", "grok", "gemini"))
@@ -544,6 +551,55 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
     return None, "unknown-target-runtime", {"vendor": vendor, "model": model, "effort": effort}
 
 
+def _requires_human_transport_proof(registry: dict[str, Any], vendor: str, model: str,
+                                    target_config: str | None) -> bool:
+    for row in registry["scored_configs"]:
+        if row["id"] not in HUMAN_TRANSPORT_PROOF_REQUIRED:
+            continue
+        if target_config == row["id"]:
+            return True
+        mapping = row["transport_mapping"]
+        names = ([mapping["runtime_model"]] if mapping.get("runtime_model") is not None
+                 else mapping.get("candidate_model_ids", []))
+        if row["vendor"] == vendor and model in names:
+            return True
+    return False
+
+
+def _transport_refusal(base: dict[str, Any], registry: dict[str, Any], vendor: str, model: str,
+                       effort: str | None, target_config: str | None, mapping_code: str,
+                       detail: dict[str, Any]) -> dict[str, Any]:
+    from verification_status import transport_guidance
+    guidance = transport_guidance(vendor, target_config, detail.get("candidate_config_ids", []),
+                                  registry.get("_transport_environment_failures", {}),
+                                  registry.get("_transport_conclusive_failures", ()))
+    if mapping_code == "selector-pending-recheck":
+        reasons = "; ".join(f"{cid}: {reason}" for cid, reason in detail["pending_recheck"].items())
+        guidance.update(
+            message=f"Selector pending re-check: {reasons}. Run `omnilane resign --vendor {vendor}` to retry.",
+            message_zh_tw=f"選擇器待複驗：{reasons}。請執行 `omnilane resign --vendor {vendor}` 重試。",
+            next_command=f"omnilane resign --vendor {vendor}")
+    base.update(
+        code=mapping_code,
+        message=guidance["message"],
+        failed_gate="target-transport",
+        reason=("the caller is identified; this host's transport overlay does not currently "
+                f"verify {vendor} {model} at effort {effort}"),
+        next_command=guidance["next_command"],
+        requires_gui_session=guidance["requires_gui_session"],
+        message_zh_tw=guidance["message_zh_tw"],
+        **detail)
+    invalidated = registry.get("_transport_invalidated_evidence", {})
+    affected = sorted(cid for cid in detail.get("candidate_config_ids", []) if cid in invalidated)
+    if affected:
+        count = sum(row["id"] in invalidated and row["vendor"] == vendor
+                    for row in registry["scored_configs"])
+        reason = f"{count} row(s) invalidated by missing or changed probe evidence for {vendor}"
+        base.update(reason=reason, message=reason, invalidated_config_ids=affected,
+                    next_command=f"omnilane resign --vendor {vendor}")
+    return base
+
+
 def decide(registry: dict[str, Any], registry_sha256: str, *,
            vendor: str, model: str, effort: str | None,
            caller: dict[str, Any] | None, caller_sha256: str | None,
@@ -569,6 +625,12 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         "evidence_limit": "workflow metadata and selected model arguments do not prove actual provider identity",
     }
     if operator_asserted_human:
+        if _requires_human_transport_proof(registry, vendor, model, target_config):
+            target_row, mapping_code, detail = _runtime_target(
+                registry, vendor, model, effort, target_config)
+            if target_row is None:
+                return _transport_refusal(base, registry, vendor, model, effort, target_config,
+                                          mapping_code, detail)
         base.update(
             allowed=True,
             code="operator-asserted-human-exemption",
@@ -653,35 +715,8 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
                 next_command="omnilane list",
                 **detail)
             return base
-        from verification_status import transport_guidance
-        guidance = transport_guidance(vendor, target_config, detail.get("candidate_config_ids", []),
-                                      registry.get("_transport_environment_failures", {}),
-                                      registry.get("_transport_conclusive_failures", ()))
-        if mapping_code == "selector-pending-recheck":
-            reasons = "; ".join(f"{cid}: {reason}" for cid, reason in detail["pending_recheck"].items())
-            guidance.update(
-                message=f"Selector pending re-check: {reasons}. Run `omnilane resign --vendor {vendor}` to retry.",
-                message_zh_tw=f"選擇器待複驗：{reasons}。請執行 `omnilane resign --vendor {vendor}` 重試。",
-                next_command=f"omnilane resign --vendor {vendor}")
-        base.update(
-            code=mapping_code,
-            message=guidance["message"],
-            failed_gate="target-transport",
-            reason=("the caller is identified; this host's transport overlay does not currently "
-                    f"verify {vendor} {model} at effort {effort}"),
-            next_command=guidance["next_command"],
-            requires_gui_session=guidance["requires_gui_session"],
-            message_zh_tw=guidance["message_zh_tw"],
-            **detail)
-        invalidated = registry.get("_transport_invalidated_evidence", {})
-        affected = sorted(cid for cid in detail.get("candidate_config_ids", []) if cid in invalidated)
-        if affected:
-            count = sum(row["id"] in invalidated and row["vendor"] == vendor
-                        for row in registry["scored_configs"])
-            reason = f"{count} row(s) invalidated by missing or changed probe evidence for {vendor}"
-            base.update(reason=reason, message=reason, invalidated_config_ids=affected,
-                        next_command=f"omnilane resign --vendor {vendor}")
-        return base
+        return _transport_refusal(base, registry, vendor, model, effort, target_config,
+                                  mapping_code, detail)
     target_score = target_row["score"]
     target_identity = _row_identity(target_row)
     base.update(

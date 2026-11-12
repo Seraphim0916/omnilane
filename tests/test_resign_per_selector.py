@@ -45,7 +45,7 @@ class SelectorFixture:
         existing.ResignTests.setUp(self)
         self.entries = probe_sweep.plan("gemini")
         self.failures = {e["config_id"]: "quota" for e in self.entries if "claude" in e["model"]}
-        self.assertEqual((len(self.entries), len(self.failures)), (10, 6))
+        self.assertEqual((len(self.entries), len(self.failures)), (13, 6))
         self.calls = []
         self.lines = []
         self.smoke_calls = []
@@ -129,7 +129,8 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         fields = {"config_id", "identity", "verification", "runtime_effort", "runtime_model",
                   "selector_type", "cli_flag", "evidence_tier"}
         old["mappings"] = [{k: v for k, v in m.items() if k in fields}
-                           for m in old["mappings"] if m["identity"]["vendor"] == "gemini"]
+                           for m in old["mappings"] if m["identity"]["vendor"] == "gemini"
+                           and m["config_id"] in rows]  # Carbon was reference-only in that snapshot.
         for mapping in old["mappings"]:
             mapping["identity"] = aa_policy._row_identity(rows[mapping["config_id"]])
         old["unproven"] = []
@@ -137,14 +138,14 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         manifest = self.sweep_root / "probe-manifest.json"
         data = json.loads(manifest.read_text())
         data["probe_runs"] = {cid: files for cid, files in data["probe_runs"].items()
-                              if cid.startswith("gemini/")}
+                              if cid.startswith("gemini/") and cid in rows}
         manifest.write_text(json.dumps(data))
         next(e for e in old["evidence"] if not e.get("vendor"))["sha256"] = resign.sha256(manifest)
         self.live.write_text(json.dumps(old))
         self.assertEqual(resign.verified(self.live)["gemini"], 10)
         self.update("gemini")
         self.assertEqual(self.run_case(), 60, self.lines)
-        self.assertEqual(resign.verified(self.live)["gemini"], 4)
+        self.assertEqual(resign.verified(self.live)["gemini"], 7)
         self.assertEqual(len(self.pending()), 6)
         self.assertEqual(self.overlay()["snapshot_id"], build_overlay.REGISTRY["snapshot"]["id"])
 
@@ -153,7 +154,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.update("gemini")
         self.assertEqual(self.run_case(all_vendors=True), 60, self.lines)
         overlay = self.overlay()
-        self.assertEqual(resign.verified(self.live)["gemini"], 4)
+        self.assertEqual(resign.verified(self.live)["gemini"], 7)
         self.assertEqual(set(self.pending()), set(self.failures))
         self.assertEqual(overlay["snapshot_id"], build_overlay.REGISTRY["snapshot"]["id"])
         for cid, item in self.pending().items():
@@ -166,7 +167,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.run_case(), 0, self.lines)
         self.assertEqual(set(self.calls), set(m["config_id"] for m in old["mappings"]
                                              if m["identity"]["vendor"] == "gemini" and "claude" in m["runtime_model"]))
-        self.assertEqual(resign.verified(self.live)["gemini"], 10)
+        self.assertEqual(resign.verified(self.live)["gemini"], 13)
         self.assertEqual(self.pending(), {})
 
     def test_non_environment_failure_holds_vendor_and_preserves_original_proofs(self):
@@ -202,7 +203,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.run_case(), 60, self.lines)
         self.assertEqual(self.run_case("--allow-shrink"), 20, self.lines)
         self.assertEqual(self.pending(), {})
-        self.assertEqual(resign.verified(self.live)["gemini"], 4)
+        self.assertEqual(resign.verified(self.live)["gemini"], 7)
 
     def test_partial_check_doctor_and_refusal_name_selector_and_reason(self):
         for path in self.bins.values():
@@ -306,7 +307,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.calls.clear()
         self.assertEqual(self.run_case(), 60, self.lines)
         self.assertEqual(set(self.calls), set(self.failures))
-        self.assertEqual(resign.verified(self.live)["gemini"], 4)
+        self.assertEqual(resign.verified(self.live)["gemini"], 7)
         self.assertTrue(all(u["pending_recheck"]["consecutive_runs"] == 2 for u in self.pending().values()))
 
     def test_all_environment_failures_remain_pending_but_are_not_partial_success(self):
@@ -315,16 +316,16 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.run_case("--daily"), 20, self.lines)
         self.assertEqual(self.summary["re_signed"], [])
         self.assertNotIn("gemini", self.summary.get("partially_re_signed", {}))
-        self.assertEqual(len(self.pending()), 10)
+        self.assertEqual(len(self.pending()), 13)
         self.assertEqual(resign.verified(self.live)["gemini"], 0)
         self.assertEqual(self.smoke_calls, [])
-        self.assertEqual(verification_status.load()["pending"]["gemini"]["pending_count"], 10)
+        self.assertEqual(verification_status.load()["pending"]["gemini"]["pending_count"], 13)
         self.assertEqual(self.run_case("--check"), 10, self.lines)
         self.failures.clear()
         self.calls.clear()
         self.assertEqual(self.run_case(), 0, self.lines)
-        self.assertEqual(len(self.calls), 10)
-        self.assertEqual(resign.verified(self.live)["gemini"], 10)
+        self.assertEqual(len(self.calls), 13)
+        self.assertEqual(resign.verified(self.live)["gemini"], 13)
 
     def test_corrupted_pending_proof_is_reported_and_cannot_dispatch(self):
         self.update("gemini")
@@ -341,7 +342,7 @@ class SelectorResignTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.calls, [])
         self.assertEqual(self.live.read_bytes(), before)
         self.assertFalse(self.decision(pending)['allowed'])
-        self.assertEqual(resign.verified(self.live)['gemini'], 4)
+        self.assertEqual(resign.verified(self.live)['gemini'], 7)
         self.assertEqual(self.summary['vendors']['gemini']['invalidated_evidence'],
                          [pending['config_id']])
         self.assertIn('1 row(s) invalidated', '\n'.join(self.lines))
@@ -358,7 +359,7 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.run_case(), 0, self.lines)  # An interactive retry refreshes saved daily status too.
         self.assertEqual(len(self.calls), 6)
         self.assertEqual(self.summary["held"], [])
-        self.assertEqual(resign.verified(self.live)["gemini"], 9)
+        self.assertEqual(resign.verified(self.live)["gemini"], 12)
         self.assertEqual(self.pending(), {})
         row = next(u for u in self.overlay()["unproven"] if u["config_id"] == cid)
         self.assertEqual(row["verdict_reason"], "client-record-mismatch")
@@ -383,7 +384,7 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
         self.failures = {cid: "weak-proof"}
         self.assertEqual(self.run_case(), 0, self.lines)
         self.assertEqual(self.summary["held"], [])
-        self.assertEqual(resign.verified(self.live)["gemini"], 9)
+        self.assertEqual(resign.verified(self.live)["gemini"], 12)
         self.assertEqual(self.pending(), {})
         self.assertFalse(self.decision(next(e for e in self.entries if e["config_id"] == cid))["allowed"])
 
@@ -391,7 +392,7 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
         with patch(__name__ + ".QUOTA", "quota exhausted"):
             self.update("gemini")
             self.assertEqual(self.run_case(interactive=False), 60, self.lines)
-            self.assertEqual(len(self.calls), 10)
+            self.assertEqual(len(self.calls), 13)
             self.calls.clear()
             self.assertEqual(self.run_case(interactive=False), 60, self.lines)
             self.assertEqual(len(self.calls), 6)
@@ -461,7 +462,7 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
             self.assertEqual(len(self.calls), 5)
             self.assertNotIn(cid, self.calls)
             self.assertEqual(self.pending(), {cid: before})
-            self.assertEqual(resign.verified(self.live)["gemini"], 9)
+            self.assertEqual(resign.verified(self.live)["gemini"], 12)
 
     def test_unattended_allow_shrink_drops_pending_without_bypassing_reset(self):
         self.update("gemini")
@@ -485,12 +486,12 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
         self.assertIn(gap, state["grok"]["config_ids"])
         self.assertEqual(state["gemini"]["pending_count"], 6)
         verification_status.record(60, summary={"partially_re_signed": {"gemini":
-            {"verified_count": 4, "pending_count": 6, "config_ids": sorted(self.failures)}},
+            {"verified_count": 7, "pending_count": 6, "config_ids": sorted(self.failures)}},
             "still_unprobed": {"grok": [gap]}})
         self.assertIn(gap, verification_status.load()["pending"]["grok"]["config_ids"])
         before = copy.deepcopy(verification_status.load()["pending"]["grok"])
         verification_status.record(60, summary={"partially_re_signed": {"gemini":
-            {"verified_count": 4, "pending_count": 6, "config_ids": sorted(self.failures)}}})
+            {"verified_count": 7, "pending_count": 6, "config_ids": sorted(self.failures)}}})
         self.assertEqual(verification_status.load()["pending"]["grok"], before)
 
     def test_check_does_not_mask_non_pending_conditions(self):
@@ -526,7 +527,7 @@ class SelectorFixTests(SelectorFixture, unittest.TestCase):
         self.assertEqual(self.run_case("--daily"), 60, self.lines)
         text = "\n".join(self.lines)
         self.assertNotIn("automatic verification did not complete", text)
-        self.assertIn("4 verified", text)
+        self.assertIn("7 verified", text)
         self.assertIn("6", text)
         self.assertIn("omnilane resign", text)
 

@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
   "snapshot": {
-    "id": "aa-v5.0.1-2026-11-10-v1",
+    "id": "aa-v5.0.1-2026-11-12-v1",
     "benchmark": "Artificial Analysis Intelligence Index",
     "benchmark_version": "5.0.1",
-    "as_of": "2026-11-10",
+    "as_of": "2026-11-12",
     "timezone": "Asia/Taipei",
     "frozen": true,
     "approval": {
       "status": "approved",
       "scope": "aa-v5.0.1-rebaseline",
-      "source": "docs/reports/aa-rebaseline-2026-11-10.md",
+      "source": "docs/reports/aa-rebaseline-2026-11-12.md",
       "estimated_scores": "approved_provisional"
     },
     "automatic_refresh_grants_authority": false,
@@ -742,11 +742,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-2"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -769,11 +769,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-2-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -796,11 +796,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-2-high"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -810,6 +810,33 @@
         "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
       },
       "score_raw": 61.82
+    },
+    {
+      "id": "gemini/gemini-4-carbon",
+      "vendor": "gemini",
+      "model": "gemini-4-carbon",
+      "effort": "high",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-4-carbon",
+      "score": 60,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "5.0.1",
+      "as_of": "2026-11-12",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gemini-4-carbon"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-4-carbon-high"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      },
+      "score_raw": 60.03
     },
     {
       "id": "claude/claude-opus-5-5",
@@ -823,11 +850,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -837,6 +864,33 @@
         "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
       },
       "score_raw": 59.11
+    },
+    {
+      "id": "gemini/gemini-4-carbon-medium",
+      "vendor": "gemini",
+      "model": "gemini-4-carbon",
+      "effort": "medium",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-4-carbon-medium",
+      "score": 58,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "5.0.1",
+      "as_of": "2026-11-12",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gemini-4-carbon-medium"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-4-carbon-medium"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      },
+      "score_raw": 58.26
     },
     {
       "id": "claude/claude-opus-5-5-xhigh",
@@ -850,11 +904,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -877,12 +931,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-astra",
         "https://artificialanalysis.ai/models/releases/gpt-6-astra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -905,11 +959,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-2-medium"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -932,12 +986,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-astra-xhigh",
         "https://artificialanalysis.ai/models/releases/gpt-6-astra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -960,12 +1014,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-astra-high",
         "https://artificialanalysis.ai/models/releases/gpt-6-astra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -988,11 +1042,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-sol"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1015,11 +1069,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1029,6 +1083,33 @@
         "reason": "AA evaluation identity is known; runtime transport identity has not been verified in this evidence snapshot"
       },
       "score_raw": 54.54
+    },
+    {
+      "id": "gemini/gemini-4-carbon-low",
+      "vendor": "gemini",
+      "model": "gemini-4-carbon",
+      "effort": "low",
+      "reasoning": "unspecified",
+      "fallback": null,
+      "aa_slug": "gemini-4-carbon-low",
+      "score": 54,
+      "estimated": false,
+      "evidence_marker": "unmarked",
+      "benchmark_version": "5.0.1",
+      "as_of": "2026-11-12",
+      "source_urls": [
+        "https://artificialanalysis.ai/models/gemini-4-carbon-low"
+      ],
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
+      "transport_mapping": {
+        "status": "unknown",
+        "candidate_model_ids": [
+          "gemini-4-carbon-low"
+        ],
+        "runtime_verified": false,
+        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
+      },
+      "score_raw": 54.22
     },
     {
       "id": "claude/claude-fable-5-2-low",
@@ -1042,11 +1123,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-2-low"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1069,11 +1150,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-sol-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1096,11 +1177,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-high"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1123,11 +1204,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-high"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1150,12 +1231,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-astra-medium",
         "https://artificialanalysis.ai/models/releases/gpt-6-astra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1178,11 +1259,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1205,11 +1286,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gemini-4-argon"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1232,11 +1313,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-sol-high"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1259,11 +1340,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-1-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1286,11 +1367,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1313,11 +1394,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-1"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1340,11 +1421,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-medium"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1367,11 +1448,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-medium"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1394,11 +1475,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-1-high"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1421,11 +1502,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-sol-medium"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1448,11 +1529,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1475,11 +1556,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1502,11 +1583,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-sol"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1529,12 +1610,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-astra-low",
         "https://artificialanalysis.ai/models/releases/gpt-6-astra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1557,11 +1638,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-1-medium"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1584,11 +1665,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra-high"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1611,11 +1692,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-high"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1638,11 +1719,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-high"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1665,11 +1746,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-fable-5-1-low"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1692,11 +1773,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra-medium"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1719,11 +1800,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-haiku-5-5"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1746,11 +1827,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/grok-4-7"
       ],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1773,11 +1854,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/grok-4-7-high"
       ],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1800,11 +1881,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-sol-low"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1827,11 +1908,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-low"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1854,11 +1935,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-opus-5-5-low"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1881,11 +1962,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-haiku-5-5-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1908,12 +1989,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-5-6-terra",
         "https://artificialanalysis.ai/models/releases/gpt-5-6-terra"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1936,11 +2017,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/grok-4-7-low"
       ],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1963,11 +2044,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/grok-4-6-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -1990,11 +2071,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-medium"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2017,11 +2098,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-medium"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2044,11 +2125,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-medium"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2071,11 +2152,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra-non-reasoning"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2098,11 +2179,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-medium"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2125,11 +2206,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-haiku-5-5-high"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2152,11 +2233,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-1-terra-low"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2179,11 +2260,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2206,11 +2287,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-low"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2233,11 +2314,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-sonnet-5-5-low"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2260,11 +2341,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-haiku-5-5-medium"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2287,12 +2368,12 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-5-6-luna",
         "https://artificialanalysis.ai/models/releases/gpt-5-6-luna"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2315,11 +2396,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna-xhigh"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2342,11 +2423,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/comparisons/gemini-3-8-flash-vs-gemini-3-8-flash-low"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2369,11 +2450,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna-high"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2396,11 +2477,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-haiku-5-5-low"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2423,11 +2504,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna-medium"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2450,11 +2531,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gemini-3-5-flash-lite"
       ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2477,11 +2558,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna-low"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2504,11 +2585,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-6-luna-non-reasoning"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2531,11 +2612,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/claude-4-5-haiku-reasoning"
       ],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2558,11 +2639,11 @@
       "estimated": false,
       "evidence_marker": "unmarked",
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "source_urls": [
         "https://artificialanalysis.ai/models/gpt-oss-120b"
       ],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "transport_mapping": {
         "status": "unknown",
         "candidate_model_ids": [
@@ -2585,12 +2666,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "Generic model alias is not verified as Sol",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2608,12 +2689,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "No exact AA configuration found; GPT-5.3 Codex score is not transferable",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2631,12 +2712,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "No separately verified AA score; do not reuse high score",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2654,12 +2735,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "No separately verified AA score; do not reuse high score",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2677,12 +2758,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "Reference-only Preview is not exact local high/low configuration",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2700,12 +2781,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "Reference-only Preview is not exact local high/low configuration",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2723,12 +2804,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v4.3.2 no longer lists gpt-6-astra-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2746,12 +2827,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "Known agy selector; no separate AA score; do not reuse High score",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2769,12 +2850,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "Known agy selector; no separate AA score; do not reuse High score",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2792,12 +2873,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-5-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2815,12 +2896,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-fable-5; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2838,12 +2919,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-5-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2861,12 +2942,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2884,12 +2965,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-5-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2907,12 +2988,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-6; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2930,12 +3011,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-6-sol-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2953,12 +3034,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2976,12 +3057,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-6-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -2999,12 +3080,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-6-sol-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3022,12 +3103,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3045,12 +3126,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-8; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3068,12 +3149,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-7; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3091,12 +3172,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-6-sol-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3114,12 +3195,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gemini-3-7-flash-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3137,12 +3218,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-5-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3160,12 +3241,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3183,12 +3264,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gemini-3-7-flash; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3206,12 +3287,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3229,12 +3310,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-5; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3252,12 +3333,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3275,12 +3356,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3298,12 +3379,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-terra-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3321,12 +3402,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3344,12 +3425,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gemini-3-7-flash-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3367,12 +3448,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-6-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3390,12 +3471,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-luna-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3413,12 +3494,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5-xhigh; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3436,12 +3517,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-terra-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3459,12 +3540,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-6-sol-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3482,12 +3563,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gemini-3-6-flash; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3505,12 +3586,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3528,12 +3609,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3551,12 +3632,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-3-codex; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3574,12 +3655,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-luna-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3597,12 +3678,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-6-adaptive; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3620,12 +3701,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5-high; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3643,12 +3724,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-7-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3666,12 +3747,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3689,12 +3770,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-terra-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3712,12 +3793,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-4-6-adaptive; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3735,12 +3816,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-5-thinking; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3758,12 +3839,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-6-sol-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3781,12 +3862,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-sol-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3804,12 +3885,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3827,12 +3908,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3850,12 +3931,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-terra-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3873,12 +3954,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-6; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3896,12 +3977,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5-instant-06-26; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3919,12 +4000,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-luna-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3942,12 +4023,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-3; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3965,12 +4046,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-3-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -3988,12 +4069,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-4-6; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4011,12 +4092,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-3-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4034,12 +4115,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4057,12 +4138,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4-mini; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4080,12 +4161,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-opus-4-5; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4103,12 +4184,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-4-6-non-reasoning-low-effort; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4126,12 +4207,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-sonnet-5-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4149,12 +4230,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-5-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4172,12 +4253,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-luna-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4195,12 +4276,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-terra-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4218,12 +4299,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-4-5-sonnet-thinking; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4241,12 +4322,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4-mini-medium; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4264,12 +4345,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-4-5-sonnet; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4287,12 +4368,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4310,12 +4391,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-6-luna-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4333,12 +4414,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists claude-4-5-haiku; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-claude-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4356,12 +4437,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists grok-4-3-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-grok-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4379,12 +4460,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-5-4-mini-non-reasoning; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4402,12 +4483,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-oss-120b-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4425,12 +4506,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-oss-20b-low; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4448,12 +4529,12 @@
       "score": null,
       "estimated": null,
       "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
+      "as_of": "2026-11-12",
       "status": "unknown",
       "authority_eligible": false,
       "reason": "AA v5.0.1 no longer lists gpt-oss-20b; the earlier score is not carried over",
       "source_urls": [],
-      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-10.md",
+      "evidence_report": "docs/reports/aa-codex-evidence-2026-11-12.md",
       "mapping_status": "unknown",
       "transport_mapping": {
         "status": "unknown",
@@ -4489,87 +4570,6 @@
       "authority_eligible": false,
       "reference_reason": "Proposal v2 retains this only as comparison; no local high/low mapping approved",
       "score_raw": 29.72
-    },
-    {
-      "id": "gemini/gemini-4-carbon",
-      "vendor": "gemini",
-      "model": "gemini-4-carbon",
-      "effort": "high",
-      "reasoning": "unspecified",
-      "fallback": null,
-      "aa_slug": "gemini-4-carbon",
-      "score": 60,
-      "estimated": false,
-      "evidence_marker": "unmarked",
-      "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
-      "source_urls": [
-        "https://artificialanalysis.ai/models/gemini-4-carbon"
-      ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
-      "transport_mapping": {
-        "status": "unknown",
-        "candidate_model_ids": [],
-        "runtime_verified": false,
-        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
-      },
-      "authority_eligible": false,
-      "reference_reason": "Google has published no model id or effort selector for Gemini 4 Carbon and agy 1.5.3 lists none (checked 2026-11-10); comparison only until one ships",
-      "score_raw": 60.03
-    },
-    {
-      "id": "gemini/gemini-4-carbon-medium",
-      "vendor": "gemini",
-      "model": "gemini-4-carbon",
-      "effort": "medium",
-      "reasoning": "unspecified",
-      "fallback": null,
-      "aa_slug": "gemini-4-carbon-medium",
-      "score": 58,
-      "estimated": false,
-      "evidence_marker": "unmarked",
-      "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
-      "source_urls": [
-        "https://artificialanalysis.ai/models/gemini-4-carbon-medium"
-      ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
-      "transport_mapping": {
-        "status": "unknown",
-        "candidate_model_ids": [],
-        "runtime_verified": false,
-        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
-      },
-      "authority_eligible": false,
-      "reference_reason": "Google has published no model id or effort selector for Gemini 4 Carbon and agy 1.5.3 lists none (checked 2026-11-10); comparison only until one ships",
-      "score_raw": 58.26
-    },
-    {
-      "id": "gemini/gemini-4-carbon-low",
-      "vendor": "gemini",
-      "model": "gemini-4-carbon",
-      "effort": "low",
-      "reasoning": "unspecified",
-      "fallback": null,
-      "aa_slug": "gemini-4-carbon-low",
-      "score": 54,
-      "estimated": false,
-      "evidence_marker": "unmarked",
-      "benchmark_version": "5.0.1",
-      "as_of": "2026-11-10",
-      "source_urls": [
-        "https://artificialanalysis.ai/models/gemini-4-carbon-low"
-      ],
-      "evidence_report": "docs/reports/aa-gemini-evidence-2026-11-10.md",
-      "transport_mapping": {
-        "status": "unknown",
-        "candidate_model_ids": [],
-        "runtime_verified": false,
-        "reason": "Report establishes AA model/effort but not exact runtime transport or reasoning mode; unspecified is literal, not a wildcard"
-      },
-      "authority_eligible": false,
-      "reference_reason": "Google has published no model id or effort selector for Gemini 4 Carbon and agy 1.5.3 lists none (checked 2026-11-10); comparison only until one ships",
-      "score_raw": 54.22
     }
   ],
   "aliases": [
@@ -5093,6 +5093,20 @@
     },
     {
       "catalog_vendor": "gemini",
+      "catalog_model": "gemini-4-carbon-high",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-4-carbon"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
       "catalog_model": "gemini-3.8-flash-high",
       "status": "unknown",
       "resolved_config_id": null,
@@ -5107,11 +5121,39 @@
     },
     {
       "catalog_vendor": "gemini",
+      "catalog_model": "gemini-4-carbon-medium",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-4-carbon-medium"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
       "catalog_model": "gemini-3.8-flash-medium",
       "status": "unknown",
       "resolved_config_id": null,
       "candidate_config_ids": [
         "gemini/gemini-3-8-flash-medium"
+      ],
+      "implicit_default_effort": null,
+      "runtime_verified": false,
+      "reason": "Exact effort/reasoning/fallback and runtime transport verification required; candidates are not authorization",
+      "catalog_source": "scripts/configure.sh",
+      "source_kind": "local_catalog_not_runtime_identity"
+    },
+    {
+      "catalog_vendor": "gemini",
+      "catalog_model": "gemini-4-carbon-low",
+      "status": "unknown",
+      "resolved_config_id": null,
+      "candidate_config_ids": [
+        "gemini/gemini-4-carbon-low"
       ],
       "implicit_default_effort": null,
       "runtime_verified": false,
@@ -5321,14 +5363,14 @@
     }
   ],
   "coverage": {
-    "scored_configs": 68,
-    "reference_configs": 4,
+    "scored_configs": 71,
+    "reference_configs": 1,
     "unknown_configs": 82,
-    "aliases": 56,
+    "aliases": 59,
     "by_vendor": {
       "codex": 26,
       "claude": 27,
-      "gemini": 11,
+      "gemini": 14,
       "grok": 4
     }
   },

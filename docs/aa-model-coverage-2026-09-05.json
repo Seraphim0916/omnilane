@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 119,
+    "catalogEntries": 122,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1176,6 +1176,63 @@
         "gemini-4-argon"
       ],
       "mappingReason": "AA v4.3.2 snapshot aa-v4.3.2-2026-10-14-v1 was approved by the operator on 2026-10-18 and measures Gemini 4 Argon (High); agy encodes high in its selector. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-carbon-high",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "primary",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-carbon"
+      ],
+      "mappingReason": "Proposed AA v5.0.1 snapshot aa-v5.0.1-2026-11-12-v1 scores Gemini 4 Carbon (High); agy 1.5.5 encodes the effort in its selector for Google AI Ultra / ADC sign-ins. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-carbon-medium",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "ui-draft",
+          "position": "primary",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-carbon-medium"
+      ],
+      "mappingReason": "Proposed AA v5.0.1 snapshot aa-v5.0.1-2026-11-12-v1 scores Gemini 4 Carbon (Medium); agy 1.5.5 encodes the effort in its selector for Google AI Ultra / ADC sign-ins. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-carbon-low",
+      "lifecycle": "active",
+      "disposition": "default",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-carbon-low"
+      ],
+      "mappingReason": "Proposed AA v5.0.1 snapshot aa-v5.0.1-2026-11-12-v1 scores Gemini 4 Carbon (Low); agy 1.5.5 encodes the effort in its selector for Google AI Ultra / ADC sign-ins. Host proof still required; absent from the historical v4.2 aaModels capture."
     },
     {
       "vendor": "gemini",

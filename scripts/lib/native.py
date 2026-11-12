@@ -449,11 +449,13 @@ def route(args):
         caller, caller_sha = aa_policy.load_caller(
             args.caller_context, registry, args.expected_caller_sha256
         )
+    # Check the resolved target before publishing a plan or allowing CLI fallback.
+    executor, reason, model = choose(args, ctx)
     policy_decision = aa_policy.decide(
         registry,
         registry_sha,
         vendor=args.vendor,
-        model=args.model,
+        model=model,
         effort=None if args.effort in ("", "-") else args.effort,
         caller=caller,
         caller_sha256=caller_sha,
@@ -466,7 +468,6 @@ def route(args):
         print_human(policy_decision)
         print(aa_policy._json_line(policy_decision), end="", file=sys.stderr)
         return 3
-    executor, reason, model = choose(args, ctx)
     if executor == "cli":
         check(args.executor != "native", "native capability rejected: " + reason)
         # Preserve an inherited exact model on CLI fallback too.
