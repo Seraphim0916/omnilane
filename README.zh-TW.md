@@ -933,10 +933,13 @@ omnilane ui stop     # 正常停止
 最快:`./install.sh` — 自動偵測本機的 CLI、接好技能、列出其餘的外掛安裝指令、
 印出這台機器的生效路由表,最後問你要不要進入互動設定選單(`--uninstall` 可逆)。
 安裝介面依系統語言自動切換(英/繁中/簡中/日/韓,可用 `OMNILANE_LANG=zh-TW`
-強制)。另提供選配的各 CLI **常駐路由提示**:在各 CLI 指令檔尾端加一段有
+強制)。另提供選配的各 CLI **常駐路由提示**:在各 CLI 指令檔加入一段短版、有
 標記、可逆的區塊(`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、
 `~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路徑可能隨 CLI 版本不同),
 讓主迴圈記得查路由表;非互動安裝可帶 `OMNILANE_HOOKS=all|none|claude,codex`。
+重裝時會在原位置替換既有標記區塊，保留前後位元組；沒有區塊才附加到檔尾。
+短版提示只在需要委派時引導讀取 `SKILL.md`，生效路由則查 `omnilane list`。
+
 `./install.sh --check` 可唯讀檢查漂移；安裝或 `--uninstall` 加上
 `--dry-run`，可先預覽每個由這份 checkout 擁有的檔案動作。
 手動接線:

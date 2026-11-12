@@ -12,6 +12,7 @@ semantic version tags.
 - The human-operator exemption (`--operator-asserted-human`, the quick start's `OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1`) no longer dispatches Carbon without transport proof: lanes skip it and an explicit Carbon selector is refused with `runtime-mapping-unverified`. Other models keep the exemption unchanged.
 
 ### Fixed
+- The installer now writes only a short routing reminder, replaces existing marked blocks in place without changing surrounding bytes, and keeps dry runs read-only. Full skill instructions and the plugin reminder remain separate.
 - Keep row-local evidence integrity handling outside the release-pinned transport compatibility module, preserving its approved bytes and the existing origin-protection tests.
 - Damaged evidence for a failed selector retired from the current score snapshot no longer blocks re-sign checks or repairs for other vendors. Maintenance retains the complete validation-time damage set separately from current-row diagnostics, while still refusing newly damaged failure evidence after validation.
 

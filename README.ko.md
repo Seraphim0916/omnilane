@@ -977,8 +977,12 @@ omnilane ui stop     # 정상 중지
 영/번체/간체/일/한을 자동 선택합니다(`OMNILANE_LANG=ko` 로 강제 가능).
 또한 각 CLI 지침 파일(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 `~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — 경로는 CLI 버전에 따라 다를
-수 있음)에 마커로 감싼 가역적 **상시 라우팅 리마인더**를 선택 설치할 수
+수 있음)에 마커로 감싼 짧고 가역적인 **상시 라우팅 리마인더**를 선택 설치할 수
 있습니다. 비대화형 설치는 `OMNILANE_HOOKS=all|none|claude,codex`. 수동 연결:
+
+다시 설치하면 기존 마커 구간을 같은 위치에서 교체하며 앞뒤 바이트를 보존합니다.
+구간이 없을 때만 파일 끝에 추가합니다. 짧은 안내는 위임이 필요할 때 `SKILL.md`를
+읽고 실효 라우팅은 `omnilane list`로 확인하도록 합니다.
 
 `./install.sh --check` 는 변경 없이 드리프트를 검사합니다. 설치 또는
 `--uninstall` 에 `--dry-run` 을 추가하면 소유 대상 작업을 미리 보여 줍니다.
