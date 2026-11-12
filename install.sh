@@ -42,7 +42,7 @@ fi
 source "$REPO/scripts/lib/i18n.sh"
 SKILL_SRC="$REPO/skills/omnilane"
 
-HOOK_SRC="$REPO/hooks/routing-instruction.md"
+HOOK_SRC="$REPO/hooks/routing-block.md"
 HOOK_START='<!-- omnilane-routing:start -->'
 HOOK_END='<!-- omnilane-routing:end -->'
 HOOKS_MODE="${OMNILANE_HOOKS:-ask}"
@@ -96,17 +96,68 @@ remove_hook() { # file [quiet]
   [[ "${2:-}" == "quiet" ]] || echo "$(msg hook_removed) $f"
 }
 
+render_hook() { # file, write|plan|plan-remove; stdout only, never writes files
+  perl -e '
+    use strict;
+    use warnings;
+    my ($file, $source, $start, $end, $mode) = @ARGV;
+    my $text = "";
+    if (-f $file) {
+      open my $fh, "<:raw", $file or die "omnilane: cannot read $file: $!\n";
+      local $/;
+      $text = <$fh> // "";
+      close $fh;
+    }
+    my (@starts, @ends);
+    while ($text =~ /^\Q$start\E(?=\n|\z)/mg) { push @starts, $-[0] }
+    while ($text =~ /^\Q$end\E(?=\n|\z)/mg) { push @ends, $+[0] }
+    if (@starts || @ends) {
+      if (@starts != 1 || @ends != 1) {
+        warn "omnilane: warning: malformed routing reminder markers in $file (start=" .
+             scalar(@starts) . " end=" . scalar(@ends) . "); file unchanged\n";
+        exit 2;
+      }
+      if ($starts[0] >= $ends[0]) {
+        warn "omnilane: warning: routing reminder markers out of order in $file; file unchanged\n";
+        exit 2;
+      }
+    }
+    if ($mode eq "plan-remove") {
+      print "would remove routing reminder from $file\n" if @starts;
+      exit 0;
+    }
+    if ($mode eq "plan") {
+      print "would write routing reminder to $file\n";
+      exit 0;
+    }
+    open my $fh, "<:raw", $source or die "omnilane: cannot read $source: $!\n";
+    local $/;
+    my $block = <$fh>;
+    close $fh;
+    if (@starts) {
+      # Leave the existing end-marker line ending and all surrounding bytes intact.
+      $block =~ s/\n\z//;
+      substr($text, $starts[0], $ends[0] - $starts[0], $block);
+    } else {
+      $text .= (length($text) ? "\n" : "") . $block;
+    }
+    binmode STDOUT;
+    print $text;
+  ' "$1" "$HOOK_SRC" "$HOOK_START" "$HOOK_END" "$2"
+}
+
 install_hook() { # vendor
-  local f; f="$(instruction_file "$1")"
+  local f tmp; f="$(instruction_file "$1")"
   [[ -n "$f" ]] || return 0
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    remove_hook "$f" quiet
-    printf 'would write routing reminder to %s\n' "$f"
-    return 0
+    render_hook "$f" plan
+    return
   fi
+  tmp="$(mktemp)"
+  render_hook "$f" write > "$tmp" || return $?
   mkdir -p "$(dirname "$f")"
-  remove_hook "$f" quiet   # refresh: old block out, current block in
-  { [[ -s "$f" ]] && echo; cat "$HOOK_SRC"; } >> "$f"
+  # Write through the existing path to retain its inode and any symlink.
+  cat "$tmp" > "$f"
   echo "$(msg hook_written) $f"
 }
 
@@ -317,7 +368,13 @@ if [[ "$CHECK" -eq 1 ]]; then
 fi
 
 if [[ "$UNINSTALL" == "--uninstall" ]]; then
-  for v in claude codex grok agy; do remove_hook "$(instruction_file "$v")"; done
+  for v in claude codex grok agy; do
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      render_hook "$(instruction_file "$v")" plan-remove
+    else
+      remove_hook "$(instruction_file "$v")"
+    fi
+  done
 fi
 
 found=()

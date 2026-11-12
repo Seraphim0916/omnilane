@@ -916,10 +916,13 @@ Esc。服务器发送事件(SSE)会实时更新，又不会重建当前聚焦的
 最快:`./install.sh` — 自动检测本机的 CLI、接好技能、列出其余的插件安装命令、
 打印这台机器的生效路由表,最后询问是否进入交互设置菜单(`--uninstall` 可逆)。
 安装界面依系统语言自动切换(英/繁中/简中/日/韩,可用 `OMNILANE_LANG=zh-CN`
-强制)。另提供可选的各 CLI **常驻路由提示**:在各 CLI 指令文件末尾加一段带
+强制)。另提供可选的各 CLI **常驻路由提示**:在各 CLI 指令文件中加入一段简短、带
 标记、可逆的区块(`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、
 `~/.grok/Agents.md`、`~/.gemini/GEMINI.md`——路径可能随 CLI 版本不同);
 非交互安装可带 `OMNILANE_HOOKS=all|none|claude,codex`。手动接线:
+
+重新安装会原位替换已有标记区块，保留前后字节；没有区块时才追加到文件末尾。
+简短提示仅在需要委派时指引读取 `SKILL.md`，生效路由通过 `omnilane list` 查询。
 
 `./install.sh --check` 可只读检查漂移；安装或 `--uninstall` 加上
 `--dry-run`，可先预览每个由这份 checkout 拥有的文件动作。

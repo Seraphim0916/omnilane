@@ -1162,7 +1162,7 @@ the plugin commands for the rest, shows your effective routing, and offers the
 interactive lane configurator (`--uninstall` reverses it). The installer
 speaks English, 繁體中文, 简体中文, 日本語 and 한국어 (auto-detected from
 your locale; force with `OMNILANE_LANG=zh-TW` etc.). It also offers an
-optional per-CLI **routing reminder**: a marked, reversible block appended to
+optional per-CLI **routing reminder**: a short, marked, reversible block added to
 each CLI's instruction file (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`,
 `~/.grok/Agents.md`, `~/.gemini/GEMINI.md` — paths may vary across CLI
 versions) so the main loop remembers to consult the table; non-interactive
@@ -1176,6 +1176,10 @@ from this checkout with:
 claude plugin marketplace add <path to this repo>
 claude plugin install omnilane@omnilane
 ```
+
+Reinstalling replaces an existing marked block in place, preserving surrounding bytes;
+a missing block is appended. The short reminder points to `SKILL.md` when delegation
+is needed and to `omnilane list` for effective routing.
 
 Use `./install.sh --check` for a read-only drift report. Add `--dry-run` to an
 install or `--uninstall` to preview every checkout-owned file action.

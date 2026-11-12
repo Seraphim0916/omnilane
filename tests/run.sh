@@ -2758,7 +2758,7 @@ test_installer_check_and_dry_run_are_read_only() {
   mkdir -p "$installed/.local/bin" "$installed/.codex/skills"
   ln -s "$ROOT/bin/omnilane" "$installed/.local/bin/omnilane"
   ln -s "$ROOT/skills/omnilane" "$installed/.codex/skills/omnilane"
-  { printf 'base\n'; cat "$ROOT/hooks/routing-instruction.md"; } > "$installed/.codex/AGENTS.md"
+  { printf 'base\n'; cat "$ROOT/hooks/routing-block.md"; } > "$installed/.codex/AGENTS.md"
   chmod 400 "$installed/.codex/AGENTS.md"
   installed_before="$(snapshot_installer_home "$installed")"
   uninstall_plan="$(HOME="$installed" PATH="$installed/bin:$OMNILANE_TEST_UTIL_PATH" OMNILANE_HOOKS=codex \
@@ -3667,6 +3667,17 @@ test_background_job_records_whole_job_timeout
 test_job_timeout_bounds_codex_lock_wait
 test_job_timeout_bounds_vote_panel
 test_doctor_is_read_only_and_reports_failures
+test_installer_routing_block() {
+  local name="installer short routing block, in-place refresh and read-only plans" out rc=0
+  out="$(python3 -m unittest discover -s "$ROOT/tests" -p test_installer_routing.py -v 2>&1)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    fail "$name" "$out"
+  else
+    pass "$name"
+  fi
+}
+test_installer_routing_block
+
 test_installer_check_and_dry_run_are_read_only
 test_incomplete_marker_fails_closed
 test_installer_usage_is_fail_closed
