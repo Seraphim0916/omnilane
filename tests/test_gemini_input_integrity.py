@@ -1,6 +1,7 @@
 """Exercise the dispatch boundary with a recording agy; never call a model."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import platform
@@ -14,7 +15,7 @@ from offline_env import isolated_environment, wait_for_job_controller
 ROOT = Path(__file__).resolve().parents[1]
 GEMINI_MAX_TASK_BYTES = 130000 if platform.system() == "Linux" else 180000
 FAKE_AGY = r'''#!/usr/bin/env python3
-import json, os, pathlib, sys
+import json, os, pathlib, re, sys
 args = sys.argv[1:]
 pathlib.Path(os.environ['AGY_CAPTURE'] + '.called').touch()
 if "--input-format" in args and args[args.index("--input-format") + 1] == "stream-json":
@@ -30,6 +31,10 @@ else:
         sys.exit(1)
     payload = os.fsencode(prompt)[:192000]
 pathlib.Path(os.environ["AGY_CAPTURE"]).write_bytes(payload)
+pointer = re.search(r'^Absolute path: (.+)$', payload.decode('utf-8'), re.M)
+if pointer:
+    brief = pathlib.Path(json.loads(pointer.group(1)))
+    pathlib.Path(os.environ['AGY_CAPTURE']+'.brief').write_bytes(brief.read_bytes())
 result = {"status": "SUCCESS", "response": "OK", "conversation_id": "integrity-session"}
 if "--output-format" in args:
     fmt = args[args.index("--output-format") + 1]
@@ -109,13 +114,13 @@ class GeminiInputIntegrityTests(unittest.TestCase):
 
     def assert_rejected(self, *flags, payload=None):
         if payload is None:
-            payload = self.large_payload(GEMINI_MAX_TASK_BYTES + 1)
+            payload = self.large_payload(1048577)
         result = self.dispatch(payload, *flags)
         self.assertEqual(result.returncode, 2)
         self.assertIn(f"task is {len(payload)} bytes".encode(), result.stderr)
-        self.assertIn(f"limit is {GEMINI_MAX_TASK_BYTES} bytes".encode(), result.stderr)
-        self.assertIn(b"sent to gemini", result.stderr)
-        self.assertIn(b"absolute path", result.stderr)
+        self.assertIn("limit is 1048576 bytes".encode(), result.stderr)
+        self.assertIn(b"tier 3 refusal", result.stderr)
+        self.assertIn(b"Nothing was cut", result.stderr)
         self.assertFalse(Path(str(self.capture) + '.called').exists())
         # Refused before any job directory exists: nothing is left to clean up.
         jobs = self.home / "jobs"
@@ -124,10 +129,12 @@ class GeminiInputIntegrityTests(unittest.TestCase):
     def test_foreground_over_limit(self):
         self.assert_rejected()
 
-    def test_linux_rejects_130001_bytes(self):
+    def test_linux_stages_130001_bytes(self):
         if platform.system() != "Linux":
             self.skipTest("Linux-only single argv argument limit; requires Linux CI")
-        self.assert_rejected(payload=self.large_payload(130001))
+        result=self.dispatch(self.large_payload(130001), "--dry-run")
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn(b"task_delivery=file",result.stdout)
 
     def test_darwin_accepts_130001_bytes(self):
         if platform.system() != "Darwin":
@@ -144,6 +151,32 @@ class GeminiInputIntegrityTests(unittest.TestCase):
 
     def test_live_large_input(self):
         self.assert_live_intact(self.large_payload())
+
+    def test_staged_tasks_across_foreground_background_thread_and_live(self):
+        for flags in ((),('--background','--single-shot'),('--thread','staged-input'),('--background','--live','--idle-timeout','5')):
+            for size in (GEMINI_MAX_TASK_BYTES-len(self.worker_rules_header())+1,1048576):
+                with self.subTest(flags=flags,size=size):
+                    payload=self.large_payload(size-2)+b'\n\n'
+                    jobs=self.home/'jobs';before=set(jobs.iterdir()) if jobs.exists() else set()
+                    result=self.dispatch(payload,*flags)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    job,=set(jobs.iterdir())-before
+                    try:
+                        deadline=time.monotonic()+60
+                        while not (job/'exit').exists() and time.monotonic()<deadline:time.sleep(.05)
+                        self.assertTrue((job/'exit').exists())
+                        self.assertEqual((job/'exit').read_text().strip(),'0')
+                        receipt=json.loads((job/'brief.json').read_text())
+                        self.assertEqual(receipt['tier'],2)
+                        self.assertEqual(receipt['delivery'],'file')
+                        self.assertEqual(Path(str(self.capture)+'.brief').read_bytes(),payload)
+                        self.assertEqual((job/'task.txt').read_bytes(),payload)
+                        self.assertEqual(receipt['sha256'],hashlib.sha256(payload).hexdigest())
+                        self.assertFalse(Path(receipt['path']).exists())
+                    finally:
+                        if not (job/'exit').exists():
+                            subprocess.run(['bash',str(ROOT/'scripts/jobs.sh'),'close',job.name],env=self.env,capture_output=True,timeout=30)
+                        wait_for_job_controller(self,job)
 
     def test_live_initial_message_matches_protocol(self):
         payload = '中文 "quote" \\ slash\t tab\r\nnext line'.encode('utf-8')

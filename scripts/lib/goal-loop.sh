@@ -523,14 +523,53 @@ reject_goal_dry_run() {
 }
 
 dispatch_goal() {
-  local goal_id="${1:-}" lane task task_value fingerprint failures
+  local goal_id="${1:-}" lane task task_value task_preview fingerprint failures
   local status spent_jobs budget_jobs spent_seconds budget_seconds workdir lane_index
   local dispatch_output dispatch_rc error_path intent_ref reserved_jobs
+  local goal_rc=0 task_source=argument prepare_rc=0 stage_brief=1
   [[ $# -ge 3 ]] || usage
   shift
   reject_goal_dry_run "$@"
   load_goal "$goal_id"
+  lane_index=$(($# - 1)); lane="${!lane_index}"; task="${!#}"
+  task_value="$task"
+  if [[ "$task" == "-" ]]; then
+    task_value="$(cat; printf .)"; task_value="${task_value%.}"; task_source=stdin
+  fi
+  # The worker gets the exact stdin bytes; the fingerprint keeps the earlier
+  # $(cat) rule so failures.json written before stays valid. dispatch.sh
+  # computes the same value with the same expression.
+  fingerprint="$(printf '%s' "$task_value" | python3 -c 'import hashlib,sys; d=sys.stdin.buffer.read(); d=d.replace(b"\0",b"").rstrip(b"\n") if sys.argv[2]=="stdin" else d; print(hashlib.sha256(sys.argv[1].encode("utf-8")+b"\0"+d).hexdigest())' "$lane" "$task_source")"
+  # Lock-free, read-only pass over the conditions that return 75 below. A goal
+  # that would stop skips staging, and the locked checks report and record it
+  # as before; otherwise a rejected task creates no lock, intent or record.
+  IFS=$'\t' read -r status spent_jobs budget_jobs spent_seconds budget_seconds _ workdir reserved_jobs < <(state_fields)
+  if [[ "$status" != "open" || "$reserved_jobs" -ne 0 ]] ||
+    [[ "$budget_jobs" != "unlimited" && "$((spent_jobs + reserved_jobs))" -ge "$budget_jobs" ]] ||
+    [[ "$budget_seconds" != "unlimited" && "$spent_seconds" -ge "$budget_seconds" ]] ||
+    [[ "$(failure_count "$fingerprint" 2>/dev/null)" -ge 2 ]]; then
+    stage_brief=0
+  fi
+  GOAL_BRIEF=""
+  cleanup_goal_brief() {
+    [[ -z "${GOAL_BRIEF:-}" || ! -s "$GOAL_BRIEF" ]] || python3 "$SCRIPT_DIR/prompt_transport.py" cleanup "$GOAL_BRIEF" || true
+    [[ -z "${GOAL_BRIEF:-}" ]] || rm -f "$GOAL_BRIEF"
+  }
+  if [[ "$stage_brief" -eq 1 ]]; then
+    GOAL_BRIEF="$(umask 077; mktemp "${TMPDIR:-/tmp}/omnilane-goal-brief.XXXXXX")"
+    trap 'omnilane_exit_trap $? cleanup_goal_brief' EXIT
+    set +e
+    if [[ "$task" == "-" ]]; then
+      printf '%s' "$task_value" | OMNILANE_GOAL_PREPARE_FILE="$GOAL_BRIEF" "$DISPATCH" --dry-run --background --workdir "$workdir" "$@" >/dev/null
+    else
+      OMNILANE_GOAL_PREPARE_FILE="$GOAL_BRIEF" "$DISPATCH" --dry-run --background --workdir "$workdir" "$@" >/dev/null </dev/null
+    fi
+    prepare_rc=$?
+    set -e
+    [[ "$prepare_rc" -eq 0 ]] || die "$prepare_rc" "dispatch failed (exit $prepare_rc)"
+  fi
   acquire_lock
+  trap 'goal_rc=$?; cleanup_goal_brief; omnilane_exit_trap "$goal_rc" release_lock' EXIT
   refresh_goal
   IFS=$'\t' read -r status spent_jobs budget_jobs spent_seconds budget_seconds \
     _ workdir reserved_jobs < <(state_fields)
@@ -543,35 +582,23 @@ dispatch_goal() {
     die 75 "seconds budget exhausted: ${spent_seconds}s/${budget_seconds}s"
   fi
 
-  lane_index=$(($# - 1))
-  lane="${!lane_index}"
-  task="${!#}"
-  task_value="$task"
-  if [[ "$task" == "-" ]]; then
-    task_value="$(cat)"
-  fi
-  fingerprint="$(python3 - "$lane" "$task_value" <<'PY'
-import hashlib
-import sys
-print(hashlib.sha256((sys.argv[1] + "\0" + sys.argv[2]).encode("utf-8")).hexdigest())
-PY
-)"
+  task_preview="$(printf '%s' "$task_value" | python3 -c 'import sys; sys.stdout.write(sys.stdin.read()[:2000])')"
   failures="$(failure_count "$fingerprint")"
   if [[ "$failures" -ge 2 ]]; then
-    record_fuse_trip "$fingerprint" "$lane" "$task_value" "$failures"
+    record_fuse_trip "$fingerprint" "$lane" "$task_preview" "$failures"
     die 75 "failure fuse tripped: lane=$lane failures=$failures fingerprint=$fingerprint"
   fi
 
   intent_ref="$(python3 "$SCRIPT_DIR/goal_dispatch.py" prepare "$OMNILANE_HOME" "$goal_id" \
-    "$lane" "$fingerprint" "$task_value")"
+    "$lane" "$fingerprint" "$task_preview")"
   error_path="$GOAL_DIR/dispatch-error-$(date +%s)-$$.txt"
   set +e
   if [[ "$task" == "-" ]]; then
-    dispatch_output="$(printf '%s' "$task_value" | OMNILANE_GOAL_INTENT="$intent_ref" OMNILANE_HOME="$OMNILANE_HOME" \
+    dispatch_output="$(printf '%s' "$task_value" | OMNILANE_PREPARED_BRIEF="$GOAL_BRIEF" OMNILANE_GOAL_INTENT="$intent_ref" OMNILANE_HOME="$OMNILANE_HOME" \
       "$DISPATCH" --background --workdir "$workdir" "$@" 2>"$error_path")"
     dispatch_rc=$?
   else
-    dispatch_output="$(OMNILANE_GOAL_INTENT="$intent_ref" OMNILANE_HOME="$OMNILANE_HOME" "$DISPATCH" --background \
+    dispatch_output="$(OMNILANE_PREPARED_BRIEF="$GOAL_BRIEF" OMNILANE_GOAL_INTENT="$intent_ref" OMNILANE_HOME="$OMNILANE_HOME" "$DISPATCH" --background \
       --workdir "$workdir" "$@" 2>"$error_path")"
     dispatch_rc=$?
   fi
@@ -591,6 +618,7 @@ PY
   fi
   [[ ! -s "$error_path" ]] || chmod 600 "$error_path"
   [[ -s "$error_path" ]] || rm "$error_path"
+  rm -f "$GOAL_BRIEF"; GOAL_BRIEF=""
   refresh_goal
   release_lock
   trap - EXIT

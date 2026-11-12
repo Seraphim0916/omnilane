@@ -84,7 +84,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-mistral.sh":
         "4893c2dc96ef193d6bd679638c81960ec911da82aea47dd0cee77bd459d8825a",
     "scripts/runners/run-openai-compat.sh":
-        "cecece9de551cd1f8f939fec3688d961e9307ee1e1dd4dc528791a034b34611b",
+        "ca3431c6527cd25bfe5d63d6fb47d910768826263689a3a4d29df16a5cbbde5e",
     "scripts/runners/run-opencode.sh":
         "7dd07be771fb8a60194cacd18b0eeeebd6535bd9a7d0a5e4bad314c87651c90d",
     "scripts/runners/run-openrouter.sh":
@@ -92,7 +92,7 @@ PROTECTED_SHA256 = {
     "scripts/runners/run-qwen.sh":
         "aed846b06a287291c210b153f727153a537aae8bfc9b49894f431298db24183d",
     "scripts/runners/run-vote.sh":
-        "656d42797e76123d919a6181c9fedf1a24310adcd406e72b57886794116fe034",
+        "b4f0f3bea5585dbdcdf555c9bd89e54937fbd2dc503720075d7cf896380b17bd",
     "scripts/runners/run-zai.sh":
         "45a05bf343ec4523d5f51ae1491ee444b26246576e8366c92a8f7238217833bc",
 }

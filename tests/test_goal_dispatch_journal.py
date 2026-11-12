@@ -285,8 +285,11 @@ else:
                 bins.mkdir()
                 wrapper = bins / "bash"
                 real = shutil.which("bash", path=self.env["PATH"])
+                # The goal's staging preview (OMNILANE_GOAL_PREPARE_FILE) passes
+                # through; only the real dispatch gets the injected fault.
                 wrapper.write_text("#!/bin/sh\n"
                     'case "$1" in */scripts/dispatch.sh)\n' +
+                    '[ -z "${OMNILANE_GOAL_PREPARE_FILE:-}" ] || exec ' + shlex.quote(real) + ' "$@"\n' +
                     shlex.quote(real) + ' "$@" >/dev/null\n' +
                     ('exit 7\n' if fault == "nonzero" else 'echo 20261001-000000-1234-42; exit 0\n' if fault == "wrong-id" else 'echo invalid-job-output; exit 0\n') +
                     ';; *) exec ' + shlex.quote(real) + ' "$@";; esac\n')
@@ -445,11 +448,32 @@ else:
                 self.wait_jobs(index)
                 self.assertEqual(self.status()["spent_jobs"], index)
                 job_id = result.stdout.strip()
-                effective = task.rstrip("\n")  # Existing goal command substitution semantics.
-                self.assertEqual((self.home / "jobs" / job_id / "task.txt").read_text(), effective)
+                # The worker gets the stdin bytes as sent, trailing newlines included.
+                self.assertEqual((self.home / "jobs" / job_id / "task.txt").read_text(), task)
                 record = next(record for record in self.records() if record["job_id"] == job_id)
+                # The fingerprint keeps the earlier $(cat) rule.
+                effective = task.rstrip("\n")
                 self.assertEqual(record["fingerprint"], hashlib.sha256(("probe\0" + effective).encode()).hexdigest())
                 self.assertEqual(self.call_count(), index)
+
+    def test_failures_recorded_under_the_earlier_rule_still_trip_the_fuse(self):
+        task = "第一行 任務\nsecond line\n\n\n"
+        # Written as the previous release did: $(cat) dropped trailing newlines.
+        fingerprint = hashlib.sha256(("probe\0" + "第一行 任務\nsecond line").encode("utf-8")).hexdigest()
+        for ordinal in (1, 2):  # Same records as GoalRecoveryTests.failed_jobs.
+            job_id = f"20261001-000000-1234-{ordinal}"
+            (self.home / "jobs" / job_id).mkdir(parents=True)
+            (self.home / "jobs" / job_id / "exit").write_text("9\n")
+            (self.goal / "jobs" / f"job-{ordinal:08d}.json").write_text(json.dumps(
+                {"job_id": job_id, "ordinal": ordinal, "lane": "probe", "fingerprint": fingerprint,
+                 "submitted_epoch": 1, "failure_counted": False}))
+        result = subprocess.run(["bash", str(ROOT / "scripts/lib/goal-loop.sh"),
+            "dispatch", self.goal_id, "--mode", "work", "probe", "-"],
+            input=task, env=self.env, text=True, capture_output=True, timeout=15)
+        self.assertEqual(result.returncode, 75, result.stderr)
+        self.assertIn("failure fuse tripped", result.stderr)
+        self.assertIn("fingerprint=" + fingerprint, result.stderr)
+        self.assertEqual(self.call_count(), 0)
 
     def test_noncanonical_terminal_codes_do_not_prove_start(self):
         ref = self.prepare()

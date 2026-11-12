@@ -1121,7 +1121,7 @@ macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 加上 `opti
 - **背景工作生命週期** — `--background` 的工作端跑在自己的 process group,
   呼叫端退出也不受影響;被殺會落盤退出碼,`jobs.sh status` 會報 `dead`
   而不是永遠顯示 `running`。
-- **任務酬載上限** — 任務超過該廠商的位元組上限時，在啟動任何工作端之前直接拒絕（結束碼 2），不會截斷。長內容請放進檔案，在任務裡寫絕對路徑。
+- **完整任務傳輸** — 純 API 目標收到全文；供應商回報模型上下文超限時，結束碼為 2。Claude、Codex、Grok、Gemini 與 vote 超過傳輸上限時，將全文存入工作目錄的 `.omnilane-tmp/job-<UUID>/`，改送含位元組數與 SHA-256 的檔案指標。原生交接與 `--inherit` 使用相同位元組檢查，其餘目標超限則拒絕。所有層級都有 1,048,576 位元組的失控輸入防線，這不保證模型讀得下全文。預演不建立任務檔，只在任務會改走檔案時列出層級。暫存檔與純 API 請求內文逐位元組保留 stdin 任務，含尾端換行；參數形式的任務照 main：讀任務檔的 runner（Codex、Grok、exec、純 API）會收到 `task.txt` 補上的那個換行，以單一 CLI 參數傳送的 runner（Claude、Gemini、OpenCode、Kimi、Qwen）與即時首訊息則去掉尾端換行。目錄權限 0700、檔案 0600，每個工作或討論串回合結束即清除，即時追訊檔保留至關閉。投票第二輪只有模型意見可縮短。詳見[任務傳輸](docs/task-transport.md)。
 
 ## 📬 即時信箱
 

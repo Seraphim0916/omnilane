@@ -119,6 +119,19 @@ stdout. With it, stdout is just the job id; collect the answer in Step 5.
 `--workdir` defaults to your current directory; a read-only worker can read it.
 Put what the worker needs into the brief, or name the files by absolute path.
 
+Long tasks are never truncated. Pure API targets receive the whole task and
+report provider context errors (exit 2). File-capable CLI workers and native /
+`--inherit` handoffs use a verified file in `--workdir/.omnilane-tmp/job-<UUID>/`
+above the transport limit; other targets refuse. The named 1,048,576-byte guard
+prevents runaway input, not context overflow. `--dry-run` never stages and lists
+tier/delivery only when the task would go by file. The worker must read the entire referenced file and verify its
+byte count and SHA-256 before acting; if it cannot, it must stop and report it.
+Files expire at job/turn end; live follow-up files expire at close. Resend a brief
+on a later thread turn if it needs to be read again. Use stdin (`-`) for large
+dispatch tasks and `jobs send ID -` for large live follow-ups. For lifecycle and
+crash recovery, see `docs/task-transport.md` in the omnilane repo.
+
+
 Every task brief states the goal, the files, what must not be touched, the
 acceptance criteria and the **exact verification command**. "Done" without
 evidence is not accepted. For example:

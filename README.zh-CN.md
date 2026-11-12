@@ -1088,7 +1088,7 @@ macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 中加入 `o
 - **后台作业生命周期** — `--background` 的工作端跑在自己的 process group,
   调用端退出也不受影响;被杀会落盘退出码,`jobs.sh status` 会报 `dead`
   而不是永远显示 `running`。
-- **任务载荷上限** — 任务超过该厂商的字节上限时，在启动任何工作端之前直接拒绝（退出码 2），不会截断。长内容请放进文件，在任务里写绝对路径。
+- **完整任务传输** — 纯 API 目标接收全文；供应商报告模型上下文超限时退出码为 2。Claude、Codex、Grok、Gemini 和 vote 超过传输上限时，将全文存入工作目录 `.omnilane-tmp/job-<UUID>/`，发送含字节数和 SHA-256 的文件指针。原生交接与 `--inherit` 采用相同字节检查，其余目标超限则拒绝。所有层级均有 1,048,576 字节的失控输入防线，不保证模型能读下全文。预演不创建任务文件，仅在任务会改走文件时列出层级。暂存文件与纯 API 请求正文逐字节保留 stdin 任务，含尾部换行；参数形式的任务照 main：读取任务文件的 runner（Codex、Grok、exec、纯 API）会收到 `task.txt` 补上的那个换行，以单个 CLI 参数传递的 runner（Claude、Gemini、OpenCode、Kimi、Qwen）与实时首条消息则去掉尾部换行。目录权限 0700、文件 0600，工作或讨论串回合结束时清除，即时追加消息文件保留至关闭。投票第二轮仅缩短模型意见。详见[任务传输](docs/task-transport.md)。
 
 ## 📬 实时邮箱
 
