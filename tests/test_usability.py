@@ -75,7 +75,7 @@ class GuidanceTests(unittest.TestCase):
                     args = SimpleNamespace(caller_context=None, operator_asserted_human=False,
                         workdir="/tmp/alice@example.invalid", context=None, policy="fixture",
                         expected_registry_sha256=None, vendor="codex", model="fixture", effort="high",
-                        target_config=None)
+                        target_config=None, executor="auto")
                     decision = dict(allowed=route == "inherited-capability", code="fixture-denied",
                         failed_gate="fixture", reason=PRIVATE_FIXTURE, message=PRIVATE_FIXTURE,
                         next_command="omnilane native-context --workdir " + args.workdir)

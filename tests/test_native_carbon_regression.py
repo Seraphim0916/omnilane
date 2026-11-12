@@ -1,5 +1,7 @@
 """Offline regressions for policy checks on the resolved native target."""
 
+import offline_env  # Activate suite isolation for direct file execution.
+
 import contextlib
 import hashlib
 import io
