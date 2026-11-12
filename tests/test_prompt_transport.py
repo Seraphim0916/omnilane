@@ -127,6 +127,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(list(self.work.iterdir()),[])
 
     def test_staged_codex_runtime_keeps_existing_base_and_git_exclude(self):
+        self.work=Path(os.path.realpath(self.work))
         spec=importlib.util.spec_from_file_location('codex_worker_setup',ROOT/'scripts/lib/codex_worker_setup.py')
         setup=importlib.util.module_from_spec(spec);spec.loader.exec_module(setup)
         subprocess.run(['git','init','-q',str(self.work)],check=True)
