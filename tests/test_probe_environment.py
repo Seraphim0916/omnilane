@@ -16,6 +16,26 @@ KEY = 'OMNILANE_PROBE_ANY_SESSION'
 
 
 class ProbeEnvironmentTests(unittest.TestCase):
+    def test_child_environment_preserves_account_names_and_excludes_overrides(self):
+        excluded = {
+            'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY',
+            'HTTPS_PROXY', 'CLAUDE_CONFIG_DIR', 'NODE_OPTIONS', 'PYTHONPATH',
+        }
+        inherited = {key: 'fake-not-a-credential' for key in excluded}
+        inherited.update(HOME='/fake/home', PATH='/fake/bin', TMPDIR='/fake/tmp',
+                         USER='fixture-user', LOGNAME='fixture-login',
+                         LANG='zh_TW.UTF-8', LC_ALL='zh_TW.UTF-8',
+                         CLAUDE_CODE_DISABLE_ADVISOR_TOOL='0')
+        with patch.dict(os.environ, inherited, clear=True):
+            environment = probe_failure.child_environment('claude')
+        self.assertEqual(environment, {
+            'HOME': '/fake/home', 'PATH': '/fake/bin', 'TMPDIR': '/fake/tmp',
+            'USER': 'fixture-user', 'LOGNAME': 'fixture-login',
+            'LANG': 'C', 'LC_ALL': 'C',
+            'CLAUDE_CODE_DISABLE_ADVISOR_TOOL': '1',
+        })
+        self.assertTrue(excluded.isdisjoint(environment))
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

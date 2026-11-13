@@ -344,9 +344,9 @@ GROK_COMPAT_SWITCHES = (
 
 
 # Deliberately no credential, endpoint, proxy, loader or config-override variables.
-# Live provider authentication requirements have not been verified. HOME retains
-# the existing on-disk/keychain identity; it is not a filesystem sandbox.
-PROBE_ENV_KEYS = ("HOME", "PATH", "TMPDIR")
+# USER/LOGNAME let CLIs locate keychain login by account name; they are not credentials.
+# HOME retains the existing on-disk identity; this is not a filesystem sandbox.
+PROBE_ENV_KEYS = ("HOME", "PATH", "TMPDIR", "USER", "LOGNAME")
 PREPARATION_TIMEOUT = 30
 _ENVIRONMENT_LOCK = threading.RLock()
 

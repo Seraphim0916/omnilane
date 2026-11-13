@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Fixed
+- Re-sign probes preserve `USER`/`LOGNAME`, fixing false not-logged-in results in the probe environment with Claude Code 2.1.323 and later.
+
 ## [0.62.0] - 2026-11-13
 
 ### Added
