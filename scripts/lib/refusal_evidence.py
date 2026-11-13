@@ -95,6 +95,33 @@ def caller_guidance(diagnostic: str) -> dict:
         return dict(reason="the launcher was found, but its effort is unknown because --effort was not set",
                     next_command="restart the CLI with explicit --model MODEL and --effort EFFORT flags, "
                                  "then retry the omnilane command")
+    if "Antigravity 的非 Gemini 模型尚未支援" in diagnostic:
+        return dict(reason="Antigravity 的非 Gemini 模型尚未支援",
+                    next_command="switch the Antigravity session to a scored Gemini model, or use "
+                                 "omnilane native-context --vendor VENDOR --model MODEL "
+                                 "--inherits-caller-runtime with omnilane route --inherit")
+    if "only command" in diagnostic and "Antigravity" in diagnostic:
+        return dict(reason="the Antigravity compound command hid the caller identity",
+                    next_command="run the omnilane command alone as the only command of the tool call, "
+                                 "without ;, &&, |, subshell or VAR=value shell prefix "
+                                 "(use env VAR=value if needed)")
+    if "ANTIGRAVITY_CONVERSATION_ID" in diagnostic:
+        return dict(reason="Antigravity conversation ID is missing, invalid, or mismatched "
+                           "in the process chain",
+                    next_command="run omnilane whoami directly inside an active Antigravity Desktop "
+                                 "conversation")
+    if "conversation database" in diagnostic and "Antigravity" in diagnostic:
+        return dict(reason="Antigravity conversation database cannot be opened safely",
+                    next_command="check the conversation database file permissions and owner, "
+                                 "then retry omnilane whoami")
+    if ("executor_metadata" in diagnostic or "10.1.28" in diagnostic) and "Antigravity" in diagnostic:
+        return dict(reason="Antigravity model field 10.1.28 is missing, duplicated, or malformed",
+                    next_command="send a turn with a scored Gemini model in Antigravity Desktop, "
+                                 "then retry omnilane whoami")
+    if "Antigravity" in diagnostic:
+        return dict(reason="Antigravity caller identity could not be verified",
+                    next_command="run omnilane whoami directly inside an active Antigravity Desktop "
+                                 "conversation with a scored Gemini model")
     if "was launched without a model flag" in diagnostic:
         return dict(reason="the launcher was found, but its model is unknown because --model was not set",
                     next_command="restart the CLI with an explicit --model flag and an explicit effort flag, "

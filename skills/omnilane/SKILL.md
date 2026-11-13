@@ -218,7 +218,7 @@ Pass `--inherits-caller-runtime` only if it is true of your tool:
 | Grok Build | you call `spawn_subagent` with no `model` argument and `[subagents.models]` pins nothing for the agent type (the bundled `general-purpose` is `model: inherit`). Model and effort inheritance observed on grok 1.0.41: parent grok-4.7/high, child grok-4.7/high. Harness name `grok-build` |
 | Hermes | `delegation.model` is not configured: `delegate_task` takes no model argument, and the child then runs the parent's model. omnilane cannot read a Hermes caller; state it as described below |
 | OpenClaw | you call `sessions_spawn` with no `model` or `thinking` argument, and no `agents.defaults.subagents.model` or `.thinking` pin (or per-agent pin) differs from your own. omnilane cannot read an OpenClaw caller; state it as described below. No cycle has been run |
-| Antigravity | agy 1.2.12 exposes only a session-level `--agent`, no sub-agent tool; do not assert it |
+| Antigravity | Antigravity Desktop (`antigravity-desktop`) caller identity is read from `/Applications/Antigravity.app/Contents/Resources/bin/language_server` (direct parent `/Applications/Antigravity.app/Contents/MacOS/Antigravity`), `ANTIGRAVITY_CONVERSATION_ID`, and `~/.gemini/antigravity/conversations/<uuid>.db` (`executor_metadata` protobuf path `10.1.28`) for scored Gemini models; non-Gemini models are refused. `agy` CLI 1.2.12 still exposes only a session-level `--agent` and no sub-agent tool; do not assert CLI sub-agent inheritance |
 
 Here the lane is only a label for what kind of work it is; it is not checked
 against your ceiling, because no lane target runs. The handoff says

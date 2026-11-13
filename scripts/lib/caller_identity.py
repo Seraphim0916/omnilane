@@ -18,12 +18,15 @@ import ctypes
 import json
 import os
 import re
+import sqlite3
+import stat
 import struct
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Optional
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
@@ -44,6 +47,9 @@ Lookup = Callable[[int], Optional[tuple[int, list[str]]]]
 EnvironmentLookup = Callable[[int], dict[str, str]]
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 CODEX_TOOL_HOSTS = frozenset(("codex-code-mode-host",))
+ANTIGRAVITY_LANGUAGE_SERVER = "/Applications/Antigravity.app/Contents/Resources/bin/language_server"
+ANTIGRAVITY_APP_EXECUTABLE = "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+_TRACKED_ENV_KEYS = (b"CODEX_THREAD_ID", b"ANTIGRAVITY_CONVERSATION_ID")
 SHELLS = frozenset(("zsh", "bash", "sh", "dash", "fish"))
 TURN_END_EVENTS = frozenset(("task_complete", "turn_complete", "turn_aborted"))
 CODEX_SANDBOX_REFUSAL = (
@@ -198,6 +204,11 @@ def resolve(registry: dict, vendor: str, model: str | None,
                   f"has no row for this model or this effort, and a family match is not accepted")
 
 
+def is_authority_eligible_row(row: dict) -> bool:
+    """True when a registry row is measured and eligible to grant caller authority."""
+    return not row.get("estimated") and bool(row.get("authority_eligible", True))
+
+
 def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
     """The lowest-scored row of a known model, for a caller whose effort is unrecorded.
 
@@ -210,11 +221,15 @@ def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
 
 
 def _thread_environment(entries: list[bytes]) -> dict[str, str]:
-    values = [entry.partition(b"=")[2] for entry in entries
-              if entry.partition(b"=")[0] == b"CODEX_THREAD_ID"]
-    if len(values) > 1:
-        raise ValueError("duplicate CODEX_THREAD_ID in initial environment")
-    return {"CODEX_THREAD_ID": values[0].decode(errors="replace")} if values else {}
+    result: dict[str, str] = {}
+    for key in _TRACKED_ENV_KEYS:
+        values = [entry.partition(b"=")[2] for entry in entries
+                  if entry.partition(b"=")[0] == key]
+        if len(values) > 1:
+            raise ValueError(f"duplicate {key.decode()} in initial environment")
+        if values:
+            result[key.decode()] = values[0].decode(errors="replace")
+    return result
 
 
 def _parse_procargs2(data: bytes) -> tuple[list[str], dict[str, str]]:
@@ -298,6 +313,18 @@ def _process(pid: int) -> tuple[int, list[str]] | None:
     return int(parts[0]), [comm, *rest.split()]
 
 
+def _is_antigravity_desktop(pid: int, ppid: int, argv: list[str], lookup: Lookup, seen: set[int]) -> bool:
+    """Match Antigravity's language_server only when its direct parent is Antigravity.app."""
+    if not argv or os.path.realpath(argv[0]) != ANTIGRAVITY_LANGUAGE_SERVER:
+        return False
+    if ppid <= 0 or ppid in seen:
+        return False
+    parent_entry = lookup(ppid)
+    if parent_entry is None or not parent_entry[1]:
+        return False
+    return os.path.realpath(parent_entry[1][0]) == ANTIGRAVITY_APP_EXECUTABLE
+
+
 def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | None:
     """The nearest process at or above pid that is a vendor CLI, with its selector.
 
@@ -316,6 +343,8 @@ def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | No
         selector = read_selector(argv)
         if selector is not None:
             return pid, selector, _thread_anchor(below)
+        if _is_antigravity_desktop(pid, ppid, argv, lookup, seen):
+            return pid, ("gemini", None, None), (below[-1][0] if below else None)
         below.append((pid, argv))
         pid = ppid
     return None
@@ -593,12 +622,211 @@ def _claude_transcript_overlay(
         return fallback("transcript metadata or file unreadable")
 
 
+def _default_antigravity_dir() -> Path:
+    return Path.home() / ".gemini" / "antigravity"
+
+
+def _read_varint(data: bytes, offset: int) -> tuple[int, int]:
+    value = 0
+    shift = 0
+    for count in range(10):
+        if offset >= len(data):
+            raise ValueError("truncated protobuf varint")
+        byte = data[offset]
+        offset += 1
+        value |= (byte & 0x7F) << shift
+        if not (byte & 0x80):
+            return value, offset
+        shift += 7
+        if count == 9:
+            raise ValueError("protobuf varint exceeds 64 bits")
+    raise ValueError("protobuf varint exceeds 64 bits")
+
+
+def _iter_proto_fields(data: bytes):
+    offset = 0
+    end = len(data)
+    while offset < end:
+        tag, offset = _read_varint(data, offset)
+        field_number = tag >> 3
+        wire_type = tag & 0x07
+        if field_number == 0:
+            raise ValueError("invalid protobuf field number 0")
+        if wire_type == 0:
+            _, offset = _read_varint(data, offset)
+            yield field_number, wire_type, b""
+        elif wire_type == 1:
+            if offset + 8 > end:
+                raise ValueError("truncated protobuf 64-bit field")
+            offset += 8
+            yield field_number, wire_type, b""
+        elif wire_type == 2:
+            length, offset = _read_varint(data, offset)
+            if length < 0 or offset + length > end:
+                raise ValueError("truncated protobuf length-delimited field")
+            payload = data[offset : offset + length]
+            offset += length
+            yield field_number, wire_type, payload
+        elif wire_type == 5:
+            if offset + 4 > end:
+                raise ValueError("truncated protobuf 32-bit field")
+            offset += 4
+            yield field_number, wire_type, b""
+        else:
+            raise ValueError(f"unsupported protobuf wire type {wire_type}")
+
+
+def _proto_path_values(data: bytes, path: tuple[int, ...]) -> list[bytes]:
+    if not path:
+        return [data]
+    target = path[0]
+    rest = path[1:]
+    matches: list[bytes] = []
+    for field_number, wire_type, payload in _iter_proto_fields(data):
+        if field_number != target:
+            continue
+        if wire_type != 2:
+            raise ValueError(
+                f"protobuf field {field_number} is wire type {wire_type}, expected length-delimited"
+            )
+        matches.extend(_proto_path_values(payload, rest))
+    return matches
+
+
+def _read_antigravity_conversation_db(conv_id: str, agy_dir: Path) -> tuple[Selector, str]:
+    """Read the latest executor_metadata protobuf path 10.1.28 from <conv_id>.db."""
+    uid = os.getuid()
+    conv_dir = agy_dir / "conversations"
+    try:
+        dir_st = os.lstat(conv_dir)
+    except OSError:
+        raise ValueError("Antigravity conversation database directory is missing or unreadable") from None
+    if stat.S_ISLNK(dir_st.st_mode) or not stat.S_ISDIR(dir_st.st_mode):
+        raise ValueError("Antigravity conversation database directory must be a real directory")
+    if dir_st.st_uid != uid:
+        raise ValueError("Antigravity conversation database directory owner mismatch")
+
+    db_path = conv_dir / f"{conv_id}.db"
+    try:
+        db_st = os.lstat(db_path)
+    except FileNotFoundError:
+        raise ValueError("Antigravity conversation database is missing") from None
+    except OSError:
+        raise ValueError("Antigravity conversation database is unreadable") from None
+    if stat.S_ISLNK(db_st.st_mode):
+        raise ValueError("Antigravity conversation database must not be a symlink")
+    if not stat.S_ISREG(db_st.st_mode):
+        raise ValueError("Antigravity conversation database is not a regular file")
+    if db_st.st_uid != uid:
+        raise ValueError("Antigravity conversation database owner mismatch")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{quote(str(db_path))}?mode=ro", uri=True, timeout=2.0)
+        row = conn.execute("SELECT data FROM executor_metadata ORDER BY idx DESC LIMIT 1").fetchone()
+    except sqlite3.Error:
+        raise ValueError("cannot read Antigravity conversation database (sqlite error)") from None
+    finally:
+        if conn is not None:
+            conn.close()
+
+    if row is None or not isinstance(row[0], bytes):
+        raise ValueError("Antigravity executor_metadata is empty")
+
+    matches = _proto_path_values(row[0], (10, 1, 28))
+    if not matches:
+        raise ValueError("Antigravity executor_metadata has no model field at protobuf path 10.1.28")
+    if len(matches) != 1:
+        raise ValueError(
+            f"Antigravity executor_metadata has {len(matches)} values at protobuf path 10.1.28; expected 1"
+        )
+    try:
+        raw = matches[0].decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Antigravity model field at 10.1.28 is not valid UTF-8") from None
+    if not raw or raw != raw.strip():
+        raise ValueError("Antigravity model field at 10.1.28 is empty or malformed")
+
+    if raw.startswith(("claude-", "gpt-", "o1-", "o3-", "o4-")):
+        raise ValueError(f"Antigravity 的非 Gemini 模型尚未支援: {raw}")
+    base, sep, suffix = raw.rpartition("-")
+    if not sep or not base or suffix not in ENCODED_EFFORTS:
+        raise ValueError(f"Antigravity model selector at 10.1.28 must be <model>-<effort>, got '{raw}'")
+    if not base.startswith("gemini-"):
+        raise ValueError(f"Antigravity 的非 Gemini 模型尚未支援: {raw}")
+    return ("gemini", base, suffix), f"antigravity-desktop conversation {conv_id}"
+
+
+def _read_antigravity_caller(
+    pid: int,
+    child: int | None,
+    lookup: Lookup,
+    environment: EnvironmentLookup,
+    current_environment: Mapping[str, str],
+    antigravity_dir: str | Path | None,
+) -> tuple[Selector, str]:
+    agy_dir = Path(antigravity_dir) if antigravity_dir is not None else _default_antigravity_dir()
+    if lookup is not _process and antigravity_dir is None and agy_dir == Path.home() / ".gemini" / "antigravity":
+        raise ValueError("fake process table cannot read real ~/.gemini without antigravity_dir")
+    conv_id = current_environment.get("ANTIGRAVITY_CONVERSATION_ID")
+    if not conv_id or not UUID_PATTERN.fullmatch(conv_id):
+        raise ValueError("current process ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID")
+    if child is None:
+        raise ValueError("cannot find the Antigravity direct child in the ancestor chain")
+    try:
+        inherited = environment(child).get("ANTIGRAVITY_CONVERSATION_ID")
+    except (OSError, ValueError) as error:
+        if isinstance(error, ValueError) and "duplicate ANTIGRAVITY_CONVERSATION_ID" in str(error):
+            raise
+        detail = f"errno {error.errno}" if isinstance(error, OSError) else "invalid environment block"
+        raise ValueError(f"cannot read Antigravity direct child initial environment ({detail})") from None
+    if not inherited or not UUID_PATTERN.fullmatch(inherited):
+        entry = lookup(child)
+        name = Path(entry[1][0]).name if entry and entry[1] else "unknown"
+        hint = ""
+        if name.lstrip("-") in SHELLS:
+            hint = (
+                "; run the omnilane command as the only command of the tool call, "
+                "with no `;`, `&&`, `|`, subshell or VAR=value shell prefix around it "
+                "(use env VAR=value if needed)"
+            )
+        raise ValueError(
+            f"Antigravity direct child ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID "
+            f"(read from pid {child}, {name}){hint}"
+        )
+    if inherited != conv_id:
+        raise ValueError(
+            "ANTIGRAVITY_CONVERSATION_ID mismatch between current process and Antigravity direct child"
+        )
+    # Also verify no intermediate process between pid and child carries a conflicting conversation id.
+    cur = pid
+    seen: set[int] = set()
+    for _ in range(MAX_DEPTH):
+        if cur <= 0 or cur in seen or cur == child:
+            break
+        seen.add(cur)
+        try:
+            env_map = environment(cur)
+        except OSError:
+            env_map = {}
+        other = env_map.get("ANTIGRAVITY_CONVERSATION_ID")
+        if other is not None and other != conv_id:
+            raise ValueError("ANTIGRAVITY_CONVERSATION_ID mismatch in Antigravity process chain")
+        entry = lookup(cur)
+        if entry is None:
+            break
+        cur = entry[0]
+
+    return _read_antigravity_conversation_db(conv_id, agy_dir)
+
+
 def read_caller(pid: int, lookup: Lookup = _process,
                 environment: EnvironmentLookup = _initial_environment,
                 current_environment: Mapping[str, str] = os.environ,
                 now: Callable[[], datetime] | None = None, *,
                 claude_dir: str | Path | None = None,
-                start_time: Callable[[int], str | datetime | None] | None = None) -> tuple[int, Selector, str]:
+                start_time: Callable[[int], str | datetime | None] | None = None,
+                antigravity_dir: str | Path | None = None) -> tuple[int, Selector, str]:
     if current_environment.get("OMNILANE_AA_CALLER_FROM_PROCESS") == "0":
         raise ValueError("caller identity from process is disabled")
     try:
@@ -624,6 +852,11 @@ def read_caller(pid: int, lookup: Lookup = _process,
             return launcher, selector, ""
         current, source = _claude_transcript_overlay(
             launcher, selector, current_environment, claude_dir, start_time)
+        return launcher, current, source
+    if selector[0] == "gemini" and selector[1] is None:
+        current, source = _read_antigravity_caller(
+            pid, child, lookup, environment, current_environment, antigravity_dir
+        )
         return launcher, current, source
     if selector[0] != "codex" or selector[1] is not None:
         return launcher, selector, ""
@@ -720,6 +953,11 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         print(f"omnilane: cannot read the caller identity: {error}", file=sys.stderr)
         return 3
     row, reason = resolve(registry, vendor, model, effort)
+    if row is not None and source.startswith("antigravity-desktop"):
+        if not is_authority_eligible_row(row):
+            reason = (f"{NO_ROW} {vendor} {model} at effort {effort}: "
+                      f"row {row['id']} is not a measured authority-eligible configuration")
+            row = None
     degraded = False
     # Nonempty Claude provenance only comes from a successfully bound current
     # transcript. Launch-only missing effort keeps its existing resolution.

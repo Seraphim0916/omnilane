@@ -123,6 +123,30 @@ The reason is that the desktop app changes model and effort without relaunching:
 launch flags said `--effort xhigh` while every turn ran at `max`, and a
 mid-session lowering would otherwise overstate the ceiling.
 
+For an Antigravity Desktop caller (`antigravity-desktop`), omnilane walks up the
+process tree to `/Applications/Antigravity.app/Contents/Resources/bin/language_server`
+and requires its direct parent executable to be `/Applications/Antigravity.app/Contents/MacOS/Antigravity`
+(exact `realpath` match, never short process names). Because `language_server` is
+shared across conversations, omnilane reads only `ANTIGRAVITY_CONVERSATION_ID`
+(a standard UUID) from the current process and the direct child's initial
+environment (`KERN_PROCARGS2` / `/proc/<pid>/environ`), ignoring all other
+environment variables such as `ANTIGRAVITY_CSRF_TOKEN` and
+`ANTIGRAVITY_LS_ADDRESS`. It then opens
+`~/.gemini/antigravity/conversations/<uuid>.db` read-only (`mode=ro`, regular
+file owned by the current uid, no symlinks) and reads the latest
+`executor_metadata` row (`ORDER BY idx DESC LIMIT 1`), extracting the single
+UTF-8 `<model>-<effort>` string at protobuf path `10.1.28` (never regex-scanning,
+so auxiliary fields such as `10.1.13.25.32` cannot misfire). Only measured,
+authority-eligible `gemini` rows in the policy table are accepted; non-Gemini
+models in Antigravity are refused. Because `~/.gemini/antigravity/conversations/<uuid>.db`
+is user-owned (`0600`) with no immutable flags or ACLs, any program running as
+the same OS user can overwrite it; its trust level matches Codex's
+`CODEX_THREAD_ID` plus rollout file (host-self-reported, not tamper-proof).
+Run `omnilane` as the only command of the tool call (with no `;`, `&&`, `|`,
+subshell or `VAR=value` shell prefix; use `env VAR=value` if needed), so the
+direct child of `language_server` does not stay `/bin/zsh`, whose macOS
+platform-binary protections hide its initial environment from `KERN_PROCARGS2`.
+
 A host declares the extra model/effort pairs its sub-agent tool can run once, in
 `$OMNILANE_HOME/native-rows.json`:
 
