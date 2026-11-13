@@ -41,10 +41,10 @@ exemption: an explicit Hydrogen selector is refused with `runtime-mapping-unveri
 publishes no time-to-first-token). Hydrogen High instead joins every lane that lists Argon High (all eleven except
 arbitrate), right after it, so it serves hosts that cannot use Argon (Google AI Ultra only). It does not go first even
 where it would win on the lane's measurement (taste-final, Briefcase overall Elo 1497 against 1485) or on index then
-price (50.8 at $1.10 per million tokens blended against 50.4 at $2.94): `--vendor gemini` pins a lane's first Gemini row
-and never falls through (`scripts/dispatch.sh` `resolve_chain`), and Hydrogen needs transport proof even under the
-human-operator exemption, so Hydrogen first would turn pinned calls that Argon serves today into refusals on hosts
-without Hydrogen proof and for callers at ceiling 50. No lane's first choice or first Gemini row changes; this
+price (50.8 at $1.10 per million tokens blended against 50.4 at $2.94): after Argon, every `--vendor gemini` call
+that Argon serves today still goes to Argon. A pin never crosses vendors; it skips same-vendor rows refused only at
+the `target-transport` gate or only for scoring above the caller's ceiling, and every other refusal stops there
+(`scripts/dispatch.sh` `resolve_chain`). No lane's first choice or first Gemini row changes; this
 placement is an operator decision, not a value pick. Hydrogen xhigh, medium and low are in no lane.
 
 Why `value` places no Hydrogen row: in hardest-coding a reachable row leads it on Terminal-Bench 4.0 by more than the near-tie band at every

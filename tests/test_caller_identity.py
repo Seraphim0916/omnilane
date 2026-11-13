@@ -938,6 +938,22 @@ class EligibleLanesTests(unittest.TestCase):
         self.assertIn("retry the lane without --vendor", value["reason"])
         self.assertNotIn("required_caller_effort", value)
 
+    def test_retry_hint_names_the_lanes_eligible_pick_not_its_cheapest_row(self):
+        # 2026-11-13: a ceiling-52 caller pinned to Gemini in hardest-coding was told the lane's
+        # reachable target was Haiku 4.5 (score 7, the cheapest) while eligible_lanes named the row
+        # the lane would actually pick.
+        routing = (ROOT / "routing.yaml").read_text()
+        value = json.loads(self.annotate(self.refusal(
+            reason="target score 60 exceeds effective caller ceiling 52", effective_ceiling=52,
+            inherited_ceiling=52, caller_score=52, caller_degraded=False,
+            caller={"vendor": "claude", "model": "claude-opus-5-5"}),
+            lane="hardest-coding", routing=routing))
+        pick = next(entry for entry in value["eligible_lanes"] if entry["lane"] == "hardest-coding")
+        self.assertNotEqual(pick["target"], value["lane_requirement"]["target"])
+        self.assertIn(f"has a target within this caller's ceiling: {pick['target']} "
+                      f"(score {pick['score']}, ceiling 52)", value["reason"])
+        self.assertNotIn(value["lane_requirement"]["target"], value["reason"])
+
     def test_a_ceiling_equal_to_the_lanes_cheapest_target_adds_retry_hint(self):
         cheapest = json.loads(self.annotate(self.refusal(), lane="cheap"))["lane_requirement"]["score"]
         original = "target score 52 exceeds effective caller ceiling"

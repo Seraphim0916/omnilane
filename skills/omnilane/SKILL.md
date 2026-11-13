@@ -610,8 +610,10 @@ can still move the chain further down.
   `-high`, `-medium` or `-low` (agy 1.5.7 listed all four on the build host on 2026-11-13).
   The value rule places none of them. High sits right after Argon High in every
   lane that lists Argon, so it serves hosts that cannot use Argon (Ultra only);
-  it is not first because `--vendor gemini` pins the first Gemini row and never
-  falls through. It leads no lane. xhigh, medium and low are explicit-only.
+  it is not first, so every `--vendor gemini` call Argon serves today stays on
+  Argon. A vendor pin never crosses vendors; it skips same-vendor rows this host
+  has no proof for or that score above the caller's ceiling, and an explicit
+  `--model` never moves. It leads no lane. xhigh, medium and low are explicit-only.
   Without host proof from `omnilane resign` it is never dispatched, even under the
   human-operator exemption; lanes then skip it and select as before.
 - **Gemini 3.1 Pro:** reference row only, kept for comparison: it has no approved

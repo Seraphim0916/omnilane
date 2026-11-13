@@ -542,10 +542,31 @@ aa_policy_candidate_allowed() {
   return 0
 }
 
+aa_decision_skippable() {
+  # Succeeds, printing why, only for a refusal a vendor pin may pass over: the
+  # target-transport gate (aa_policy._transport_refusal) or the caller ceiling
+  # (failed_gate downward-ceiling). A later row is never scored higher than the
+  # ceiling allows, so skipping cannot raise it. Identity, model-name and
+  # invalid-input refusals carry another gate or none.
+  python3 -c 'import json,sys
+d = json.loads(sys.argv[1])
+gate, code = d.get("failed_gate"), d.get("code", "")
+if d.get("allowed") is not False:
+    sys.exit(1)
+if gate == "target-transport":
+    print(f"no transport proof on this host ({code})")
+elif gate == "downward-ceiling" and code == "target-above-effective-ceiling":
+    print("score %s is above the caller ceiling %s (%s)"
+          % (d.get("target_score"), d.get("effective_ceiling"), code))
+else:
+    sys.exit(1)' "$1" 2>/dev/null
+}
+
 # Pick the first candidate whose vendor CLI is present ("off" always matches).
 # Sets RESOLVED_SPEC / RESOLVED_FIELDS / RESOLVED_IDX / RESOLVED_TOTAL.
 resolve_chain() {
   local chain="$1" requested_vendor="${2:-}" seg i=0 vendor model effort considered=0
+  local first_refusal="" skip_reason="" skip_note="" skip_notes=""
   RESOLVED_SPEC=""; RESOLVED_IDX=0; RESOLVED_TOTAL=0; RESOLVED_FIELDS=()
   local SEGS=() F=()
   IFS='|' read -ra SEGS <<< "$chain"
@@ -572,8 +593,26 @@ resolve_chain() {
       considered=1
       if [[ "$AA_POLICY_ACTIVE" -eq 1 ]] &&
          ! aa_policy_candidate_allowed "$vendor" "$model" "$effort"; then
+        # A vendor pin falls back within its vendor the way an unpinned lane falls
+        # back across vendors: a row this host has no proof for, or one above the
+        # caller's ceiling, must not refuse while a later row of the same vendor
+        # is usable. An explicit --model or --target-config names one row, and any
+        # other gate still refuses here.
+        if [[ -z "$OVERRIDE_MODEL" && -z "$AA_TARGET_CONFIG" ]] &&
+           skip_reason="$(aa_decision_skippable "$AA_LAST_DECISION")"; then
+          [[ -n "$first_refusal" ]] || first_refusal="$AA_LAST_DECISION"
+          skip_note="omnilane: --vendor $vendor: skipped candidate $i ($vendor $model ${effort:--}): $skip_reason; trying the lane's next $vendor row"
+          # A JSON-only refusal must keep its shape, so hold the notes until a row is selected.
+          if [[ "${OMNILANE_REFUSAL_JSON_ONLY:-0}" == "1" ]]; then
+            skip_notes+="$skip_note"$'\n'
+          else
+            echo "$skip_note" >&2
+          fi
+          continue
+        fi
         return 6
       fi
+      [[ -z "$skip_notes" ]] || printf '%s' "$skip_notes" >&2
       RESOLVED_SPEC="$seg"; RESOLVED_FIELDS=("${F[@]}"); RESOLVED_IDX="$i"
       AA_SELECTED_DECISION="$AA_LAST_DECISION"
       if [[ "$RESOLVE_WITH_CONTEXT" -eq 1 ]] || routing_candidate_available "$vendor" "$model"; then return 0; fi
@@ -600,6 +639,10 @@ resolve_chain() {
     fi
     [[ "$AA_EXPLICIT_TARGET" -eq 1 ]] && return 4
   done
+  if [[ -n "$first_refusal" ]]; then
+    AA_LAST_DECISION="$first_refusal"
+    return 6
+  fi
   [[ -n "$requested_vendor" ]] && return 5
   return 1
 }

@@ -44,8 +44,8 @@ class HydrogenRegistryTests(unittest.TestCase):
                 self.assertIn(config_id, aa_policy.HUMAN_TRANSPORT_PROOF_REQUIRED)
 
     def test_hydrogen_high_sits_right_after_argon(self):
-        # `--vendor gemini` pins a lane's first Gemini row and never falls through, so Hydrogen high
-        # (which needs transport proof even for the human operator) never precedes Argon high.
+        # Hydrogen high never precedes Argon high, so every `--vendor gemini` call Argon serves
+        # today stays on Argon.
         hydrogen, argon = "gemini gemini-4-hydrogen-high -", "gemini gemini-4-argon-high -"
         lanes = {}
         for line in (fixtures.ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
@@ -124,8 +124,10 @@ class HydrogenDispatchTests(unittest.TestCase):
                     self.assertIn("runtime-mapping-unverified", result.stderr)
 
     def test_pinned_gemini_still_selects_argon_without_hydrogen_proof(self):
+        # hardest-coding and ui-draft start their Gemini rows with Carbon; the pin skips the
+        # unproven Carbon rows there and reaches Argon like every other lane.
         for lane in routing_tests.EXPECTED_DEFAULTS:
-            if lane in ("arbitrate", "hardest-coding", "ui-draft"):  # Carbon leads the Gemini rows there
+            if lane == "arbitrate":
                 continue
             with self.subTest(lane=lane):
                 dry = self.fixture._run("--dry-run", "--vendor", "gemini", lane, "fixture")
@@ -140,6 +142,202 @@ class HydrogenDispatchTests(unittest.TestCase):
                 dry = self.fixture._run("--dry-run", lane, "fixture")
                 self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
                 self.assertNotIn("gemini-4-hydrogen", dry.stdout)
+
+
+def _lanes():
+    lanes = {}
+    for line in (fixtures.ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
+        if match:
+            lanes[match.group(1)] = [item.strip() for item in match.group(2).split("|")]
+    return lanes
+
+
+class VendorPinSkipsUnprovenRowsTests(unittest.TestCase):
+    """`--vendor gemini` without --model passes over same-vendor rows this host has no proof for."""
+
+    ARGON = "gemini gemini-4-argon-high -"
+    CARBON_LANES = {"hardest-coding": "gemini-4-carbon-high", "ui-draft": "gemini-4-carbon-medium"}
+    SKIP = "no transport proof on this host"
+
+    def setUp(self):
+        self.fixture = routing_tests.AARoutingUpdateTests("test_all_twelve_default_lane_selections")
+        self.fixture.setUp()
+        self.addCleanup(self.fixture.doCleanups)
+        self.addCleanup(self.fixture.tearDown)
+        self.registry = json.loads((fixtures.ROOT / "config/aa-model-policy.json").read_text())
+        self.lanes = _lanes()
+
+    def overlay(self, *selectors):
+        # A valid offline selector-proof fixture, never host/provider evidence.
+        rows = {row["transport_mapping"]["candidate_model_ids"][0]: row
+                for row in self.registry["scored_configs"]
+                if row["vendor"] == "gemini" and row["transport_mapping"].get("candidate_model_ids")}
+        evidence = self.fixture.base / "selector-contract.txt"
+        evidence.write_text("offline Gemini selector contract fixture\n")
+        mappings = []
+        for selector in selectors:
+            row = rows[selector]
+            mappings.append({
+                "config_id": row["id"],
+                "identity": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
+                "runtime_model": selector, "runtime_effort": row["effort"],
+                "selector_type": "model_id_encoded_effort",
+                "verification": "request-selector-contract",
+            })
+        overlay = {
+            "schema_version": 1, "snapshot_id": self.registry["snapshot"]["id"],
+            "host": socket.gethostname(),
+            "evidence": [{"path": str(evidence), "vendor": "gemini",
+                          "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest()}],
+            "mappings": mappings,
+        }
+        path = self.fixture.base / "overlay.json"
+        path.write_text(json.dumps(overlay))
+        env = self.fixture.env.copy()
+        env["OMNILANE_AA_TRANSPORT_OVERLAY"] = str(path)
+        return env
+
+    def model_caller(self, env, config_id):
+        row = next(row for row in self.registry["scored_configs"] if row["id"] == config_id)
+        caller = {"schema_version": 1, "snapshot_id": self.registry["snapshot"]["id"], "kind": "model",
+                  "caller": {key: row[key] for key in aa_policy.IDENTITY_FIELDS},
+                  "inherited_ceiling": row["score"]}
+        path = self.fixture.base / "caller.json"
+        path.write_text(json.dumps(caller))
+        env = env.copy()
+        env["OMNILANE_AA_OPERATOR_ASSERTED_HUMAN"] = "0"
+        return env, ["--caller-context", str(path)]
+
+    def candidate(self, lane, spec):
+        chain = self.lanes[lane]
+        return f"candidate={chain.index(spec) + 1}/{len(chain)}\n"
+
+    def test_unproven_carbon_lanes_fall_through_to_argon(self):
+        for lane in self.CARBON_LANES:
+            with self.subTest(lane=lane):
+                dry = self.fixture._run("--dry-run", "--vendor", "gemini", lane, "fixture")
+                self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+                self.assertIn("model=gemini-4-argon-high\n", dry.stdout)
+                self.assertIn(self.candidate(lane, self.ARGON), dry.stdout)
+                self.assertIn(self.SKIP, dry.stderr)
+                self.assertIn("runtime-mapping-unverified", dry.stderr)
+                skipped = [spec for spec in self.lanes[lane] if "gemini-4-carbon" in spec]
+                self.assertEqual(len(skipped), dry.stderr.count(self.SKIP))
+
+    def test_proven_carbon_is_still_selected(self):
+        env = self.overlay("gemini-4-carbon-high", "gemini-4-carbon-low", "gemini-4-carbon-medium")
+        for lane, selector in self.CARBON_LANES.items():
+            with self.subTest(lane=lane):
+                dry = self.fixture._run("--dry-run", "--vendor", "gemini", lane, "fixture", env=env)
+                self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+                self.assertIn(f"model={selector}\n", dry.stdout)
+                self.assertIn(self.candidate(lane, f"gemini {selector} -"), dry.stdout)
+                self.assertNotIn(self.SKIP, dry.stderr)
+
+    def test_explicit_model_still_refuses_without_proof(self):
+        for lane in self.CARBON_LANES:
+            with self.subTest(lane=lane):
+                result = self.fixture._run("--dry-run", "--vendor", "gemini", "--model",
+                                           "gemini-4-carbon-high", lane, "fixture")
+                self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+                self.assertNotIn("dry_run=yes", result.stdout)
+                self.assertIn("target-transport", result.stderr)
+                self.assertNotIn(self.SKIP, result.stderr)
+
+    CEILING = "above the caller ceiling"
+    PROVEN = ("gemini-4-carbon-high", "gemini-4-carbon-low", "gemini-4-argon-high",
+              "gemini-4-hydrogen-high", "gemini-3.8-flash-medium")
+
+    def test_ceiling_52_passes_proven_carbon_and_selects_argon(self):
+        env, caller = self.model_caller(self.overlay(*self.PROVEN), "claude/claude-opus-5-5-high")
+        dry = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                "fixture", env=env)
+        self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+        self.assertIn("model=gemini-4-argon-high\n", dry.stdout)
+        self.assertIn(self.candidate("hardest-coding", self.ARGON), dry.stdout)
+        self.assertIn("score 60 is above the caller ceiling 52", dry.stderr)
+        self.assertIn("score 54 is above the caller ceiling 52", dry.stderr)
+        self.assertEqual(2, dry.stderr.count(self.CEILING))
+        self.assertNotIn(self.SKIP, dry.stderr)
+
+    def test_ceiling_49_passes_argon_too(self):
+        env, caller = self.model_caller(self.overlay(*self.PROVEN), "claude/claude-fable-5-1")
+        dry = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                "fixture", env=env)
+        self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+        self.assertIn("model=gemini-3.8-flash-medium\n", dry.stdout)
+        self.assertIn(self.candidate("hardest-coding", "gemini gemini-3.8-flash-medium -"), dry.stdout)
+        for score in (60, 54, 51, 50):
+            self.assertIn(f"score {score} is above the caller ceiling 49", dry.stderr)
+
+    def test_ceiling_49_without_a_usable_row_reports_the_first_refusal(self):
+        env, caller = self.model_caller(self.overlay(*self.PROVEN[:4]), "claude/claude-fable-5-1")
+        result = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                   "fixture", env=env)
+        self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("dry_run=yes", result.stdout)
+        refusal = next(json.loads(line) for line in result.stderr.splitlines()
+                       if line.startswith("{") and '"failed_gate"' in line)
+        self.assertEqual("target-above-effective-ceiling", refusal["code"])
+        self.assertEqual("gemini-4-carbon-high", refusal["target_request"]["model"])
+
+    def test_explicit_model_above_the_ceiling_still_refuses(self):
+        env, caller = self.model_caller(self.overlay(*self.PROVEN), "claude/claude-opus-5-5-high")
+        result = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "--model",
+                                   "gemini-4-carbon-high", "hardest-coding", "fixture", env=env)
+        self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("dry_run=yes", result.stdout)
+        self.assertIn("target-above-effective-ceiling", result.stderr)
+        self.assertNotIn(self.CEILING, result.stderr)
+
+    def test_model_caller_reaches_proven_argon_past_unproven_carbon(self):
+        env = self.overlay("gemini-4-argon-high")
+        env, caller = self.model_caller(env, "gemini/gemini-4-argon")
+        dry = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                "fixture", env=env)
+        self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+        self.assertIn("model=gemini-4-argon-high\n", dry.stdout)
+        self.assertIn(self.candidate("hardest-coding", self.ARGON), dry.stdout)
+
+    def test_all_unproven_rows_report_the_first_refusal(self):
+        # A model caller has no human exemption, so nothing in the Gemini block is proven.
+        env, caller = self.model_caller(self.fixture.env, "gemini/gemini-4-argon")
+        result = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                   "fixture", env=env)
+        self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("dry_run=yes", result.stdout)
+        refusal = next(json.loads(line) for line in result.stderr.splitlines()
+                       if line.startswith("{") and '"failed_gate"' in line)
+        self.assertEqual("target-transport", refusal["failed_gate"])
+        self.assertEqual("gemini-4-carbon-high", refusal["target_request"]["model"])
+
+    def test_json_only_refusal_keeps_the_explicit_refusal_shape(self):
+        # JSON-only refusals start with the decision line; held skip notes must not precede it.
+        env, caller = self.model_caller(self.fixture.env, "gemini/gemini-4-argon")
+        env["OMNILANE_REFUSAL_JSON_ONLY"] = "1"
+        pinned = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "hardest-coding",
+                                   "fixture", env=env)
+        explicit = self.fixture._run("--dry-run", *caller, "--vendor", "gemini", "--model",
+                                     "gemini-4-carbon-high", "hardest-coding", "fixture", env=env)
+        self.assertEqual(3, pinned.returncode, pinned.stdout + pinned.stderr)
+        self.assertNotIn(self.SKIP, pinned.stderr)
+        self.assertEqual(len(explicit.stderr.splitlines()), len(pinned.stderr.splitlines()))
+        refusal = json.loads(pinned.stderr.splitlines()[0])
+        self.assertEqual("gemini-4-carbon-high", refusal["target_request"]["model"])
+        self.assertEqual("target-transport", refusal["failed_gate"])
+
+    def test_argon_led_lanes_do_not_skip(self):
+        argon_led = [lane for lane, chain in self.lanes.items()
+                     if self.ARGON in chain and lane not in self.CARBON_LANES]
+        self.assertEqual(9, len(argon_led))
+        for lane in argon_led:
+            with self.subTest(lane=lane):
+                dry = self.fixture._run("--dry-run", "--vendor", "gemini", lane, "fixture")
+                self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
+                self.assertIn("model=gemini-4-argon-high\n", dry.stdout)
+                self.assertIn(self.candidate(lane, self.ARGON), dry.stdout)
+                self.assertNotIn(self.SKIP, dry.stderr)
 
 
 class NativeHydrogenProofTests(unittest.TestCase):

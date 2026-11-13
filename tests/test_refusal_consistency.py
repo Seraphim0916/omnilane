@@ -103,9 +103,12 @@ def inconsistencies(registry, refusal, lane):
     found = []
     reason = refusal.get("reason") or ""
     requirement = refusal.get("lane_requirement") or {}
+    # The retry hint names the row the lane would pick: its eligible_lanes entry.
+    pick = next((entry for entry in refusal.get("eligible_lanes") or [] if entry.get("lane") == lane), {})
     target = refusal.get("target_score")
     ceiling = refusal.get("effective_ceiling")
-    named = {value for value in (target, ceiling, requirement.get("score")) if type(value) is int}
+    named = {value for value in (target, ceiling, requirement.get("score"), pick.get("score"))
+             if type(value) is int}
     for number in NUMBER.findall(reason):
         if int(number) not in named:
             found.append(f"reason quotes {number}, which is none of target_score, "
@@ -128,9 +131,9 @@ def inconsistencies(registry, refusal, lane):
             r"\(score (\d+), ceiling (\d+)\)", reason):
         if named_lane != lane or named_lane != requirement.get("lane"):
             found.append(f"hint lane {named_lane} disagrees with lane_requirement")
-        if named_target != requirement.get("target"):
-            found.append(f"hint target {named_target} disagrees with lane_requirement.target")
-        if int(score) != requirement.get("score") or int(quoted) != ceiling:
+        if named_target != pick.get("target"):
+            found.append(f"hint target {named_target} disagrees with eligible_lanes[{lane}].target")
+        if int(score) != pick.get("score") or int(quoted) != ceiling:
             found.append("hint score or ceiling disagrees with its corresponding field")
         if int(score) > int(quoted):
             found.append("hint target is above the caller's ceiling")
@@ -265,8 +268,9 @@ class RefusalTableTests(unittest.TestCase):
                 continue
             with self.subTest(lane=lane, caller=row["id"], degraded=degraded, mode=mode):
                 checked += 1
+                pick = next(entry for entry in refusal["eligible_lanes"] if entry["lane"] == lane)
                 hint = (f"Lane {lane} has a target within this caller's ceiling: "
-                        f"{need['target']} (score {need['score']}, "
+                        f"{pick['target']} (score {pick['score']}, "
                         f"ceiling {refusal['effective_ceiling']}). "
                         "If you specified --vendor, retry the lane without --vendor.")
                 separator = " " if decision["reason"].endswith(".") else ". "
@@ -294,6 +298,7 @@ class RefusalTableTests(unittest.TestCase):
         good = {"allowed": False, "code": ABOVE, "target_score": 46,
                 "effective_ceiling": 33,
                 "lane_requirement": {"lane": "example", "target": "vendor/model", "score": 9},
+                "eligible_lanes": [{"lane": "example", "target": "vendor/model", "score": 9}],
                 "reason": ("Lane example has a target within this caller's ceiling: "
                            "vendor/model (score 9, ceiling 33). "
                            "If you specified --vendor, retry the lane without --vendor.")}
@@ -305,6 +310,7 @@ class RefusalTableTests(unittest.TestCase):
                 self.assertNotEqual(inconsistencies(self.registry, broken, "example"), [])
         above = copy.deepcopy(good)
         above["lane_requirement"]["score"] = 46
+        above["eligible_lanes"][0]["score"] = 46
         above["reason"] = above["reason"].replace("score 9", "score 46")
         self.assertNotEqual(inconsistencies(self.registry, above, "example"), [])
 
