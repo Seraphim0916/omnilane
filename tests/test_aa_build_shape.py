@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO / "scripts" / "lib"))
 sys.path.insert(0, str(REPO / "scripts"))
 import aa_rebaseline  # noqa: E402
 
-EXTRACT = REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json"
+EXTRACT = REPO / "docs/reports/aa-v5.0.1-extract-2026-11-13.json"
 TARGET = "claude/claude-fable-5-2-low"
 
 

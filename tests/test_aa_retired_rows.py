@@ -27,7 +27,7 @@ MINI = ("codex/gpt-5-4-mini", "codex/gpt-5-4-mini-medium",
         "codex/gpt-5-4-mini-non-reasoning")
 REASON = "HTTP 400: not supported when using Codex with a ChatGPT account"
 EXTRACT = REPO / "docs/reports/aa-v4.3.2-extract-2026-10-27.json"
-CURRENT_EXTRACT = REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json"
+CURRENT_EXTRACT = REPO / "docs/reports/aa-v5.0.1-extract-2026-11-13.json"
 TERRA = tuple(f"codex/gpt-6-1-terra{suffix}" for suffix in
               ("", "-xhigh", "-high", "-medium", "-low", "-non-reasoning"))
 

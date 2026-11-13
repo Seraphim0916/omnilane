@@ -43,7 +43,7 @@ class WithdrawnRowTests(unittest.TestCase):
                              for r in self.registry["unknown_configs"]))
 
     def test_withdrawal_is_idempotent_and_later_capture_can_restore_row(self):
-        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json").read_text())
+        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-13.json").read_text())
         without = copy.deepcopy(extract)
         del without["records"]["claude-sonnet-5-5-low"]
         # AA still lists the model without a score: its own page was captured.
@@ -73,7 +73,7 @@ class WithdrawnRowTests(unittest.TestCase):
                 self.assertIn(WITHDRAWN, {r["id"] for r in json.loads(output.read_text())["scored_configs"]})
 
     def test_build_refuses_a_base_row_the_extract_never_saw(self):
-        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-10.json").read_text())
+        extract = json.loads((REPO / "docs/reports/aa-v5.0.1-extract-2026-11-13.json").read_text())
         del extract["records"]["claude-sonnet-5-5-low"]
         with tempfile.TemporaryDirectory(dir=REPO / "tests") as tmp:
             output = Path(tmp) / "policy.json"

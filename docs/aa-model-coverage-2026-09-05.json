@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 122,
+    "catalogEntries": 126,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1233,6 +1233,114 @@
         "gemini-4-carbon-low"
       ],
       "mappingReason": "Proposed AA v5.0.1 snapshot aa-v5.0.1-2026-11-12-v1 scores Gemini 4 Carbon (Low); agy 1.5.5 encodes the effort in its selector for Google AI Ultra / ADC sign-ins. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-hydrogen-xhigh",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-hydrogen"
+      ],
+      "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-13-v1 (approved 2026-11-13) scores Gemini 4 Hydrogen (XHigh); agy 1.5.7 listed this selector on the build host on 2026-11-13 and encodes the effort in it. No lane lists it because `aa_rebaseline.py value` places it nowhere; explicit selection only. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-hydrogen-high",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "triage",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "consult",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "long-context",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "fast-agentic",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "live-search",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "coding-overflow",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-hydrogen-high"
+      ],
+      "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-13-v1 (approved 2026-11-13) scores Gemini 4 Hydrogen (High); agy 1.5.7 listed this selector on the build host on 2026-11-13 and encodes the effort in it. Placed right after Argon High in every lane that lists Argon, so the first Gemini row that `--vendor gemini` pins is unchanged; not an `aa_rebaseline.py value` pick. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-hydrogen-medium",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-hydrogen-medium"
+      ],
+      "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-13-v1 (approved 2026-11-13) scores Gemini 4 Hydrogen (Medium); agy 1.5.7 listed this selector on the build host on 2026-11-13 and encodes the effort in it. No lane lists it because `aa_rebaseline.py value` places it nowhere; explicit selection only. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-hydrogen-low",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-hydrogen-low"
+      ],
+      "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-13-v1 (approved 2026-11-13) scores Gemini 4 Hydrogen (Low); agy 1.5.7 listed this selector on the build host on 2026-11-13 and encodes the effort in it. No lane lists it because `aa_rebaseline.py value` places it nowhere; explicit selection only. Host proof still required; absent from the historical v4.2 aaModels capture."
     },
     {
       "vendor": "gemini",

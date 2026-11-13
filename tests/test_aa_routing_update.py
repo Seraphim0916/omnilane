@@ -21,6 +21,7 @@ DISPATCH = ROOT / "scripts" / "dispatch.sh"
 # 2026-11-10 AA v5.0.1 re-rank (LANES-501 "now"): hardest-coding and hard-judgment lead with
 # Claude Fable 5.2 xhigh; long-context moves to the Codex family because Opus 5 lost its score.
 EXPECTED_DEFAULTS = {
+    # 2026-11-13: Hydrogen high sits right after Argon high in every lane that lists Argon and heads no lane.
     # 2026-11-12: Carbon heads hardest-coding and ui-draft. --list shows chain heads only; a host without
     # Carbon transport proof skips it at dispatch (test_human_lane_dispatch_skips_unproven_carbon).
     "hardest-coding": "gemini gemini-4-carbon-high -",
@@ -117,7 +118,9 @@ class AARoutingUpdateTests(unittest.TestCase):
                 self.assertEqual(1, chain.count(argon))
                 flash = next(i for i, item in enumerate(chain)
                              if item.startswith("gemini gemini-3.8-flash-"))
-                self.assertEqual(flash - 1, chain.index(argon))
+                # 2026-11-13: Gemini 4 Hydrogen high sits between Argon high and Flash.
+                self.assertEqual("gemini gemini-4-hydrogen-high -", chain[flash - 1])
+                self.assertEqual(flash - 2, chain.index(argon))
                 self.assertEqual(EXPECTED_DEFAULTS[lane], chain[0])
 
     def test_agy_only_host_selects_argon_in_every_flash_lane(self) -> None:
@@ -127,7 +130,8 @@ class AARoutingUpdateTests(unittest.TestCase):
         result = self._run("--list", env=env)
         self.assertEqual(0, result.returncode, result.stderr)
         selected = self._listed(result.stdout)
-        # --list shows the first installed vendor's row; Carbon heads two lanes, Argon every other one.
+        # --list shows the first installed vendor's row; Carbon heads two lanes, Argon every other one
+        # (Gemini 4 Hydrogen high sits right after Argon, 2026-11-13).
         carbon = {"hardest-coding": "gemini gemini-4-carbon-high -", "ui-draft": "gemini gemini-4-carbon-medium -"}
         for lane in EXPECTED_DEFAULTS.keys() - {"arbitrate"}:
             self.assertEqual(selected[lane].split("#", 1)[0].strip(),

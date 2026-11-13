@@ -65,6 +65,9 @@ for cid, rid, ev in [
     # agy 1.5.5 lists Carbon only for Ultra / ADC sign-ins; a host without that access fails the probe.
     *[("gemini/gemini-4-carbon" + ("" if effort == "high" else f"-{effort}"), f"gemini-4-carbon-{effort}",
        f"agy-gemini-4-carbon-{effort}") for effort in ("high", "medium", "low")],
+    # agy 1.5.7 listed gemini-4-hydrogen-{xhigh,high,medium,low} on 2026-11-13; AA's unsuffixed row is xhigh.
+    *[("gemini/gemini-4-hydrogen" + ("" if effort == "xhigh" else f"-{effort}"), f"gemini-4-hydrogen-{effort}",
+       f"agy-gemini-4-hydrogen-{effort}") for effort in ("xhigh", "high", "medium", "low")],
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 

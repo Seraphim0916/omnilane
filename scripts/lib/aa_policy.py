@@ -28,14 +28,17 @@ MAX_BYTES = 1_048_576
 # governance change, never a caller argument/environment override.
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "5.0.1"
-APPROVED_AS_OF = "2026-11-12"
-APPROVED_REGISTRY_SHA256 = "753709bb79e32ed565df250640fd5ce1c078a261f3ee8fe0dad59824416f5a25"
+APPROVED_AS_OF = "2026-11-13"
+APPROVED_REGISTRY_SHA256 = "a95b811703c654115014122e8651578b70915d26736cfa754c3e0b2908bd8076"
 
 # Google sells Gemini 4 Carbon only to AI Ultra / ADC sign-ins (agy 1.5.5), so an installed agy
 # says nothing about whether this host may run it. The human-operator exemption lifts the
 # score ceiling only; these rows still need transport proof on every path.
+# Gemini 4 Hydrogen follows the same rule until a host probe proves its selectors.
 HUMAN_TRANSPORT_PROOF_REQUIRED = frozenset((
     "gemini/gemini-4-carbon", "gemini/gemini-4-carbon-medium", "gemini/gemini-4-carbon-low",
+    "gemini/gemini-4-hydrogen", "gemini/gemini-4-hydrogen-high", "gemini/gemini-4-hydrogen-medium",
+    "gemini/gemini-4-hydrogen-low",
 ))
 
 IDENTITY_FIELDS = ("vendor", "model", "effort", "reasoning", "fallback")

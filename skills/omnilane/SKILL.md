@@ -590,8 +590,9 @@ can still move the chain further down.
   2026-11-10 re-rank hardest-coding places it in the Gemini tail. UI/long-context
   placements provide access without claiming measured superiority. Grok remains
   first for native X search and Codex-quota relief; Argon is a generic-web
-  fallback. `consult --vendor gemini` selects Argon without crossing vendors. A
-  successful host probe is required. Medium/Low are unscored.
+  fallback. `consult --vendor gemini` selects Argon without crossing vendors. Since
+  2026-11-13 Gemini 4 Hydrogen High sits right after Argon in every lane that lists
+  it. A successful host probe is required. Medium/Low are unscored.
 - **Gemini 3.8 Flash:** the cross-vendor fallback after Argon (high 31, medium 30,
   low 23). Do not infer visual taste or controller authority from coding
   benchmarks.
@@ -604,12 +605,25 @@ can still move the chain further down.
   exemption. The value rule puts high first and low second in hardest-coding
   and medium first in ui-draft; it is in no other lane. A host that has not proven
   it with `omnilane resign` skips it and selects as before.
+- **Gemini 4 Hydrogen:** scored in the approved `aa-v5.0.1-2026-11-13-v1` snapshot
+  (xhigh 54, high 51, medium 41, low 27) and selectable as `gemini-4-hydrogen-xhigh`,
+  `-high`, `-medium` or `-low` (agy 1.5.7 listed all four on the build host on 2026-11-13).
+  The value rule places none of them. High sits right after Argon High in every
+  lane that lists Argon, so it serves hosts that cannot use Argon (Ultra only);
+  it is not first because `--vendor gemini` pins the first Gemini row and never
+  falls through. It leads no lane. xhigh, medium and low are explicit-only.
+  Without host proof from `omnilane resign` it is never dispatched, even under the
+  human-operator exemption; lanes then skip it and select as before.
 - **Gemini 3.1 Pro:** reference row only, kept for comparison: it has no approved
   local mapping, is in no lane and has no alias.
 
 ## Reference
 
 ### Model aliases
+
+Snapshot `aa-v5.0.1-2026-11-13-v1` (2026-11-13, **approved** on 2026-11-13): 75 scored rows, 82 unknown,
+1 reference. It adds Gemini 4 Hydrogen xhigh/high/medium/low (54/51/41/27), with the effort in the agy selector;
+Hydrogen High sits right after Argon High in every lane that lists Argon. See `docs/reports/aa-rebaseline-2026-11-13.md`.
 
 Snapshot `aa-v5.0.1-2026-11-12-v1` (2026-11-12, **approved** by the operator on 2026-11-12): same AA v5.0.1
 capture, 71 scored rows, 82 unknown, 1 reference. Gemini 4 Carbon high/medium/low leave the reference rows and are
@@ -664,6 +678,10 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Gemini 4 Carbon High | gemini | gemini-4-carbon-high | - |
 | Gemini 4 Carbon Medium | gemini | gemini-4-carbon-medium | - |
 | Gemini 4 Carbon Low | gemini | gemini-4-carbon-low | - |
+| Gemini 4 Hydrogen XHigh | gemini | gemini-4-hydrogen-xhigh | - |
+| Gemini 4 Hydrogen High | gemini | gemini-4-hydrogen-high | - |
+| Gemini 4 Hydrogen Medium | gemini | gemini-4-hydrogen-medium | - |
+| Gemini 4 Hydrogen Low | gemini | gemini-4-hydrogen-low | - |
 | Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
 | Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
 | Kimi | kimi | kimi-code/k3 | - |

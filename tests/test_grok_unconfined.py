@@ -110,13 +110,45 @@ class GrokUnconfinedTests(unittest.TestCase):
         self.assertIn("fallback-result", real.stdout)
         self.assertFalse(self.marker.exists())
 
+    def hydrogen_overlay(self):
+        """An offline selector-proof fixture for Gemini 4 Hydrogen high only, never host evidence."""
+        registry = json.loads((ROOT / "config/aa-model-policy.json").read_text())
+        row = next(r for r in registry["scored_configs"] if r["id"] == "gemini/gemini-4-hydrogen-high")
+        evidence = self.base / "hydrogen-selector-contract.txt"
+        evidence.write_text("offline Hydrogen selector contract fixture\n")
+        import hashlib
+        import socket
+        overlay = {
+            "schema_version": 1, "snapshot_id": registry["snapshot"]["id"], "host": socket.gethostname(),
+            "evidence": [{"path": str(evidence), "vendor": "gemini",
+                          "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest()}],
+            "mappings": [{
+                "config_id": row["id"],
+                "identity": {key: row[key] for key in ("vendor", "model", "effort", "reasoning", "fallback")},
+                "runtime_model": "gemini-4-hydrogen-high", "runtime_effort": "high",
+                "selector_type": "model_id_encoded_effort", "verification": "request-selector-contract",
+            }],
+        }
+        path = self.base / "hydrogen-overlay.json"
+        path.write_text(json.dumps(overlay))
+        return path
+
     def test_shipped_coding_overflow_skips_grok_before_argon_without_opt_in(self):
-        result = self.work("--dry-run", lane="coding-overflow")
-        self.assert_ok(result)
-        self.assertIn("vendor=gemini\n", result.stdout)
-        self.assertIn("model=gemini-4-argon-high\n", result.stdout)
-        self.assertIn("candidate=2/7\n", result.stdout)
-        self.assertFalse(self.marker.exists())
+        # Gemini 4 Hydrogen high sits right after Argon high, so Argon is selected (2/8) whether or not
+        # this host has proven Hydrogen; the proven case must still resolve to Argon, not Hydrogen.
+        for proof in (False, True):
+            with self.subTest(hydrogen_proof=proof):
+                flags = ("--transport-overlay", str(self.hydrogen_overlay())) if proof else ()
+                result = self.work("--dry-run", *flags, lane="coding-overflow")
+                self.assert_ok(result)
+                self.assertIn("vendor=gemini\n", result.stdout)
+                self.assertIn("model=gemini-4-argon-high\n", result.stdout)
+                self.assertIn("candidate=2/8\n", result.stdout)
+                self.assertFalse(self.marker.exists())
+                # The fixture is live: an explicit Hydrogen selector is allowed only with the proof.
+                explicit = self.work("--dry-run", *flags, "--vendor", "gemini", "--model",
+                                     "gemini-4-hydrogen-high", lane="coding-overflow")
+                self.assertEqual(explicit.returncode, 0 if proof else 3, explicit.stdout + explicit.stderr)
 
     def test_shipped_option_is_lint_failure_and_ignored(self):
         repo = self.fixture_repo()

@@ -33,7 +33,7 @@ class UnmappedModelTests(unittest.TestCase):
             registry.write_text(json.dumps(base))
             args = argparse.Namespace(
                 base=str(registry),
-                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-10.json"),
+                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-13.json"),
                 as_of="2026-11-10", revision=1, approval="proposed",
             )
             with patch.object(aa, "REGISTRY", registry), contextlib.redirect_stdout(io.StringIO()):

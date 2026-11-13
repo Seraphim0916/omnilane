@@ -138,6 +138,12 @@ NEW_ROWS = [
     *[(f"gemini/gemini-4-carbon{suffix}", "gemini", "gemini-4-carbon", effort, "unspecified",
        f"gemini-4-carbon{suffix}", "gemini/gemini-3-8-flash" + suffix)
       for effort in ("high", "medium", "low") for suffix in ["" if effort == "high" else f"-{effort}"]],
+    # Gemini 4 Hydrogen (2026-11-13): AA's unsuffixed page is the xhigh thinking level, the top
+    # one, so it takes the unsuffixed id like Carbon high. agy 1.5.7 listed the four selectors on 2026-11-13:
+    # gemini-4-hydrogen-{xhigh,high,medium,low}; agy has no Flash xhigh, so xhigh copies Flash high.
+    *[(f"gemini/gemini-4-hydrogen{suffix}", "gemini", "gemini-4-hydrogen", effort, "unspecified",
+       f"gemini-4-hydrogen{suffix}", "gemini/gemini-3-8-flash" + ("" if effort in ("xhigh", "high") else suffix))
+      for effort in ("xhigh", "high", "medium", "low") for suffix in ["" if effort == "xhigh" else f"-{effort}"]],
 ]
 # Scored by AA but with no runtime selector the vendor has published: kept in
 # reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
@@ -150,6 +156,8 @@ NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra",
                "claude-fable-5-2": "claude-fable-5-1",
                **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
+               **{f"gemini-4-hydrogen-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
+                  for e in ("xhigh", "high", "medium", "low")},
                }  # catalog selector -> alias to clone
 # AA labels every Fable 5.2 row "Default Fallback", as it does Fable 5.1.
 NEW_ROW_FALLBACKS = {"claude-fable-5-2": "default"}
@@ -694,7 +702,7 @@ STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context"
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-fable-5-2", "claude-fable-5-1", "claude-sonnet-5-5",
                   "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon",
-                  "gemini-4-carbon"}
+                  "gemini-4-carbon", "gemini-4-hydrogen"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
 
