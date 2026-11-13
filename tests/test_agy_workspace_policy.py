@@ -1,5 +1,8 @@
 """Ownership and race contracts for per-run native AGY workspace policies."""
 import offline_env  # Activate suite isolation for direct file execution.
+import hashlib
+import json
+import stat
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -37,6 +40,61 @@ class AgyWorkspacePolicyContracts(unittest.TestCase):
         self.assertEqual(leaf.stat().st_ino, inode)
         self.assertEqual((leaf / "agent.md").read_bytes(), policy)
         self.assertEqual((self.app / "policy/agent.md").read_bytes(), policy)
+
+    def test_staged_agent_is_private_regular_file_matching_source(self):
+        leaf = self.stage()
+        agent = leaf / "agent.md"
+        source = self.app / "policy/agent.md"
+        self.assertFalse(agent.is_symlink())
+        self.assertTrue(stat.S_ISREG(agent.lstat().st_mode))
+        self.assertEqual(stat.S_IMODE(agent.stat().st_mode), 0o600)
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        self.assertEqual(hashlib.sha256(agent.read_bytes()).hexdigest(), digest)
+        marker = json.loads((leaf / ".omnilane-owned.json").read_text())
+        self.assertEqual(marker["policy_sha256"], digest)
+
+    def test_cleanup_preserves_changed_agent_and_marker(self):
+        leaf = self.stage()
+        agent = leaf / "agent.md"
+        agent.unlink()
+        agent.write_text("someone else's agent")
+        with self.assertRaisesRegex(ValueError, "content changed"):
+            self.m.cleanup_work_agent(self.app, self.work)
+        self.assertEqual(agent.read_text(), "someone else's agent")
+        self.assertTrue((leaf / ".omnilane-owned.json").exists())
+
+    def test_cleanup_preserves_substituted_symlink(self):
+        leaf = self.stage()
+        agent = leaf / "agent.md"
+        agent.unlink()
+        source = self.app / "policy/agent.md"
+        original = source.read_bytes()
+        agent.symlink_to(source)
+        with self.assertRaises(OSError):
+            self.m.cleanup_work_agent(self.app, self.work)
+        self.assertTrue(agent.is_symlink())
+        self.assertEqual(source.read_bytes(), original)
+
+    def test_readback_detects_corruption_before_recording_success(self):
+        real_fsync = self.m.os.fsync
+
+        def corrupt_staged_file(fd):
+            real_fsync(fd)
+            for agent in self.work.glob(".agents/agents/*/agent.md"):
+                agent.write_bytes(b"corrupted")
+
+        with patch.object(self.m.os, "fsync", side_effect=corrupt_staged_file):
+            with self.assertRaisesRegex(ValueError, "content changed during staging"):
+                self.stage()
+        self.assertFalse((self.app / "workspace-agent.json").exists())
+
+    def test_existing_user_agent_prevents_restage(self):
+        leaf = self.stage()
+        self.m.cleanup_work_agent(self.app, self.work)
+        (leaf / "agent.md").write_text("user agent")
+        with self.assertRaisesRegex(ValueError, "active or stale"):
+            self.m.stage_work_agent(self.app, self.work)
+        self.assertEqual((leaf / "agent.md").read_text(), "user agent")
 
     def test_cache_conflict_precedes_any_workspace_policy_leaf(self):
         (self.work / ".omnilane-cache").symlink_to(self.app)

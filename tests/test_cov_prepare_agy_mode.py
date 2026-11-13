@@ -343,7 +343,8 @@ class StageCleanupTests(AgyFixture):
         self.assertRegex(state["agent"], r"^omnilane-work-[a-f0-9]{16}$")
         self.assertEqual(leaf, self.workdir / ".agents/agents" / state["agent"])
         self.assertEqual(sorted(os.listdir(leaf)), [".omnilane-owned.json", "agent.md"])
-        self.assertEqual(os.readlink(leaf / "agent.md"), state["policy"])
+        self.assertFalse((leaf / "agent.md").is_symlink())
+        self.assertEqual((leaf / "agent.md").read_bytes(), Path(state["policy"]).read_bytes())
         for part in ("tmp", "cache", "clang", "swift"):
             self.assertTrue((Path(state["cache"]) / part).is_dir())
 

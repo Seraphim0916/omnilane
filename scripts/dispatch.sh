@@ -544,16 +544,19 @@ aa_policy_candidate_allowed() {
 
 aa_decision_skippable() {
   # Succeeds, printing why, only for a refusal a vendor pin may pass over: the
-  # target-transport gate (aa_policy._transport_refusal) or the caller ceiling
-  # (failed_gate downward-ceiling). A later row is never scored higher than the
-  # ceiling allows, so skipping cannot raise it. Identity, model-name and
-  # invalid-input refusals carry another gate or none.
+  # explicitly listed transport-proof failures or the caller ceiling.
+  # aa_policy also uses target-transport for encoded-effort-conflict and
+  # ambiguous-runtime-mapping: neither is a missing-proof fallback.
+  # Unknown codes fail closed; each later row must still pass the ceiling.
   python3 -c 'import json,sys
 d = json.loads(sys.argv[1])
 gate, code = d.get("failed_gate"), d.get("code", "")
 if d.get("allowed") is not False:
     sys.exit(1)
-if gate == "target-transport":
+if gate == "target-transport" and code in {
+    "runtime-mapping-unverified", "unknown-target-runtime", "selector-pending-recheck",
+    "runtime-executable-changed", "runtime-effort-discarded",
+}:
     print(f"no transport proof on this host ({code})")
 elif gate == "downward-ceiling" and code == "target-above-effective-ceiling":
     print("score %s is above the caller ceiling %s (%s)"

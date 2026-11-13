@@ -134,8 +134,8 @@ def main(argv: list[str] | None = None) -> int:
                                "No effort of the caller's model reaches it; a stronger caller model "
                                "or a human operator has to dispatch it."))
                     elif type(score) is int and score <= ceiling:
-                        # Name the row the lane would actually pick (its eligible_lanes entry,
-                        # first in chain order), not the cheapest one.
+                        # This score-only helper has no current host transport overlay.
+                        # Name a score-qualified candidate, never promise runtime selection.
                         pick = next((entry for entry in decision["eligible_lanes"]
                                      if entry["lane"] == args.lane),
                                     {"target": need["target"], "score": score})
@@ -143,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
                         decision["reason"] = reason + ("" if reason.endswith(".") else ".") + (
                             f" Lane {args.lane} has a target within this caller's ceiling: "
                             f"{pick['target']} (score {pick['score']}, ceiling {ceiling}). "
+                            "Transport availability is not checked; this is not a selection guarantee. "
                             "If you specified --vendor, retry the lane without --vendor.")
         sys.stdout.write(json.dumps(decision, ensure_ascii=False, separators=(",", ":")) + "\n")
     except (ValueError, OSError, aa_policy.PolicyError, KeyError, TypeError):

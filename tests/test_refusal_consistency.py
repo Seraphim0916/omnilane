@@ -103,7 +103,7 @@ def inconsistencies(registry, refusal, lane):
     found = []
     reason = refusal.get("reason") or ""
     requirement = refusal.get("lane_requirement") or {}
-    # The retry hint names the row the lane would pick: its eligible_lanes entry.
+    # The hint names a score-qualified candidate, without promising transport availability.
     pick = next((entry for entry in refusal.get("eligible_lanes") or [] if entry.get("lane") == lane), {})
     target = refusal.get("target_score")
     ceiling = refusal.get("effective_ceiling")
@@ -202,9 +202,28 @@ class RefusalTableTests(unittest.TestCase):
         return decision
 
     def vendor_refusal(self, segments, vendor, caller):
-        # --vendor: only the lane's first segment of that vendor is considered.
-        decision = self.decide(next(f for f in segments if f[0] == vendor), caller)
-        return None if decision["allowed"] else decision
+        # Same-vendor fallback skips only proof failures and ceiling refusals.
+        first_refusal = None
+        for fields in segments:
+            if fields[0] != vendor:
+                continue
+            decision = self.decide(fields, caller)
+            if decision["allowed"]:
+                return None
+            skippable = (
+                decision.get("failed_gate") == "target-transport"
+                and decision.get("code") in {
+                    "runtime-mapping-unverified", "unknown-target-runtime",
+                    "selector-pending-recheck", "runtime-executable-changed",
+                    "runtime-effort-discarded",
+                }
+            ) or (decision.get("failed_gate") == "downward-ceiling"
+                  and decision.get("code") == ABOVE)
+            if not skippable:
+                return decision
+            if first_refusal is None:
+                first_refusal = decision
+        return first_refusal
 
     def annotate(self, decision, lane):
         out = io.StringIO()
@@ -222,6 +241,15 @@ class RefusalTableTests(unittest.TestCase):
                 modes += [(f"--vendor {vendor}", self.vendor_refusal(segments, vendor, caller))
                           for vendor in dict.fromkeys(f[0] for f in segments)
                           if vendor not in ("off", "vote")]
+                # Explicit --model retains the single-row refusal semantics.
+                # Keep these cases separate from the vendor-only fallback model.
+                for vendor in dict.fromkeys(f[0] for f in segments):
+                    if vendor in ("off", "vote"):
+                        continue
+                    fields = next(f for f in segments if f[0] == vendor)
+                    decision = self.decide(fields, caller)
+                    modes.append((f"--vendor {vendor} --model {fields[1]}",
+                                  None if decision["allowed"] else decision))
                 for mode, decision in modes:
                     yield lane, row, degraded, mode, decision
 
@@ -272,6 +300,7 @@ class RefusalTableTests(unittest.TestCase):
                 hint = (f"Lane {lane} has a target within this caller's ceiling: "
                         f"{pick['target']} (score {pick['score']}, "
                         f"ceiling {refusal['effective_ceiling']}). "
+                        "Transport availability is not checked; this is not a selection guarantee. "
                         "If you specified --vendor, retry the lane without --vendor.")
                 separator = " " if decision["reason"].endswith(".") else ". "
                 self.assertEqual(refusal["reason"], decision["reason"] + separator + hint)
@@ -301,6 +330,7 @@ class RefusalTableTests(unittest.TestCase):
                 "eligible_lanes": [{"lane": "example", "target": "vendor/model", "score": 9}],
                 "reason": ("Lane example has a target within this caller's ceiling: "
                            "vendor/model (score 9, ceiling 33). "
+                           "Transport availability is not checked; this is not a selection guarantee. "
                            "If you specified --vendor, retry the lane without --vendor.")}
         self.assertEqual(inconsistencies(self.registry, good, "example"), [])
         for old, new in (("score 9", "score 33"), ("ceiling 33", "ceiling 9"),

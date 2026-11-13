@@ -300,6 +300,18 @@ class VendorPinSkipsUnprovenRowsTests(unittest.TestCase):
         self.assertIn("model=gemini-4-argon-high\n", dry.stdout)
         self.assertIn(self.candidate("hardest-coding", self.ARGON), dry.stdout)
 
+    def test_conflicting_explicit_effort_refuses_without_skipping(self):
+        env, caller = self.model_caller(self.fixture.env, "gemini/gemini-4-argon")
+        result = self.fixture._run("--dry-run", *caller, "--vendor", "gemini",
+                                   "--effort", "medium", "hardest-coding", "fixture", env=env)
+        self.assertEqual(3, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("dry_run=yes", result.stdout)
+        self.assertNotIn("skipped candidate", result.stderr)
+        refusal = next(json.loads(line) for line in result.stderr.splitlines()
+                       if line.startswith("{") and '"failed_gate"' in line)
+        self.assertEqual("encoded-effort-conflict", refusal["code"])
+        self.assertEqual("gemini-4-carbon-high", refusal["target_request"]["model"])
+
     def test_all_unproven_rows_report_the_first_refusal(self):
         # A model caller has no human exemption, so nothing in the Gemini block is proven.
         env, caller = self.model_caller(self.fixture.env, "gemini/gemini-4-argon")

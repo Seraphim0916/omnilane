@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import tempfile
 
 POLICY_MARKER = ".omnilane-policy-root-v1.json"
@@ -256,6 +257,8 @@ def checked_directory(path: Path) -> None:
 def stage_work_agent(app_root: Path, workdir: Path) -> None:
     name = "omnilane-work-" + hashlib.sha256(str(app_root.resolve()).encode()).hexdigest()[:16]
     agent = ensure_work_agent(app_root, name)
+    content = agent.read_bytes()
+    policy_sha256 = hashlib.sha256(content).hexdigest()
     cache = workdir / ".omnilane-cache"
     checked_directory(cache)
     cache = cache / name
@@ -283,7 +286,7 @@ def stage_work_agent(app_root: Path, workdir: Path) -> None:
             raise ValueError("agy workspace policy leaf is active or stale; inspect it before reuse") from exc
         expected_identity = (cleaned["device"], cleaned["inode"])
     marker = {"schema_version": 1, "app_root": str(app_root.resolve()),
-              "workdir": str(workdir), "agent": name}
+              "workdir": str(workdir), "agent": name, "policy_sha256": policy_sha256}
     fd = os.open(leaf, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         st = os.fstat(fd)
@@ -294,7 +297,18 @@ def stage_work_agent(app_root: Path, workdir: Path) -> None:
         with os.fdopen(marker_fd, "w", encoding="utf-8") as handle:
             json.dump(marker, handle)
             handle.write("\n")
-        os.symlink(agent, "agent.md", dir_fd=fd)
+        agent_fd = os.open("agent.md", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                           0o600, dir_fd=fd)
+        with os.fdopen(agent_fd, "wb") as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+            written = os.fstat(handle.fileno())
+        digest, staged = workspace_agent_digest(fd)
+        if (digest != policy_sha256
+                or (written.st_dev, written.st_ino) != (staged.st_dev, staged.st_ino)):
+            raise ValueError("agy workspace policy content changed during staging")
         current = leaf.lstat()
         if (current.st_dev, current.st_ino) != (st.st_dev, st.st_ino):
             raise ValueError("agy workspace policy leaf changed during staging")
@@ -302,9 +316,21 @@ def stage_work_agent(app_root: Path, workdir: Path) -> None:
         os.close(fd)
     atomic_write_json(app_root / "workspace-agent.json", {
         **marker, "leaf": str(leaf), "device": st.st_dev, "inode": st.st_ino,
-        "policy": str(agent), "policy_sha256": hashlib.sha256(agent.read_bytes()).hexdigest(),
+        "policy": str(agent),
         "cache": str(cache),
     })
+
+
+def workspace_agent_digest(directory_fd: int) -> tuple[str, os.stat_result]:
+    # O_NONBLOCK also prevents a substituted FIFO from hanging cleanup.
+    agent_fd = os.open("agent.md", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                       dir_fd=directory_fd)
+    with os.fdopen(agent_fd, "rb") as handle:
+        identity = os.fstat(handle.fileno())
+        if not stat.S_ISREG(identity.st_mode):
+            raise ValueError("agy workspace policy content changed")
+        digest = hashlib.sha256(handle.read()).hexdigest()
+    return digest, identity
 
 
 def cleanup_work_agent(app_root: Path, workdir: Path) -> None:
@@ -318,8 +344,11 @@ def cleanup_work_agent(app_root: Path, workdir: Path) -> None:
     if not isinstance(name, str) or not re.fullmatch(r"omnilane-work-[a-f0-9]{16}", name):
         raise ValueError("invalid agy workspace policy identity")
     leaf = workdir / ".agents/agents" / name
+    policy_sha256 = state.get("policy_sha256")
+    if not isinstance(policy_sha256, str) or not re.fullmatch(r"[a-f0-9]{64}", policy_sha256):
+        raise ValueError("agy workspace policy content changed")
     expected = {"schema_version": 1, "app_root": str(app_root.resolve()),
-                "workdir": str(workdir), "agent": name}
+                "workdir": str(workdir), "agent": name, "policy_sha256": policy_sha256}
     if any(state.get(k) != v for k, v in expected.items()) or state.get("leaf") != str(leaf):
         raise ValueError("agy workspace policy ownership changed")
     for path in (workdir / ".agents", workdir / ".agents/agents", leaf):
@@ -334,12 +363,15 @@ def cleanup_work_agent(app_root: Path, workdir: Path) -> None:
         if set(os.listdir(fd)) != {"agent.md", ".omnilane-owned.json"}:
             raise ValueError("agy workspace policy leaf contents changed")
         marker = leaf / ".omnilane-owned.json"
-        agent = leaf / "agent.md"
         policy_path = app_root / "policy/agent.md"
         if (marker.is_symlink() or load_json(marker, "workspace marker") != expected
-                or not agent.is_symlink() or os.readlink("agent.md", dir_fd=fd) != str(policy_path.resolve())
                 or state.get("policy") != str(policy_path.resolve())
                 or hashlib.sha256(policy_path.read_bytes()).hexdigest() != state.get("policy_sha256")):
+            raise ValueError("agy workspace policy content changed")
+        digest, identity = workspace_agent_digest(fd)
+        current_agent = os.stat("agent.md", dir_fd=fd, follow_symlinks=False)
+        if (digest != policy_sha256
+                or (current_agent.st_dev, current_agent.st_ino) != (identity.st_dev, identity.st_ino)):
             raise ValueError("agy workspace policy content changed")
         os.unlink("agent.md", dir_fd=fd)
         os.unlink(".omnilane-owned.json", dir_fd=fd)
