@@ -69,6 +69,17 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 | Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
 | Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
 
+## What's new in v0.62.0
+
+- **After upgrading, run `omnilane resign` once on each host.** The score snapshot moves to `aa-v5.0.1-2026-11-13-v1`; unchanged selector proofs carry over, but its new Gemini 4 Carbon and Gemini 4 Hydrogen selectors and two changed runners (`run-openai-compat.sh`, `run-vote.sh`) need fresh host proof; on a host with Google AI Ultra, run `omnilane resign --vendor gemini`. Exit **60** means passing selectors were installed and the rest remain pending re-check.
+- **Gemini 4 Carbon** (high 60, medium 58, low 54; Google AI Ultra in Antigravity) is scored: high, then low, lead `hardest-coding`, and medium leads `ui-draft`. **Gemini 4 Hydrogen** (xhigh 54, high 51, medium 41, low 27) is scored; Hydrogen high sits right after Argon high in every lane that lists Argon. Neither model is dispatched without transport proof, even under the human-operator exemption; lanes skip them until then, and so does `--vendor gemini` without `--model`: it passes over same-vendor rows this host has no proof for or that score above the caller's ceiling (one stderr line each) and checks the lane's next Gemini row, so `hardest-coding` and `ui-draft` reach Argon high instead of refusing. A pin never crosses to another vendor, and an explicit `--model` without proof is still refused.
+- **Three-tier, lossless task transport.** Pure API vendors send the complete task and turn a provider context-length error into a one-line exit 2; file-capable workers receive a verified workdir file pointer above their byte limit; other targets refuse before creating job, thread or goal state. See `docs/task-transport.md`.
+- The installer writes only a short routing block and replaces an existing marked block in place; `--dry-run` stays read-only.
+- Codex `upstream_eof`/`upstream_error` connection cuts are classified separately from task failures (exit 75) and never resume automatically. The receipt prints the job's exact `omnilane jobs resume ID` command, which continues the same session with the recorded route and mode.
+- Upgrade: `npm i -g omnilane@0.62.0`.
+
+## 📜 Release history
+
 ## What's new in v0.61.0
 
 - **After upgrading, run `omnilane resign` once on each host.** Unchanged selector proofs carry over; new or changed selectors need verification. Exit **60** means passing selectors were installed and others remain pending re-check; inspect `omnilane doctor` and retry after the cause clears.
@@ -76,8 +87,6 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 - First-time setup is `omnilane resign --init`. Refusals explain the next step in plain language; exit 20 has vendor-specific `attention` guidance, and doctor/overlay-health show carried-over versus new/unprobed rows.
 - Re-signing keeps verified selectors usable during partial provider failures, bounds unattended pending retries, honors reset hints, and treats wrong-model findings as conclusive. A fully unauthenticated sweep stops after its first probe instead of repeating the same login failure.
 - Upgrade: `npm i -g omnilane@0.61.0`.
-
-## 📜 Release history
 
 ## What's new in v0.60.1
 
@@ -980,7 +989,7 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v5.0.1-2026-11-13-v1`: **approved on 2026-11-13**; 75 scored configurations. Gemini 4 Hydrogen (xhigh 54, high 51, medium 41, low 27) is scored and selectable as `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`; on 2026-11-13 agy 1.5.7 listed all four on the host that built this snapshot. The value rule places none of them. Hydrogen High joins every lane that lists Argon High, right after it: `--vendor gemini` pins a lane's first Gemini row and never falls through, so putting Hydrogen first would turn pinned calls that Argon serves today into refusals on hosts without Hydrogen proof and for callers at ceiling 50. After Argon, it serves hosts that cannot use Argon (Google AI Ultra only). No lane's first choice changes. Like Carbon, Hydrogen is never dispatched without host proof from `omnilane resign`, even under the human-operator exemption; until then lanes skip it.
+AA `aa-v5.0.1-2026-11-13-v1`: **approved on 2026-11-13**; 75 scored configurations. Gemini 4 Hydrogen (xhigh 54, high 51, medium 41, low 27) is scored and selectable as `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`; on 2026-11-13 agy 1.5.7 listed all four on the host that built this snapshot. The value rule places none of them. Hydrogen High joins every lane that lists Argon High, right after it: after Argon, every `--vendor gemini` call that Argon serves today still goes to Argon (a pin skips same-vendor rows without proof or above the caller's ceiling and never crosses vendors). After Argon, it serves hosts that cannot use Argon (Google AI Ultra only). No lane's first choice changes. Like Carbon, Hydrogen is never dispatched without host proof from `omnilane resign`, even under the human-operator exemption; until then lanes skip it.
 
 AA `aa-v5.0.1-2026-11-12-v1`: **approved by the operator on 2026-11-12**; same AA v5.0.1 capture, 71 scored configurations. Gemini 4 Carbon (high 60, medium 58, low 54; Google AI Ultra in Antigravity, agy 1.5.5) moves from comparison-only to scored, selectable as `gemini-4-carbon-high`/`-medium`/`-low`. Those selector strings are inferred from agy's effort-in-model-id convention, not published by Google or probed yet; `omnilane resign` on a host with Ultra (ADC) access confirms them. The value rule puts Carbon high (then low) first in hardest-coding and Carbon medium first in ui-draft; every other rung is unchanged, and a host that has not proven Carbon with `omnilane resign` skips it and selects exactly as before. [Evidence](docs/reports/aa-rebaseline-2026-11-12.md).
 

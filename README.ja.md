@@ -69,6 +69,17 @@ omnilane jobs result JOB_ID
 | 終了コード 60：`partially-re-signed` | 合格したセレクターは導入済みです。保持された行は再確認待ちで、ディスパッチできません。終了コード 20 の保留が優先されます。 | `omnilane resign --vendor VENDOR` — 待機原因の解決後に実行 |
 | 終了コード 20：`operator-or-login-needed`、または次の手順に `--approve`、`--allow-shrink`、`--record-signers`、信頼／取消フラグがある | 操作者の判断が必要であり、アシスタントが自己承認してよいという意味ではありません。 | `omnilane doctor` — 人間が証拠を確認してから、指定操作をターミナルで実行 |
 
+## v0.62.0 の新機能
+
+- **アップグレード後、各ホストで一度 `omnilane resign` を実行してください。** スコアスナップショットは `aa-v5.0.1-2026-11-13-v1` に変わります。変更のないセレクター証拠は引き継がれますが、新しい Gemini 4 Carbon と Gemini 4 Hydrogen のセレクター、および変更された 2 つのランナー（`run-openai-compat.sh`、`run-vote.sh`）には新たなホスト証明が必要です。Google AI Ultra のあるホストでは `omnilane resign --vendor gemini` を実行してください。終了コード **60** は合格セレクターが導入済みで、残りが再確認待ちであることを示します。
+- **Gemini 4 Carbon**（high 60、medium 58、low 54。Antigravity の Google AI Ultra）を採点しました。high、次に low が `hardest-coding` の先頭に、medium が `ui-draft` の先頭に入ります。**Gemini 4 Hydrogen**（xhigh 54、high 51、medium 41、low 27）も採点し、Argon を含む各レーンで Hydrogen high を Argon high の直後に置きました。どちらも転送証明がなければディスパッチされず、人間の操作者による免除下でも同じです。それまでレーンはこれらを飛ばし、`--model` なしの `--vendor gemini` も同様です。このホストで証明のない行や呼び出し元の上限を超える行は、同じベンダー内で飛ばし（1 行ごとに stderr に 1 行表示）、レーンの次の Gemini 行を確認するため、`hardest-coding` と `ui-draft` は拒否されずに Argon high を選びます。ベンダー固定が別のベンダーへ移ることはなく、証明のない `--model` の明示指定は引き続き拒否されます。
+- **3 段階のロスレスなタスク転送。** 純粋な API ベンダーはタスク全体を送り、プロバイダーのコンテキスト長エラーは 1 行の終了コード 2 になります。ファイルを読めるワーカーはバイト上限を超えると、検証済みの作業ディレクトリのファイルポインターを受け取ります。それ以外の宛先は、ジョブ、スレッド、ゴールの状態を作る前に拒否します。詳しくは `docs/task-transport.md` を参照してください。
+- インストーラーは短いルーティングブロックだけを書き、既存のマーク付きブロックはその場で置き換えます。`--dry-run` は読み取り専用のままです。
+- Codex の `upstream_eof`／`upstream_error` による接続切断はタスク失敗と区別して分類され（終了コード 75）、自動では再開しません。レシートにはそのジョブ専用の `omnilane jobs resume ID` コマンドが表示され、記録されたルートとモードで同じセッションを続行します。
+- アップグレード：`npm i -g omnilane@0.62.0`。
+
+## 📜 リリース履歴
+
 ## v0.61.0 の新機能
 
 - **アップグレード後、各ホストで一度 `omnilane resign` を実行してください。** 変更のないセレクター証拠は引き継がれ、新規・変更行は検証が必要です。終了コード **60** は合格行が導入済みで、残りが再確認待ちであることを示します。`omnilane doctor` で確認し、原因を解決してから再試行してください。
@@ -76,8 +87,6 @@ omnilane jobs result JOB_ID
 - 初回設定は `omnilane resign --init` です。拒否には読みやすい次の手順、終了コード 20 にはベンダー別の `attention` 案内が付きます。doctor／overlay-health は引き継いだ行と新規／未プローブ行の数を表示します。
 - 一部のプロバイダー検証が失敗しても合格セレクターは利用可能です。無人実行の再確認は回数とリセット時刻を守り、モデル不一致は確定的な失敗として扱います。全体が未認証のスイープは最初のプローブで停止し、同じログイン失敗を繰り返しません。
 - アップグレード：`npm i -g omnilane@0.61.0`。
-
-## 📜 リリース履歴
 
 ## v0.60.1 の新機能
 
@@ -837,7 +846,7 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
-AA `aa-v5.0.1-2026-11-13-v1`：**承認済み（2026-11-13）**。採点済み構成は 75 件。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）を採点し、`gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` で指定できます。2026-11-13 にこのスナップショットを作ったホストでは、agy 1.5.7 がこの 4 つを一覧に出しました。価値ルールはどの行も選びません。Hydrogen High は Argon High を含む各レーンで Argon の直後に入ります。`--vendor gemini` はレーンの最初の Gemini 行に固定され、後ろへは進まないため、Hydrogen を先に置くと、Hydrogen を証明していないホストや上限 50 の呼び出し元で、今 Argon が受けている指定呼び出しが拒否に変わります。Argon の後ろなら、Argon を使えない（Google AI Ultra 限定）ホストで使われます。各レーンの第一候補は変わりません。Carbon と同じく、`omnilane resign` によるホストでの証明がなければ、人間オペレーター免除の下でも派遣されず、それまでレーンはスキップします。
+AA `aa-v5.0.1-2026-11-13-v1`：**承認済み（2026-11-13）**。採点済み構成は 75 件。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）を採点し、`gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` で指定できます。2026-11-13 にこのスナップショットを作ったホストでは、agy 1.5.7 がこの 4 つを一覧に出しました。価値ルールはどの行も選びません。Hydrogen High は Argon High を含む各レーンで Argon の直後に入ります。こうすると、今 Argon が受けている `--vendor gemini` の呼び出しは引き続き Argon に届きます（ベンダー固定は証明のない行や呼び出し元の上限を超える同じベンダーの行を飛ばし、ベンダーはまたぎません）。Argon の後ろなら、Argon を使えない（Google AI Ultra 限定）ホストで使われます。各レーンの第一候補は変わりません。Carbon と同じく、`omnilane resign` によるホストでの証明がなければ、人間オペレーター免除の下でも派遣されず、それまでレーンはスキップします。
 
 AA `aa-v5.0.1-2026-11-12-v1`：**approved（2026-11-12 に操作者が承認）**。同じ AA v5.0.1 の取得データを使い、採点済み構成は 71 件。Gemini 4 Carbon（high 60、medium 58、low 54。Antigravity の Google AI Ultra 向け、agy 1.5.5）を比較専用から採点対象に移し、`gemini-4-carbon-high`／`-medium`／`-low` で指定できます。これらのセレクター文字列は、強度をモデル ID に含める agy の慣例から推定したもので、Google は公表しておらず、まだどのホストでも実測されていません。Ultra（ADC）権限のあるホストで `omnilane resign` を実行して確認します。価値ルールにより Carbon high（次に low）が hardest-coding、Carbon medium が ui-draft の先頭になります。その他の順位は変わらず、`omnilane resign` で Carbon を証明していないホストはスキップして従来どおり選びます。[証拠](docs/reports/aa-rebaseline-2026-11-12.md)。
 

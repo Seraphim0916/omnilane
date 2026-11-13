@@ -69,6 +69,17 @@ omnilane jobs result JOB_ID
 | 結束碼 60：`partially-re-signed` | 通過的選擇參數已安裝；保留項目待重查，不能派工。需要處理的結束碼 20 優先。 | `omnilane resign --vendor VENDOR` — 待原因解除後執行 |
 | 結束碼 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤銷旗標 | 這是操作者決策，不是助理可自行核准的權限。 | `omnilane doctor` — 由真人檢查證據，再於終端機執行指定動作 |
 
+## v0.62.0 新功能
+
+- **升級後，每台主機先執行一次 `omnilane resign`。** 評分快照換成 `aa-v5.0.1-2026-11-13-v1`；未變更的選擇參數證據可沿用，但新增的 Gemini 4 Carbon、Gemini 4 Hydrogen 選擇參數與改過的兩支執行器（`run-openai-compat.sh`、`run-vote.sh`）需要重新取得主機證明；有 Google AI Ultra 的主機請執行 `omnilane resign --vendor gemini`。結束碼 **60** 表示通過項目已安裝，其他項目待重查。
+- **Gemini 4 Carbon**（high 60、medium 58、low 54；Antigravity 的 Google AI Ultra）列入計分：high、low 依序領頭 `hardest-coding`，medium 領頭 `ui-draft`。**Gemini 4 Hydrogen**（xhigh 54、high 51、medium 41、low 27）列入計分；在每條含 Argon 的車道，Hydrogen high 排在 Argon high 正後方。兩者沒有傳輸證明都不會派出，真人豁免也一樣；在那之前車道會跳過它們，沒指定 `--model` 的 `--vendor gemini` 也一樣：本機沒有證明、或分數超過呼叫端上限的同家列會跳過（每跳一列在 stderr 印一行），改查車道裡下一個 Gemini 列，所以 `hardest-coding`、`ui-draft` 會選到 Argon high，不再被拒。鎖定廠商不會跨到別家；明確指定 `--model` 而沒有證明時仍會被拒。
+- **三層無損任務傳送。** 純 API 供應商送出完整任務，供應商回報超出上下文長度時以結束碼 2 加一行說明結束；可讀檔的工人超過位元組上限時，改收經驗證的工作目錄檔案指標；其他目標在建立工作、對話串或目標狀態之前就拒絕。詳見 `docs/task-transport.md`。
+- 安裝程式只寫入簡短的路由區塊，已有標記區塊時就地取代；`--dry-run` 維持唯讀。
+- Codex 的 `upstream_eof`／`upstream_error` 連線中斷與任務失敗分開分類（結束碼 75），不會自動續跑。收據會印出該工作專用的 `omnilane jobs resume ID` 指令，沿用原本的工作階段、路由與模式繼續。
+- 升級：`npm i -g omnilane@0.62.0`。
+
+## 📜 版本歷程
+
 ## v0.61.0 新功能
 
 - **升級後，每台主機先執行一次 `omnilane resign`。** 未變更的選擇參數證據可沿用，新增或變更項目需要驗證。結束碼 **60** 表示通過項目已安裝，其他項目待重查；用 `omnilane doctor` 查看，排除原因後再重試。
@@ -76,8 +87,6 @@ omnilane jobs result JOB_ID
 - 首次設定改用 `omnilane resign --init`。拒絕訊息用白話說明下一步，結束碼 20 提供各供應商的 `attention` 指引，doctor／overlay-health 顯示沿用與新增／尚未探測項目數量。
 - 部分供應商驗證失敗時，重簽仍保留通過項目的可用性；無人值守的待重查有重試上限，遵守重設時間，模型不符則視為確定失敗。整批未登入時，第一個探測失敗就停止，不重複相同登入失敗。
 - 升級：`npm i -g omnilane@0.61.0`。
-
-## 📜 版本歷程
 
 ## v0.60.1 新功能
 
@@ -795,7 +804,7 @@ flowchart LR
 
 ## 🛤️ 通道一覽(預設值;實際生效值跑 `scripts/dispatch.sh --list` 看)
 
-AA `aa-v5.0.1-2026-11-13-v1`：**已核准（2026-11-13）**；75 列計分。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）列入計分，可用 `gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` 指定；2026-11-13 在建置這份快照的主機上，agy 1.5.7 列得出這四個。價值規則沒有選出任何一列。Hydrogen High 加進每條含 Argon High 的車道，排在 Argon 正後方：`--vendor gemini` 會固定選車道裡第一個 Gemini 列、不往後找，如果 Hydrogen 排前面，還沒證明 Hydrogen 的主機與上限 50 的呼叫端，原本由 Argon 接的指定呼叫會變成被拒。排在 Argon 後面，它可以服務不能用 Argon（限 Google AI Ultra）的主機。各車道首選不變。和 Carbon 一樣，沒有 `omnilane resign` 的主機實測證明就不會派出，真人豁免也一樣；在那之前車道會跳過它。
+AA `aa-v5.0.1-2026-11-13-v1`：**已核准（2026-11-13）**；75 列計分。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）列入計分，可用 `gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` 指定；2026-11-13 在建置這份快照的主機上，agy 1.5.7 列得出這四個。價值規則沒有選出任何一列。Hydrogen High 加進每條含 Argon High 的車道，排在 Argon 正後方：這樣現在由 Argon 接的 `--vendor gemini` 呼叫仍交給 Argon（鎖定廠商會跳過同家沒有證明或超過呼叫端上限的列，不跨廠商）。排在 Argon 後面，它可以服務不能用 Argon（限 Google AI Ultra）的主機。各車道首選不變。和 Carbon 一樣，沒有 `omnilane resign` 的主機實測證明就不會派出，真人豁免也一樣；在那之前車道會跳過它。
 
 AA `aa-v5.0.1-2026-11-12-v1`：**approved（操作者 2026-11-12 核准）**；沿用同一份 AA v5.0.1 擷取，71 列計分。Gemini 4 Carbon（high 60、medium 58、low 54；Google AI Ultra 在 Antigravity 可用，agy 1.5.5）由僅供比較改為計分列，可用 `gemini-4-carbon-high`／`-medium`／`-low` 指定。這三個選擇子字串是依 agy 把強度寫進型號的慣例推得，Google 沒有公布、也還沒有主機實測；要由有 Ultra（ADC）權限的主機跑 `omnilane resign` 確認。價值規則把 Carbon high（其次 low）排在 hardest-coding 首位、Carbon medium 排在 ui-draft 首位；其他順位不變，尚未用 `omnilane resign` 證明 Carbon 的主機會跳過它，選到的與先前相同。[證據](docs/reports/aa-rebaseline-2026-11-12.md)。
 

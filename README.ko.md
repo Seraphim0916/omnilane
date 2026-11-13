@@ -69,6 +69,17 @@ omnilane jobs result JOB_ID
 | 종료 코드 60: `partially-re-signed` | 통과한 선택자는 설치되었습니다. 보존된 행은 재확인 대기 중이며 디스패치할 수 없습니다. 종료 코드 20에 해당하는 보류가 우선합니다. | `omnilane resign --vendor VENDOR` — 대기 원인이 해결된 뒤 실행 |
 | 종료 코드 20: `operator-or-login-needed`, 또는 다음 단계에 `--approve`, `--allow-shrink`, `--record-signers` 또는 신뢰／철회 플래그가 있음 | 운영자의 판단 사항이며 어시스턴트가 자신을 승인할 수 있다는 뜻이 아닙니다. | `omnilane doctor` — 사람이 증거를 검토하고 지정된 동작을 터미널에서 실행 |
 
+## v0.62.0 새 기능
+
+- **업그레이드 후 각 호스트에서 `omnilane resign`을 한 번 실행하세요.** 점수 스냅샷이 `aa-v5.0.1-2026-11-13-v1`로 바뀝니다. 변경되지 않은 선택자 증거는 이어서 사용하지만, 새 Gemini 4 Carbon과 Gemini 4 Hydrogen 선택자, 그리고 변경된 두 러너(`run-openai-compat.sh`, `run-vote.sh`)는 새 호스트 증명이 필요합니다. Google AI Ultra가 있는 호스트에서는 `omnilane resign --vendor gemini`를 실행하세요. 종료 코드 **60**은 통과한 선택자는 설치되었고 나머지는 재확인 대기 중이라는 뜻입니다.
+- **Gemini 4 Carbon**(high 60, medium 58, low 54, Antigravity의 Google AI Ultra)이 점수에 들어갑니다. high, 그다음 low가 `hardest-coding`의 맨 앞에, medium이 `ui-draft`의 맨 앞에 옵니다. **Gemini 4 Hydrogen**(xhigh 54, high 51, medium 41, low 27)도 점수에 들어가며, Argon이 있는 모든 레인에서 Hydrogen high가 Argon high 바로 뒤에 놓입니다. 두 모델 모두 전송 증명이 없으면 디스패치되지 않으며, 사람 운영자 면제에서도 마찬가지입니다. 그전까지 레인은 이들을 건너뛰고, `--model` 없는 `--vendor gemini`도 같습니다. 이 호스트에서 증명이 없거나 호출자 상한을 넘는 같은 벤더의 행은 건너뛰고(행마다 stderr에 한 줄 표시) 레인의 다음 Gemini 행을 확인하므로, `hardest-coding`과 `ui-draft`는 거절되지 않고 Argon high를 선택합니다. 벤더 고정은 다른 벤더로 넘어가지 않으며, 증명 없이 `--model`을 명시하면 여전히 거절됩니다.
+- **3단계 무손실 작업 전달.** 순수 API 벤더는 작업 전체를 보내고, 프로바이더의 컨텍스트 길이 오류는 한 줄짜리 종료 코드 2가 됩니다. 파일을 읽을 수 있는 워커는 바이트 한도를 넘으면 검증된 작업 디렉터리 파일 포인터를 받습니다. 그 밖의 대상은 작업, 스레드, 목표 상태를 만들기 전에 거절합니다. 자세한 내용은 `docs/task-transport.md`를 참고하세요.
+- 설치 프로그램은 짧은 라우팅 블록만 쓰고, 기존에 표시된 블록은 그 자리에서 교체합니다. `--dry-run`은 읽기 전용으로 유지됩니다.
+- Codex의 `upstream_eof`/`upstream_error` 연결 끊김은 작업 실패와 따로 분류되며(종료 코드 75) 자동으로 재개되지 않습니다. 영수증에는 해당 작업 전용 `omnilane jobs resume ID` 명령이 표시되며, 기록된 경로와 모드로 같은 세션을 이어 갑니다.
+- 업그레이드: `npm i -g omnilane@0.62.0`.
+
+## 📜 릴리스 기록
+
 ## v0.61.0 새 기능
 
 - **업그레이드 후 각 호스트에서 `omnilane resign`을 한 번 실행하세요.** 변경되지 않은 선택자 증거는 이어서 사용하며, 새 행과 변경된 행은 검증이 필요합니다. 종료 코드 **60**은 통과한 행은 설치되었고 나머지는 재확인 대기 중이라는 뜻입니다. `omnilane doctor`로 확인하고 원인이 해결된 뒤 재시도하세요.
@@ -76,8 +87,6 @@ omnilane jobs result JOB_ID
 - 최초 설정은 `omnilane resign --init`으로 수행합니다. 거절에는 쉬운 다음 단계가, 종료 코드 20에는 벤더별 `attention` 안내가 제공됩니다. doctor／overlay-health는 이어서 사용하는 행과 신규／미탐색 행의 수를 보여 줍니다.
 - 일부 프로바이더 검증이 실패해도 통과한 선택자는 사용할 수 있습니다. 무인 재확인은 횟수 제한과 리셋 시각을 지키며, 모델 불일치는 확정 실패로 처리합니다. 전체가 미인증인 스윕은 첫 탐색에서 멈춰 같은 로그인 실패를 반복하지 않습니다.
 - 업그레이드: `npm i -g omnilane@0.61.0`.
-
-## 📜 릴리스 기록
 
 ## v0.60.1 새 기능
 
@@ -831,7 +840,7 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-AA `aa-v5.0.1-2026-11-13-v1`: **승인됨(2026-11-13)**. 점수가 있는 구성은 75개입니다. Gemini 4 Hydrogen(xhigh 54, high 51, medium 41, low 27)이 점수에 들어가며 `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`로 지정할 수 있습니다. 2026-11-13 이 스냅샷을 만든 호스트에서 agy 1.5.7이 네 가지를 모두 표시했습니다. 가치 규칙은 어느 행도 고르지 않습니다. Hydrogen High는 Argon High가 있는 모든 레인에서 Argon 바로 뒤에 들어갑니다. `--vendor gemini`는 레인의 첫 Gemini 행에 고정되고 뒤로 넘어가지 않으므로, Hydrogen을 앞에 두면 Hydrogen 증명이 없는 호스트나 상한 50인 호출자에서 지금 Argon이 받는 지정 호출이 거부로 바뀝니다. Argon 뒤에 두면 Argon을 쓸 수 없는(Google AI Ultra 전용) 호스트에서 쓰입니다. 각 레인의 첫 선택은 바뀌지 않습니다. Carbon과 마찬가지로 `omnilane resign`의 호스트 증명이 없으면 사람 운영자 예외에서도 디스패치되지 않으며, 그 전까지 레인은 건너뜁니다.
+AA `aa-v5.0.1-2026-11-13-v1`: **승인됨(2026-11-13)**. 점수가 있는 구성은 75개입니다. Gemini 4 Hydrogen(xhigh 54, high 51, medium 41, low 27)이 점수에 들어가며 `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`로 지정할 수 있습니다. 2026-11-13 이 스냅샷을 만든 호스트에서 agy 1.5.7이 네 가지를 모두 표시했습니다. 가치 규칙은 어느 행도 고르지 않습니다. Hydrogen High는 Argon High가 있는 모든 레인에서 Argon 바로 뒤에 들어갑니다. 이렇게 하면 지금 Argon이 받는 `--vendor gemini` 호출은 계속 Argon으로 갑니다(벤더 고정은 증명이 없거나 호출자 상한을 넘는 같은 벤더의 행을 건너뛰며 벤더를 넘지 않습니다). Argon 뒤에 두면 Argon을 쓸 수 없는(Google AI Ultra 전용) 호스트에서 쓰입니다. 각 레인의 첫 선택은 바뀌지 않습니다. Carbon과 마찬가지로 `omnilane resign`의 호스트 증명이 없으면 사람 운영자 예외에서도 디스패치되지 않으며, 그 전까지 레인은 건너뜁니다.
 
 AA `aa-v5.0.1-2026-11-12-v1`: **approved (2026-11-12 운영자 승인)**. 같은 AA v5.0.1 수집본을 쓰며 점수가 있는 구성은 71개입니다. Gemini 4 Carbon(high 60, medium 58, low 54; Antigravity의 Google AI Ultra, agy 1.5.5)이 비교 전용에서 점수 행으로 바뀌어 `gemini-4-carbon-high`/`-medium`/`-low`로 지정할 수 있습니다. 이 셀렉터 문자열은 강도를 모델 ID에 넣는 agy 관례에서 추정한 것으로, Google이 공개하지 않았고 아직 어떤 호스트에서도 실측되지 않았습니다. Ultra(ADC) 권한이 있는 호스트에서 `omnilane resign`을 실행해 확인합니다. 가치 규칙에 따라 Carbon high(다음 low)가 hardest-coding, Carbon medium이 ui-draft의 첫 후보가 됩니다. 다른 순위는 그대로이며, `omnilane resign`으로 Carbon을 증명하지 않은 호스트는 이를 건너뛰고 이전과 같이 선택합니다. [근거](docs/reports/aa-rebaseline-2026-11-12.md).
 
