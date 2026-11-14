@@ -99,7 +99,7 @@ class RunnerClaudeEnvironmentTests(unittest.TestCase):
         self.assertEqual(seen["unrelated"], "kept")
 
     def test_grok_runner_strips_the_caller_claude_environment(self):
-        seen = self.run_runner("run-grok.sh", "grok-4.6")
+        seen = self.run_runner("run-grok.sh", "grok-4.7")
         self.assertEqual(seen["leaked"], [])
         self.assertEqual(seen["unrelated"], "kept")
 

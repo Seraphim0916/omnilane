@@ -48,7 +48,7 @@ def check_direct_grok_worker_auto(base, home, env):
             "grok",
             "advise",
             str(direct),
-            "grok-4.6",
+            "grok-4.7",
             "-",
             str(prompt),
             str(output),
@@ -78,7 +78,7 @@ def main():
         home, bins = base / "home", base / "bin"
         home.mkdir()
         bins.mkdir()
-        vendors = {"codex": "gpt-5.6-sol", "grok": "grok-4.6",
+        vendors = {"codex": "gpt-5.6-sol", "grok": "grok-4.7",
                    "claude": "claude-sonnet-5", "gemini": "gemini-3.7-flash-medium"}
         (home / "routing.local.yaml").write_text("".join(
             f"policy-{vendor}: {vendor} {model} -\n" for vendor, model in vendors.items()))

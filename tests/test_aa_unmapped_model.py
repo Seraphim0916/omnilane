@@ -55,11 +55,17 @@ class UnmappedModelTests(unittest.TestCase):
         self.assertEqual(alias["status"], "unknown")
         self.assertIsNone(alias["resolved_config_id"])
         self.assertFalse(alias["runtime_verified"])
-        self.assertEqual([r["effort"] for r in result["scored_configs"]
-                          if r["model"] == "gemini-4-argon"], ["high"])
-        unscored = [r for r in result["unknown_configs"] if r["model"] == "gemini-4-argon"]
-        self.assertEqual({r["effort"] for r in unscored}, {"medium", "low"})
-        self.assertTrue(all(r["score"] is None and not r["authority_eligible"] for r in unscored))
+        argon = [r for r in result["scored_configs"] if r["model"] == "gemini-4-argon"]
+        self.assertEqual([r["effort"] for r in argon if not r.get("score_source")], ["high"])
+        bounded = [r for r in argon if r.get("score_source") == "upper-bound"]
+        self.assertEqual({r["effort"] for r in bounded}, {"medium", "low"})
+        for bound in bounded:
+            self.assertEqual(bound["bound_from"], cid)
+            self.assertEqual(bound["score"], row["score"])
+            self.assertFalse(bound["authority_eligible"])
+            self.assertFalse(bound["transport_mapping"]["runtime_verified"])
+            self.assertNotIn(bound, aa.value_pool(result["scored_configs"]))
+        self.assertFalse(any(r["model"] == "gemini-4-argon" for r in result["unknown_configs"]))
 
 
 if __name__ == "__main__":

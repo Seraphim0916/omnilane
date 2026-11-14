@@ -12,6 +12,7 @@ import unittest
 from offline_env import isolated_environment
 
 
+# Use measured Opus 5.5: these fixtures test lifecycle, not bound transport proof.
 ROOT = Path(__file__).resolve().parents[1]
 SHELLS = list(dict.fromkeys(["/bin/bash", shutil.which("bash") or "/bin/bash"]))
 # Only reached when something is wrong, so a slow machine cannot fail a correct worker.
@@ -180,7 +181,7 @@ class ReaderReleaseTests(unittest.TestCase):
         with self.stderr_path.open("w") as stderr, (self.job / "stdout").open("w") as stdout:
             self.process = subprocess.Popen(
                 [shell, str(self.runtime / "scripts/lib/job-worker.sh"), "claude", "work",
-                 str(self.root), "claude-opus-5", "high", str(self.prompt), str(self.job / "out.txt")],
+                 str(self.root), "claude-opus-5-5", "high", str(self.prompt), str(self.job / "out.txt")],
                 env=dict(self.env, FAKE_CLOCK_DIR=str(self.clock)),
                 stdout=stdout, stderr=stderr, start_new_session=True)
 

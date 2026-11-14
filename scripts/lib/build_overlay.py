@@ -53,7 +53,7 @@ PROVEN["grok/grok-4-7"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-xhig
 PROVEN["grok/grok-4-7-high"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-high")
 PROVEN["grok/grok-4-7-low"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-low")
 # Known selectors are probe candidates, not host authorization. Ultra access and
-# successful evidence are still required; unscored Argon Medium/Low stay out.
+# successful evidence are still required, including explicit-only proxy bounds.
 
 for cid, rid, ev in [
     ("gemini/gemini-4-argon", "gemini-4-argon-high", "agy-gemini-4-argon-high"),
@@ -70,6 +70,19 @@ for cid, rid, ev in [
        f"agy-gemini-4-hydrogen-{effort}") for effort in ("xhigh", "high", "medium", "low")],
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
+
+# Explicit-only proxy selectors still require a successful host probe.
+PROVEN["gemini/gemini-pro-orchestrator-g1-pro"] = (
+    "model_and_effort", "gemini-pro-orchestrator-g1-pro", "agy-gemini-pro-orchestrator-g1-pro")
+for cid, row in ROWS.items():
+    if row.get("score_source") != "upper-bound":
+        continue
+    vendor, model, effort = row["vendor"], row["model"], row["effort"]
+    selector = "model_id_encoded_effort" if vendor == "gemini" else (
+        "cli_reasoning_effort" if vendor == "grok" else "model_and_effort")
+    runtime = f"{model}-{effort}" if vendor == "gemini" else model
+    PROVEN[cid] = (selector, runtime, (f"agy-{runtime}" if vendor == "gemini"
+                                     else f"bound-{vendor}-{model}-{effort}"))
 
 # AA v5.0.1 scores claude-opus-5 at max only.
 for model, efforts in [("claude-opus-5", ["max"]), ("claude-opus-5-5", ALL_EFFORTS),

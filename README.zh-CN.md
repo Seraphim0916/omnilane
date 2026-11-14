@@ -71,6 +71,8 @@ omnilane jobs result JOB_ID
 
 ## v0.62.0 新功能
 
+- **只能明確指定的型號（0.63.0）：** `--vendor gemini --model gemini-pro-orchestrator-g1-pro` 的派工代理分數為 **54 = max(Argon high 50, Hydrogen xhigh 54)**，不是 AA 實測。沒分數的低強度列取同廠商、同型號較高強度中最低的計分列當上限（Argon medium/low：50）。兩類都不進車道或效益排序，真人豁免也需要主機傳輸證明。快照 `aa-v5.0.1-2026-11-13-v2` 有 75 列實測與 23 列衍生分數。見[設計與限制](docs/reports/aa-orchestrator-2026-11-13.md)。
+- **全车道按 AA v5.0.1 重排（0.63.0）：** 六条价值车道（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）前段采用 `scripts/aa_rebaseline.py value` 完整链，备援尾段保留其余计分行的原有相对顺序；**`bulk-mechanical` 首选由 GPT-6.1 Sol (medium) 改为 GPT-6.1 Sol (xhigh)**，`coding-overflow` 移除未计分的 Kimi／Qwen／OpenCode，`fast-agentic` 因未公布首字延迟保持原顺序。见[全车道重排报告](docs/reports/aa-lane-rerank-2026-11-13.md)。
 - **升级后，每台主机先运行一次 `omnilane resign`。** 评分快照换成 `aa-v5.0.1-2026-11-13-v1`；未变更的选择参数证据可以沿用，但新增的 Gemini 4 Carbon、Gemini 4 Hydrogen 选择参数和改动过的两个执行器（`run-openai-compat.sh`、`run-vote.sh`）需要重新取得主机证明；有 Google AI Ultra 的主机请运行 `omnilane resign --vendor gemini`。退出码 **60** 表示通过项已安装，其他项待复查。
 - **Gemini 4 Carbon**（high 60、medium 58、low 54；Antigravity 的 Google AI Ultra）纳入计分：high、low 依次领跑 `hardest-coding`，medium 领跑 `ui-draft`。**Gemini 4 Hydrogen**（xhigh 54、high 51、medium 41、low 27）纳入计分；在每条含 Argon 的车道中，Hydrogen high 排在 Argon high 正后方。两者没有传输证明都不会派出，人工豁免也一样；在此之前车道会跳过它们，未指定 `--model` 的 `--vendor gemini` 也一样：本机没有证明、或分数超过调用方上限的同厂商行会被跳过（每跳过一行在 stderr 打印一行），改为检查车道中的下一个 Gemini 行，因此 `hardest-coding`、`ui-draft` 会选中 Argon high，不再被拒。锁定厂商不会跨到其他厂商；显式指定 `--model` 而没有证明时仍会被拒。
 - **三层无损任务传输。** 纯 API 供应商发送完整任务，供应商报告超出上下文长度时以退出码 2 加一行说明结束；可读文件的工人超过字节上限时，改为接收经过验证的工作目录文件指针；其他目标在创建任务、线程或目标状态之前就拒绝。详见 `docs/task-transport.md`。
@@ -761,7 +763,7 @@ omnilane 让**任何**一个 agentic CLI 的主循环把子任务分类到通道
 ```mermaid
 flowchart LR
     M["主循环<br/><i>你在用的任一 CLI</i>"] --> T{{"routing.yaml<br/>一张共用路由表"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|hardest-coding| C1["Gemini — 4 Carbon (High)<br/><i>或 Claude — Opus 5.5 (high)</i>"]
     T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
     T -->|taste-final| C3["Claude — Sonnet 5.5"]
     T -->|long-context| C4["Codex — GPT-6 Astra"]
@@ -790,11 +792,13 @@ flowchart LR
 
 ## 🛤️ 通道一览(默认值;实际生效值运行 `scripts/dispatch.sh --list` 查看)
 
-AA `aa-v5.0.1-2026-11-13-v1`：**已批准（2026-11-13）**；75 行计分。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）纳入计分，可用 `gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` 指定；2026-11-13 在构建这份快照的主机上，agy 1.5.7 能列出这四个。价值规则没有选出任何一行。Hydrogen High 加入每条含 Argon High 的车道，排在 Argon 正后方：这样现在由 Argon 处理的 `--vendor gemini` 调用仍交给 Argon（锁定厂商会跳过同厂商没有证明或超过调用方上限的行，不跨厂商）。排在 Argon 后面，它可以服务不能用 Argon（仅限 Google AI Ultra）的主机。各车道首选不变。和 Carbon 一样，没有 `omnilane resign` 的主机实测证明就不会派出，人工豁免也一样；在此之前车道会跳过它。
+AA `aa-v5.0.1-2026-11-13-v2`：**已批准（操作者 2026-11-14 批准）**；75 行实测计分加 23 行仅限显式指定的衍生上限。下表依据这份快照与 0.63.0 全车道价值重排排列：六条价值车道（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）前段完整采用 `scripts/aa_rebaseline.py value` 链，备援尾段保留其余计分行的原有相对顺序（`bulk-mechanical` 首选由 GPT-6.1 Sol medium 升为 GPT-6.1 Sol xhigh；`hardest-coding` 与 `ui-draft` 在 Carbon 之后紧接 Claude Opus 5.5 high），`coding-overflow` 移除未计分的 Kimi／Qwen／OpenCode，`fast-agentic` 因 AA v5.0.1 未公布首字延迟保持原顺序。`gemini-pro-orchestrator-g1-pro`（代理上限 54）与 22 行低强度上限行仅限显式指定、不进入任何车道、不能授权调用方上限，且即使在人工豁免下也必须有 `omnilane resign` 的主机传输证明。[重测报告](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 设计](docs/reports/aa-orchestrator-2026-11-13.md) · [全车道重排报告](docs/reports/aa-lane-rerank-2026-11-13.md)。
+
+AA `aa-v5.0.1-2026-11-13-v1`：**已批准（2026-11-13）**；75 行计分。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）纳入计分，可用 `gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` 指定；2026-11-13 在构建这份快照的主机上，agy 1.5.7 能列出这四个。价值规则没有选出任何一行。Hydrogen High 加入每条含 Argon High 的车道，排在 Argon 正后方：这样现在由 Argon 处理的 `--vendor gemini` 调用仍交给 Argon（锁定厂商会跳过同厂商没有证明或超过调用方上限的行，不跨厂商）。排在 Argon 后面，它可以服务不能用 Argon（仅限 Google AI Ultra）的主机。v1 单独加入 Hydrogen 时各车道首选未变（随后已由上方 `aa-v5.0.1-2026-11-13-v2` 的 0.63.0 全车道重排取代）。和 Carbon 一样，没有 `omnilane resign` 的主机实测证明就不会派出，人工豁免也一样；在此之前车道会跳过它。
 
 AA `aa-v5.0.1-2026-11-12-v1`：**approved（操作者 2026-11-12 批准）**；沿用同一份 AA v5.0.1 抓取，71 行计分。Gemini 4 Carbon（high 60、medium 58、low 54；Google AI Ultra 在 Antigravity 可用，agy 1.5.5）由仅供比较改为计分行，可用 `gemini-4-carbon-high`／`-medium`／`-low` 指定。这三个选择器字符串是按 agy 把强度写进型号的惯例推断的，Google 没有公布，也还没有主机实测；需由有 Ultra（ADC）权限的主机运行 `omnilane resign` 确认。价值规则把 Carbon high（其次 low）排在 hardest-coding 首位、Carbon medium 排在 ui-draft 首位；其他顺位不变，尚未用 `omnilane resign` 证明 Carbon 的主机会跳过它，选到的与之前相同。[证据](docs/reports/aa-rebaseline-2026-11-12.md)。
 
-AA `aa-v5.0.1-2026-11-10-v1`：**approved（操作者 2026-11-10 批准）**；改用 AA Intelligence Index v5.0.1，68 行计分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），并去掉 v5.0.1 不再计分的行。下表已按它排列：Fable 5.2 xhigh 成为 hardest-coding 与 hard-judgment 的首选；Claude Opus 5 失去分数，long-context 改由 GPT-6 Astra (medium) 领头。Gemini 4 Carbon 有分数，但没有可派发的代号，不在任何车道。每台主机都要运行一次 `omnilane resign`，让 overlay 针对新评分表重新验证。[证据](docs/reports/aa-rebaseline-2026-11-10.md)。取代 `aa-v4.3.2-2026-10-28-v1`（2026-10-28 批准）。
+AA `aa-v5.0.1-2026-11-10-v1`：**approved（操作者 2026-11-10 批准）**；改用 AA Intelligence Index v5.0.1，68 行计分。新增 Claude Fable 5.2（max 65、xhigh 62、high 62、medium 56、low 54；需要 Claude Code 2.1.321 以上），并去掉 v5.0.1 不再计分的行。该版快照当时由 Fable 5.2 xhigh 成为 hardest-coding 与 hard-judgment 的首选；Claude Opus 5 失去分数，long-context 改由 GPT-6 Astra (medium) 领头；Gemini 4 Carbon 当时仅作参考行、没有可派发的代号，不在任何车道。每台主机都要运行一次 `omnilane resign`，让 overlay 针对新评分表重新验证。[证据](docs/reports/aa-rebaseline-2026-11-10.md)。取代 `aa-v4.3.2-2026-10-28-v1`（2026-10-28 批准）。
 
 AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当天“把新模型收进去”的指示批准）**；130 行计分、9 行未知。新增 GPT-6.1 Terra（六行，max 48），按价值规则放入 hardest-coding、bulk-mechanical、ui-draft、fast-agentic，各车道首选不变。仍需主机传输验证。[证据](docs/reports/aa-rebaseline-2026-10-27.md)。取代 `aa-v4.3.2-2026-10-18-v1`（2026-10-19 批准）。
 
@@ -802,25 +806,25 @@ AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | Gemini 4 Carbon (High) | Gemini 4 Carbon (Low) → Claude Fable 5.2 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最难的实现、深度调试、正确性关键的修改 |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 重构、迁移、测试、大范围扫描——机械耐力活 |
+| 🔥 hardest-coding | Gemini 4 Carbon (High) | Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最难的实现、深度调试、正确性关键的修改 |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (xhigh) | GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 重构、迁移、测试、大范围扫描——机械耐力活 |
 | 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量扫描、第一轮筛选 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 架构裁决、深度推理、第二意见 |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) | 对外文字、提示词／文档润色、风格裁决 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 架构裁决、深度推理、第二意见 |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) | 对外文字、提示词／文档润色、风格裁决 |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) | 直接指定模型咨询；保留 `--vendor` 避免降级 |
-| 🎨 ui-draft | Gemini 4 Carbon (Medium) | Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 仅在提供设计系统／参考图时生成 UI 草稿 |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
+| 🎨 ui-draft | Gemini 4 Carbon (Medium) | Claude Opus 5.5 (high) → GPT-6.1 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 仅在提供设计系统／参考图时生成 UI 草稿 |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (high) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 长文档提取与综合，按 AA-LCR、成本和吞吐排序 |
 | ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速多步骤工具循环、多模态检查 |
 | 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 实时 X／网页搜索与社交上下文 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Codex 配额耗尽时的中量级编码安全阀 |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → off | Codex 配额耗尽时的中量级编码安全阀 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大决定的内置意见评审团；默认禁用，在 `routing.local.yaml` 启用，每位评审每轮调用一次 |
 
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. Since 2026-11-13 Gemini 4 Hydrogen High sits right after Argon in every lane that lists Argon. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+Argon High 已加入所有包含 Flash 的车道，需要 Google AI Ultra 与成功的主机传输验证。自 2026-11-13 起，每条包含 Argon High 的车道在 Argon 正后方紧接 Gemini 4 Hydrogen High（其后才是 Gemini 3.8 Flash）。在 bulk-mechanical、triage、fast-agentic、live-search 与 coding-overflow 中，Argon High 与 Hydrogen High 排在 Gemini 3.8 Flash 正前方，其中 bulk-mechanical 首选在 0.63.0 已升为价值首选 GPT-6.1 Sol (xhigh)，其余四条用途车道保留原有首选。2026-11-10 重排后，Argon 在 hardest-coding 不再排第二，在那里和其他价值车道都位于 Gemini 尾段；UI／长文的候选位置不代表评测胜出。Grok 仍是实时 X／网页搜索与 Codex 配额卸载的首选，Argon 备援提供通用网页搜索。`consult --vendor gemini` 仅在 Gemini 内选择 Argon。Medium／Low 没有 AA 实测分数（仅有显式指定上限 50，不进入任何车道）。
 
 **备选模型**是候选链的下一位——首选那家的厂商 CLI 没装时,派发就降到它。每条
 通道都是这样一条链;整条都没装时,通道自动降为 `off`。
 
-> **Claude Fable 5.2 现在领头 hardest-coding 与 hard-judgment（AA v5.0.1 快照，2026-11-10 批准）。** 分数与重排见[重测报告](docs/reports/aa-rebaseline-2026-11-10.md)；各通道的比较见[常见问题](#-常见问题)。
+> **0.63.0 全车道价值重排（`aa-v5.0.1-2026-11-13-v2`）：** Gemini 4 Carbon (High) 领头 `hardest-coding`（未验证 Carbon 的主机首选为 Claude Opus 5.5 (high)），Claude Fable 5.2 (xhigh) 领头 `hard-judgment`，GPT-6.1 Sol (xhigh) 领头 `bulk-mechanical`，Gemini 4 Carbon (Medium) 领头 `ui-draft`。重排前后完整链与分数见[全车道重排报告](docs/reports/aa-lane-rerank-2026-11-13.md)与 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)；各通道权衡见[常见问题](#-常见问题)。
 
 ### 自然语言咨询
 
@@ -841,18 +845,18 @@ Argon High is included in every Flash-bearing lane and requires Google AI Ultra 
 即使模型相同，也要委派。只有调用方明确确认模型、推理强度、模式、工作目录、
 工具、隔离方式和生命周期都相符时，才可以用原生代理；否则走 CLI。
 主控负责编排和验收，工作代理执行任务，不得再派发。
-下面各条的起点只按分数上限推算（AA v5.0.1 快照，2026-11-10 批准）；继承上限、主机探测失败或
+下面各条的起点只按 AA v5.0.1 实测分数上限推算（`aa-v5.0.1-2026-11-13-v2`，0.63.0 全车道价值重排；衍生上限行不能授权调用方上限）；继承上限、主机探测失败或
 额度不足，都可能让链继续往下走。
 
-- **Claude Code · Fable 5.2**——上限最高的提示词层主控（需要 Claude Code 2.1.321 以上）。在 max、xhigh、high 时，hardest-coding 与 hard-judgment 的第一候选就是 Fable 5.2 自己，仍要派发。medium 时第一个可派的是 Astra xhigh（hardest-coding）与 Fable 5.2 medium（hard-judgment）；low 时是 Opus 5.5 high 与 Fable 5.2 low。
-- **Claude Code · Fable 5.1**——xhigh（50）时，hard-judgment 从 Fable 5.1 xhigh 自己开始（仍要派发）；hardest-coding 与 taste-final 从 Sonnet 5.5 xhigh 开始；bulk-mechanical、fast-agentic、long-context 从 GPT-6.1 Sol medium 开始。
-- **Claude Code · Opus 5.5**——ui-draft 由它的 high 领头。xhigh（57）时，hardest-coding 从 Astra xhigh、hard-judgment 从 Fable 5.2 medium 开始；medium（48）时，hardest-coding 与 hard-judgment 从 Opus 5.5 medium 自己开始，ui-draft 与 long-context 从 GPT-6.1 Sol medium 开始。
-- **Claude Code · Opus 5**——只剩 max 还有分数（44），所以只作为明确点名、用 `max` 的独立复核者，不是任何通道的默认。在这个上限下，hardest-coding 从 Sonnet 5.5 high、hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。
-- **Codex · GPT-6.1 Sol**——bulk-mechanical 与 fast-agentic 由它的 medium 领头。xhigh（52）时，hardest-coding 从 Opus 5.5 high、hard-judgment 从 Fable 5.1 xhigh、long-context 从 Astra medium 开始；high（50）时，hardest-coding 从 Sonnet 5.5 xhigh 开始。
-- **Codex · Astra**——consult（xhigh）与 long-context（medium）的第一候选，xhigh 也是 hardest-coding 与 taste-final 的第二位。xhigh（55）时，hard-judgment 从 Fable 5.2 low 开始。需要时明确指定 `--vendor codex --effort max`；显式指定的 model／effort 始终优先。
-- **Codex · GPT-6.1 Terra**——Codex 的性价比行：fast-agentic 第二、第三（medium、low），bulk-mechanical 第三（high）。xhigh（45）时，hardest-coding 从 Terra xhigh 自己开始，hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。GPT-5.6 Terra 只剩 max 有分数，不在任何通道。
-- **Grok Build · Grok 4.7**——live-search 与 coding-overflow 的第一候选、consult 第三，也是 hardest-coding、hard-judgment、taste-final 的 Grok 尾段。上限只有 35，困难通道大多从 Opus 5.5 low 开始。Grok 4.6 不在任何通道。仍需验证 API 签名和引用的事实。
-- **Antigravity · Gemini 4 Argon／3.8 Flash**——Argon High（50）与紧随其后的 Hydrogen High（51）在每条通道占据 Gemini 的位置，排在 Flash 前面。Flash 是它之后的跨厂商备用：consult、ui-draft、hard-judgment、live-search、coding-overflow 用 High；hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic 用 Medium；triage 用 Low。不要从代理／编码评测推断审美能力或主控权。
+- **Claude Code · Fable 5.2**——上限最高的提示词层主控（需要 Claude Code 2.1.321 以上）：领头 hard-judgment（xhigh，其次 medium、low），并在 hardest-coding 排在十个价值行之后的第一个备援（第 11 顺位，xhigh）。在 max、xhigh、high（65／62／62）时，hard-judgment 从 Fable 5.2 自己开始（仍要派发），hardest-coding 在已验证 Carbon 的主机从 Carbon High 开始、否则从 Opus 5.5 high 开始。medium（56）与 low（54）时，hardest-coding 从 Carbon Low（有 Carbon 证明）或 Opus 5.5 high（无证明）开始，hard-judgment 分别从 Fable 5.2 medium 与 Fable 5.2 low 开始（low 时 consult 从 Grok 4.7 开始）。
+- **Claude Code · Fable 5.1**——xhigh 在 hard-judgment 排第四（high、medium、low 接在 Opus 5.5 medium 后完成价值前段），high 与 low 则是 hardest-coding 的价值行（第 6、第 10 顺位）。xhigh（50）时，hard-judgment 从 Fable 5.1 xhigh 自己开始（仍要派发）；hardest-coding 与 taste-final 从 Sonnet 5.5 xhigh 开始；bulk-mechanical 与 ui-draft 从 GPT-6.1 Sol high 开始；fast-agentic 与 long-context 从 GPT-6.1 Sol medium 开始。
+- **Claude Code · Opus 5.5**——high 在 ui-draft 排第二（紧接 Carbon Medium 后）、在 hardest-coding 排第三（紧接 Carbon High 与 Low 后，因此在未验证 Carbon 的主机为首选）；medium 在 hardest-coding 与 hard-judgment 均排第五。xhigh（57）时，hardest-coding 从 Carbon Low（有 Carbon 证明）或 Opus 5.5 high（无证明）开始，bulk-mechanical 从 GPT-6.1 Sol xhigh、hard-judgment 从 Fable 5.2 medium、ui-draft 从 Opus 5.5 high 开始；medium（48）时，hardest-coding 与 hard-judgment 从 Opus 5.5 medium 自己开始，bulk-mechanical、ui-draft 与 long-context 从 GPT-6.1 Sol medium 开始。
+- **Claude Code · Opus 5**——只有 max 有 AA 实测分数（44；较低强度仅有显式指定上限 44），不在任何通道，只作为显式点名的独立复核者。上限 44 时，hardest-coding 从 Sonnet 5.5 high、bulk-mechanical 与 ui-draft 从 GPT-6.1 Terra high、hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。
+- **Codex · GPT-6.1 Sol**——xhigh 领头 bulk-mechanical（后接 high 与 medium），medium 领头 fast-agentic；medium 在 hardest-coding 排第七，xhigh 在 hard-judgment 排第九，high／xhigh／medium 在 ui-draft 排第三至第五，medium／low 在 long-context 排第二与第四。xhigh（52）时，hardest-coding 与 ui-draft 从 Opus 5.5 high、bulk-mechanical 从 GPT-6.1 Sol xhigh 自己、hard-judgment 从 Fable 5.1 xhigh、long-context 从 Astra medium 开始；high（50）时，hardest-coding 从 Sonnet 5.5 xhigh、bulk-mechanical 与 ui-draft 从 GPT-6.1 Sol high 开始。
+- **Codex · Astra**——consult（xhigh）与 long-context（medium，low 排第三）的第一候选，xhigh 位于 hardest-coding（第 12 顺位）与 taste-final（第 4 顺位）的备援段。xhigh（55）时，hardest-coding 从 Carbon Low（有证明）或 Opus 5.5 high（无证明）、bulk-mechanical 从 GPT-6.1 Sol xhigh、hard-judgment 从 Fable 5.2 low 开始。需要时明确指定 `--vendor codex --effort max`；显式指定的 model／effort 始终优先。
+- **Codex · GPT-6.1 Terra**——Sol 之下的 Codex 性价比行：fast-agentic 第二、第三（medium、low），bulk-mechanical 第四、第五（high、medium），hardest-coding 第八（xhigh），ui-draft 第六（high），taste-final 第八（xhigh）。xhigh（45）时，hardest-coding 从 Terra xhigh 自己、bulk-mechanical 与 ui-draft 从 Terra high、hard-judgment 从 Fable 5.1 medium、long-context 从 Astra low 开始。GPT-5.6 Terra 只剩 max 有实测分数（32），不在任何通道。
+- **Grok Build · Grok 4.7**——live-search 与 coding-overflow 的第一候选，在 taste-final 进入价值前段排第三（high；low 在备援段排第十）、consult 排第三，并担任 hardest-coding 与 hard-judgment 的 Grok 备援尾段（low 也排在 bulk-mechanical、ui-draft、long-context 末尾）。high（上限 35）时，hardest-coding 从 Opus 5.5 low、bulk-mechanical 从 GPT-6.1 Sol low、hard-judgment 从 Flash High、taste-final 从 Grok 4.7 high 自己开始。Grok 4.6 不在任何通道。仍需验证 API 签名和引用的事实。
+- **Antigravity · Gemini 4 Carbon／Argon／Hydrogen／3.8 Flash**——Carbon 在已通过 Google AI Ultra 主机验证时领头 hardest-coding（High 60、Low 54）与 ui-draft（Medium 58）；未验证主机会自动跳过。Argon High（50）与紧随其后的 Hydrogen High（51）在除 arbitrate 外的每条通道占据 Gemini 位置，排在 Flash 前面。Flash 是其后的跨厂商备用：consult、ui-draft、hard-judgment、live-search、coding-overflow 用 High；hardest-coding、bulk-mechanical、taste-final、long-context、fast-agentic 用 Medium；triage 用 Low。不要从代理／编码评测推断审美能力或主控权。
 
 </details>
 
@@ -1190,23 +1194,15 @@ omnilane goal close "$GOAL_ID" --summary "结账集成已稳定"
 </details>
 
 <details>
-<summary><b>为什么困难工作现在由 Fable 5.2 领头？</b></summary>
+<summary><b>0.63.0 在困难通道如何排列 Fable 5.2、Carbon、Opus 5.5 与 Sol？</b></summary>
 
 <br/>
 
-2026-11-10 的快照（AA Intelligence Index v5.0.1，当天批准）给 Fable 5.2 xhigh 打了
-62 分，高于通道能派发的其他所有行（Opus 5.5 xhigh 57、Astra xhigh 55）。在
-`hardest-coding`，它的 Terminal-Bench 4.0 也最高（0.616；Astra 与 Opus 5.5 xhigh
-都是 0.596），SciCode 为 0.656（另两者 0.557、0.650）。在 `hard-judgment`，它的
-HLE（0.689）、Briefcase analytical Elo（1927）、CritPt（0.357）都是整条链最高；
-第一个 Codex 行 GPT-6.1 Sol xhigh 分别是 0.526、1691、0.317。它也是最贵的一行：
-AA 跑一次指数，Fable 5.2 xhigh 约 $11,742，Opus 5.5 xhigh 约 $4,766，Astra xhigh
-约 $3,746。
+快照 `aa-v5.0.1-2026-11-13-v2`（AA Intelligence Index v5.0.1）在六条价值通道前段完整采用 `scripts/aa_rebaseline.py value` 链，其余计分行按原有相对顺序留在备援尾段：
 
-Astra xhigh 仍是 `hardest-coding` 第二、`consult` 第一；`ui-draft` 由 Opus 5.5
-high 领头。Fable 5.2 需要 Claude Code 2.1.321 以上。这份快照已由操作者
-在 2026-11-10 批准；各通道的完整数值见
-[`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt)。
+- **`hard-judgment`：** Claude Fable 5.2 xhigh（62 分；需 Claude Code 2.1.321 以上）在 HLE（0.689）、Briefcase analytical Elo（1927）、CritPt（0.357）均为整条链最高，后接 Fable 5.2 medium 与 low；第一个 Codex 行 GPT-6.1 Sol xhigh（第 9 顺位）分别为 0.526、1691、0.317。
+- **`hardest-coding`：** Gemini 4 Carbon High（60 分；Terminal-Bench 4.0 0.618，AA 跑一次指数约 $2,020）与 Carbon Low（54 分）排在价值前段最前，第 3 顺位为 Claude Opus 5.5 high（52 分；未验证 Carbon 的主机首选）。Fable 5.2 xhigh（Terminal-Bench 0.616、SciCode 0.656，跑一次指数约 $11,742）排在十个价值行之后的第 11 顺位备援首行，后接第 12 顺位 GPT-6 Astra xhigh（约 $3,746）与第 13 顺位 Opus 5.5 xhigh（约 $4,766）。
+- **其余重排价值通道：** GPT-6.1 Sol xhigh（52 分）领头 `bulk-mechanical`，Claude Sonnet 5.5 xhigh（50 分）领头 `taste-final`，Gemini 4 Carbon Medium（58 分，其次 Opus 5.5 high）领头 `ui-draft`，GPT-6 Astra medium（52 分）领头 `long-context`；Astra xhigh（55 分）保持 `consult` 第一。Carbon 与 Hydrogen 均需通过 `omnilane resign` 主机传输验证。各通道重排前后对照与完整测量数值见 [`docs/reports/aa-lane-rerank-2026-11-13.md`](docs/reports/aa-lane-rerank-2026-11-13.md) 与 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)。
 
 </details>
 
@@ -1317,9 +1313,12 @@ codex 记在 session rollout，agy 写进 `cli.log`。这是 CLI 自己抄的订
 ## 📊 默认值与数据来源
 
 默认通道配置依据 Artificial Analysis Intelligence Index v5.0.1 快照
-`aa-v5.0.1-2026-11-10-v1`（2026-11-10，操作者当天批准），由 85 个 AA 模型页
-合并而成；每条通道按这些分数和该通道自己的测量，以性价比优先排序，v5.0.1 不再计分的行
-直接去掉，不沿用旧分数（[证据](docs/reports/aa-rebaseline-2026-11-10.md)）。这些是意见不是定律——
+`aa-v5.0.1-2026-11-13-v2`（操作者 2026-11-14 批准），由 2026-11-10 的 85 个 AA
+模型页加上 2026-11-13 的 4 个 Gemini 4 Hydrogen 模型页合并而成（75 行实测计分，另
+23 行仅限显式指定的衍生上限不进入车道）；六条价值通道前段按这些分数和各通道自己的测量采用
+`aa_rebaseline.py value` 链，v5.0.1 不再计分的行直接去掉，不沿用旧分数
+（[重测报告](docs/reports/aa-rebaseline-2026-11-13-v2.md) ·
+[全车道重排报告](docs/reports/aa-lane-rerank-2026-11-13.md)）。这些是意见不是定律——
 设置菜单和 `routing.local.yaml` 就是让你不同意用的。评审团(arbitrate)
 默认关闭;要用就在 `routing.local.yaml` 写
 `arbitrate: vote codex,claude,grok -`(从四家里任选 1-4 个评审),

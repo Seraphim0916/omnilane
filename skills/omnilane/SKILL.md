@@ -517,73 +517,85 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the AA v5.0.1 scores of the `aa-v5.0.1-2026-11-10-v1`
-snapshot, approved by the operator on 2026-11-10.
+Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-13-v2`
+(2026-11-13 full-lane `value` rerank; derived explicit-only bounds cannot
+authorize caller ceilings).
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
 can still move the chain further down.
 
-- **Claude Fable 5.2:** leads hardest-coding (xhigh) and hard-judgment (xhigh,
-  then medium and low); it appears in no other lane. Claude Code 2.1.321 or later
-  is required, and `fable` resolves to 5.2 only from 2.1.321. As the main model,
-  at max, xhigh or high your ceiling is 65/62/62 and every lane row is reachable;
-  hardest-coding and hard-judgment then start on Fable 5.2 itself (same model, not
-  a reason to self-execute). At medium (56) hardest-coding starts at Astra xhigh
-  and hard-judgment at Fable 5.2 medium (same model); at low (54) hardest-coding
-  starts at Opus 5.5 high, hard-judgment at Fable 5.2 low (same model) and consult
-  at Grok 4.7. The `vote` Claude voter is Fable 5.2 low. On a host that has proven
-  Gemini 4 Carbon (2026-11-12 snapshot), hardest-coding starts at Carbon high
-  for ceilings 60 and up and Carbon low for 54–59 instead.
-- **Claude Opus 5.5:** leads ui-draft (high); xhigh, high and medium are rungs of
-  hardest-coding, medium is second in bulk-mechanical and a rung of hard-judgment,
-  xhigh is the Claude row in consult and a Claude rung of long-context, and low is
-  the Claude fallback in live-search and fast-agentic. Running at medium your
-  ceiling is 48: hardest-coding and hard-judgment start at Opus 5.5 medium itself,
-  ui-draft and long-context at GPT-6.1 Sol medium. Running at xhigh (57)
-  hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium.
-  On a host that has proven Gemini 4 Carbon, ui-draft starts at Carbon medium for
-  ceilings 58 and up, and at xhigh (57) hardest-coding starts at Carbon low.
-- **Claude Sonnet 5.5:** leads taste-final at xhigh, with high on the lower ladder;
-  rungs of hardest-coding (xhigh, high, medium, low) and bulk-mechanical (high,
-  medium), lower rungs of hard-judgment (medium, low), the Claude row in
-  fast-agentic (medium) and long-context (low). It has
+- **Claude Fable 5.2:** leads hard-judgment (xhigh, then medium and low) and is
+  the first fallback after the ten `value` picks in hardest-coding (xhigh); it
+  appears in no other lane. Claude Code 2.1.321 or later is required, and `fable`
+  resolves to 5.2 only from 2.1.321. As the main model, at max, xhigh or high your
+  ceiling is 65/62/62 and every lane row is reachable; hard-judgment starts on
+  Fable 5.2 itself (same model, not a reason to self-execute), while hardest-coding
+  starts at Carbon high on hosts that have proven Carbon and at Opus 5.5 high
+  otherwise. At medium (56) hardest-coding starts at Carbon low (with Carbon proof)
+  or Opus 5.5 high (without) and hard-judgment at Fable 5.2 medium; at low (54)
+  hardest-coding starts at Carbon low (with Carbon proof) or Opus 5.5 high
+  (without), hard-judgment at Fable 5.2 low and consult at Grok 4.7. The `vote`
+  Claude voter is Fable 5.2 low.
+- **Claude Opus 5.5:** second in ui-draft (high, right behind Carbon medium) and
+  third in hardest-coding (high, right behind Carbon high and low, so first on
+  hosts without Carbon proof); medium is fifth in hardest-coding, fifth in
+  hard-judgment (`value` pick at ceiling 48) and the first Claude fallback in
+  bulk-mechanical; xhigh is in the hardest-coding fallback tail, the Claude row in
+  consult and a Claude rung of long-context; low is the seventh `value` rung in
+  ui-draft and the Claude fallback in live-search and fast-agentic. Running at
+  medium your ceiling is 48: hardest-coding and hard-judgment start at Opus 5.5
+  medium itself, bulk-mechanical, ui-draft and long-context at GPT-6.1 Sol medium.
+  Running at xhigh (57) hardest-coding starts at Carbon low (with Carbon proof) or
+  Opus 5.5 high (without), bulk-mechanical at GPT-6.1 Sol xhigh, and hard-judgment
+  at Fable 5.2 medium.
+- **Claude Sonnet 5.5:** leads taste-final at xhigh, followed directly by high;
+  `value` rungs of hardest-coding (xhigh, high) with medium and low in the fallback
+  tail, Claude fallbacks in bulk-mechanical (high, medium), lower rungs of
+  hard-judgment (medium, low), the Claude row in fast-agentic (medium) and
+  long-context (low). It has
   no published visual result: keep it out of ui-draft and live-search. A host has
   to prove it with `omnilane resign` first; until then each chain serves the row
   right behind it.
 - **Claude Fable 5.1:** xhigh is fourth in hard-judgment, behind the three Fable
-  5.2 rows; high, medium and low are lower rungs of hard-judgment, and high and
-  low are rungs of hardest-coding. Everywhere else a cheaper row is as good.
+  5.2 rows, with high, medium and low completing hard-judgment's `value` prefix
+  after Opus 5.5 medium; high and low are `value` rungs of hardest-coding.
+  Everywhere else a cheaper row is as good.
 - **Claude Opus 5:** only max is still scored (44) and it is in no lane; select it
   explicitly as an independent reviewer. It no longer leads long-context.
-- **Claude Haiku 5.5:** lower-ceiling value rows: high, medium and low in
+- **Claude Haiku 5.5:** lower-ceiling fallback rows: high, medium and low in
   hardest-coding; low in bulk-mechanical; medium and low in triage; xhigh to low
   in taste-final; high to low in hard-judgment; medium and low in long-context.
   No fast-agentic or ui-draft placement. Haiku 4.5 stays only as the last
   low-ceiling / unproven-host fallback; max stays explicit-only.
 - **Claude Sonnet 5:** unscored in v5.0.1 and in no lane; do not route to it.
-- **GPT-6 Astra:** leads consult (xhigh) and long-context (medium); xhigh is second
-  in hardest-coding and taste-final, medium and low are rungs of fast-agentic, low
-  is a rung of long-context and hard-judgment. Resolve your real effort first; an
-  explicit higher effort does not bypass the ceiling.
-- **GPT-6.1 Sol:** leads bulk-mechanical and fast-agentic (medium); xhigh, high,
-  medium and low are rungs of hardest-coding, xhigh is Codex's first row in
-  hard-judgment, it is second in ui-draft (xhigh) and long-context (medium), and
-  xhigh, high and medium are rungs of taste-final.
-  A host has to prove it with `omnilane resign` first.
+- **GPT-6 Astra:** leads consult (xhigh) and long-context (medium); low is third
+  in long-context and a fallback in hard-judgment and fast-agentic (with medium),
+  and xhigh is in the fallback tails of hardest-coding and taste-final. Resolve
+  your real effort first; an explicit higher effort does not bypass the ceiling.
+- **GPT-6.1 Sol:** leads bulk-mechanical (xhigh, followed by high and medium) and
+  fast-agentic (medium); medium is a `value` rung of hardest-coding (with xhigh,
+  high and low in the fallback tail), xhigh is Codex's first fallback in
+  hard-judgment, high, xhigh and medium are #3–#5 in ui-draft, medium and low are
+  #2 and #4 in long-context, and xhigh, high and medium are in taste-final's
+  fallback tail. A host has to prove it with `omnilane resign` first.
 - **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol: second and third in
-  fast-agentic (medium, low), third in bulk-mechanical (high, then medium and
-  low), rungs of
+  fast-agentic (medium, low), fourth and fifth in bulk-mechanical (high, medium,
+  with low in the fallback tail), and rungs of
   hardest-coding, ui-draft and taste-final. It leads no lane. Max and the
   non-reasoning row are explicit-only.
-- **GPT-6 Luna:** high leads triage; its other rows are low-ceiling tails of the
-  coding, judgment, taste, UI and long-context lanes. Do not promote Luna's low
-  price into correctness-critical work.
+- **GPT-6 Luna:** high leads triage and is #5 in long-context (followed by low at
+  #6); its other rows are low-ceiling tails of the coding, judgment, taste and UI
+  lanes. Do not promote Luna's low price into correctness-critical work.
 - **GPT-6 Sol / GPT-5.6 Terra / GPT-5.6 Luna:** only max is still scored (44, 32,
   24) and none is in a lane; GPT-5.6 Sol is unscored. Select them explicitly or
   not at all.
 - **Grok 4.7:** first in live-search for native X/web search and in coding-overflow
-  for Codex-quota relief, third in consult, and the Grok tail of the hard lanes.
-  Grok 4.6 (xhigh 31) is in no lane. Verify API signatures and cited facts before
-  shipping.
+  for Codex-quota relief, third in taste-final (`value` pick at high, with low at
+  #10 in the fallback tail) and third in consult, and the Grok fallback tail of
+  hardest-coding and hard-judgment (with low also ending bulk-mechanical, ui-draft
+  and long-context). At high (ceiling 35) hardest-coding starts at Opus 5.5 low,
+  bulk-mechanical at Sol low, hard-judgment at Flash high and taste-final at Grok 4.7
+  high itself. Grok 4.6 (xhigh 31) is in no lane. Verify API signatures and cited
+  facts before shipping.
 - **Gemini 4 Argon:** High is measured (50 in v5.0.1) and selectable as
   `gemini-4-argon-high` on Antigravity with Google AI Ultra. It is in every lane
   except arbitrate, normally in the Gemini slot right before Flash; since the
@@ -623,16 +635,21 @@ can still move the chain further down.
 
 ### Model aliases
 
-Snapshot `aa-v5.0.1-2026-11-13-v1` (2026-11-13, **approved** on 2026-11-13): 75 scored rows, 82 unknown,
+Current approved snapshot `aa-v5.0.1-2026-11-13-v2` (2026-11-13, approved by the operator on 2026-11-14; 75 measured rows plus 23 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-13-v2.md`):
+
+- Explicit only: `--vendor gemini --model gemini-pro-orchestrator-g1-pro` uses proxy ceiling 54 (not AA measured); unscored lower efforts use same-model higher-effort bounds (Argon medium/low 50). No lane/value entry; host transport proof remains required, including human exemption. See `docs/reports/aa-orchestrator-2026-11-13.md`.
+- 0.63.0 full-lane rerank (against `docs/reports/aa-v5.0.1-extract-2026-11-13.json`): all six `value` lanes place the complete `aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its head from `gpt-6.1-sol medium` to `gpt-6.1-sol xhigh`), `coding-overflow` drops unscored `kimi`/`qwen`/`opencode` rows, and `fast-agentic` keeps its order while time-to-first-token is unpublished. See `docs/reports/aa-lane-rerank-2026-11-13.md`.
+
+Previous approved snapshot `aa-v5.0.1-2026-11-13-v1` (2026-11-13, **approved** on 2026-11-13): 75 scored rows, 82 unknown,
 1 reference. It adds Gemini 4 Hydrogen xhigh/high/medium/low (54/51/41/27), with the effort in the agy selector;
 Hydrogen High sits right after Argon High in every lane that lists Argon. See `docs/reports/aa-rebaseline-2026-11-13.md`.
 
-Snapshot `aa-v5.0.1-2026-11-12-v1` (2026-11-12, **approved** by the operator on 2026-11-12): same AA v5.0.1
+Previous approved snapshot `aa-v5.0.1-2026-11-12-v1` (2026-11-12, **approved** by the operator on 2026-11-12): same AA v5.0.1
 capture, 71 scored rows, 82 unknown, 1 reference. Gemini 4 Carbon high/medium/low leave the reference rows and are
 scored (60/58/54), with the effort in the agy selector; they need host proof like every other row.
 See `docs/reports/aa-rebaseline-2026-11-12.md`.
 
-Current approved snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the operator on 2026-11-10):
+Previous approved snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the operator on 2026-11-10):
 AA Intelligence Index v5.0.1, 68 scored rows, 82 unknown, 4 reference. It adds Claude Fable 5.2
 (max/xhigh/high/medium/low; Claude Code 2.1.321 or later). Rows v5.0.1 no longer scores move to
 unknown without carrying their old score. Gemini 4 Carbon and Gemini 3.1 Pro are reference rows only.
@@ -691,7 +708,7 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
 | OpenRouter | openrouter | explicit OpenRouter slug (e.g. anthropic/claude-sonnet-5) | - |
 
-OpenCode is a multi-provider CLI, work-capable, last resort in coding-overflow.
+OpenCode is a multi-provider CLI, work-capable, selectable explicitly with `--vendor opencode` (removed from the default `coding-overflow` chain in 0.63.0 because it is unscored).
 OpenRouter is direct API (`OPENROUTER_API_KEY`), **advise/consult only**, and its
 slug is mandatory: `omnilane route --vendor openrouter --model <slug> consult "<task>"`.
 

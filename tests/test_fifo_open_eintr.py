@@ -12,6 +12,7 @@ import unittest
 from offline_env import isolated_environment
 
 
+# Use measured Opus 5.5: these fixtures test lifecycle, not bound transport proof.
 ROOT = Path(__file__).resolve().parents[1]
 # dispatch.sh always starts the worker with /bin/bash; 3.2 on macOS fails the open
 # with EINTR while newer Bash blocks again, so both must converge.
@@ -119,7 +120,7 @@ class FifoOpenTests(unittest.TestCase):
             pass
         self.process.wait(timeout=5)
 
-    def start(self, shell, scenario, vendor="claude", model="claude-opus-5", effort="high", **env):
+    def start(self, shell, scenario, vendor="claude", model="claude-opus-5-5", effort="high", **env):
         self.kill_group()
         for name in ("started", "received", "release"):
             (self.root / name).unlink(missing_ok=True)
@@ -369,7 +370,7 @@ class FifoOpenTests(unittest.TestCase):
                 (job / "runner-inbox.fifo.opened").symlink_to(outside)
                 result = subprocess.run(
                     [shell, str(self.runtime / "scripts/lib/job-worker.sh"), "claude", "work",
-                     str(self.root), "claude-opus-5", "high", str(self.prompt), str(job / "out.txt")],
+                     str(self.root), "claude-opus-5-5", "high", str(self.prompt), str(job / "out.txt")],
                     env=dict(self.env, PROBE_SCENARIO="immediate"), capture_output=True, timeout=20)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(outside.exists())
@@ -512,7 +513,7 @@ class RealCloseOfAnUnopenedInboxTests(unittest.TestCase):
 printf '%s\n' "$$" > "$JOB_DIR/pid"
 while [[ -n "$1" && ! -e "$1" ]]; do sleep 0.01; done
 perl "$WORKER_ROOT/scripts/lib/job-timeout.pl" --no-deadline "$2" \
-  "$WORKER_ROOT/scripts/lib/job-worker.sh" claude work "$WORKER_DIR" claude-opus-5 high \
+  "$WORKER_ROOT/scripts/lib/job-worker.sh" claude work "$WORKER_DIR" claude-opus-5-5 high \
   "$WORKER_PROMPT" "$JOB_DIR/out.txt" > "$JOB_DIR/stdout" 2> "$JOB_DIR/stderr"
 printf '%s\n' "$?" > "$JOB_DIR/exit"
 """

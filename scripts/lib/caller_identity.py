@@ -185,6 +185,8 @@ def resolve(registry: dict, vendor: str, model: str | None,
         excluded = [row for row in rows if row["reasoning"] == "non-reasoning"]
         rows = [row for row in rows if row["reasoning"] != "non-reasoning"]
     if len(rows) == 1:
+        if not aa_policy.authority_eligible(rows[0]):
+            return None, "derived or authority-ineligible rows cannot supply caller authority"
         return rows[0], ""
     if rows:
         return None, f"{vendor} {model} at effort {effort} matches {len(rows)} scored configurations"
@@ -205,7 +207,8 @@ def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
     narrow what the caller may dispatch; it never widens it.
     """
     rows = [row for row in registry["scored_configs"]
-            if row["vendor"] == vendor and row["model"] == model]
+            if row["vendor"] == vendor and row["model"] == model
+            and aa_policy.authority_eligible(row)]
     return min(rows, key=lambda row: (row["score"], row["id"])) if rows else None
 
 
@@ -669,6 +672,8 @@ def load_registry(path: str | Path) -> tuple[dict, str]:
 
 def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool = False) -> Path:
     """One file per identity: every session launched the same way is the same caller."""
+    if not aa_policy.authority_eligible(row):
+        raise ValueError("derived or authority-ineligible rows cannot supply caller authority")
     directory = Path(home) / "caller-context"
     directory.mkdir(parents=True, exist_ok=True)
     stem = row["id"].replace("/", "--")

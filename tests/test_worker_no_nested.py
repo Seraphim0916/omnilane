@@ -527,8 +527,8 @@ print("fixture")
 class LiveFirstMessageCarriesWorkerRules(unittest.TestCase):
     VENDORS = {
         "claude": ("CLAUDE_BIN", "claude", "triage: claude claude-default high\n", ()),
-        "codex": ("CODEX_BIN", "codex", "triage: codex gpt-5.6-luna medium\n",
-                  ("--model", "gpt-5.6-luna", "--effort", "medium")),
+        "codex": ("CODEX_BIN", "codex", "triage: codex gpt-6-luna medium\n",
+                  ("--model", "gpt-6-luna", "--effort", "medium")),
         "gemini": ("AGY_BIN", "agy", 'triage: gemini "Gemini Fake" -\n', ("--mode", "sysops")),
     }
 

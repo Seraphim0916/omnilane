@@ -134,7 +134,7 @@ class GrokUnconfinedTests(unittest.TestCase):
         return path
 
     def test_shipped_coding_overflow_skips_grok_before_argon_without_opt_in(self):
-        # Gemini 4 Hydrogen high sits right after Argon high, so Argon is selected (2/8) whether or not
+        # Gemini 4 Hydrogen high sits right after Argon high, so Argon is selected (2/5) whether or not
         # this host has proven Hydrogen; the proven case must still resolve to Argon, not Hydrogen.
         for proof in (False, True):
             with self.subTest(hydrogen_proof=proof):
@@ -143,7 +143,7 @@ class GrokUnconfinedTests(unittest.TestCase):
                 self.assert_ok(result)
                 self.assertIn("vendor=gemini\n", result.stdout)
                 self.assertIn("model=gemini-4-argon-high\n", result.stdout)
-                self.assertIn("candidate=2/8\n", result.stdout)
+                self.assertIn("candidate=2/5\n", result.stdout)
                 self.assertFalse(self.marker.exists())
                 # The fixture is live: an explicit Hydrogen selector is allowed only with the proof.
                 explicit = self.work("--dry-run", *flags, "--vendor", "gemini", "--model",

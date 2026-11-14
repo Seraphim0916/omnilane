@@ -15,6 +15,7 @@ import unittest
 from offline_env import isolated_environment
 
 
+# Use measured Opus 5.5: these fixtures test lifecycle, not bound transport proof.
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_SOURCE = ROOT / "scripts/lib/job-worker.sh"
 
@@ -66,7 +67,7 @@ set -euo pipefail
             self.env["OMNILANE_IDLE_TIMEOUT"] = "0"
         process = subprocess.Popen(
             ["bash", str(self.runtime / "scripts/lib/job-worker.sh"),
-             "claude", "work", str(self.root), "claude-opus-5", "high",
+             "claude", "work", str(self.root), "claude-opus-5-5", "high",
              str(self.prompt), str(self.output)],
             env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             start_new_session=True,
@@ -110,7 +111,7 @@ set -euo pipefail
 """)
         process = subprocess.Popen(
             ["bash", str(self.runtime / "scripts/lib/job-worker.sh"), "claude", "work",
-             str(self.root), "claude-opus-5", "high", str(self.prompt), str(self.output)],
+             str(self.root), "claude-opus-5-5", "high", str(self.prompt), str(self.output)],
             env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             start_new_session=True,
         )

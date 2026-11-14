@@ -71,6 +71,8 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 
 ## What's new in v0.62.0
 
+- **Explicit-only models (0.63.0):** `--vendor gemini --model gemini-pro-orchestrator-g1-pro` uses a proxy ceiling of **54 = max(Argon high 50, Hydrogen xhigh 54)**, not an AA measurement. Unscored lower efforts use the minimum scored higher-effort bound of the same vendor/model (Argon medium/low: 50). Neither kind enters lanes or value ranking; both require host transport proof, even for a human exemption. Snapshot `aa-v5.0.1-2026-11-13-v2` contains 75 measured rows plus 23 derived rows. See [design and limits](docs/reports/aa-orchestrator-2026-11-13.md).
+- **Full-lane AA v5.0.1 rerank (0.63.0):** all six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) place the complete `scripts/aa_rebaseline.py value` chain first, followed by their remaining scored fallbacks in prior relative order; **`bulk-mechanical` moves its first choice from GPT-6.1 Sol (medium) to GPT-6.1 Sol (xhigh)**, `coding-overflow` removes unscored Kimi/Qwen/OpenCode rows, and `fast-agentic` keeps its order while AA v5.0.1 publishes no time-to-first-token. See [lane rerank report](docs/reports/aa-lane-rerank-2026-11-13.md).
 - **After upgrading, run `omnilane resign` once on each host.** The score snapshot moves to `aa-v5.0.1-2026-11-13-v1`; unchanged selector proofs carry over, but its new Gemini 4 Carbon and Gemini 4 Hydrogen selectors and two changed runners (`run-openai-compat.sh`, `run-vote.sh`) need fresh host proof; on a host with Google AI Ultra, run `omnilane resign --vendor gemini`. Exit **60** means passing selectors were installed and the rest remain pending re-check.
 - **Gemini 4 Carbon** (high 60, medium 58, low 54; Google AI Ultra in Antigravity) is scored: high, then low, lead `hardest-coding`, and medium leads `ui-draft`. **Gemini 4 Hydrogen** (xhigh 54, high 51, medium 41, low 27) is scored; Hydrogen high sits right after Argon high in every lane that lists Argon. Neither model is dispatched without transport proof, even under the human-operator exemption; lanes skip them until then, and so does `--vendor gemini` without `--model`: it passes over same-vendor rows this host has no proof for or that score above the caller's ceiling (one stderr line each) and checks the lane's next Gemini row, so `hardest-coding` and `ui-draft` reach Argon high instead of refusing. A pin never crosses to another vendor, and an explicit `--model` without proof is still refused.
 - **Three-tier, lossless task transport.** Pure API vendors send the complete task and turn a provider context-length error into a one-line exit 2; file-capable workers receive a verified workdir file pointer above their byte limit; other targets refuse before creating job, thread or goal state. See `docs/task-transport.md`.
@@ -954,7 +956,7 @@ key with no extra CLI at all):
 ```mermaid
 flowchart LR
     M["main loop<br/><i>any CLI you drive</i>"] --> T{{"routing.yaml<br/>one shared table"}}
-    T -->|hardest-coding| C1["Claude — Fable 5.2"]
+    T -->|hardest-coding| C1["Gemini — 4 Carbon (High)<br/><i>or Claude — Opus 5.5 (high)</i>"]
     T -->|bulk-mechanical| C2["Codex — GPT-6.1 Sol"]
     T -->|taste-final| C3["Claude — Sonnet 5.5"]
     T -->|long-context| C4["Codex — GPT-6 Astra"]
@@ -989,11 +991,13 @@ flowchart LR
 Defaults below — run `scripts/dispatch.sh --list` for the table your machine
 actually resolves.
 
-AA `aa-v5.0.1-2026-11-13-v1`: **approved on 2026-11-13**; 75 scored configurations. Gemini 4 Hydrogen (xhigh 54, high 51, medium 41, low 27) is scored and selectable as `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`; on 2026-11-13 agy 1.5.7 listed all four on the host that built this snapshot. The value rule places none of them. Hydrogen High joins every lane that lists Argon High, right after it: after Argon, every `--vendor gemini` call that Argon serves today still goes to Argon (a pin skips same-vendor rows without proof or above the caller's ceiling and never crosses vendors). After Argon, it serves hosts that cannot use Argon (Google AI Ultra only). No lane's first choice changes. Like Carbon, Hydrogen is never dispatched without host proof from `omnilane resign`, even under the human-operator exemption; until then lanes skip it.
+AA `aa-v5.0.1-2026-11-13-v2`: **approved by the operator on 2026-11-14**; 75 measured configurations plus 23 explicit-only derived bounds. The table below follows this snapshot and the 0.63.0 full-lane value rerank: all six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) place the complete `scripts/aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its first choice from GPT-6.1 Sol medium to GPT-6.1 Sol xhigh; Claude Opus 5.5 high sits right behind Carbon in `hardest-coding` and `ui-draft`), `coding-overflow` drops unscored Kimi/Qwen/OpenCode rows, and `fast-agentic` keeps its order while AA v5.0.1 publishes no time-to-first-token. `gemini-pro-orchestrator-g1-pro` (proxy ceiling 54) and 22 lower-effort upper-bound rows stay explicit-only, enter no lane, cannot authorize caller ceilings, and require host transport proof from `omnilane resign` even under the human-operator exemption. [Rebaseline](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator](docs/reports/aa-orchestrator-2026-11-13.md) · [Lane rerank](docs/reports/aa-lane-rerank-2026-11-13.md).
+
+AA `aa-v5.0.1-2026-11-13-v1`: **approved on 2026-11-13**; 75 scored configurations. Gemini 4 Hydrogen (xhigh 54, high 51, medium 41, low 27) is scored and selectable as `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`; on 2026-11-13 agy 1.5.7 listed all four on the host that built this snapshot. The value rule places none of them. Hydrogen High joins every lane that lists Argon High, right after it: after Argon, every `--vendor gemini` call that Argon serves today still goes to Argon (a pin skips same-vendor rows without proof or above the caller's ceiling and never crosses vendors). After Argon, it serves hosts that cannot use Argon (Google AI Ultra only). When v1 added Hydrogen alone, no lane's first choice changed (superseded by the 0.63.0 full-lane rerank in `aa-v5.0.1-2026-11-13-v2` above). Like Carbon, Hydrogen is never dispatched without host proof from `omnilane resign`, even under the human-operator exemption; until then lanes skip it.
 
 AA `aa-v5.0.1-2026-11-12-v1`: **approved by the operator on 2026-11-12**; same AA v5.0.1 capture, 71 scored configurations. Gemini 4 Carbon (high 60, medium 58, low 54; Google AI Ultra in Antigravity, agy 1.5.5) moves from comparison-only to scored, selectable as `gemini-4-carbon-high`/`-medium`/`-low`. Those selector strings are inferred from agy's effort-in-model-id convention, not published by Google or probed yet; `omnilane resign` on a host with Ultra (ADC) access confirms them. The value rule puts Carbon high (then low) first in hardest-coding and Carbon medium first in ui-draft; every other rung is unchanged, and a host that has not proven Carbon with `omnilane resign` skips it and selects exactly as before. [Evidence](docs/reports/aa-rebaseline-2026-11-12.md).
 
-AA `aa-v5.0.1-2026-11-10-v1`: **approved by the operator on 2026-11-10**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. The tables below already follow it: Fable 5.2 xhigh leads hardest-coding and hard-judgment, and long-context moves to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon is scored but has no dispatchable alias and is in no lane. Every host needs `omnilane resign` once to re-prove its overlay against the new table. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md). It replaces `aa-v4.3.2-2026-10-28-v1` (approved 2026-10-28).
+AA `aa-v5.0.1-2026-11-10-v1`: **approved by the operator on 2026-11-10**; AA Intelligence Index v5.0.1, 68 scored configurations. It adds Claude Fable 5.2 (max 65, xhigh 62, high 62, medium 56, low 54; Claude Code 2.1.321 or later) and drops every row v5.0.1 no longer scores. In that snapshot Fable 5.2 xhigh led hardest-coding and hard-judgment, and long-context moved to GPT-6 Astra (medium) because Claude Opus 5 lost its score. Gemini 4 Carbon was scored as a reference row with no dispatchable alias and was in no lane. Every host needs `omnilane resign` once to re-prove its overlay against the new table. [Evidence](docs/reports/aa-rebaseline-2026-11-10.md). It replaces `aa-v4.3.2-2026-10-28-v1` (approved 2026-10-28).
 
 AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, acting on the operator's request that day to add the new model); 130 scored configurations and 9 unknown rows. It adds GPT-6.1 Terra (six rows, max 48) and places it where the value rule picks it in hardest-coding, bulk-mechanical, ui-draft and fast-agentic; every first choice is unchanged. Host transport proof is still required. [Evidence](docs/reports/aa-rebaseline-2026-10-27.md). It replaces `aa-v4.3.2-2026-10-18-v1` (approved 2026-10-19).
 
@@ -1001,26 +1005,26 @@ AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | Gemini 4 Carbon (High) | Gemini 4 Carbon (Low) → Claude Fable 5.2 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → Claude Sonnet 5.5 (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (high) → Claude Fable 5.1 (low) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
-| 🏗️ bulk-mechanical | GPT-6.1 Sol (medium) | Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
+| 🔥 hardest-coding | Gemini 4 Carbon (High) | Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🏗️ bulk-mechanical | GPT-6.1 Sol (xhigh) | GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Fable 5.1 (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Grok 4.7 → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → GPT-6.1 Sol (medium) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
 | 💬 consult | GPT-6 Astra (xhigh) | Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
-| 🎨 ui-draft | Gemini 4 Carbon (Medium) | Claude Opus 5.5 (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
-| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
+| 🎨 ui-draft | Gemini 4 Carbon (Medium) | Claude Opus 5.5 (high) → GPT-6.1 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → Claude Opus 5.5 (medium) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
+| 📚 long-context | GPT-6 Astra (medium) | GPT-6.1 Sol (medium) → GPT-6 Astra (low) → GPT-6.1 Sol (low) → GPT-6 Luna (high) → GPT-6 Luna (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
 | ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
 | 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → Kimi Code K3 → Qwen3.8 Max → OpenCode → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
+| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 3.8 Flash (High) → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, it sits immediately before Gemini 3.8 Flash while the original value or purpose default stays first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. Since 2026-11-13 Gemini 4 Hydrogen High sits right after Argon in every lane that lists Argon. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low remain unscored.
+Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. Since 2026-11-13 Gemini 4 Hydrogen High sits immediately after Argon High (ahead of Gemini 3.8 Flash) in every lane that lists Argon. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, Argon High and Hydrogen High sit immediately before Gemini 3.8 Flash, while bulk-mechanical starts with its 0.63.0 value pick GPT-6.1 Sol (xhigh) and the four purpose lanes keep their defaults first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low have no AA measurement (explicit-only upper bound 50; in no lane).
 
 The **backup** is the next candidate in the lane's `routing.yaml` chain — what
 dispatch falls back to when the first-choice vendor CLI is not installed. Every
 lane is such a chain; when nothing in it is installed the lane degrades to `off`.
 
-> **Claude Fable 5.2 now leads hardest-coding and hard-judgment (AA v5.0.1 snapshot, approved 2026-11-10).** Scores and the re-rank are in the [rebaseline report](docs/reports/aa-rebaseline-2026-11-10.md); the per-lane comparison is in [FAQ](#-faq).
+> **0.63.0 full-lane value rerank (`aa-v5.0.1-2026-11-13-v2`):** Gemini 4 Carbon (High) leads `hardest-coding` (`Claude Opus 5.5 (high)` first on hosts without Carbon proof), Claude Fable 5.2 (xhigh) leads `hard-judgment`, GPT-6.1 Sol (xhigh) leads `bulk-mechanical`, and Gemini 4 Carbon (Medium) leads `ui-draft`. Before/after chains and scores are in the [lane rerank report](docs/reports/aa-lane-rerank-2026-11-13.md) and [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md); key trade-offs are in [FAQ](#-faq).
 
 ### Natural-language consultation
 
@@ -1099,19 +1103,20 @@ hints, not self-execution exemptions: even a same-model task is delegated.
 A native agent is eligible only when the caller explicitly confirms the exact
 model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
 The commander orchestrates and validates; workers do not delegate again.
-Starting rows below come from the score ceiling alone (AA v5.0.1 snapshot,
-approved 2026-11-10); an inherited ceiling, a failed host probe or a quota can move the
-chain further down.
+Starting rows below come from the measured AA v5.0.1 score ceiling alone
+(`aa-v5.0.1-2026-11-13-v2`, 0.63.0 full-lane value rerank; derived explicit-only
+bounds cannot authorize caller ceilings); an inherited ceiling, a failed host
+probe or a quota can move the chain further down.
 
-- **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later). At max, xhigh or high, hardest-coding and hard-judgment start on Fable 5.2 itself; still delegate. At medium the first reachable rows are Astra xhigh (hardest-coding) and Fable 5.2 medium (hard-judgment); at low, Opus 5.5 high and Fable 5.2 low.
-- **Claude Code · Fable 5.1** — at xhigh (50), hard-judgment starts on Fable 5.1 xhigh itself (still delegate); hardest-coding and taste-final start at Sonnet 5.5 xhigh; bulk-mechanical, fast-agentic and long-context at GPT-6.1 Sol medium.
-- **Claude Code · Opus 5.5** — leads ui-draft at high. At xhigh (57), hardest-coding starts at Astra xhigh and hard-judgment at Fable 5.2 medium; at medium (48), hardest-coding and hard-judgment start on Opus 5.5 medium itself, and ui-draft and long-context at GPT-6.1 Sol medium.
-- **Claude Code · Opus 5** — only max is still scored (44), so it is an explicitly selected independent reviewer at `max`, not a lane default. At that ceiling hardest-coding starts at Sonnet 5.5 high, hard-judgment at Fable 5.1 medium and long-context at Astra low.
-- **Codex · GPT-6.1 Sol** — leads bulk-mechanical and fast-agentic at medium. At xhigh (52), hardest-coding starts at Opus 5.5 high, hard-judgment at Fable 5.1 xhigh and long-context at Astra medium; at high (50), hardest-coding starts at Sonnet 5.5 xhigh.
-- **Codex · Astra** — leads consult (xhigh) and long-context (medium), and xhigh is second in hardest-coding and taste-final. At xhigh (55), hard-judgment starts at Fable 5.2 low. Select `--vendor codex --effort max` explicitly when needed; explicit model/effort always win.
-- **Codex · GPT-6.1 Terra** — the value Codex rows: second and third in fast-agentic (medium, low), third in bulk-mechanical (high). At xhigh (45), hardest-coding starts on Terra xhigh itself, hard-judgment at Fable 5.1 medium and long-context at Astra low. GPT-5.6 Terra is scored only at max and is in no lane.
-- **Grok Build · Grok 4.7** — leads live-search and coding-overflow, is third in consult, and is the Grok tail of hardest-coding, hard-judgment and taste-final. Its ceiling is 35, so most hard lanes start at Opus 5.5 low. Grok 4.6 is in no lane. Verify API signatures and cited facts.
-- **Antigravity · Gemini 4 Argon / 3.8 Flash** — Argon High (50) and, right after it, Hydrogen High (51) hold the Gemini slot in every lane, ahead of Flash. Flash is the cross-vendor fallback after it: High in consult, ui-draft, hard-judgment, live-search and coding-overflow; Medium in hardest-coding, bulk-mechanical, taste-final, long-context and fast-agentic; Low in triage. Do not infer visual taste or controller authority from agent/coding benchmarks.
+- **Claude Code · Fable 5.2** — highest-ceiling prompt-level controller (Claude Code 2.1.321 or later): leads hard-judgment (xhigh, then medium and low) and is the first fallback (#11, xhigh) after the ten value picks in hardest-coding. At max, xhigh or high (65/62/62), hard-judgment starts on Fable 5.2 itself (still delegate), while hardest-coding starts at Carbon High on hosts with Carbon proof and at Opus 5.5 high otherwise. At medium (56) and low (54), hardest-coding starts at Carbon Low (with Carbon proof) or Opus 5.5 high (without), and hard-judgment starts at Fable 5.2 medium and Fable 5.2 low respectively (consult starts at Grok 4.7 at low).
+- **Claude Code · Fable 5.1** — xhigh is fourth in hard-judgment (with high, medium and low completing its value prefix after Opus 5.5 medium), and high and low are value rungs (#6, #10) of hardest-coding. At xhigh (50), hard-judgment starts on Fable 5.1 xhigh itself (still delegate); hardest-coding and taste-final start at Sonnet 5.5 xhigh; bulk-mechanical and ui-draft start at GPT-6.1 Sol high; fast-agentic at GPT-6.1 Sol medium; long-context at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5.5** — high is second in ui-draft (right behind Carbon Medium) and third in hardest-coding (right behind Carbon High and Low, so first on hosts without Carbon proof); medium is fifth in hardest-coding and fifth in hard-judgment. At xhigh (57), hardest-coding starts at Carbon Low (with Carbon proof) or Opus 5.5 high (without), bulk-mechanical at GPT-6.1 Sol xhigh, hard-judgment at Fable 5.2 medium, and ui-draft at Opus 5.5 high; at medium (48), hardest-coding and hard-judgment start on Opus 5.5 medium itself, and bulk-mechanical, ui-draft and long-context start at GPT-6.1 Sol medium.
+- **Claude Code · Opus 5** — only max is measured (44; lower efforts have explicit-only upper bounds of 44), so it is an explicitly selected independent reviewer, in no lane. At ceiling 44, hardest-coding starts at Sonnet 5.5 high, bulk-mechanical and ui-draft at GPT-6.1 Terra high, hard-judgment at Fable 5.1 medium, and long-context at Astra low.
+- **Codex · GPT-6.1 Sol** — leads bulk-mechanical at xhigh (followed by high and medium) and fast-agentic at medium; medium is #7 in hardest-coding, xhigh is #9 in hard-judgment, high/xhigh/medium are #3–#5 in ui-draft, and medium/low are #2 and #4 in long-context. At xhigh (52), hardest-coding starts at Opus 5.5 high, bulk-mechanical on GPT-6.1 Sol xhigh itself, hard-judgment at Fable 5.1 xhigh, ui-draft at Opus 5.5 high, and long-context at Astra medium; at high (50), hardest-coding starts at Sonnet 5.5 xhigh and bulk-mechanical and ui-draft on GPT-6.1 Sol high.
+- **Codex · Astra** — leads consult (xhigh) and long-context (medium, with low at #3), and xhigh sits in the fallback tails of hardest-coding (#12) and taste-final (#4). At xhigh (55), hardest-coding starts at Carbon Low (with Carbon proof) or Opus 5.5 high (without), bulk-mechanical at GPT-6.1 Sol xhigh, and hard-judgment at Fable 5.2 low. Select `--vendor codex --effort max` explicitly when needed; explicit model/effort always win.
+- **Codex · GPT-6.1 Terra** — the value Codex rows below Sol: second and third in fast-agentic (medium, low), fourth and fifth in bulk-mechanical (high, medium), #8 in hardest-coding (xhigh), #6 in ui-draft (high), and #8 in taste-final (xhigh). At xhigh (45), hardest-coding starts on Terra xhigh itself, bulk-mechanical and ui-draft at Terra high, hard-judgment at Fable 5.1 medium, and long-context at Astra low. GPT-5.6 Terra is measured only at max (32) and is in no lane.
+- **Grok Build · Grok 4.7** — leads live-search and coding-overflow, is third in taste-final (value pick at high, with low at #10) and third in consult, and is the Grok fallback tail of hardest-coding and hard-judgment (with low also ending bulk-mechanical, ui-draft and long-context). At high (ceiling 35), hardest-coding starts at Opus 5.5 low, bulk-mechanical at GPT-6.1 Sol low, hard-judgment at Flash High, and taste-final on Grok 4.7 high itself. Grok 4.6 is in no lane. Verify API signatures and cited facts.
+- **Antigravity · Gemini 4 Carbon / Argon / Hydrogen / 3.8 Flash** — Carbon leads hardest-coding (High 60, Low 54) and ui-draft (Medium 58) when proven on a Google AI Ultra host; without host proof lanes skip it. Argon High (50) and, right after it, Hydrogen High (51) hold the Gemini slot in every lane except arbitrate, ahead of Flash. Flash is the cross-vendor fallback after them: High in consult, ui-draft, hard-judgment, live-search and coding-overflow; Medium in hardest-coding, bulk-mechanical, taste-final, long-context and fast-agentic; Low in triage. Do not infer visual taste or controller authority from agent/coding benchmarks.
 
 </details>
 
@@ -1509,24 +1514,33 @@ with the key you set — those are advise-only and never edit files.
 </details>
 
 <details>
-<summary><b>Why does Fable 5.2 now lead hard work?</b></summary>
+<summary><b>How does 0.63.0 rank Fable 5.2, Carbon, Opus 5.5 and Sol across the hard lanes?</b></summary>
 
 <br/>
 
-The 2026-11-10 snapshot (AA Intelligence Index v5.0.1, approved that day) scores Fable
-5.2 xhigh at 62, above every other row a lane can dispatch (Opus 5.5 xhigh 57,
-Astra xhigh 55). In `hardest-coding` it also leads Terminal-Bench 4.0 (0.616
-against 0.596 for both Astra and Opus 5.5 xhigh) and SciCode (0.656 against
-0.557 and 0.650). In `hard-judgment` it leads every row in the chain on HLE
-(0.689), Briefcase analytical Elo (1927) and CritPt (0.357); the first Codex
-row, GPT-6.1 Sol xhigh, has 0.526, 1691 and 0.317. It is also the most
-expensive row: an AA index run costs about $11,742 at Fable 5.2 xhigh, against
-$4,766 for Opus 5.5 xhigh and $3,746 for Astra xhigh.
+Snapshot `aa-v5.0.1-2026-11-13-v2` (AA Intelligence Index v5.0.1) places the
+complete `scripts/aa_rebaseline.py value` chain first in all six value lanes,
+followed by remaining scored fallbacks in their prior relative order:
 
-Astra xhigh stays second in `hardest-coding` and first in `consult`; Opus 5.5
-high leads `ui-draft`. Fable 5.2 needs Claude Code 2.1.321 or later. The
-operator approved the snapshot on 2026-11-10; the full per-lane
-tables are in [`docs/reports/aa-v5.0.1-lanes-2026-11-10.txt`](docs/reports/aa-v5.0.1-lanes-2026-11-10.txt).
+- **`hard-judgment`:** Claude Fable 5.2 xhigh (score 62; Claude Code 2.1.321+)
+  leads every row in the chain on HLE (0.689), Briefcase analytical Elo (1927)
+  and CritPt (0.357), followed by Fable 5.2 medium and low; the first Codex row,
+  GPT-6.1 Sol xhigh (#9), has 0.526, 1691 and 0.317.
+- **`hardest-coding`:** Gemini 4 Carbon High (60; Terminal-Bench 4.0 0.618,
+  about $2,020 per AA index run) and Carbon Low (54) lead the value prefix,
+  followed at #3 by Claude Opus 5.5 high (52; first choice on hosts without
+  Carbon proof). Fable 5.2 xhigh (Terminal-Bench 0.616, SciCode 0.656, about
+  $11,742 per AA index run) sits at #11 as the first fallback after the ten
+  value picks, followed by GPT-6 Astra xhigh (#12, ~$3,746) and Opus 5.5 xhigh
+  (#13, ~$4,766).
+- **Other re-ranked value lanes:** GPT-6.1 Sol xhigh (52) leads
+  `bulk-mechanical`, Claude Sonnet 5.5 xhigh (50) leads `taste-final`, Gemini 4
+  Carbon Medium (58, then Opus 5.5 high) leads `ui-draft`, and GPT-6 Astra
+  medium (52) leads `long-context`; Astra xhigh (55) continues to lead
+  `consult`. Carbon and Hydrogen require host transport proof from
+  `omnilane resign`. Full before/after chains and measurements are in
+  [`docs/reports/aa-lane-rerank-2026-11-13.md`](docs/reports/aa-lane-rerank-2026-11-13.md)
+  and [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
 
 </details>
 
@@ -1659,11 +1673,14 @@ next sweep with no change to omnilane.
 ## 📊 Defaults and provenance
 
 Default lane assignments follow the Artificial Analysis Intelligence Index
-v5.0.1 snapshot `aa-v5.0.1-2026-11-10-v1` (2026-11-10, approved by the
-operator on 2026-11-10), merged from 85 AA model pages; each lane is ordered
-value-first on those scores and its own measures, and rows v5.0.1 no longer
+v5.0.1 snapshot `aa-v5.0.1-2026-11-13-v2` (approved by the operator on
+2026-11-14), merged from 85 2026-11-10 AA model pages plus four 2026-11-13
+Gemini 4 Hydrogen pages (75 measured rows, plus 23 explicit-only derived bounds
+that never enter lanes); all six value lanes place the `aa_rebaseline.py value`
+chain first on those scores and their own measures, and rows v5.0.1 no longer
 scores are left out rather than carried over
-([evidence](docs/reports/aa-rebaseline-2026-11-10.md)). They are opinions, not laws — the
+([rebaseline](docs/reports/aa-rebaseline-2026-11-13-v2.md) ·
+[lane rerank](docs/reports/aa-lane-rerank-2026-11-13.md)). They are opinions, not laws — the
 configurator and `routing.local.yaml` exist so you can disagree. The full
 working notes, including per-benchmark caveats, live in
 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md).
