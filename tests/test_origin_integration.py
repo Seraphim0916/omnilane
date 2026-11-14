@@ -58,9 +58,9 @@ PROTECTED_SHA256 = {
     "scripts/lib/probe_sweep.py":
         "5b98a7facc460e94cfab573a88c4835df06b55f56f6f56d6576d0c5975d14bc7",
     "scripts/lib/transport_compat.py":
-        "c278e93b7fc44872b140d079a6cf0a4232dea6acb3165278760586fd05253080",
+        "0c600945ec27acb6505a39cc61bd99b9db4335eb56aa60791e3e6358a54cdeac",
     "config/transport-compatibility.json":
-        "85246fd69e90564b18f25b3e8aa29bdd71b1aa79726e2352d519eeef4103fe77",
+        "79fda667b8b6813201f5f6f60d5cb60436d1ab74555bbd4b1b7221dae978b274",
     "scripts/runners/run-cerebras.sh":
         "7a981da6af5cc143d9801ffd5abef4b376cbd45f31a1ee09b40999839b007b1f",
     "scripts/runners/run-claude.sh":

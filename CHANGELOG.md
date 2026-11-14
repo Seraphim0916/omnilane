@@ -6,8 +6,21 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-14
+
+### Added
+- Explicit-only Antigravity Orchestrator selector `gemini-pro-orchestrator-g1-pro`: proxy ceiling 54 derived from max(Argon high 50, Hydrogen xhigh 54), not an AA measurement. Snapshot `aa-v5.0.1-2026-11-13-v2` retains all 75 measured scores and adds one proxy plus 22 lower-effort upper bounds. Bounds use the minimum scored higher effort of the same vendor/model; unknown models without such a source still fail closed. Derived rows never enter the value pool or lane chains. Host transport proof is required even for the human exemption; the probe plan includes Orchestrator and all bounded selectors.
+- **Antigravity Desktop caller identity** (`antigravity-desktop`). `omnilane whoami`, `native-context` and dispatch now recognise a caller running inside an Antigravity Desktop conversation: the process chain must reach `/Applications/Antigravity.app/Contents/Resources/bin/language_server` whose direct parent is `/Applications/Antigravity.app/Contents/MacOS/Antigravity` (exact `realpath` match, never short process names); only `ANTIGRAVITY_CONVERSATION_ID` (a standard UUID, consistent across the current process and the direct child) is kept from the initial environment, and the model is read from that conversation's `~/.gemini/antigravity/conversations/<uuid>.db` (`executor_metadata`, protobuf path `10.1.28`). Only measured, authority-eligible Gemini rows are accepted; non-Gemini models in Antigravity are refused. The trust level matches Codex's `CODEX_THREAD_ID` plus rollout file: host-self-reported, not tamper-proof. Run `omnilane` as the only command of the tool call (no `;`, `&&`, `|`, subshell or `VAR=value` prefix; use `env VAR=value` if needed). The latest persisted `executor_metadata` row is assumed to match the active turn; concurrent turns or an unflushed mid-session model switch are known limitations. `agy` CLI still exposes no sub-agent tool. See `docs/native-executor.md` and `docs/reports/agy-desktop-identity-2026-11-13.md`.
+
+### Changed
+- **All value lanes are re-ranked against the complete AA Intelligence Index v5.0.1 extract (`docs/reports/aa-v5.0.1-extract-2026-11-13.json`).** The six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) now place the full `scripts/aa_rebaseline.py value` chain first, followed by their remaining scored cross-vendor fallbacks in their prior relative order. **`bulk-mechanical` changes its first choice from `codex gpt-6.1-sol medium` to `codex gpt-6.1-sol xhigh`** (followed by `gpt-6.1-sol high`, `gpt-6.1-sol medium`, `gpt-6.1-terra high`, `gpt-6.1-terra medium`), so callers at ceiling 52 and up reach `gpt-6.1-sol xhigh` while ceiling 48 keeps `gpt-6.1-sol medium`. In `hardest-coding`, `claude-opus-5-5 high` (score 52) is now the third rung directly behind `gemini-4-carbon-high` and `gemini-4-carbon-low`, so hosts without Carbon proof select `claude-opus-5-5 high` at ceilings 52 and up while `claude-fable-5-2 xhigh` remains first in the fallback tail. `coding-overflow` removes its three unscored tail entries (`kimi`, `qwen`, `opencode`, which remain explicitly selectable via `--vendor`), keeping `grok-4.7 high`, `gemini-4-argon-high`, `gemini-4-hydrogen-high` and `gemini-3.8-flash-high` before `off`. `fast-agentic` keeps its order while v5.0.1 publishes no time-to-first-token; `triage`, `consult`, `live-search` and `arbitrate` keep their purpose order, and all Grok rows stay in place. Stale `0.62.0` comments in `routing.yaml` claiming `--vendor gemini` never falls through within Gemini are removed. See `docs/reports/aa-lane-rerank-2026-11-13.md`.
+
 ### Fixed
 - Re-sign probes preserve `USER`/`LOGNAME`, fixing false not-logged-in results in the probe environment with Claude Code 2.1.323 and later.
+
+### Security
+- Antigravity Desktop identity parsing is hardened against hostile conversation data: the model field at `10.1.28` must match a known `gemini-*` model in the local policy table, and malformed or unrecognised field text is never echoed in errors (including the `native-context --vendor` fallback to the host's statement); protobuf varints are decoded strictly as unsigned 64-bit (more than 10 bytes or overflow is refused) and field numbers are bounded; `executor_metadata` is read with `ORDER BY idx DESC LIMIT 2`, refusing `NULL` or non-integer `idx` and a duplicated maximum `idx`; SQL bounds `length(data) <= 262144` before the BLOB is materialised, and the model selector is capped at 128 bytes; the database is opened read-only (`mode=ro`) only as a regular, non-symlinked file owned by the current user; other environment variables (such as `ANTIGRAVITY_CSRF_TOKEN` and `ANTIGRAVITY_LS_ADDRESS`) are discarded without being persisted, printed or echoed.
+- Derived or authority-ineligible score rows (the Orchestrator proxy and the lower-effort upper bounds) can never supply caller authority: identity resolution, the effort-unrecorded floor row, caller-context writes and the Antigravity Desktop path all refuse them.
 
 ## [0.62.0] - 2026-11-13
 
@@ -1944,7 +1957,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.62.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.0...HEAD
+[0.63.0]: https://github.com/Seraphim0916/omnilane/compare/v0.62.0...v0.63.0
 [0.62.0]: https://github.com/Seraphim0916/omnilane/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/Seraphim0916/omnilane/compare/v0.60.1...v0.61.0
 [0.60.1]: https://github.com/Seraphim0916/omnilane/compare/v0.60.0...v0.60.1

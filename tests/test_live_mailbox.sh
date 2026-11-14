@@ -843,13 +843,13 @@ case_codex_live_rpc() {
   local reply job job_dir close_out
   mkdir -p "$home" "$bin"
   make_codex "$fake"
-  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  printf 'triage: codex gpt-6-luna medium\n' > "$home/routing.local.yaml"
   printf -v reply 'path\to "x" 測試'
 
   job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
     FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$counter" FAKE_CODEX_REPLY="$reply" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
-    --workdir "$ROOT" --vendor codex --model gpt-5.6-luna --effort medium \
+    --workdir "$ROOT" --vendor codex --model gpt-6-luna --effort medium \
     triage 'initial prompt echo marker')"
   job_dir="$home/jobs/$job"
   register_job "$home" "$job"
@@ -878,7 +878,7 @@ assert [item["method"] for item in requests[:4]] == [
 ]
 thread = requests[1]["params"]
 assert thread["cwd"] == os.environ["ROOT"]
-assert thread["model"] == "gpt-5.6-luna"
+assert thread["model"] == "gpt-6-luna"
 assert thread["sandbox"] == "read-only"
 turn = requests[2]["params"]
 assert turn["threadId"] == "thread-live-1"
@@ -910,7 +910,7 @@ case_codex_live_large_task() {
   local over="$home/over.src" refused rc=0 rules
   mkdir -p "$home" "$bin"
   make_codex "$fake"
-  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  printf 'triage: codex gpt-6-luna medium\n' > "$home/routing.local.yaml"
   rules="$(source "$ROOT/scripts/lib/common.sh"; worker_rules_bytes)"
   python3 - "$task" "$over" "$((102400 - rules))" <<'PY'
 import pathlib
@@ -925,7 +925,7 @@ PY
 
   refused="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" FAKE_CODEX_INPUT="$input" \
     FAKE_CODEX_COUNTER="$home/codex.counter" "$ROOT/scripts/dispatch.sh" --background --live \
-    --idle-timeout 0 --workdir "$home" --vendor codex --model gpt-5.6-luna --effort medium \
+    --idle-timeout 0 --workdir "$home" --vendor codex --model gpt-6-luna --effort medium \
     triage - < "$over" 2>&1)" || rc=$?
   [[ "$rc" -eq 2 ]] || fail "over-cap live task was not refused (exit $rc): $refused"
   [[ "$refused" == *"runaway-input limit is 1048576 bytes"* ]] || fail "refusal message: $refused"
@@ -935,7 +935,7 @@ PY
   job="$(LC_ALL=C OMNILANE_HOME="$home" CODEX_BIN="$fake" \
     FAKE_CODEX_INPUT="$input" FAKE_CODEX_COUNTER="$home/codex.counter" FAKE_CODEX_REPLY="done" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
-    --workdir "$home" --vendor codex --model gpt-5.6-luna --effort medium \
+    --workdir "$home" --vendor codex --model gpt-6-luna --effort medium \
     triage - < "$task")"
   job_dir="$home/jobs/$job"
   register_job "$home" "$job"
@@ -1054,7 +1054,7 @@ printf 'codex single-shot fallback\n' > "$output"
 printf '{"type":"thread.started","thread_id":"fallback-thread"}\n'
 EOF
   chmod +x "$fake"
-  printf 'triage: codex gpt-5.6-luna medium\n' > "$home/routing.local.yaml"
+  printf 'triage: codex gpt-6-luna medium\n' > "$home/routing.local.yaml"
 
   job="$(OMNILANE_HOME="$home" CODEX_BIN="$fake" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
@@ -1133,8 +1133,8 @@ set -euo pipefail
 trap '' TERM
 printf '%s\n' "$$" > "$FAKE_CLAUDE_PIDS"
 while IFS= read -r _; do
-  printf '%s\n' '{"type":"system","model":"claude-opus-5"}'
-  printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5","content":[{"type":"text","text":"claude recovered close output"}]}}'
+  printf '%s\n' '{"type":"system","model":"claude-opus-5-5"}'
+  printf '%s\n' '{"type":"assistant","message":{"model":"claude-opus-5-5","content":[{"type":"text","text":"claude recovered close output"}]}}'
   printf '%s\n' '{"type":"result","is_error":false,"result":"claude recovered close output"}'
 done
 sleep 60 &
@@ -1143,7 +1143,7 @@ printf '%s\n' "$child" >> "$FAKE_CLAUDE_PIDS"
 wait "$child"
 EOF
   chmod +x "$fake"
-  printf 'triage: claude claude-opus-5 high\n' > "$home/routing.local.yaml"
+  printf 'triage: claude claude-opus-5-5 high\n' > "$home/routing.local.yaml"
   job="$(OMNILANE_HOME="$home" CLAUDE_BIN="$fake" FAKE_CLAUDE_PIDS="$home/claude.pids" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
     --mode work --workdir "$ROOT" --vendor claude triage 'recover completed output')"
@@ -1740,9 +1740,9 @@ def emit(value):
 
 if sys.argv[1:] not in (
     ["agent", "stdio"],
-    ["agent", "--model", "grok-4.6", "stdio"],
+    ["agent", "--model", "grok-4.7", "stdio"],
     ["--no-memory", "--no-subagents", "--no-plan", "--verbatim", "--sandbox", "off", "agent", "--always-approve", "stdio"],
-    ["--no-memory", "--no-subagents", "--no-plan", "--verbatim", "--sandbox", "off", "agent", "--always-approve", "--model", "grok-4.6", "stdio"],
+    ["--no-memory", "--no-subagents", "--no-plan", "--verbatim", "--sandbox", "off", "agent", "--always-approve", "--model", "grok-4.7", "stdio"],
 ):
     print("grok single-shot")
     raise SystemExit(0)
@@ -1835,13 +1835,13 @@ for raw in sys.stdin:
         raise SystemExit(0)
 PY
   chmod +x "$fake"
-  printf 'live-search: grok grok-4.6 high\n' > "$home/routing.local.yaml"
+  printf 'live-search: grok grok-4.7 high\n' > "$home/routing.local.yaml"
   printf -v reply 'path\\to "x" 測試'
 
   local advise_dry advise_live_out advise_live_rc=0
   advise_dry="$(OMNILANE_HOME="$home" GROK_BIN="$fake" \
     "$ROOT/scripts/dispatch.sh" --dry-run --background \
-      --workdir "$ROOT" --vendor grok --model grok-4.6 \
+      --workdir "$ROOT" --vendor grok --model grok-4.7 \
       live-search 'read-only Grok advice')"
   [[ "$advise_dry" == *"session_mode=single-shot"* ]] ||
     fail "Grok advise did not stay single-shot: $advise_dry"
@@ -1849,7 +1849,7 @@ PY
   set +e
   advise_live_out="$(OMNILANE_HOME="$home" GROK_BIN="$fake" \
     "$ROOT/scripts/dispatch.sh" --dry-run --background --live \
-      --workdir "$ROOT" --vendor grok --model grok-4.6 \
+      --workdir "$ROOT" --vendor grok --model grok-4.7 \
       live-search 'read-only Grok advice' 2>&1)"
   advise_live_rc=$?
   set -e
@@ -1862,7 +1862,7 @@ PY
     FAKE_GROK_INPUT="$input" FAKE_GROK_COUNTER="$counter" \
     FAKE_GROK_REPLY="$reply" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
-      --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.6 \
+      --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.7 \
       --effort - live-search 'initial Grok prompt')"
   job_dir="$home/jobs/$job"
   register_job "$home" "$job"
@@ -1971,11 +1971,11 @@ fi
 printf 'grok single-shot fallback\n'
 EOF
   chmod +x "$fake"
-  printf 'live-search: grok grok-4.6 high\n' > "$home/routing.local.yaml"
+  printf 'live-search: grok grok-4.7 high\n' > "$home/routing.local.yaml"
 
   job="$(OMNILANE_HOME="$home" GROK_BIN="$fake" \
     "$ROOT/scripts/dispatch.sh" --background --live --idle-timeout 0 \
-      --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.6 live-search fallback)"
+      --mode sysops --workdir "$ROOT" --vendor grok --model grok-4.7 live-search fallback)"
   job_dir="$home/jobs/$job"
   register_job "$home" "$job"
   wait_for_file "$job_dir/exit" || fail "Grok fallback job did not finish"

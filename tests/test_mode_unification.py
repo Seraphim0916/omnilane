@@ -190,7 +190,7 @@ printf 'grok mode fixture\n'
                 str(ROOT / "scripts/runners/run-grok.sh"),
                 mode,
                 str(workdir),
-                "grok-4.6",
+                "grok-4.7",
                 "-",
                 str(prompt),
                 str(output),
@@ -247,15 +247,15 @@ printf 'grok mode fixture\n'
     def test_acp_is_sysops_only(self) -> None:
         module = load_grok_live()
         self.assertEqual(
-            module.grok_acp_argv("grok", "grok-4.6", "sysops"),
+            module.grok_acp_argv("grok", "grok-4.7", "sysops"),
             [
                 "grok", "--no-memory", "--no-subagents", "--no-plan", "--verbatim",
-                "--sandbox", "off", "agent", "--always-approve", "--model", "grok-4.6", "stdio",
+                "--sandbox", "off", "agent", "--always-approve", "--model", "grok-4.7", "stdio",
             ],
         )
         for mode in ("advise", "work"):
             with self.subTest(mode=mode), self.assertRaises(ValueError):
-                module.grok_acp_argv("grok", "grok-4.6", mode)
+                module.grok_acp_argv("grok", "grok-4.7", mode)
 
 
 class ClaudeModeContracts(unittest.TestCase):

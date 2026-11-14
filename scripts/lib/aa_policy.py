@@ -29,7 +29,7 @@ MAX_BYTES = 1_048_576
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "5.0.1"
 APPROVED_AS_OF = "2026-11-13"
-APPROVED_REGISTRY_SHA256 = "a95b811703c654115014122e8651578b70915d26736cfa754c3e0b2908bd8076"
+APPROVED_REGISTRY_SHA256 = "fb5d05954fb69787be1c3b7f81bc44894adbfb72d67cc54636e34ff4bc7a9828"
 
 # Google sells Gemini 4 Carbon only to AI Ultra / ADC sign-ins (agy 1.5.5), so an installed agy
 # says nothing about whether this host may run it. The human-operator exemption lifts the
@@ -464,6 +464,20 @@ def _row_identity(row: dict[str, Any]) -> dict[str, Any]:
     return {key: row[key] for key in IDENTITY_FIELDS}
 
 
+def authority_eligible(row: dict[str, Any]) -> bool:
+    """A target bound is not evidence of the caller's own capability."""
+    return row.get("authority_eligible") is not False and not row.get("score_source")
+
+
+def _ineligible_caller(base: dict[str, Any], identity: dict[str, Any]) -> dict[str, Any]:
+    base.update(code="ineligible-caller-config", caller=identity,
+                message="derived or authority-ineligible rows cannot authorize dispatch",
+                failed_gate="caller-identity",
+                reason="a target upper bound or proxy is not measured caller authority",
+                next_command="omnilane whoami")
+    return base
+
+
 def _matching_rows(registry: dict[str, Any], identity: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in registry["scored_configs"] if _row_identity(row) == identity]
 
@@ -557,7 +571,7 @@ def _runtime_target(registry: dict[str, Any], vendor: str, model: str,
 def _requires_human_transport_proof(registry: dict[str, Any], vendor: str, model: str,
                                     target_config: str | None) -> bool:
     for row in registry["scored_configs"]:
-        if row["id"] not in HUMAN_TRANSPORT_PROOF_REQUIRED:
+        if row["id"] not in HUMAN_TRANSPORT_PROOF_REQUIRED and not row.get("score_source"):
             continue
         if target_config == row["id"]:
             return True
@@ -674,8 +688,11 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         )
         return base
     caller_row = caller_rows[0]
+    if not authority_eligible(caller_row):
+        return _ineligible_caller(base, caller_identity)
     model_rows = [row for row in registry["scored_configs"]
-                  if row["vendor"] == caller_row["vendor"] and row["model"] == caller_row["model"]]
+                  if row["vendor"] == caller_row["vendor"] and row["model"] == caller_row["model"]
+                  and authority_eligible(row)]
     if degraded and caller_row["score"] != min(row["score"] for row in model_rows):
         base.update(
             code="invalid-degraded-caller",
@@ -728,6 +745,10 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         target_score=target_score,
         target_estimated=target_row["estimated"],
     )
+    if target_row.get("score_source"):
+        base.update(target_score_source=target_row["score_source"],
+                    target_bound_from=target_row.get("bound_from"),
+                    target_proxy_of=target_row.get("proxy_of"))
     if target_score > effective:
         reaching = sorted((row for row in model_rows if row["score"] >= target_score),
                           key=lambda row: (row["score"], row["id"]))
@@ -765,7 +786,7 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
     base.update(
         allowed=True,
         code="same-score-allowed" if target_score == effective else "downward-allowed",
-        message="target exact AA score is at or below effective caller ceiling",
+        message="target score or conservative bound is at or below effective caller ceiling",
         child_context=child_context,
     )
     return base
@@ -847,8 +868,11 @@ def decide_inherited(registry: dict[str, Any], registry_sha256: str, *,
                     next_command="omnilane whoami")
         return base
     row = rows[0]
+    if not authority_eligible(row):
+        return _ineligible_caller(base, identity)
     floor = min(r["score"] for r in registry["scored_configs"]
-                if r["vendor"] == row["vendor"] and r["model"] == row["model"])
+                if r["vendor"] == row["vendor"] and r["model"] == row["model"]
+                and authority_eligible(r))
     if degraded and row["score"] != floor:
         base.update(code="invalid-degraded-caller",
                     message="an effort-unverified caller must name its model's lowest-scored row",

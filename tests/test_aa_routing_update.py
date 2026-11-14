@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline contract tests for the 2026-09-05 AA routing refresh."""
+"""Offline contract tests for the 0.63.0 (aa-v5.0.1-2026-11-13-v2) AA routing defaults."""
 
 from __future__ import annotations
 
@@ -18,14 +18,18 @@ ROOT = Path(__file__).resolve().parents[1]
 DISPATCH = ROOT / "scripts" / "dispatch.sh"
 
 
-# 2026-11-10 AA v5.0.1 re-rank (LANES-501 "now"): hardest-coding and hard-judgment lead with
-# Claude Fable 5.2 xhigh; long-context moves to the Codex family because Opus 5 lost its score.
+# 2026-11-13 AA v5.0.1 full-lane value rerank (0.63.0, snapshot aa-v5.0.1-2026-11-13-v2):
+# six value lanes place the full aa_rebaseline.py value chain first; Carbon heads hardest-coding
+# and ui-draft (with Opus 5.5 high next), Fable 5.2 xhigh heads hard-judgment, GPT-6.1 Sol xhigh
+# heads bulk-mechanical, and GPT-6 Astra medium heads long-context.
 EXPECTED_DEFAULTS = {
-    # 2026-11-13: Hydrogen high sits right after Argon high in every lane that lists Argon and heads no lane.
+    # 2026-11-13 (0.63.0): full-lane AA v5.0.1 value rerank moves bulk-mechanical's head to
+    # GPT-6.1 Sol xhigh and places Opus 5.5 high right after Carbon in hardest-coding.
+    # Hydrogen high sits right after Argon high in every lane that lists Argon and heads no lane.
     # 2026-11-12: Carbon heads hardest-coding and ui-draft. --list shows chain heads only; a host without
     # Carbon transport proof skips it at dispatch (test_human_lane_dispatch_skips_unproven_carbon).
     "hardest-coding": "gemini gemini-4-carbon-high -",
-    "bulk-mechanical": "codex gpt-6.1-sol medium",
+    "bulk-mechanical": "codex gpt-6.1-sol xhigh",
     "triage": "codex gpt-6-luna high",
     "hard-judgment": "claude claude-fable-5-2 xhigh",
     "taste-final": "claude claude-sonnet-5-5 xhigh",
@@ -39,8 +43,8 @@ EXPECTED_DEFAULTS = {
 }
 CARBON_FIRST = {"hardest-coding": ["gemini gemini-4-carbon-high -", "gemini gemini-4-carbon-low -"],
                 "ui-draft": ["gemini gemini-4-carbon-medium -"]}
-# The 2026-11-10 first choices, still next in line on a host without Carbon proof.
-BEFORE_CARBON = {"hardest-coding": "claude claude-fable-5-2 xhigh", "ui-draft": "claude claude-opus-5-5 high"}
+# Next value rung in line on a host without Carbon proof (2026-11-13 AA v5.0.1 value rerank).
+BEFORE_CARBON = {"hardest-coding": "claude claude-opus-5-5 high", "ui-draft": "claude claude-opus-5-5 high"}
 
 
 class AARoutingUpdateTests(unittest.TestCase):
@@ -105,7 +109,8 @@ class AARoutingUpdateTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(EXPECTED_DEFAULTS, self._listed(result.stdout))
 
-    def test_argon_keeps_the_five_value_and_purpose_defaults(self) -> None:
+    def test_argon_and_hydrogen_precede_flash_under_expected_lane_heads(self) -> None:
+        """Verify bulk-mechanical (0.63.0 value head Sol xhigh) and four purpose lanes keep EXPECTED_DEFAULTS[lane] first and Argon high -> Hydrogen high -> Flash in order."""
         lanes = {}
         for line in (ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
             match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
@@ -158,7 +163,7 @@ class AARoutingUpdateTests(unittest.TestCase):
                 self.assertFalse(any("gemini-4-carbon" in item for item in chain), lane)
 
     def test_human_lane_dispatch_skips_unproven_carbon(self) -> None:
-        expected = {"hardest-coding": ("claude-fable-5-2", "xhigh"), "ui-draft": ("claude-opus-5-5", "high")}
+        expected = {"hardest-coding": ("claude-opus-5-5", "high"), "ui-draft": ("claude-opus-5-5", "high")}
         for lane, (model, effort) in expected.items():
             with self.subTest(lane=lane):
                 dry = self._run("--dry-run", lane, "fixture")

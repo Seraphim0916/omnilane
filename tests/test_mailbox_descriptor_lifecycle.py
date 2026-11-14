@@ -13,6 +13,7 @@ import unittest
 from offline_env import isolated_environment
 
 
+# Use measured Opus 5.5: these fixtures test lifecycle, not bound transport proof.
 ROOT = Path(__file__).resolve().parents[1]
 
 # No close_fds sanitization: an inherited worker descriptor must remain visible.
@@ -153,7 +154,7 @@ class MailboxDescriptorLifecycleTests(unittest.TestCase):
         with (self.root / "stdout").open("w") as stdout, (self.root / "stderr").open("w") as stderr:
             self.process = subprocess.Popen(
                 ["bash", str(self.runtime / "scripts/lib/job-worker.sh"),
-                 "claude", "work", str(self.root), "claude-opus-5", "high",
+                 "claude", "work", str(self.root), "claude-opus-5-5", "high",
                  str(self.prompt), str(self.job / "out.txt")],
                 env=self.env, stdout=stdout, stderr=stderr, start_new_session=True)
         self.await_condition(lambda: all((self.root / name).exists()

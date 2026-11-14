@@ -370,6 +370,52 @@ def rescore(row: dict, record: dict, version: str, as_of: str, report: str) -> N
     row["benchmark_version"], row["as_of"], row["evidence_report"] = version, as_of, report
 
 
+PROXY_MODEL = "gemini-pro-orchestrator-g1-pro"
+PROXY_ID = "gemini/" + PROXY_MODEL
+PROXY_OF = ("gemini/gemini-4-argon", "gemini/gemini-4-hydrogen")
+EFFORT_ORDER = {effort: rank for rank, effort in enumerate(("low", "medium", "high", "xhigh", "max"))}
+
+
+def derive_scores(scored: list[dict], unknown: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Derive dispatch bounds from measured rows, never from other bounds."""
+    measured = {row["id"]: row for row in scored}
+    missing = set(PROXY_OF) - measured.keys()
+    if missing:
+        sys.exit(f"build: missing proxy sources: {', '.join(sorted(missing))}")
+    sources = [measured[cid] for cid in PROXY_OF]
+    proxy = copy.deepcopy(sources[0])
+    proxy.update(id=PROXY_ID, model=PROXY_MODEL, effort=None, aa_slug=None,
+                 score_source="proxy", proxy_of=list(PROXY_OF),
+                 score=max(r["score"] for r in sources), score_raw=max(r["score_raw"] for r in sources),
+                 estimated=True, authority_eligible=False,
+                 score_formula="max(" + ", ".join(PROXY_OF) + ")",
+                 reason="Proxy score, not AA measured; strongest internal model for this selector",
+                 source_urls=sorted({url for r in sources for url in r["source_urls"]}),
+                 transport_mapping={"status": "unknown", "runtime_verified": False,
+                                    "candidate_model_ids": [PROXY_MODEL]})
+    scored.append(proxy)
+    remaining = []
+    for row in unknown:
+        rank = EFFORT_ORDER.get(row["effort"])
+        higher = [r for r in measured.values()
+                  if (r["vendor"], r["model"]) == (row["vendor"], row["model"])
+                  and rank is not None and EFFORT_ORDER.get(r["effort"], -1) > rank]
+        if not higher or "operator-approved retirement" in row.get("reason", ""):
+            remaining.append(row)
+            continue
+        source = min(higher, key=lambda r: (r["score"], r["score_raw"], r["id"]))
+        bounded = copy.deepcopy(row)
+        selector = f"{row['model']}-{row['effort']}" if row["vendor"] == "gemini" else row["model"]
+        bounded.update(score=source["score"], score_raw=source["score_raw"], estimated=True,
+                       status="bounded", aa_slug=None, score_source="upper-bound", bound_from=source["id"],
+                       authority_eligible=False, source_urls=source["source_urls"],
+                       reason="Upper bound, not measured quality: lower effort cannot exceed higher effort",
+                       transport_mapping={"status": "unknown", "runtime_verified": False,
+                                          "candidate_model_ids": [selector]})
+        scored.append(bounded)
+    return scored, remaining
+
+
 def cmd_build(args) -> int:
     overlap = set(RETIRED_ROWS) & {row[0] for row in NEW_ROWS}
     if overlap:
@@ -377,6 +423,16 @@ def cmd_build(args) -> int:
     extract = json.loads(Path(args.extract).read_text())
     records, version, as_of = extract["records"], extract["benchmark_version"], args.as_of
     old = json.loads(Path(args.base).read_text())
+    # Rebuild derived rows from source data on every run; never carry a stale bound.
+    old = copy.deepcopy(old)
+    for row in old["scored_configs"]:
+        if row.get("score_source") == "upper-bound":
+            restored = copy.deepcopy(row)
+            for key in ("score_source", "bound_from", "score_raw", "aa_slug"):
+                restored.pop(key, None)
+            restored.update(score=None, estimated=None, status="unknown")
+            old["unknown_configs"].append(restored)
+    old["scored_configs"] = [r for r in old["scored_configs"] if not r.get("score_source")]
     new = copy.deepcopy(old)
     # a second snapshot on the same day must not reuse the first one's id or overwrite its reports
     tag = as_of if args.revision == 1 else f"{as_of}-v{args.revision}"
@@ -464,8 +520,7 @@ def cmd_build(args) -> int:
             "source_urls": [], "evidence_report": report(row["vendor"]), "mapping_status": "unknown",
             "transport_mapping": {"status": "unknown", "runtime_verified": False, "resolved_config_id": None},
         })
-    # Follow the existing Gemini 3.6 medium/low convention: known selectors with
-    # no separate AA score are unknown, never assigned their High sibling's score.
+    # Seed known scoreless selectors; derive_scores may assign conservative bounds.
     for effort in ("medium", "low"):
         cid = f"gemini/gemini-4-argon/{effort}/unspecified"
         if not any(row["id"] == cid for row in unknown):
@@ -480,6 +535,9 @@ def cmd_build(args) -> int:
                 "transport_mapping": {"status": "unknown", "runtime_verified": False,
                                       "resolved_config_id": None},
             })
+    scored, unknown = derive_scores(scored, unknown)
+    scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
+    new["scored_configs"] = scored
     new["unknown_configs"] = unknown
 
     # A reference row that NEW_ROWS now scores is no longer comparison-only.
@@ -576,7 +634,9 @@ def cmd_report(args) -> int:
             before = old.get(row["id"])
             lines.append(f"| {row['id']} | {row['effort']} | {row['score_raw']} | {row['score']} | "
                          f"{'yes' if row['estimated'] else 'no'} | "
-                         f"{before['score'] if before else 'new'} | {row['source_urls'][0]} |")
+                         f"{before['score'] if before else 'new'} | "
+                         f"{row.get('score_source', 'AA measured')}: "
+                         f"{row.get('bound_from', row.get('proxy_of', row['source_urls'][0]))} |")
         gone = [cid for cid, row in old.items() if row["vendor"] == vendor
                 and cid not in {r["id"] for r in new["scored_configs"]}]
         retired = [cid for cid in gone if cid in RETIRED_ROWS]
@@ -713,7 +773,7 @@ def value_pool(rows: list[dict]) -> list[dict]:
     family is the model as written; only the routing selector encodes it in the id.
     """
     return [r for r in rows if r["reasoning"] != "non-reasoning" and r["effort"] != "max"
-            and r["model"] in VALUE_FAMILIES]
+            and r["model"] in VALUE_FAMILIES and not r.get("score_source")]
 
 
 def cmd_value(args) -> int:

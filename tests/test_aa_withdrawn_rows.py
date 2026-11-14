@@ -63,10 +63,16 @@ class WithdrawnRowTests(unittest.TestCase):
                 self.assertEqual(once, output.read_bytes())
                 missing = json.loads(once)
                 self.assertNotIn(WITHDRAWN, {r["id"] for r in missing["scored_configs"]})
-                unknown = next(r for r in missing["unknown_configs"]
-                               if r["model"] == "claude-sonnet-5-5" and r["effort"] == "low")
-                self.assertIsNone(unknown["score"])
-                self.assertFalse(unknown["authority_eligible"])
+                # A withdrawn measurement may become an explicit-only bound,
+                # but never retain its measured identity or caller authority.
+                bound = next(r for r in missing["scored_configs"]
+                             if r["model"] == "claude-sonnet-5-5" and r["effort"] == "low"
+                             and r.get("score_source") == "upper-bound")
+                source = next(r for r in missing["scored_configs"] if r["id"] == bound["bound_from"])
+                self.assertEqual(bound["score"], source["score"])
+                self.assertFalse(bound["authority_eligible"])
+                self.assertFalse(bound["transport_mapping"]["runtime_verified"])
+                self.assertNotIn(bound, aa_rebaseline.value_pool(missing["scored_configs"]))
                 self.assertFalse(any(WITHDRAWN in a["candidate_config_ids"] for a in missing["aliases"]))
                 captured.write_text(json.dumps(extract))
                 aa_rebaseline.cmd_build(args)
