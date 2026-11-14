@@ -773,7 +773,10 @@ def _proto_path_values(data: bytes, path: tuple[int, ...]) -> list[bytes]:
 def _read_antigravity_conversation_db(
     conv_id: str, agy_dir: Path, allowed_models: set[str] | None = None
 ) -> tuple[Selector, str]:
-    """Read the latest executor_metadata protobuf path 10.1.28 from <conv_id>.db.
+    """Parse persisted metadata only; this does not prove the current caller.
+
+    The caller adapter refuses unbound turns without calling this reader. This
+    low-level decoder remains available for explicit offline diagnostics/tests.
 
     Security and ordering boundaries:
     - SQL checks `length(data) <= _ANTIGRAVITY_METADATA_MAX_BYTES` before projecting
@@ -937,18 +940,16 @@ def _read_antigravity_caller(
             break
         cur = entry[0]
 
-    if registry is None:
-        policy_path = current_environment.get("OMNILANE_AA_POLICY_FILE") or str(
-            REPO / "config" / "aa-model-policy.json"
-        )
-        try:
-            effective_registry, _ = load_registry(policy_path)
-        except (aa_policy.PolicyError, OSError, ValueError):
-            raise ValueError("cannot verify Antigravity model against AA registry") from None
-    else:
-        effective_registry = registry
-    allowed_models = known_antigravity_gemini_models(effective_registry)
-    return _read_antigravity_conversation_db(conv_id, agy_dir, allowed_models)
+    # Source: codex-s / Astra S-1 worker / MacStudio, 2026-11-14.
+    # A conversation ID and a unique latest idx do not bind this tool request to
+    # the persisted model. No trusted per-turn binding is available in this
+    # adapter; do not read unrelated metadata or grant authority from it.
+    # Explicit native-context flags may describe inherited execution only. They
+    # remain host-asserted and cannot create a caller ceiling.
+    raise ValueError(
+        "Antigravity current-turn binding is unavailable; "
+        "persisted metadata cannot supply caller authority"
+    )
 
 
 def read_caller(pid: int, lookup: Lookup = _process,

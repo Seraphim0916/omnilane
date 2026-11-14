@@ -32,6 +32,9 @@ LS_ADDR_SECRET = "127.0.0.1:59999"
 
 
 def _varint(value: int) -> bytes:
+    # This unsigned fixture encoder must not loop forever on negative int64.
+    if type(value) is not int or not 0 <= value < (1 << 64):
+        raise ValueError("fixture varint requires an unsigned 64-bit integer")
     out = bytearray()
     while True:
         byte = value & 0x7F
@@ -177,6 +180,30 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             antigravity_dir=agy_dir,
         )
 
+    def _read_persisted(self, agy_dir: Path, *, conv_id: str = CONV_UUID):
+        """Exercise the decoder, without claiming current-turn caller identity."""
+        selector, source = caller_identity._read_antigravity_conversation_db(
+            conv_id, agy_dir, caller_identity.known_antigravity_gemini_models(self.registry)
+        )
+        return 80, selector, source
+
+    def test_uint64_exact_ten_byte_boundaries_and_negative_fixture(self) -> None:
+        for value in (0, 127, 128, (1 << 63), (1 << 64) - 1):
+            encoded = _varint(value)
+            self.assertEqual(caller_identity._read_varint(encoded, 0), (value, len(encoded)))
+        self.assertEqual(_varint((1 << 64) - 1), b"\xff" * 9 + b"\x01")
+        for final in (0x02, 0x7f):
+            overflow = b"\xff" * 9 + bytes([final])
+            self.assertEqual(len(overflow), 10)
+            self.assertEqual(overflow[-1] & 0x80, 0)  # complete, not overlong
+            with self.assertRaisesRegex(ValueError, "exceeds 64 bits"):
+                caller_identity._read_varint(overflow, 0)
+        for value in (-1, -(1 << 63), 1 << 64, True):
+            with self.assertRaisesRegex(ValueError, "unsigned 64-bit"):
+                _varint(value)
+            with self.assertRaisesRegex(ValueError, "unsigned 64-bit"):
+                _pb_varint(1, value)
+
     def test_valid_carbon_hydrogen_argon_and_argon_medium_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             agy_dir = Path(tmp) / "agy"
@@ -186,7 +213,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 ("11111111-2222-3333-4444-555555555555", b"gemini-4-argon-high", "gemini-4-argon", "high"),
             ):
                 _write_synthetic_db(agy_dir, cid, [(0, _build_executor_metadata(raw))])
-                launcher, selector, source = self._run_read(agy_dir, conv_id=cid)
+                launcher, selector, source = self._read_persisted(agy_dir, conv_id=cid)
                 self.assertEqual(launcher, 80)
                 self.assertEqual(selector, ("gemini", expected_model, expected_effort))
                 self.assertIn("antigravity-desktop", source)
@@ -199,7 +226,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             # Either way it must be cleanly refused as a caller identity.
             argon_med_cid = "22222222-2222-3333-4444-555555555555"
             _write_synthetic_db(agy_dir, argon_med_cid, [(0, _build_executor_metadata(b"gemini-4-argon-medium"))])
-            _, selector, _ = self._run_read(agy_dir, conv_id=argon_med_cid)
+            _, selector, _ = self._read_persisted(agy_dir, conv_id=argon_med_cid)
             row, reason = caller_identity.resolve(self.registry, *selector)
             if row is not None:
                 self.assertFalse(caller_identity.is_authority_eligible_row(row))
@@ -236,7 +263,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             # (a) Only 10.1.13.25.32 and 10.15.*, no 10.1.28 -> must refuse.
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(None, include_aux=True))])
             with self.assertRaises(ValueError) as ctx:
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
             self.assertIn("10.1.28", str(ctx.exception))
 
             # (b) Aux fields + 10.1.28 -> exact match on 10.1.28.
@@ -245,7 +272,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 OTHER_UUID,
                 [(0, _build_executor_metadata(b"gemini-4-carbon-medium", include_aux=True))],
             )
-            _, selector, _ = self._run_read(agy_dir, conv_id=OTHER_UUID)
+            _, selector, _ = self._read_persisted(agy_dir, conv_id=OTHER_UUID)
             self.assertEqual(selector, ("gemini", "gemini-4-carbon", "medium"))
 
     def test_missing_fields_empty_table_and_missing_db(self) -> None:
@@ -253,29 +280,29 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             agy_dir = Path(tmp) / "agy"
             # Missing DB
             with self.assertRaises(ValueError) as ctx:
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
             self.assertIn("database", str(ctx.exception).lower())
 
             # Empty table
             _write_synthetic_db(agy_dir, CONV_UUID, [])
             with self.assertRaises(ValueError) as ctx:
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
             self.assertIn("executor_metadata", str(ctx.exception))
 
             # Missing field 10
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(None, omit_f10=True))])
             with self.assertRaises(ValueError):
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
 
             # Missing field 10.1
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(None, omit_f1=True))])
             with self.assertRaises(ValueError):
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
 
             # Invalid selector format (no effort suffix)
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(b"gemini-4-carbon"))])
             with self.assertRaises(ValueError):
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
 
     def test_duplicate_10_1_28_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -287,7 +314,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 [(0, _build_executor_metadata(b"gemini-4-carbon-medium", extra_tag28=b"gemini-4-hydrogen-medium"))],
             )
             with self.assertRaises(ValueError) as ctx:
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
             self.assertIn("10.1.28", str(ctx.exception))
 
             # Duplicate 10.1 with tag 28
@@ -297,7 +324,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 [(0, _build_executor_metadata(b"gemini-4-carbon-medium", extra_f1_with_tag28=b"gemini-4-hydrogen-medium"))],
             )
             with self.assertRaises(ValueError):
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
 
             # Duplicate 10 with 10.1.28
             _write_synthetic_db(
@@ -306,7 +333,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 [(0, _build_executor_metadata(b"gemini-4-carbon-medium", extra_f10_with_tag28=b"gemini-4-hydrogen-medium"))],
             )
             with self.assertRaises(ValueError):
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
 
     def test_invalid_or_duplicate_conversation_id_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -343,7 +370,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             for bad_model in (b"claude-opus-5-5-high", b"claude-sonnet-5-medium", b"gpt-6-luna-medium"):
                 _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(bad_model))])
                 with self.assertRaises(ValueError) as ctx:
-                    self._run_read(agy_dir)
+                    self._read_persisted(agy_dir)
                 self.assertIn("Antigravity 的非 Gemini 模型尚未支援", str(ctx.exception))
 
     def test_wrong_language_server_path_and_wrong_parent_not_recognized(self) -> None:
@@ -379,7 +406,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             self.assertNotIn(CSRF_SECRET, repr(parsed_env))
             self.assertNotIn(LS_ADDR_SECRET, repr(parsed_env))
 
-            # End-to-end main() success path
+            # End-to-end main() refuses even a valid persisted selector
             def env_lookup(pid: int) -> dict[str, str]:
                 if pid == 90:
                     return caller_identity._parse_procargs2(raw)[1]
@@ -401,16 +428,11 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     lookup=_fake_chain(root_pid=os.getpid()),
                     process_environment=env_lookup,
                 )
-            self.assertEqual(rc, 0, stderr_buf.getvalue())
-            ctx_path = Path(stdout_buf.getvalue().strip())
-            self.assertTrue(ctx_path.is_file())
-            ctx_text = ctx_path.read_text(encoding="utf-8")
-            ctx_data = json.loads(ctx_text)
-            self.assertEqual(ctx_data["caller"]["vendor"], "gemini")
-            self.assertEqual(ctx_data["caller"]["model"], "gemini-4-hydrogen")
-            self.assertEqual(ctx_data["caller"]["effort"], "medium")
-            self.assertEqual(ctx_data["inherited_ceiling"], 41)
-            for text in (stdout_buf.getvalue(), stderr_buf.getvalue(), ctx_text):
+            self.assertEqual(rc, 3, stderr_buf.getvalue())
+            self.assertEqual(stdout_buf.getvalue(), "")
+            self.assertFalse(home_dir.exists())
+            self.assertIn("current-turn binding is unavailable", stderr_buf.getvalue())
+            for text in (stdout_buf.getvalue(), stderr_buf.getvalue()):
                 self.assertNotIn(CSRF_SECRET, text)
                 self.assertNotIn(LS_ADDR_SECRET, text)
 
@@ -427,7 +449,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     process_environment=env_lookup,
                 )
             self.assertEqual(rc_fail, 3)
-            self.assertIn("Antigravity 的非 Gemini 模型尚未支援", stderr_err.getvalue())
+            self.assertIn("current-turn binding is unavailable", stderr_err.getvalue())
             self.assertNotIn(CSRF_SECRET, stderr_err.getvalue())
             self.assertNotIn(LS_ADDR_SECRET, stderr_err.getvalue())
 
@@ -458,6 +480,8 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     with patch.dict(os.environ, test_env, clear=False), \
                          patch.object(caller_identity, "_default_antigravity_dir", return_value=agy_dir), \
                          patch.object(caller_identity, "load_registry", return_value=(bad_reg, "synthetic")), \
+                         patch.object(caller_identity, "read_caller", return_value=(
+                             80, ("gemini", "gemini-4-carbon", "medium"), "antigravity-desktop synthetic")), \
                          redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
                         rc = caller_identity.main(
                             ["--registry", str(REGISTRY_PATH)],
@@ -479,7 +503,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                          redirect_stdout(stdout_nc), redirect_stderr(stderr_nc):
                         rc_nc = native_context.main(
                             ["--workdir", str(workdir), "--no-host-rows", "--out", str(out_file)],
-                            read_caller=lambda pid: self._run_read(agy_dir),
+                            read_caller=lambda pid: self._read_persisted(agy_dir),
                         )
                     self.assertEqual(rc_nc, 3)
                     self.assertIn(
@@ -665,13 +689,13 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 with self.subTest(case=idx):
                     _write_synthetic_db(agy_dir, CONV_UUID, [(0, bad_blob)])
                     with self.assertRaises(ValueError):
-                        self._run_read(agy_dir)
+                        self._read_persisted(agy_dir)
 
             # Standard 64-bit max varint (9 * 0xff + 0x01, used by protobuf for int64 -1) remains valid.
             max_uint64_varint = b"\xff" * 9 + b"\x01"
             valid_with_neg1 = _varint((99 << 3) | 0) + max_uint64_varint + valid_10_1_28
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, valid_with_neg1)])
-            _, selector, _ = self._run_read(agy_dir)
+            _, selector, _ = self._read_persisted(agy_dir)
             self.assertEqual(selector, ("gemini", "gemini-4-carbon", "high"))
 
     def test_p1_2_duplicate_max_idx_and_null_or_non_integer_idx_rejected(self) -> None:
@@ -702,7 +726,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             ):
                 write_unconstrained_rows(rows)
                 with self.assertRaises(ValueError) as ctx:
-                    self._run_read(agy_dir)
+                    self._read_persisted(agy_dir)
                 self.assertIn("duplicate maximum idx", str(ctx.exception))
 
             # NULL idx (alone or alongside valid integer rows) and non-integer idx must fail closed.
@@ -715,12 +739,12 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             ):
                 write_unconstrained_rows(bad_rows)
                 with self.assertRaises(ValueError) as ctx:
-                    self._run_read(agy_dir)
+                    self._read_persisted(agy_dir)
                 self.assertIn("idx", str(ctx.exception))
 
             # Distinct integer idx values pick the unique maximum row cleanly.
             write_unconstrained_rows([(1, high_blob), (2, low_blob)])
-            _, selector, _ = self._run_read(agy_dir)
+            _, selector, _ = self._read_persisted(agy_dir)
             self.assertEqual(selector, ("gemini", "gemini-4-carbon", "low"))
 
     def test_p1_3_private_text_in_10_1_28_never_echoed_in_exceptions_or_cli(self) -> None:
@@ -825,7 +849,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
 
             # Must fail closed on oversized latest row and never fall back to idx=0.
             with self.assertRaises(ValueError) as ctx:
-                self._run_read(agy_dir)
+                self._read_persisted(agy_dir)
             self.assertIn("exceeds", str(ctx.exception))
 
             # Verify SQL query itself does not materialize the oversized BLOB into Python bytes.
@@ -848,10 +872,10 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             exact_blob = base_blob + _pb_bytes(12, b"x" * exact_pad_len)
             if len(exact_blob) <= max_bytes:
                 _write_synthetic_db(agy_dir, CONV_UUID, [(0, exact_blob)])
-                _, selector, _ = self._run_read(agy_dir)
+                _, selector, _ = self._read_persisted(agy_dir)
                 self.assertEqual(selector, ("gemini", "gemini-4-carbon", "high"))
 
-    def test_native_context_uses_antigravity_desktop_harness_and_verified(self) -> None:
+    def test_native_context_explicit_fallback_is_unverified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             agy_dir = Path(tmp) / "agy"
             home_dir = Path(tmp) / "omnilane_home"
@@ -881,6 +905,9 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     [
                         "--workdir", str(workdir),
                         "--inherits-caller-runtime",
+                        "--vendor", "gemini",
+                        "--model", "gemini-4-hydrogen",
+                        "--harness", "antigravity-desktop",
                         "--no-host-rows",
                         "--out", str(out_file),
                     ],
@@ -891,8 +918,10 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             self.assertEqual(data["harness"], "antigravity-desktop")
             self.assertEqual(data["vendor"], "gemini")
             self.assertEqual(data["current_model"], "gemini-4-hydrogen")
-            self.assertEqual(data["current_effort"], "medium")
-            self.assertNotIn("caller_identity_verified", data)
+            self.assertNotIn("current_effort", data)
+            self.assertIs(data["caller_identity_verified"], False)
+            self.assertNotIn("inherited_ceiling", data)
+            self.assertNotIn("child_context", data)
             self.assertNotIn(CSRF_SECRET, out_file.read_text(encoding="utf-8"))
 
 

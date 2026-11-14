@@ -101,6 +101,13 @@ def caller_guidance(diagnostic: str) -> dict:
         return dict(reason="the launcher was found, but its effort is unknown because --effort was not set",
                     next_command="restart the CLI with explicit --model MODEL and --effort EFFORT flags, "
                                  "then retry the omnilane command")
+    if "Antigravity current-turn binding is unavailable" in diagnostic:
+        return dict(reason="Antigravity has no trusted binding from this request to its persisted model",
+                    next_command="omnilane native-context --vendor VENDOR --model MODEL "
+                                 "--harness antigravity-desktop --inherits-caller-runtime "
+                                 "--mode work --no-host-rows --workdir <dir> "
+                                 "(host statement only; use with omnilane route --inherit; "
+                                 "no caller authority or score ceiling)")
     if "Antigravity 的非 Gemini 模型尚未支援" in diagnostic:
         return dict(reason="Antigravity 的非 Gemini 模型尚未支援",
                     next_command="switch the Antigravity session to a scored Gemini model, or use "
