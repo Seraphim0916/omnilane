@@ -18,12 +18,15 @@ import ctypes
 import json
 import os
 import re
+import sqlite3
+import stat
 import struct
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Optional
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import aa_policy  # noqa: E402
@@ -44,6 +47,9 @@ Lookup = Callable[[int], Optional[tuple[int, list[str]]]]
 EnvironmentLookup = Callable[[int], dict[str, str]]
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 CODEX_TOOL_HOSTS = frozenset(("codex-code-mode-host",))
+ANTIGRAVITY_LANGUAGE_SERVER = "/Applications/Antigravity.app/Contents/Resources/bin/language_server"
+ANTIGRAVITY_APP_EXECUTABLE = "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+_TRACKED_ENV_KEYS = (b"CODEX_THREAD_ID", b"ANTIGRAVITY_CONVERSATION_ID")
 SHELLS = frozenset(("zsh", "bash", "sh", "dash", "fish"))
 TURN_END_EVENTS = frozenset(("task_complete", "turn_complete", "turn_aborted"))
 CODEX_SANDBOX_REFUSAL = (
@@ -198,6 +204,18 @@ def resolve(registry: dict, vendor: str, model: str | None,
                   f"has no row for this model or this effort, and a family match is not accepted")
 
 
+def is_authority_eligible_row(row: dict) -> bool:
+    """True when a registry row is measured and eligible to grant caller authority."""
+    policy_check = getattr(aa_policy, "authority_eligible", None)
+    if callable(policy_check) and not policy_check(row):
+        return False
+    return (
+        row.get("authority_eligible") is not False
+        and not row.get("score_source")
+        and not row.get("estimated")
+    )
+
+
 def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
     """The lowest-scored row of a known model, for a caller whose effort is unrecorded.
 
@@ -210,14 +228,28 @@ def floor_row(registry: dict, vendor: str, model: str | None) -> dict | None:
 
 
 def _thread_environment(entries: list[bytes]) -> dict[str, str]:
-    values = [entry.partition(b"=")[2] for entry in entries
-              if entry.partition(b"=")[0] == b"CODEX_THREAD_ID"]
-    if len(values) > 1:
-        raise ValueError("duplicate CODEX_THREAD_ID in initial environment")
-    return {"CODEX_THREAD_ID": values[0].decode(errors="replace")} if values else {}
+    """Extract only whitelisted conversation/thread IDs from raw environment entries.
+
+    Security boundary: neither macOS (sysctl KERN_PROCARGS2) nor Linux
+    (/proc/<pid>/environ) offers a kernel syscall to fetch a single environment
+    key from another process. The raw initial-environment buffer therefore enters
+    this process's local memory briefly and is filtered immediately in memory to
+    _TRACKED_ENV_KEYS only; unrelated variables (tokens, CSRF secrets, addresses)
+    are never decoded, retained, persisted, printed, or interpolated into errors.
+    """
+    result: dict[str, str] = {}
+    for key in _TRACKED_ENV_KEYS:
+        values = [entry.partition(b"=")[2] for entry in entries
+                  if entry.partition(b"=")[0] == key]
+        if len(values) > 1:
+            raise ValueError(f"duplicate {key.decode()} in initial environment")
+        if values:
+            result[key.decode()] = values[0].decode(errors="replace")
+    return result
 
 
 def _parse_procargs2(data: bytes) -> tuple[list[str], dict[str, str]]:
+    """Parse Darwin KERN_PROCARGS2 in local memory and retain only _TRACKED_ENV_KEYS."""
     if len(data) < 4:
         raise ValueError("truncated KERN_PROCARGS2 header")
     argc = struct.unpack_from("=i", data)[0]
@@ -245,6 +277,7 @@ def _parse_procargs2(data: bytes) -> tuple[list[str], dict[str, str]]:
 
 
 def _darwin_procargs(pid: int) -> tuple[list[str], dict[str, str]]:
+    """Read KERN_PROCARGS2 into transient process memory (OS provides no single-key query)."""
     libc = ctypes.CDLL(None, use_errno=True)
     argmax = ctypes.c_int()
     size = ctypes.c_size_t(ctypes.sizeof(argmax))
@@ -259,6 +292,7 @@ def _darwin_procargs(pid: int) -> tuple[list[str], dict[str, str]]:
 
 
 def _initial_environment(pid: int) -> dict[str, str]:
+    """Return only _TRACKED_ENV_KEYS from pid's initial environment (filtered in memory)."""
     if sys.platform == "darwin":
         return _darwin_procargs(pid)[1]
     return _thread_environment(Path(f"/proc/{pid}/environ").read_bytes().split(b"\0"))
@@ -298,6 +332,18 @@ def _process(pid: int) -> tuple[int, list[str]] | None:
     return int(parts[0]), [comm, *rest.split()]
 
 
+def _is_antigravity_desktop(pid: int, ppid: int, argv: list[str], lookup: Lookup, seen: set[int]) -> bool:
+    """Match Antigravity's language_server only when its direct parent is Antigravity.app."""
+    if not argv or os.path.realpath(argv[0]) != ANTIGRAVITY_LANGUAGE_SERVER:
+        return False
+    if ppid <= 0 or ppid in seen:
+        return False
+    parent_entry = lookup(ppid)
+    if parent_entry is None or not parent_entry[1]:
+        return False
+    return os.path.realpath(parent_entry[1][0]) == ANTIGRAVITY_APP_EXECUTABLE
+
+
 def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | None:
     """The nearest process at or above pid that is a vendor CLI, with its selector.
 
@@ -316,6 +362,8 @@ def _launcher(pid: int, lookup: Lookup) -> tuple[int, Selector, int | None] | No
         selector = read_selector(argv)
         if selector is not None:
             return pid, selector, _thread_anchor(below)
+        if _is_antigravity_desktop(pid, ppid, argv, lookup, seen):
+            return pid, ("gemini", None, None), (below[-1][0] if below else None)
         below.append((pid, argv))
         pid = ppid
     return None
@@ -593,12 +641,321 @@ def _claude_transcript_overlay(
         return fallback("transcript metadata or file unreadable")
 
 
+INELIGIBLE_AUTHORITY_REASON = "derived or authority-ineligible rows cannot supply caller authority"
+UNRECOGNIZED_ANTIGRAVITY_MODEL = "Antigravity model selector at 10.1.28 names an unrecognized model"
+_PROTO_MAX_FIELD_NUMBER = (1 << 29) - 1
+_ANTIGRAVITY_METADATA_MAX_BYTES = 262_144
+_ANTIGRAVITY_MODEL_SELECTOR_MAX_BYTES = 128
+_ANTIGRAVITY_GEMINI_MODEL_PATTERN = re.compile(r"gemini-[a-z0-9]+(?:[.-][a-z0-9]+)*\Z")
+
+
+def known_antigravity_gemini_models(registry: dict) -> set[str]:
+    """Return the set of known Gemini model IDs registered in the local policy table."""
+    known: set[str] = set()
+    for section in ("scored_configs", "unknown_configs", "reference_configs"):
+        entries = registry.get(section)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("vendor") != "gemini":
+                continue
+            model = entry.get("model")
+            if isinstance(model, str) and model.startswith("gemini-"):
+                known.add(model)
+    return known
+
+
+def validate_antigravity_caller(
+    registry: dict, vendor: str, model: str | None, source: object
+) -> None:
+    """Reject any Antigravity Desktop model not in the local policy Gemini whitelist."""
+    if isinstance(source, str) and source.startswith("antigravity-desktop"):
+        if vendor != "gemini" or not model or model not in known_antigravity_gemini_models(registry):
+            raise ValueError(UNRECOGNIZED_ANTIGRAVITY_MODEL)
+_ANTIGRAVITY_METADATA_QUERY = """
+SELECT
+    idx,
+    typeof(idx),
+    typeof(data),
+    length(data),
+    CASE
+        WHEN typeof(idx) = 'integer'
+             AND typeof(data) = 'blob'
+             AND length(data) <= ?
+        THEN data
+        ELSE NULL
+    END,
+    EXISTS(
+        SELECT 1 FROM executor_metadata
+        WHERE idx IS NULL OR typeof(idx) != 'integer'
+    )
+FROM executor_metadata
+ORDER BY idx DESC
+LIMIT 2
+"""
+
+
+def _default_antigravity_dir() -> Path:
+    return Path.home() / ".gemini" / "antigravity"
+
+
+def _read_varint(data: bytes, offset: int) -> tuple[int, int]:
+    """Decode an unsigned 64-bit protobuf varint, rejecting >10 bytes or >uint64."""
+    value = 0
+    shift = 0
+    for count in range(10):
+        if offset >= len(data):
+            raise ValueError("truncated protobuf varint")
+        byte = data[offset]
+        offset += 1
+        if count == 9 and byte > 0x01:
+            raise ValueError("protobuf varint exceeds 64 bits")
+        value |= (byte & 0x7F) << shift
+        if not (byte & 0x80):
+            return value, offset
+        shift += 7
+    raise ValueError("protobuf varint exceeds 64 bits")
+
+
+def _iter_proto_fields(data: bytes):
+    offset = 0
+    end = len(data)
+    while offset < end:
+        tag, offset = _read_varint(data, offset)
+        field_number = tag >> 3
+        wire_type = tag & 0x07
+        if field_number == 0 or field_number > _PROTO_MAX_FIELD_NUMBER:
+            raise ValueError("invalid protobuf field number")
+        if wire_type == 0:
+            _, offset = _read_varint(data, offset)
+            yield field_number, wire_type, b""
+        elif wire_type == 1:
+            if offset + 8 > end:
+                raise ValueError("truncated protobuf 64-bit field")
+            offset += 8
+            yield field_number, wire_type, b""
+        elif wire_type == 2:
+            length, offset = _read_varint(data, offset)
+            if length < 0 or offset + length > end:
+                raise ValueError("truncated protobuf length-delimited field")
+            payload = data[offset : offset + length]
+            offset += length
+            yield field_number, wire_type, payload
+        elif wire_type == 5:
+            if offset + 4 > end:
+                raise ValueError("truncated protobuf 32-bit field")
+            offset += 4
+            yield field_number, wire_type, b""
+        else:
+            raise ValueError(f"unsupported protobuf wire type {wire_type}")
+
+
+def _proto_path_values(data: bytes, path: tuple[int, ...]) -> list[bytes]:
+    if not path:
+        return [data]
+    target = path[0]
+    rest = path[1:]
+    matches: list[bytes] = []
+    for field_number, wire_type, payload in _iter_proto_fields(data):
+        if field_number != target:
+            continue
+        if wire_type != 2:
+            raise ValueError(
+                f"protobuf field {field_number} is wire type {wire_type}, expected length-delimited"
+            )
+        matches.extend(_proto_path_values(payload, rest))
+    return matches
+
+
+def _read_antigravity_conversation_db(
+    conv_id: str, agy_dir: Path, allowed_models: set[str] | None = None
+) -> tuple[Selector, str]:
+    """Read the latest executor_metadata protobuf path 10.1.28 from <conv_id>.db.
+
+    Security and ordering boundaries:
+    - SQL checks `length(data) <= _ANTIGRAVITY_METADATA_MAX_BYTES` before projecting
+      `data`, so oversized BLOBs return NULL in SQL without being materialized in
+      Python memory and are rejected fail-closed. Bounded `executor_metadata.data`
+      bytes are parsed in local process memory to extract only protobuf path `10.1.28`;
+      other fields and untrusted field values are never persisted, printed, or
+      interpolated into error messages, and `10.1.28` model IDs must match the known
+      Gemini model whitelist in the local AA policy registry.
+    - Ordering uses `ORDER BY idx DESC LIMIT 2` and rejects `idx IS NULL`,
+      non-integer `idx`, or duplicate maximum `idx` values fail-closed. Selecting the
+      unique maximum `idx` assumes the conversation database's latest persisted
+      `executor_metadata` row corresponds to the active turn; concurrent turns in the
+      same conversation or an unpersisted mid-session model switch before DB flush are
+      known limitations rather than a kernel-enforced per-turn binding.
+    """
+    uid = os.getuid()
+    conv_dir = agy_dir / "conversations"
+    try:
+        dir_st = os.lstat(conv_dir)
+    except OSError:
+        raise ValueError("Antigravity conversation database directory is missing or unreadable") from None
+    if stat.S_ISLNK(dir_st.st_mode) or not stat.S_ISDIR(dir_st.st_mode):
+        raise ValueError("Antigravity conversation database directory must be a real directory")
+    if dir_st.st_uid != uid:
+        raise ValueError("Antigravity conversation database directory owner mismatch")
+
+    db_path = conv_dir / f"{conv_id}.db"
+    try:
+        db_st = os.lstat(db_path)
+    except FileNotFoundError:
+        raise ValueError("Antigravity conversation database is missing") from None
+    except OSError:
+        raise ValueError("Antigravity conversation database is unreadable") from None
+    if stat.S_ISLNK(db_st.st_mode):
+        raise ValueError("Antigravity conversation database must not be a symlink")
+    if not stat.S_ISREG(db_st.st_mode):
+        raise ValueError("Antigravity conversation database is not a regular file")
+    if db_st.st_uid != uid:
+        raise ValueError("Antigravity conversation database owner mismatch")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{quote(str(db_path))}?mode=ro", uri=True, timeout=2.0)
+        rows = conn.execute(_ANTIGRAVITY_METADATA_QUERY, (_ANTIGRAVITY_METADATA_MAX_BYTES,)).fetchall()
+    except sqlite3.Error:
+        raise ValueError("cannot read Antigravity conversation database (sqlite error)") from None
+    finally:
+        if conn is not None:
+            conn.close()
+
+    if not rows:
+        raise ValueError("Antigravity executor_metadata is empty")
+
+    top_idx, idx_type, data_type, data_len, blob, has_invalid_idx = rows[0]
+    if has_invalid_idx or idx_type != "integer" or type(top_idx) is not int:
+        raise ValueError("Antigravity executor_metadata contains a null or non-integer idx")
+    if len(rows) > 1 and rows[0][0] == rows[1][0]:
+        raise ValueError("Antigravity executor_metadata has duplicate maximum idx")
+    if data_type != "blob":
+        raise ValueError("Antigravity executor_metadata latest row is not a blob")
+    if type(data_len) is not int or data_len > _ANTIGRAVITY_METADATA_MAX_BYTES:
+        raise ValueError(
+            f"Antigravity executor_metadata exceeds {_ANTIGRAVITY_METADATA_MAX_BYTES} bytes"
+        )
+    if not isinstance(blob, bytes) or len(blob) > _ANTIGRAVITY_METADATA_MAX_BYTES:
+        raise ValueError("Antigravity executor_metadata is empty")
+
+    try:
+        matches = _proto_path_values(blob, (10, 1, 28))
+    except ValueError as error:
+        raise ValueError(f"Antigravity executor_metadata protobuf is malformed ({error})") from None
+    if not matches:
+        raise ValueError("Antigravity executor_metadata has no model field at protobuf path 10.1.28")
+    if len(matches) != 1:
+        raise ValueError(
+            f"Antigravity executor_metadata has {len(matches)} values at protobuf path 10.1.28; expected 1"
+        )
+    if len(matches[0]) > _ANTIGRAVITY_MODEL_SELECTOR_MAX_BYTES:
+        raise ValueError("Antigravity model field at 10.1.28 is empty or malformed")
+    try:
+        raw = matches[0].decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("Antigravity model field at 10.1.28 is not valid UTF-8") from None
+    if not raw or raw != raw.strip():
+        raise ValueError("Antigravity model field at 10.1.28 is empty or malformed")
+
+    if raw.startswith(("claude-", "gpt-", "o1-", "o3-", "o4-")):
+        raise ValueError("Antigravity 的非 Gemini 模型尚未支援")
+    base, sep, suffix = raw.rpartition("-")
+    if not sep or not base or suffix not in ENCODED_EFFORTS:
+        raise ValueError("Antigravity model selector at 10.1.28 must be <model>-<effort>")
+    if not base.startswith("gemini-"):
+        raise ValueError("Antigravity 的非 Gemini 模型尚未支援")
+    if not _ANTIGRAVITY_GEMINI_MODEL_PATTERN.fullmatch(base):
+        raise ValueError("Antigravity model selector at 10.1.28 is malformed")
+    if allowed_models is not None and base not in allowed_models:
+        raise ValueError(UNRECOGNIZED_ANTIGRAVITY_MODEL)
+    return ("gemini", base, suffix), f"antigravity-desktop conversation {conv_id}"
+
+
+def _read_antigravity_caller(
+    pid: int,
+    child: int | None,
+    lookup: Lookup,
+    environment: EnvironmentLookup,
+    current_environment: Mapping[str, str],
+    antigravity_dir: str | Path | None,
+    registry: dict | None = None,
+) -> tuple[Selector, str]:
+    agy_dir = Path(antigravity_dir) if antigravity_dir is not None else _default_antigravity_dir()
+    if lookup is not _process and antigravity_dir is None and agy_dir == Path.home() / ".gemini" / "antigravity":
+        raise ValueError("fake process table cannot read real ~/.gemini without antigravity_dir")
+    conv_id = current_environment.get("ANTIGRAVITY_CONVERSATION_ID")
+    if not conv_id or not UUID_PATTERN.fullmatch(conv_id):
+        raise ValueError("current process ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID")
+    if child is None:
+        raise ValueError("cannot find the Antigravity direct child in the ancestor chain")
+    try:
+        inherited = environment(child).get("ANTIGRAVITY_CONVERSATION_ID")
+    except (OSError, ValueError) as error:
+        if isinstance(error, ValueError) and "duplicate ANTIGRAVITY_CONVERSATION_ID" in str(error):
+            raise
+        detail = f"errno {error.errno}" if isinstance(error, OSError) else "invalid environment block"
+        raise ValueError(f"cannot read Antigravity direct child initial environment ({detail})") from None
+    if not inherited or not UUID_PATTERN.fullmatch(inherited):
+        entry = lookup(child)
+        raw_name = Path(entry[1][0]).name if entry and entry[1] else "unknown"
+        name = raw_name if re.fullmatch(r"-?[A-Za-z0-9._+-]{1,64}\Z", raw_name) else "process"
+        hint = ""
+        if name.lstrip("-") in SHELLS:
+            hint = (
+                "; run the omnilane command as the only command of the tool call, "
+                "with no `;`, `&&`, `|`, subshell or VAR=value shell prefix around it "
+                "(use env VAR=value if needed)"
+            )
+        raise ValueError(
+            f"Antigravity direct child ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID "
+            f"(read from pid {child}, {name}){hint}"
+        )
+    if inherited != conv_id:
+        raise ValueError(
+            "ANTIGRAVITY_CONVERSATION_ID mismatch between current process and Antigravity direct child"
+        )
+    # Also verify no intermediate process between pid and child carries a conflicting conversation id.
+    cur = pid
+    seen: set[int] = set()
+    for _ in range(MAX_DEPTH):
+        if cur <= 0 or cur in seen or cur == child:
+            break
+        seen.add(cur)
+        try:
+            env_map = environment(cur)
+        except OSError:
+            env_map = {}
+        other = env_map.get("ANTIGRAVITY_CONVERSATION_ID")
+        if other is not None and other != conv_id:
+            raise ValueError("ANTIGRAVITY_CONVERSATION_ID mismatch in Antigravity process chain")
+        entry = lookup(cur)
+        if entry is None:
+            break
+        cur = entry[0]
+
+    if registry is None:
+        policy_path = current_environment.get("OMNILANE_AA_POLICY_FILE") or str(
+            REPO / "config" / "aa-model-policy.json"
+        )
+        try:
+            effective_registry, _ = load_registry(policy_path)
+        except (aa_policy.PolicyError, OSError, ValueError):
+            raise ValueError("cannot verify Antigravity model against AA registry") from None
+    else:
+        effective_registry = registry
+    allowed_models = known_antigravity_gemini_models(effective_registry)
+    return _read_antigravity_conversation_db(conv_id, agy_dir, allowed_models)
+
+
 def read_caller(pid: int, lookup: Lookup = _process,
                 environment: EnvironmentLookup = _initial_environment,
                 current_environment: Mapping[str, str] = os.environ,
                 now: Callable[[], datetime] | None = None, *,
                 claude_dir: str | Path | None = None,
-                start_time: Callable[[int], str | datetime | None] | None = None) -> tuple[int, Selector, str]:
+                start_time: Callable[[int], str | datetime | None] | None = None,
+                antigravity_dir: str | Path | None = None,
+                registry: dict | None = None) -> tuple[int, Selector, str]:
     if current_environment.get("OMNILANE_AA_CALLER_FROM_PROCESS") == "0":
         raise ValueError("caller identity from process is disabled")
     try:
@@ -624,6 +981,11 @@ def read_caller(pid: int, lookup: Lookup = _process,
             return launcher, selector, ""
         current, source = _claude_transcript_overlay(
             launcher, selector, current_environment, claude_dir, start_time)
+        return launcher, current, source
+    if selector[0] == "gemini" and selector[1] is None:
+        current, source = _read_antigravity_caller(
+            pid, child, lookup, environment, current_environment, antigravity_dir, registry
+        )
         return launcher, current, source
     if selector[0] != "codex" or selector[1] is not None:
         return launcher, selector, ""
@@ -697,6 +1059,20 @@ def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool
     return path
 
 
+def public_caller_error(error: BaseException) -> str:
+    """Format a caller-identity error for CLI stderr without echoing untrusted values."""
+    if isinstance(error, OSError):
+        if getattr(error, "errno", None) is not None:
+            return f"cannot read caller identity input (errno {error.errno})"
+        return "cannot read caller identity input"
+    text = " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", str(error)).split())
+    if "Antigravity" in text and ("got '" in text or 'got "' in text or "尚未支援:" in text):
+        if "尚未支援" in text:
+            return "Antigravity 的非 Gemini 模型尚未支援"
+        return "Antigravity model selector at 10.1.28 is malformed"
+    return text
+
+
 def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.environ,
          lookup: Lookup = _process,
          process_environment: EnvironmentLookup = _initial_environment) -> int:
@@ -713,13 +1089,19 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         return 3
     try:
         pid, (vendor, model, effort), source = read_caller(
-            os.getpid(), lookup, process_environment, environment)
+            os.getpid(), lookup, process_environment, environment, registry=registry)
+        validate_antigravity_caller(registry, vendor, model, source)
     except ValueError as error:
         from refusal_evidence import caller_guidance, print_human
-        print_human(dict(failed_gate="caller-identity", **caller_guidance(str(error))))
-        print(f"omnilane: cannot read the caller identity: {error}", file=sys.stderr)
+        diagnostic = public_caller_error(error)
+        print_human(dict(failed_gate="caller-identity", **caller_guidance(diagnostic)))
+        print(f"omnilane: cannot read the caller identity: {diagnostic}", file=sys.stderr)
         return 3
     row, reason = resolve(registry, vendor, model, effort)
+    if row is not None and source.startswith("antigravity-desktop"):
+        if not is_authority_eligible_row(row):
+            reason = INELIGIBLE_AUTHORITY_REASON
+            row = None
     degraded = False
     # Nonempty Claude provenance only comes from a successfully bound current
     # transcript. Launch-only missing effort keeps its existing resolution.
@@ -732,7 +1114,7 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
         from refusal_evidence import caller_guidance, print_human
         print_human(dict(failed_gate="caller-identity", **caller_guidance(reason)))
         print(f"omnilane: cannot read the caller identity from pid {pid}: {reason}", file=sys.stderr)
-        if reason.startswith(NO_ROW):
+        if reason.startswith(NO_ROW) or reason == INELIGIBLE_AUTHORITY_REASON:
             print(f"omnilane: to hand work to your own sub-agent instead, state the runtime: "
                   f"omnilane native-context --vendor {vendor} --model {model} "
                   f"--inherits-caller-runtime --workdir <dir>, then omnilane route --inherit "
