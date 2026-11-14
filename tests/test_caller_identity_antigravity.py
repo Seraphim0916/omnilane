@@ -194,16 +194,28 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 self.assertIsNotNone(row, reason)
                 self.assertEqual(row["vendor"], "gemini")
 
-            # In 0.62.0 policy table, argon only has high; argon-medium must be cleanly refused.
+            # In v1 policy, argon has no medium row (NO_ROW); in v2 (bda3c2e), argon/medium is a derived
+            # upper-bound row (estimated=True, authority_eligible=False, score_source="upper-bound").
+            # Either way it must be cleanly refused as a caller identity.
             argon_med_cid = "22222222-2222-3333-4444-555555555555"
             _write_synthetic_db(agy_dir, argon_med_cid, [(0, _build_executor_metadata(b"gemini-4-argon-medium"))])
             _, selector, _ = self._run_read(agy_dir, conv_id=argon_med_cid)
             row, reason = caller_identity.resolve(self.registry, *selector)
-            self.assertIsNone(row)
-            self.assertIn(caller_identity.NO_ROW, reason)
+            if row is not None:
+                self.assertFalse(caller_identity.is_authority_eligible_row(row))
+            else:
+                self.assertTrue(
+                    caller_identity.NO_ROW in reason or "derived or authority-ineligible" in reason,
+                    reason,
+                )
 
-            # With a synthetic policy table that includes a measured argon/medium row, it resolves cleanly.
+            # With a synthetic policy table that replaces any existing argon/medium row with a measured
+            # authority-eligible one, it resolves cleanly in both v1 and v2 schemas.
             synthetic_registry = copy.deepcopy(self.registry)
+            synthetic_registry["scored_configs"] = [
+                r for r in synthetic_registry["scored_configs"]
+                if not (r["vendor"] == "gemini" and r["model"] == "gemini-4-argon" and r["effort"] == "medium")
+            ]
             synthetic_registry["scored_configs"].append({
                 "id": "gemini/gemini-4-argon-medium",
                 "vendor": "gemini",
@@ -215,6 +227,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             })
             row2, reason2 = caller_identity.resolve(synthetic_registry, *selector)
             self.assertIsNotNone(row2, reason2)
+            self.assertTrue(caller_identity.is_authority_eligible_row(row2))
             self.assertEqual(row2["id"], "gemini/gemini-4-argon-medium")
 
     def test_auxiliary_field_interference_does_not_misfire(self) -> None:
@@ -422,28 +435,57 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             agy_dir = Path(tmp) / "agy"
             home_dir = Path(tmp) / "omnilane_home"
+            workdir = Path(tmp) / "proj"
+            workdir.mkdir()
+            out_file = Path(tmp) / "native-ctx.json"
             _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(b"gemini-4-carbon-medium"))])
-            bad_reg = copy.deepcopy(self.registry)
-            for row in bad_reg["scored_configs"]:
-                if row["id"] == "gemini/gemini-4-carbon-medium":
-                    row["estimated"] = True
             test_env = {
                 "OMNILANE_HOME": str(home_dir),
                 "ANTIGRAVITY_CONVERSATION_ID": CONV_UUID,
             }
-            stdout_buf, stderr_buf = io.StringIO(), io.StringIO()
-            with patch.dict(os.environ, test_env, clear=False), \
-                 patch.object(caller_identity, "_default_antigravity_dir", return_value=agy_dir), \
-                 patch.object(caller_identity, "load_registry", return_value=(bad_reg, "synthetic")), \
-                 redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
-                rc = caller_identity.main(
-                    ["--registry", str(REGISTRY_PATH)],
-                    environment=test_env,
-                    lookup=_fake_chain(root_pid=os.getpid()),
-                    process_environment=lambda pid: {"ANTIGRAVITY_CONVERSATION_ID": CONV_UUID} if pid == 90 else {},
-                )
-            self.assertEqual(rc, 3)
-            self.assertIn("not a measured authority-eligible", stderr_buf.getvalue())
+            for override in (
+                {"estimated": True},
+                {"authority_eligible": False},
+                {"score_source": "upper-bound"},
+            ):
+                with self.subTest(override=override):
+                    bad_reg = copy.deepcopy(self.registry)
+                    for row in bad_reg["scored_configs"]:
+                        if row["id"] == "gemini/gemini-4-carbon-medium":
+                            row.update(override)
+                            self.assertFalse(caller_identity.is_authority_eligible_row(row))
+                    stdout_buf, stderr_buf = io.StringIO(), io.StringIO()
+                    with patch.dict(os.environ, test_env, clear=False), \
+                         patch.object(caller_identity, "_default_antigravity_dir", return_value=agy_dir), \
+                         patch.object(caller_identity, "load_registry", return_value=(bad_reg, "synthetic")), \
+                         redirect_stdout(stdout_buf), redirect_stderr(stderr_buf):
+                        rc = caller_identity.main(
+                            ["--registry", str(REGISTRY_PATH)],
+                            environment=test_env,
+                            lookup=_fake_chain(root_pid=os.getpid()),
+                            process_environment=lambda pid: {"ANTIGRAVITY_CONVERSATION_ID": CONV_UUID} if pid == 90 else {},
+                        )
+                    self.assertEqual(rc, 3)
+                    self.assertIn(
+                        "derived or authority-ineligible rows cannot supply caller authority",
+                        stderr_buf.getvalue(),
+                    )
+                    self.assertNotIn("restart the CLI with explicit", stderr_buf.getvalue())
+                    self.assertNotIn("restart the vendor CLI", stderr_buf.getvalue())
+
+                    stdout_nc, stderr_nc = io.StringIO(), io.StringIO()
+                    with patch.dict(os.environ, test_env, clear=False), \
+                         patch.object(caller_identity, "load_registry", return_value=(bad_reg, "synthetic")), \
+                         redirect_stdout(stdout_nc), redirect_stderr(stderr_nc):
+                        rc_nc = native_context.main(
+                            ["--workdir", str(workdir), "--no-host-rows", "--out", str(out_file)],
+                            read_caller=lambda pid: self._run_read(agy_dir),
+                        )
+                    self.assertEqual(rc_nc, 3)
+                    self.assertIn(
+                        "derived or authority-ineligible rows cannot supply caller authority",
+                        stderr_nc.getvalue(),
+                    )
 
     def test_shell_compound_command_hint_and_no_redacted_in_human_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -461,15 +503,22 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
 
     def test_all_step_refusal_human_lines_never_redact_or_leak(self) -> None:
         diagnostics = [
-            f"current process ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID",
-            f"Antigravity direct child ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID (read from pid 90, zsh); run the omnilane command as the only command of the tool call, with no `;`, `&&`, `|`, subshell or VAR=value shell prefix around it (use env VAR=value if needed)",
+            "current process ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID",
+            "Antigravity direct child ANTIGRAVITY_CONVERSATION_ID is missing or not a UUID (read from pid 90, zsh); run the omnilane command as the only command of the tool call, with no `;`, `&&`, `|`, subshell or VAR=value shell prefix around it (use env VAR=value if needed)",
             "ANTIGRAVITY_CONVERSATION_ID mismatch between current process and Antigravity direct child",
             "Antigravity conversation database is missing",
             "Antigravity conversation database owner mismatch",
             "Antigravity executor_metadata is empty",
+            "Antigravity executor_metadata contains a null or non-integer idx",
+            "Antigravity executor_metadata has duplicate maximum idx",
+            "Antigravity executor_metadata exceeds 262144 bytes",
+            "Antigravity executor_metadata protobuf is malformed (protobuf varint exceeds 64 bits)",
             "Antigravity executor_metadata has no model field at protobuf path 10.1.28",
-            "Antigravity model selector at 10.1.28 must be <model>-<effort>, got 'gemini-4-carbon'",
-            "Antigravity 的非 Gemini 模型尚未支援: claude-opus-5-5-high",
+            "Antigravity model selector at 10.1.28 must be <model>-<effort>",
+            "Antigravity model selector at 10.1.28 is malformed",
+            "Antigravity model selector at 10.1.28 names an unrecognized model",
+            "derived or authority-ineligible rows cannot supply caller authority",
+            "Antigravity 的非 Gemini 模型尚未支援",
         ]
         for diag in diagnostics:
             line = refusal_evidence.human_line(
@@ -478,6 +527,329 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             self.assertNotIn("[redacted]", line, diag)
             self.assertNotIn(CSRF_SECRET, line, diag)
             self.assertNotIn(LS_ADDR_SECRET, line, diag)
+
+    def test_p1_a_lowercase_unknown_gemini_selector_never_echoed_and_native_context_falls_back(self) -> None:
+        token = "synthetic-private-token-7788"
+        contaminated = f"gemini-{token}-high".encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            agy_dir = Path(tmp) / "agy"
+            home_dir = Path(tmp) / "omnilane_home"
+            workdir = Path(tmp) / "proj"
+            workdir.mkdir()
+            out_file = Path(tmp) / "native-ctx.json"
+            _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(contaminated))])
+            test_env = {
+                "OMNILANE_HOME": str(home_dir),
+                "ANTIGRAVITY_CONVERSATION_ID": CONV_UUID,
+            }
+
+            # 0. Direct read_caller() refuses with fixed message and never echoes token
+            with self.assertRaises(ValueError) as ctx_direct:
+                self._run_read(agy_dir)
+            self.assertNotIn(token, str(ctx_direct.exception))
+            self.assertNotIn("7788", str(ctx_direct.exception))
+
+            # 1. omnilane whoami (caller_identity.main) refuses (rc=3) without echoing token anywhere
+            stdout_who, stderr_who = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, test_env, clear=False), \
+                 patch.object(caller_identity, "_default_antigravity_dir", return_value=agy_dir), \
+                 redirect_stdout(stdout_who), redirect_stderr(stderr_who):
+                rc_who = caller_identity.main(
+                    ["--registry", str(REGISTRY_PATH)],
+                    environment=test_env,
+                    lookup=_fake_chain(root_pid=os.getpid()),
+                    process_environment=lambda p: {"ANTIGRAVITY_CONVERSATION_ID": CONV_UUID} if p == 90 else {},
+                )
+            self.assertEqual(rc_who, 3)
+            combined_who = stdout_who.getvalue() + stderr_who.getvalue()
+            self.assertNotIn(token, combined_who)
+            self.assertNotIn("7788", combined_who)
+
+            # 2. native-context without --vendor refuses (rc=3) without echoing token
+            stdout_nc1, stderr_nc1 = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, test_env, clear=False), \
+                 redirect_stdout(stdout_nc1), redirect_stderr(stderr_nc1):
+                rc_nc1 = native_context.main(
+                    ["--workdir", str(workdir), "--no-host-rows", "--out", str(out_file)],
+                    read_caller=lambda pid: self._run_read(agy_dir),
+                )
+            self.assertEqual(rc_nc1, 3)
+            combined_nc1 = stdout_nc1.getvalue() + stderr_nc1.getvalue()
+            self.assertNotIn(token, combined_nc1)
+            self.assertNotIn("7788", combined_nc1)
+
+            # 3. native-context WITH --vendor gemini --model gemini-4-carbon --inherits-caller-runtime
+            # must fall back to host statement (rc=0, caller_identity_verified=False), NOT exit 2!
+            stdout_nc2, stderr_nc2 = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, test_env, clear=False), \
+                 redirect_stdout(stdout_nc2), redirect_stderr(stderr_nc2):
+                rc_nc2 = native_context.main(
+                    [
+                        "--workdir", str(workdir),
+                        "--vendor", "gemini",
+                        "--model", "gemini-4-carbon",
+                        "--inherits-caller-runtime",
+                        "--no-host-rows",
+                        "--out", str(out_file),
+                    ],
+                    read_caller=lambda pid: self._run_read(agy_dir),
+                )
+            self.assertEqual(rc_nc2, 0, stderr_nc2.getvalue())
+            ctx_json_text = out_file.read_text(encoding="utf-8")
+            ctx_json = json.loads(ctx_json_text)
+            self.assertIs(ctx_json["caller_identity_verified"], False)
+            self.assertEqual(ctx_json["vendor"], "gemini")
+            self.assertEqual(ctx_json["current_model"], "gemini-4-carbon")
+            combined_nc2 = stdout_nc2.getvalue() + stderr_nc2.getvalue() + ctx_json_text
+            self.assertNotIn(token, combined_nc2)
+            self.assertNotIn("7788", combined_nc2)
+            self.assertNotIn("this harness reads as", combined_nc2)
+
+            # 4. Defense-in-depth: even if an injected read_caller stub returns an unrecognized
+            # antigravity-desktop model tuple directly, native_context.main still refuses to echo
+            # it and falls back to host statement (rc=0, caller_identity_verified=False).
+            stdout_nc3, stderr_nc3 = io.StringIO(), io.StringIO()
+            with patch.dict(os.environ, test_env, clear=False), \
+                 redirect_stdout(stdout_nc3), redirect_stderr(stderr_nc3):
+                rc_nc3 = native_context.main(
+                    [
+                        "--workdir", str(workdir),
+                        "--vendor", "gemini",
+                        "--model", "gemini-4-carbon",
+                        "--inherits-caller-runtime",
+                        "--no-host-rows",
+                        "--out", str(out_file),
+                    ],
+                    read_caller=lambda pid: (
+                        80,
+                        ("gemini", f"gemini-{token}", "high"),
+                        f"antigravity-desktop conversation {CONV_UUID}",
+                    ),
+                )
+            self.assertEqual(rc_nc3, 0, stderr_nc3.getvalue())
+            ctx_json3 = json.loads(out_file.read_text(encoding="utf-8"))
+            self.assertIs(ctx_json3["caller_identity_verified"], False)
+            combined_nc3 = stdout_nc3.getvalue() + stderr_nc3.getvalue() + out_file.read_text(encoding="utf-8")
+            self.assertNotIn(token, combined_nc3)
+            self.assertNotIn("7788", combined_nc3)
+            self.assertNotIn("this harness reads as", combined_nc3)
+
+    def test_p1_1_overflowing_protobuf_varint_and_invalid_field_number_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            agy_dir = Path(tmp) / "agy"
+            valid_10_1_28 = _pb_bytes(10, _pb_bytes(1, _pb_bytes(28, b"gemini-4-carbon-high")))
+            overflow_9ff_7f = b"\xff" * 9 + b"\x7f"
+            overflow_9ff_02 = b"\xff" * 9 + b"\x02"
+            overflow_11_bytes = b"\x80" * 10 + b"\x01"
+
+            # Overflowing varint in an unknown field at top level, inside field 10, and inside field 10.1.
+            malformed_blobs = [
+                _varint((99 << 3) | 0) + overflow_9ff_7f + valid_10_1_28,
+                _varint((99 << 3) | 0) + overflow_9ff_02 + valid_10_1_28,
+                _varint((99 << 3) | 0) + overflow_11_bytes + valid_10_1_28,
+                _pb_bytes(
+                    10,
+                    _varint((99 << 3) | 0) + overflow_9ff_7f + _pb_bytes(1, _pb_bytes(28, b"gemini-4-carbon-high")),
+                ),
+                _pb_bytes(
+                    10,
+                    _pb_bytes(
+                        1,
+                        _varint((99 << 3) | 0) + overflow_9ff_7f + _pb_bytes(28, b"gemini-4-carbon-high"),
+                    ),
+                ),
+                # Field number exceeding the 29-bit protobuf maximum (0x1FFFFFFF).
+                _varint(((0x1FFFFFFF + 1) << 3) | 0) + _varint(1) + valid_10_1_28,
+            ]
+            for idx, bad_blob in enumerate(malformed_blobs):
+                with self.subTest(case=idx):
+                    _write_synthetic_db(agy_dir, CONV_UUID, [(0, bad_blob)])
+                    with self.assertRaises(ValueError):
+                        self._run_read(agy_dir)
+
+            # Standard 64-bit max varint (9 * 0xff + 0x01, used by protobuf for int64 -1) remains valid.
+            max_uint64_varint = b"\xff" * 9 + b"\x01"
+            valid_with_neg1 = _varint((99 << 3) | 0) + max_uint64_varint + valid_10_1_28
+            _write_synthetic_db(agy_dir, CONV_UUID, [(0, valid_with_neg1)])
+            _, selector, _ = self._run_read(agy_dir)
+            self.assertEqual(selector, ("gemini", "gemini-4-carbon", "high"))
+
+    def test_p1_2_duplicate_max_idx_and_null_or_non_integer_idx_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            agy_dir = Path(tmp) / "agy"
+            conv_dir = agy_dir / "conversations"
+            conv_dir.mkdir(parents=True, exist_ok=True)
+            db_path = conv_dir / f"{CONV_UUID}.db"
+            high_blob = _build_executor_metadata(b"gemini-4-carbon-high")
+            low_blob = _build_executor_metadata(b"gemini-4-carbon-low")
+
+            def write_unconstrained_rows(rows: list[tuple[object, object]]) -> None:
+                conn = sqlite3.connect(db_path)
+                try:
+                    conn.execute("DROP TABLE IF EXISTS executor_metadata")
+                    conn.execute("CREATE TABLE executor_metadata (idx integer, data blob)")
+                    for r_idx, r_blob in rows:
+                        conn.execute("INSERT INTO executor_metadata (idx, data) VALUES (?, ?)", (r_idx, r_blob))
+                    conn.commit()
+                finally:
+                    conn.close()
+
+            # Duplicate maximum idx in both insertion orders must fail closed (never pick high or low).
+            for rows in (
+                [(5, high_blob), (5, low_blob)],
+                [(5, low_blob), (5, high_blob)],
+                [(1, low_blob), (7, high_blob), (7, low_blob)],
+            ):
+                write_unconstrained_rows(rows)
+                with self.assertRaises(ValueError) as ctx:
+                    self._run_read(agy_dir)
+                self.assertIn("duplicate maximum idx", str(ctx.exception))
+
+            # NULL idx (alone or alongside valid integer rows) and non-integer idx must fail closed.
+            for bad_rows in (
+                [(None, high_blob)],
+                [(1, low_blob), (None, high_blob)],
+                [(2, low_blob), (1, low_blob), (None, high_blob)],
+                [(5, low_blob), ("not-an-int", high_blob)],
+                [(5, low_blob), (1.5, high_blob)],
+            ):
+                write_unconstrained_rows(bad_rows)
+                with self.assertRaises(ValueError) as ctx:
+                    self._run_read(agy_dir)
+                self.assertIn("idx", str(ctx.exception))
+
+            # Distinct integer idx values pick the unique maximum row cleanly.
+            write_unconstrained_rows([(1, high_blob), (2, low_blob)])
+            _, selector, _ = self._run_read(agy_dir)
+            self.assertEqual(selector, ("gemini", "gemini-4-carbon", "low"))
+
+    def test_p1_3_private_text_in_10_1_28_never_echoed_in_exceptions_or_cli(self) -> None:
+        secret = "SYNTHETIC_PRIVATE_TEXT"
+        with tempfile.TemporaryDirectory() as tmp:
+            agy_dir = Path(tmp) / "agy"
+            home_dir = Path(tmp) / "omnilane_home"
+            workdir = Path(tmp) / "proj"
+            workdir.mkdir()
+            out_file = Path(tmp) / "native-ctx.json"
+            test_env = {
+                "OMNILANE_HOME": str(home_dir),
+                "ANTIGRAVITY_CONVERSATION_ID": CONV_UUID,
+            }
+
+            for contaminated in (
+                secret.encode("utf-8"),
+                f"{secret}-high".encode("utf-8"),
+                f"claude-{secret}-high".encode("utf-8"),
+                f"gemini-{secret}-high".encode("utf-8"),
+            ):
+                with self.subTest(payload=contaminated):
+                    _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(contaminated))])
+
+                    # 1. Direct read_caller() exception text
+                    with self.assertRaises(ValueError) as ctx:
+                        self._run_read(agy_dir)
+                    self.assertNotIn(secret, str(ctx.exception))
+                    self.assertNotIn("SYNTHETIC", str(ctx.exception))
+                    self.assertNotIn("PRIVATE", str(ctx.exception))
+
+                    # 2. caller_identity.main() CLI refusal output
+                    stdout_who, stderr_who = io.StringIO(), io.StringIO()
+                    with patch.dict(os.environ, test_env, clear=False), \
+                         patch.object(caller_identity, "_default_antigravity_dir", return_value=agy_dir), \
+                         redirect_stdout(stdout_who), redirect_stderr(stderr_who):
+                        rc_who = caller_identity.main(
+                            ["--registry", str(REGISTRY_PATH)],
+                            environment=test_env,
+                            lookup=_fake_chain(root_pid=os.getpid()),
+                            process_environment=lambda p: {"ANTIGRAVITY_CONVERSATION_ID": CONV_UUID} if p == 90 else {},
+                        )
+                    self.assertEqual(rc_who, 3)
+                    combined_who = stdout_who.getvalue() + stderr_who.getvalue()
+                    self.assertNotIn(secret, combined_who)
+                    self.assertNotIn("SYNTHETIC", combined_who)
+
+                    # 3. native_context.main() CLI refusal and host-statement fallback output
+                    def fake_read_caller(pid: int):
+                        return self._run_read(agy_dir)
+
+                    stdout_nc1, stderr_nc1 = io.StringIO(), io.StringIO()
+                    with patch.dict(os.environ, test_env, clear=False), \
+                         redirect_stdout(stdout_nc1), redirect_stderr(stderr_nc1):
+                        rc_nc1 = native_context.main(
+                            ["--workdir", str(workdir), "--no-host-rows", "--out", str(out_file)],
+                            read_caller=fake_read_caller,
+                        )
+                    self.assertEqual(rc_nc1, 3)
+                    combined_nc1 = stdout_nc1.getvalue() + stderr_nc1.getvalue()
+                    self.assertNotIn(secret, combined_nc1)
+                    self.assertNotIn("SYNTHETIC", combined_nc1)
+
+                    stdout_nc2, stderr_nc2 = io.StringIO(), io.StringIO()
+                    with patch.dict(os.environ, test_env, clear=False), \
+                         redirect_stdout(stdout_nc2), redirect_stderr(stderr_nc2):
+                        rc_nc2 = native_context.main(
+                            [
+                                "--workdir", str(workdir),
+                                "--vendor", "gemini",
+                                "--model", "gemini-4-carbon",
+                                "--inherits-caller-runtime",
+                                "--no-host-rows",
+                                "--out", str(out_file),
+                            ],
+                            read_caller=fake_read_caller,
+                        )
+                    self.assertEqual(rc_nc2, 0)
+                    combined_nc2 = stdout_nc2.getvalue() + stderr_nc2.getvalue() + out_file.read_text(encoding="utf-8")
+                    self.assertNotIn(secret, combined_nc2)
+                    self.assertNotIn("SYNTHETIC", combined_nc2)
+
+    def test_p1_4_oversized_executor_metadata_blob_rejected_in_sql_without_fetching(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            agy_dir = Path(tmp) / "agy"
+            max_bytes = getattr(caller_identity, "_ANTIGRAVITY_METADATA_MAX_BYTES", 262_144)
+            base_blob = _build_executor_metadata(b"gemini-4-carbon-high", include_aux=False)
+            # Construct a valid protobuf padding field so total length == max_bytes + 1.
+            pad_header_probe = _varint((12 << 3) | 2)
+            # Solve payload_len such that len(base_blob) + len(tag) + len(varint(payload_len)) + payload_len == max_bytes + 1
+            target_total = max_bytes + 1
+            payload_len = target_total - len(base_blob) - len(pad_header_probe) - 3
+            while len(base_blob) + len(_pb_bytes(12, b"x" * payload_len)) < target_total:
+                payload_len += 1
+            while len(base_blob) + len(_pb_bytes(12, b"x" * payload_len)) > target_total:
+                payload_len -= 1
+            oversized_blob = base_blob + _pb_bytes(12, b"x" * payload_len)
+            self.assertEqual(len(oversized_blob), max_bytes + 1)
+
+            small_old_blob = _build_executor_metadata(b"gemini-4-carbon-low", include_aux=False)
+            db_path = _write_synthetic_db(agy_dir, CONV_UUID, [(0, small_old_blob), (1, oversized_blob)])
+
+            # Must fail closed on oversized latest row and never fall back to idx=0.
+            with self.assertRaises(ValueError) as ctx:
+                self._run_read(agy_dir)
+            self.assertIn("exceeds", str(ctx.exception))
+
+            # Verify SQL query itself does not materialize the oversized BLOB into Python bytes.
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                rows = conn.execute(
+                    caller_identity._ANTIGRAVITY_METADATA_QUERY,
+                    (max_bytes,),
+                ).fetchall()
+            finally:
+                conn.close()
+            self.assertEqual(rows[0][0], 1)
+            self.assertEqual(rows[0][3], max_bytes + 1)
+            self.assertIsNone(rows[0][4])
+
+            # Exact boundary length == max_bytes remains accepted.
+            exact_blob = oversized_blob[:-1]
+            # Adjust field 12 length by 1 byte so protobuf stays valid at exact max_bytes.
+            exact_pad_len = payload_len - 1
+            exact_blob = base_blob + _pb_bytes(12, b"x" * exact_pad_len)
+            if len(exact_blob) <= max_bytes:
+                _write_synthetic_db(agy_dir, CONV_UUID, [(0, exact_blob)])
+                _, selector, _ = self._run_read(agy_dir)
+                self.assertEqual(selector, ("gemini", "gemini-4-carbon", "high"))
 
     def test_native_context_uses_antigravity_desktop_harness_and_verified(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

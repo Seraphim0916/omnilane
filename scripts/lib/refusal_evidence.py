@@ -78,6 +78,12 @@ def caller_guidance(diagnostic: str) -> dict:
                            "unscored callers by design until the table is updated in a release",
                     next_command='omnilane route --inherit --native-context <file> <lane> "<task>" '
                                  "(your own sub-agent; create its runtime capability file with omnilane native-context)")
+    if "derived or authority-ineligible" in diagnostic:
+        return dict(reason="this model configuration is a derived bound or authority-ineligible row "
+                           "and cannot supply caller authority",
+                    next_command='switch to a measured authority-eligible model, or run '
+                                 'omnilane route --inherit --native-context <file> <lane> "<task>" '
+                                 "(create <file> with omnilane native-context)")
     if "only command" in diagnostic and "codex" in diagnostic.lower():
         return dict(reason="the Codex compound command hid the caller identity",
                     next_command="run the omnilane command alone as the only command of the tool call, "
@@ -115,7 +121,8 @@ def caller_guidance(diagnostic: str) -> dict:
                     next_command="check the conversation database file permissions and owner, "
                                  "then retry omnilane whoami")
     if ("executor_metadata" in diagnostic or "10.1.28" in diagnostic) and "Antigravity" in diagnostic:
-        return dict(reason="Antigravity model field 10.1.28 is missing, duplicated, or malformed",
+        return dict(reason="Antigravity executor_metadata or model field 10.1.28 is missing, ambiguous, "
+                           "unrecognized, or malformed",
                     next_command="send a turn with a scored Gemini model in Antigravity Desktop, "
                                  "then retry omnilane whoami")
     if "Antigravity" in diagnostic:

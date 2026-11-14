@@ -211,13 +211,24 @@ def main(argv: list[str] | None = None, read_caller=caller_identity.read_caller)
     verified, recorded, source = True, None, ""
     try:
         registry, _ = caller_identity.load_registry(args.registry)
-        _, (vendor, model, effort), source = read_caller(os.getpid())
+        if read_caller is caller_identity.read_caller:
+            _, (vendor, model, effort), source = read_caller(os.getpid(), registry=registry)
+        else:
+            _, (vendor, model, effort), source = read_caller(os.getpid())
+        caller_identity.validate_antigravity_caller(registry, vendor, model, source)
     except (ValueError, OSError) as error:
+        source = ""
+        diagnostic = caller_identity.public_caller_error(error)
         if not args.vendor:
-            print(f"omnilane: cannot read the caller identity: {error}\n{HOST_STATEMENT_HINT}", file=sys.stderr)
+            print(
+                f"omnilane: cannot read the caller identity: {diagnostic}\n{HOST_STATEMENT_HINT}",
+                file=sys.stderr,
+            )
             return 3
-        print(f"omnilane: caller identity not verified ({error}); using the host's statement",
-              file=sys.stderr)
+        print(
+            f"omnilane: caller identity not verified ({diagnostic}); using the host's statement",
+            file=sys.stderr,
+        )
         verified, vendor, model = False, args.vendor, args.model
     else:
         if args.vendor and (args.vendor != vendor or (model is not None and args.model != model)):
@@ -227,8 +238,7 @@ def main(argv: list[str] | None = None, read_caller=caller_identity.read_caller)
         row, reason = caller_identity.resolve(registry, vendor, model, effort)
         if row is not None and isinstance(source, str) and source.startswith("antigravity-desktop"):
             if not caller_identity.is_authority_eligible_row(row):
-                reason = (f"{caller_identity.NO_ROW} {vendor} {model} at effort {effort}: "
-                          f"row {row['id']} is not a measured authority-eligible configuration")
+                reason = caller_identity.INELIGIBLE_AUTHORITY_REASON
                 row = None
         if row is not None:
             # Codex spells its reasoning-off effort "none"; the registry stores it as null.

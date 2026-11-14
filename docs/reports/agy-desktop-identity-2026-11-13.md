@@ -7,6 +7,8 @@
   - `/Users/vincentw/.ssot/root/task-records/2026-11-13-omnilane-agy-identity/IMPL-BRIEF.md`（SHA256[:16] `a8c0ed3e2f540220`）
 - **工作樹與分支**：`/Users/vincentw/dev/omnilane-wt/agy-identity`（分支 `feat/agy-desktop-identity`，基底 `227f77c`（`0.62.0` 分支最新提交，含 `agy` 工作代理修正；已確認與 `227f77c` 無衝突並完整保留全部改動），**未提交、未推送**）
 
+> **2026-11-14 R1/R2 審查補強附註（`agy-s`）**：本文下方第 1 節所述 SQL（`SELECT data FROM executor_metadata ORDER BY idx DESC LIMIT 1`）與第 6 節檔案 `SHA256` 為 **2026-11-13 初版（R0）歷史快照**。經 2026-11-14 雲端獨立審查員 `Dot` 與本機第二方審查員對抗審查後，實作已升級為：`ORDER BY idx DESC LIMIT 2` 搭配 SQL 層 `length(data) <= 262144` 與全表 `idx` 非空整數／最大 `idx` 唯一性檢查、嚴格 64 位元 `uint64` protobuf varint 溢位拒絕、`10.1.28` 本地計分表已知 `gemini-*` 模型白名單驗證與固定訊息零回顯（含 `native-context --vendor` 退回主機自述結束碼 `0`），以及與 `0.63.0`（`bda3c2e` `v2` 計分表推導列 `score_source`／`authority_eligible`）完全相容。
+
 ---
 
 ## 1. 實作摘要

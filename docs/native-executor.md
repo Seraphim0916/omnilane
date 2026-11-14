@@ -127,17 +127,27 @@ For an Antigravity Desktop caller (`antigravity-desktop`), omnilane walks up the
 process tree to `/Applications/Antigravity.app/Contents/Resources/bin/language_server`
 and requires its direct parent executable to be `/Applications/Antigravity.app/Contents/MacOS/Antigravity`
 (exact `realpath` match, never short process names). Because `language_server` is
-shared across conversations, omnilane reads only `ANTIGRAVITY_CONVERSATION_ID`
-(a standard UUID) from the current process and the direct child's initial
-environment (`KERN_PROCARGS2` / `/proc/<pid>/environ`), ignoring all other
-environment variables such as `ANTIGRAVITY_CSRF_TOKEN` and
-`ANTIGRAVITY_LS_ADDRESS`. It then opens
+shared across conversations and neither macOS (`KERN_PROCARGS2`) nor Linux
+(`/proc/<pid>/environ`) provides a kernel syscall for a single environment key,
+omnilane parses that initial-environment buffer in local process memory and
+retains only `ANTIGRAVITY_CONVERSATION_ID` (a standard UUID) from the current
+process and the direct child, discarding all other environment variables (such as
+`ANTIGRAVITY_CSRF_TOKEN` and `ANTIGRAVITY_LS_ADDRESS`) without persisting,
+printing, or echoing them in errors. It then opens
 `~/.gemini/antigravity/conversations/<uuid>.db` read-only (`mode=ro`, regular
-file owned by the current uid, no symlinks) and reads the latest
-`executor_metadata` row (`ORDER BY idx DESC LIMIT 1`), extracting the single
-UTF-8 `<model>-<effort>` string at protobuf path `10.1.28` (never regex-scanning,
-so auxiliary fields such as `10.1.13.25.32` cannot misfire). Only measured,
-authority-eligible `gemini` rows in the policy table are accepted; non-Gemini
+file owned by the current uid, no symlinks) and queries `executor_metadata` with
+`ORDER BY idx DESC LIMIT 2` and a SQL `length(data) <= 262144` guard (rejecting
+`NULL` or non-integer `idx`, duplicate maximum `idx`, and oversized BLOBs before
+materializing them in Python). From the bounded `data` BLOB in local memory it
+extracts only the single UTF-8 `<model>-<effort>` string at protobuf path
+`10.1.28` (strict 64-bit varint decoding, matching `<model>` against the known
+`gemini-*` models in the local AA policy table, never regex-scanning, and never
+echoing malformed or unrecognized field text in errors). Selecting the unique maximum `idx` assumes the
+conversation database's latest persisted `executor_metadata` row corresponds to
+the active turn; concurrent turns in the same conversation or an unpersisted
+mid-session model switch before DB flush are known limitations. Only measured,
+authority-eligible `gemini` rows in the policy table are accepted (derived or
+authority-ineligible bounds cannot supply caller authority); non-Gemini
 models in Antigravity are refused. Because `~/.gemini/antigravity/conversations/<uuid>.db`
 is user-owned (`0600`) with no immutable flags or ACLs, any program running as
 the same OS user can overwrite it; its trust level matches Codex's
