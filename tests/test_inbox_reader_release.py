@@ -119,6 +119,7 @@ sub import {
 RM = r'''#!/bin/bash
 for path in "$@"; do
   if [[ "$path" == */inbox.ready && -e "$path" ]]; then : > "$PROBE_ROOT/ready-published"; fi
+  if [[ "$path" == */runner-inbox.fifo.opened && -e "$path" ]]; then : > "$FAKE_CLOCK_DIR/marker-removing"; fi
 done
 exec /bin/rm "$@"
 '''
@@ -263,7 +264,27 @@ class ReaderReleaseTests(unittest.TestCase):
                 for attempt in range(5):
                     self.start(shell, f"marker-{index}-{attempt}", "hold-helper", enter_open=True)
                     marker = self.job / "runner-inbox.fifo.opened"
-                    self.await_path(marker, "the release marker never appeared")
+                    # The marker exists only during the worker's bounded helper wait.
+                    # The rm shim leaves a persistent witness when that window closes.
+                    deadline = time.monotonic() + EVENT_LIMIT
+                    while not marker.exists():
+                        if (self.clock / "marker-removing").exists():
+                            break
+                        if self.process.poll() is not None:
+                            self.fail(f"worker exited before marker: rc={self.process.returncode}; "
+                                      f"stderr={self.stderr_path.read_text()!r}")
+                        if time.monotonic() > deadline:
+                            self.fail(f"marker wait timed out; rc={self.process.poll()}; "
+                                      f"clock={[p.name for p in self.clock.iterdir()]}; "
+                                      f"job={[p.name for p in self.job.iterdir()]}; "
+                                      f"stderr={self.stderr_path.read_text()!r}")
+                        time.sleep(0.005)
+                    if not marker.exists():
+                        # This attempt missed the window; stop it before retrying.
+                        if self.process.poll() is None:
+                            self.process.send_signal(signal.SIGTERM)
+                        self.finish()
+                        continue
                     self.process.send_signal(signal.SIGTERM)
                     self.finish()
                     if "did not exit" not in self.stderr_path.read_text():
