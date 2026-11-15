@@ -69,6 +69,12 @@ omnilane jobs result JOB_ID
 | 結束碼 60：`partially-re-signed` | 通過的選擇參數已安裝；保留項目待重查，不能派工。需要處理的結束碼 20 優先。 | `omnilane resign --vendor VENDOR` — 待原因解除後執行 |
 | 結束碼 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤銷旗標 | 這是操作者決策，不是助理可自行核准的權限。 | `omnilane doctor` — 由真人檢查證據，再於終端機執行指定動作 |
 
+## v0.63.2 新功能
+
+- **取消與逾時收尾會停掉替身輔助程序（0.63.2）：** 輔助程序在處理 TERM 時啟動替身，現在會在兩秒視窗內依該工作的專屬標記重新掃描，最後再補一次 KILL；KILL 必須在新掃描中看到相同的 PID 與啟動時間才會送出。`reaped` 計的是收尾期間看過的不同程序身分，`remaining` 是最後一次觀察。車道與政策都沒變，不需要重簽。
+- **收尾中斷狀態（0.63.2）：** 監督程序收尾前會先記錄 `reaped=unknown remaining=unknown`；若收尾途中遭終止，狀態會保留 `unknown`，不會顯示過期數字，`unknown` 也不代表零。
+- 升級：`npm i -g omnilane@0.63.2`。
+
 ## v0.63.1 新功能
 
 - **Antigravity 桌面版身分來源標示（0.63.1）：** 在 Antigravity 桌面版對話裡呼叫時，仍由該對話最新一筆已存的型號列辨識；`omnilane whoami` 與派工輸出現在會標明「當輪綁定未驗證」。呼叫者情境檔會記錄 `identity_source` 區塊，並依對話分檔，不會蓋掉命令列的情境檔。車道與政策都沒變，不需要重簽。

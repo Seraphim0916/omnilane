@@ -69,6 +69,12 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 | Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
 | Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
 
+## What's new in v0.63.2
+
+- **Cancel and timeout cleanup now stops replacement helpers (0.63.2):** a helper that starts a replacement while handling TERM is rescanned by its exact job marker within a two-second window, then stopped by a final KILL that requires the same PID and start time. `reaped` counts distinct process identities and `remaining` is the last observation. No routing or policy change; no re-sign needed.
+- **Interrupted cleanup status (0.63.2):** before cleanup, the supervisor records `reaped=unknown remaining=unknown`; if it is killed during cleanup, `status` retains `unknown` rather than a stale count, and `unknown` does not mean zero.
+- Upgrade: `npm i -g omnilane@0.63.2`.
+
 ## What's new in v0.63.1
 
 - **Antigravity Desktop identity provenance (0.63.1):** callers inside an Antigravity Desktop conversation are still identified from that conversation's latest persisted model row, now labelled "current-turn binding unverified" in `omnilane whoami` and dispatch output. Caller-context files record an `identity_source` block and are kept per conversation, so they never overwrite CLI contexts. No routing or policy change; no re-sign needed.

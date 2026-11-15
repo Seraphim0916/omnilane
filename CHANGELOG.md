@@ -6,6 +6,19 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.63.2] - 2026-11-15
+
+### Fixed
+- **Cancellation and whole-job timeout now stop replacement helpers.** A helper can start a replacement while it handles TERM. The supervisor now rescans the exact job marker for up to two seconds (`MARKED_CLEANUP_SECONDS`), sends TERM to each pass's marked processes, and makes a final KILL pass. A KILL requires the same PID and start time in a fresh marker scan, so a reused PID is left alone. Previously a replacement born during TERM handling was counted as remaining and left running. `reaped` now counts distinct process identities seen during cleanup, replacements included, and `remaining` is the last observation; a failed listing or a continuously forking job is never reported as quiescent.
+- **An interrupted supervisor no longer leaves a stale cleanup count.** Before the first cleanup TERM the supervisor atomically records `reaped=unknown remaining=unknown`, and the final observation replaces it. If the supervisor is killed during cleanup, `status` keeps `unknown` instead of an out-of-date count. `unknown` means the cleanup count is not known, not zero.
+
+### Documentation
+- README: new "Verify cleanup after cancellation or whole-job timeout" section describing the cleanup window, the identity-checked KILL, and how to read `leftovers.reaped` and `leftovers.remaining` for a job.
+
+### Tests
+- `tests/test_job_env_marker_reap.py` covers a killed supervisor that must keep `unknown` counts, cancellation that reaps a replacement started after TERM (replacing the test that expected such a replacement to stay running), and three timed-out jobs that each leave six replacement helpers, eighteen in all, with an unrelated control process left alive.
+- `tests/test_inbox_reader_release.py`: the release-marker test retried only by waiting for a marker that exists for at most about five seconds, so a slow machine could miss the window and fail after 60 seconds. The test's `rm` shim now leaves a witness when the marker is removed, and a missed window is retried (up to five attempts). The final assertion that the marker does not outlive the worker is unchanged. No production code changed (#197).
+
 ## [0.63.1] - 2026-11-15
 
 ### Changed
@@ -1968,7 +1981,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.1...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.2...HEAD
+[0.63.2]: https://github.com/Seraphim0916/omnilane/compare/v0.63.1...v0.63.2
 [0.63.1]: https://github.com/Seraphim0916/omnilane/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/Seraphim0916/omnilane/compare/v0.62.0...v0.63.0
 [0.62.0]: https://github.com/Seraphim0916/omnilane/compare/v0.61.0...v0.62.0

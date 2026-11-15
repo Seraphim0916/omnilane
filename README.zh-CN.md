@@ -69,6 +69,12 @@ omnilane jobs result JOB_ID
 | 退出码 60：`partially-re-signed` | 通过的选择参数已安装；保留项待复查，不能派发任务。需要处理的退出码 20 优先。 | `omnilane resign --vendor VENDOR` — 待原因解除后执行 |
 | 退出码 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤销标志 | 这是操作者决策，不是助手可以自行批准的权限。 | `omnilane doctor` — 由人工检查证据，再在终端执行指定操作 |
 
+## v0.63.2 新功能
+
+- **取消与超时清理会停掉替身辅助进程（0.63.2）：** 辅助进程在处理 TERM 时启动替身，现在会在两秒窗口内按该任务的专属标记重新扫描，最后再补一次 KILL；KILL 必须在新扫描中看到相同的 PID 与启动时间才会发送。`reaped` 统计的是清理期间见到的不同进程身份，`remaining` 是最后一次观察。车道与策略都没变，不需要重新签名。
+- **清理中断状态（0.63.2）：** 监督进程在清理前先记录 `reaped=unknown remaining=unknown`；如果清理途中被终止，状态保留 `unknown`，而不是过期数字，`unknown` 也不代表零。
+- 升级：`npm i -g omnilane@0.63.2`。
+
 ## v0.63.1 新功能
 
 - **Antigravity 桌面版身份来源标注（0.63.1）：** 在 Antigravity 桌面版对话中调用时，仍由该对话最新一条已保存的型号行识别；`omnilane whoami` 与派工输出现在会标明“当前轮次绑定未验证”。调用者上下文文件会记录 `identity_source` 区块，并按对话分文件保存，不会覆盖命令行的上下文文件。车道与策略都没有变化，不需要重签。
