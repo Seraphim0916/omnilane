@@ -450,9 +450,25 @@ def load_caller(path: str | Path, registry: dict[str, Any],
     # because the launching harness recorded no effort; it may only be true.
     unverified = value.pop("effort_unverified", None)
     _check(unverified is None or unverified is True, "invalid caller-context effort_unverified")
+    source_present = "identity_source" in value
+    source = value.pop("identity_source", None)
+    if source_present:
+        _check(isinstance(source, dict), "invalid caller-context identity_source")
+        _exact_fields(source, {"kind", "conversation_id", "selection", "model_field",
+                               "current_turn_binding_verified"})
+        _check(source["kind"] == "antigravity-executor-metadata"
+               and source["selection"] == "latest persisted row for this conversation"
+               and source["model_field"] == "10.1.28"
+               and source["current_turn_binding_verified"] is False,
+               "invalid caller-context identity_source")
+        _check(isinstance(source["conversation_id"], str) and re.fullmatch(
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            source["conversation_id"]) is not None, "invalid caller-context conversation_id")
     _exact_fields(value, {"schema_version", "snapshot_id", "kind", "caller", "inherited_ceiling"})
     if unverified:
         value["effort_unverified"] = True
+    if source_present:
+        value["identity_source"] = source
     value["caller"] = _identity(value["caller"], "caller")
     ceiling = value["inherited_ceiling"]
     _check(type(ceiling) is int and 0 <= ceiling <= 100,

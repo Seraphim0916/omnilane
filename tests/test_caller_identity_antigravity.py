@@ -406,7 +406,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             self.assertNotIn(CSRF_SECRET, repr(parsed_env))
             self.assertNotIn(LS_ADDR_SECRET, repr(parsed_env))
 
-            # End-to-end main() refuses even a valid persisted selector
+            # End-to-end main() accepts the latest persisted selector with explicit provenance.
             def env_lookup(pid: int) -> dict[str, str]:
                 if pid == 90:
                     return caller_identity._parse_procargs2(raw)[1]
@@ -428,11 +428,12 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     lookup=_fake_chain(root_pid=os.getpid()),
                     process_environment=env_lookup,
                 )
-            self.assertEqual(rc, 3, stderr_buf.getvalue())
-            self.assertEqual(stdout_buf.getvalue(), "")
-            self.assertFalse(home_dir.exists())
-            self.assertIn("current-turn binding is unavailable", stderr_buf.getvalue())
-            for text in (stdout_buf.getvalue(), stderr_buf.getvalue()):
+            self.assertEqual(rc, 0, stderr_buf.getvalue())
+            context_text = Path(stdout_buf.getvalue().strip()).read_text()
+            self.assertIn("latest persisted row for this conversation", stderr_buf.getvalue())
+            self.assertIn("current-turn binding unverified", stderr_buf.getvalue())
+            self.assertIs(json.loads(context_text)["identity_source"]["current_turn_binding_verified"], False)
+            for text in (stdout_buf.getvalue(), stderr_buf.getvalue(), context_text):
                 self.assertNotIn(CSRF_SECRET, text)
                 self.assertNotIn(LS_ADDR_SECRET, text)
 
@@ -449,7 +450,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     process_environment=env_lookup,
                 )
             self.assertEqual(rc_fail, 3)
-            self.assertIn("current-turn binding is unavailable", stderr_err.getvalue())
+            self.assertIn("Antigravity 的非 Gemini 模型尚未支援", stderr_err.getvalue())
             self.assertNotIn(CSRF_SECRET, stderr_err.getvalue())
             self.assertNotIn(LS_ADDR_SECRET, stderr_err.getvalue())
 
@@ -882,7 +883,8 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
             workdir = Path(tmp) / "proj"
             workdir.mkdir()
             out_file = Path(tmp) / "native-ctx.json"
-            _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(b"gemini-4-hydrogen-medium"))])
+            # A missing selector exercises the explicit unverified fallback.
+            _write_synthetic_db(agy_dir, CONV_UUID, [(0, _build_executor_metadata(None))])
             test_env = {
                 "OMNILANE_HOME": str(home_dir),
                 "ANTIGRAVITY_CONVERSATION_ID": CONV_UUID,

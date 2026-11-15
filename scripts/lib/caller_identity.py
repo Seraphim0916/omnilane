@@ -773,10 +773,7 @@ def _proto_path_values(data: bytes, path: tuple[int, ...]) -> list[bytes]:
 def _read_antigravity_conversation_db(
     conv_id: str, agy_dir: Path, allowed_models: set[str] | None = None
 ) -> tuple[Selector, str]:
-    """Parse persisted metadata only; this does not prove the current caller.
-
-    The caller adapter refuses unbound turns without calling this reader. This
-    low-level decoder remains available for explicit offline diagnostics/tests.
+    """Read the conversation's latest persisted model, without proving the current turn.
 
     Security and ordering boundaries:
     - SQL checks `length(data) <= _ANTIGRAVITY_METADATA_MAX_BYTES` before projecting
@@ -940,16 +937,20 @@ def _read_antigravity_caller(
             break
         cur = entry[0]
 
-    # Source: codex-s / Astra S-1 worker / MacStudio, 2026-11-14.
-    # A conversation ID and a unique latest idx do not bind this tool request to
-    # the persisted model. No trusted per-turn binding is available in this
-    # adapter; do not read unrelated metadata or grant authority from it.
-    # Explicit native-context flags may describe inherited execution only. They
-    # remain host-asserted and cannot create a caller ceiling.
-    raise ValueError(
-        "Antigravity current-turn binding is unavailable; "
-        "persisted metadata cannot supply caller authority"
-    )
+    # The approved desktop source is this conversation's latest persisted row.
+    # It is host-reported metadata, not proof of a current-turn binding.
+    if registry is None:
+        policy_path = current_environment.get("OMNILANE_AA_POLICY_FILE") or str(
+            REPO / "config" / "aa-model-policy.json"
+        )
+        try:
+            effective_registry, _ = load_registry(policy_path)
+        except (aa_policy.PolicyError, OSError, ValueError):
+            raise ValueError("cannot verify Antigravity model against AA registry") from None
+    else:
+        effective_registry = registry
+    allowed_models = known_antigravity_gemini_models(effective_registry)
+    return _read_antigravity_conversation_db(conv_id, agy_dir, allowed_models)
 
 
 def read_caller(pid: int, lookup: Lookup = _process,
@@ -1033,8 +1034,9 @@ def load_registry(path: str | Path) -> tuple[dict, str]:
         os.environ.update(saved)
 
 
-def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool = False) -> Path:
-    """One file per identity: every session launched the same way is the same caller."""
+def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool = False,
+                  source: str = "") -> Path:
+    """Keep CLI identity paths stable; scope desktop provenance to its conversation."""
     if not aa_policy.authority_eligible(row):
         raise ValueError("derived or authority-ineligible rows cannot supply caller authority")
     directory = Path(home) / "caller-context"
@@ -1043,7 +1045,6 @@ def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool
     if effort_unverified:
         # Not the same caller as one that really launched at the floor effort.
         stem = f"{row['vendor']}--{row['model'].replace('.', '-')}--effort-unverified"
-    path = directory / (stem + ".json")
     value = {
         "schema_version": 1,
         "snapshot_id": registry["snapshot"]["id"],
@@ -1053,6 +1054,21 @@ def write_context(row: dict, registry: dict, home: Path, effort_unverified: bool
     }
     if effort_unverified:
         value["effort_unverified"] = True
+    if source.startswith("antigravity-desktop conversation "):
+        conversation_id = source.removeprefix("antigravity-desktop conversation ")
+        if not UUID_PATTERN.fullmatch(conversation_id):
+            raise ValueError("invalid Antigravity conversation provenance")
+        # New desktop metadata must not overwrite legacy CLI contexts or another
+        # conversation's provenance/digest for the same model and effort.
+        stem += f"--antigravity-desktop--{conversation_id}"
+        value["identity_source"] = {
+            "kind": "antigravity-executor-metadata",
+            "conversation_id": conversation_id,
+            "selection": "latest persisted row for this conversation",
+            "model_field": "10.1.28",
+            "current_turn_binding_verified": False,
+        }
+    path = directory / (stem + ".json")
     text = json.dumps(value, indent=2, sort_keys=True) + "\n"
     try:
         if path.read_text() == text:
@@ -1128,8 +1144,10 @@ def main(argv: list[str] | None = None, environment: Mapping[str, str] = os.envi
                   f"a snapshot that scores this model at this effort)", file=sys.stderr)
         return 3
     home = Path(os.environ.get("OMNILANE_HOME") or Path.home() / ".omnilane")
-    path = write_context(row, registry, home, effort_unverified=degraded)
+    path = write_context(row, registry, home, effort_unverified=degraded, source=source)
     provenance = f", {source}" if source else ""
+    if source.startswith("antigravity-desktop"):
+        provenance += ", latest persisted row for this conversation; current-turn binding unverified"
     if degraded:
         print(f"omnilane: caller is {vendor}/{model} at an unrecorded effort; degraded to its "
               f"lowest-scored row {row['id']} (ceiling {row['score']}), read from pid {pid}"
