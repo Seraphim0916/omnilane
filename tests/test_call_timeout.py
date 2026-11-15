@@ -57,63 +57,134 @@ class CallTimeoutTests(unittest.TestCase):
         # finishes while the watchdog cannot observe the deadline, so the
         # watchdog never sees it running past the deadline and keeps its status.
         child = self.root / "child.py"
-        ready = self.root / "ready"
-        child.write_text("import pathlib,sys,time\n"
-                         "pathlib.Path(sys.argv[1]).write_text('ready')\n"
-                         "time.sleep(1.3)\nprint('complete', flush=True)\n")
-        process = subprocess.Popen(
-            ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "1",
-             sys.executable, str(child), str(ready)],
-            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            deadline = time.monotonic() + 3
-            while not ready.exists() and time.monotonic() < deadline:
-                time.sleep(0.01)
-            self.assertTrue(ready.exists(), "owned child failed to start")
-            process.send_signal(signal.SIGSTOP)
-            time.sleep(1.6)
-            process.send_signal(signal.SIGCONT)
-            stdout, stderr = process.communicate(timeout=5)
-            self.assertEqual(0, process.returncode, stderr)
-            self.assertEqual("complete\n", stdout)
-        finally:
-            if process.poll() is None:
+        child.write_text("import os,pathlib,sys,time\n"
+                         "ready = pathlib.Path(sys.argv[1])\n"
+                         "release = pathlib.Path(sys.argv[2])\n"
+                         "tmp = ready.with_suffix('.tmp')\n"
+                         "tmp.write_text(str(os.getpid()))\n"
+                         "tmp.replace(ready)\n"
+                         "deadline = time.monotonic() + 30\n"
+                         "while not release.exists():\n"
+                         "    if time.monotonic() >= deadline:\n"
+                         "        raise SystemExit(97)\n"
+                         "    time.sleep(0.01)\n"
+                         "print('complete', flush=True)\n")
+        for attempt in range(5):
+            ready = self.root / f"ready-{attempt}"
+            release = self.root / f"release-{attempt}"
+            process = subprocess.Popen(
+                ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "1",
+                 sys.executable, str(child), str(ready), str(release)],
+                env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                deadline = time.monotonic() + 3
+                while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists(), "owned child failed to start")
+                child_pid = int(ready.read_text().strip())
+                process.send_signal(signal.SIGSTOP)
+                stopped = False
+                stop_deadline = time.monotonic() + 3
+                while time.monotonic() < stop_deadline and process.poll() is None:
+                    w_state = subprocess.run(
+                        ["ps", "-o", "stat=", "-p", str(process.pid)], env=self.env,
+                        text=True, capture_output=True, timeout=2).stdout.strip()
+                    if w_state.startswith("T"):
+                        stopped = True
+                        break
+                    time.sleep(0.01)
+                c_state = subprocess.run(
+                    ["ps", "-o", "stat=", "-p", str(child_pid)], env=self.env,
+                    text=True, capture_output=True, timeout=2).stdout.strip()
+                if not stopped or not c_state or c_state.startswith("Z"):
+                    # Watchdog's 1s deadline fired before SIGSTOP froze it; retry.
+                    continue
+                time.sleep(1.2)
+                release.write_text("go")
+                exit_deadline = time.monotonic() + 5
+                while time.monotonic() < exit_deadline:
+                    c_state = subprocess.run(
+                        ["ps", "-o", "stat=", "-p", str(child_pid)], env=self.env,
+                        text=True, capture_output=True, timeout=2).stdout.strip()
+                    if not c_state or c_state.startswith("Z"):
+                        break
+                    time.sleep(0.01)
+                self.assertTrue(
+                    not c_state or c_state.startswith("Z"),
+                    f"child did not finish before watchdog resume: {c_state!r}")
                 process.send_signal(signal.SIGCONT)
-                process.kill()
-                process.communicate(timeout=5)
-            process.stdout.close()
-            process.stderr.close()
+                stdout, stderr = process.communicate(timeout=5)
+                self.assertEqual(0, process.returncode, stderr)
+                self.assertEqual("complete\n", stdout)
+                break
+            finally:
+                if process.poll() is None:
+                    process.send_signal(signal.SIGCONT)
+                    process.kill()
+                    process.communicate(timeout=5)
+                process.stdout.close()
+                process.stderr.close()
+        else:
+            self.fail("watchdog always timed out before SIGSTOP could freeze it")
 
     def test_child_finishing_in_time_keeps_status_when_reaped_after_deadline(self):
         # The child stops its own watchdog and exits well inside the deadline;
         # the watchdog resumes only after the deadline and reaps it late.
         child = self.root / "child.py"
-        child.write_text("import os,signal\nos.kill(os.getppid(), signal.SIGSTOP)\n"
+        child.write_text("import os,pathlib,signal,sys\n"
+                         "ready = pathlib.Path(sys.argv[1])\n"
+                         "tmp = ready.with_suffix('.tmp')\n"
+                         "tmp.write_text(str(os.getpid()))\n"
+                         "tmp.replace(ready)\n"
+                         "os.kill(os.getppid(), signal.SIGSTOP)\n"
                          "print('complete', flush=True)\n")
-        process = subprocess.Popen(
-            ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "1", sys.executable, str(child)],
-            env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            deadline = time.monotonic() + 5
-            while time.monotonic() < deadline:
-                state = subprocess.run(["ps", "-o", "stat=", "-p", str(process.pid)], env=self.env,
-                                       text=True, capture_output=True, timeout=2).stdout.strip()
-                if state.startswith("T"):
-                    break
-                time.sleep(0.01)
-            self.assertTrue(state.startswith("T"), f"watchdog was not stopped: {state!r}")
-            time.sleep(1.5)
-            process.send_signal(signal.SIGCONT)
-            stdout, stderr = process.communicate(timeout=5)
-            self.assertEqual(0, process.returncode, stderr)
-            self.assertEqual("complete\n", stdout)
-        finally:
-            if process.poll() is None:
+        for attempt in range(5):
+            ready = self.root / f"finish-ready-{attempt}"
+            process = subprocess.Popen(
+                ["perl", str(ROOT / "scripts/lib/call-timeout.pl"), "2",
+                 sys.executable, str(child), str(ready)],
+                env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                state = ""
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline and process.poll() is None:
+                    state = subprocess.run(["ps", "-o", "stat=", "-p", str(process.pid)], env=self.env,
+                                           text=True, capture_output=True, timeout=2).stdout.strip()
+                    if state.startswith("T"):
+                        break
+                    time.sleep(0.01)
+                if not state.startswith("T"):
+                    # Watchdog's deadline fired before SIGSTOP froze it; retry.
+                    continue
+                if ready.exists():
+                    child_pid = int(ready.read_text().strip())
+                    exit_deadline = time.monotonic() + 5
+                    c_state = ""
+                    while time.monotonic() < exit_deadline:
+                        c_state = subprocess.run(
+                            ["ps", "-o", "stat=", "-p", str(child_pid)], env=self.env,
+                            text=True, capture_output=True, timeout=2).stdout.strip()
+                        if not c_state or c_state.startswith("Z"):
+                            break
+                        time.sleep(0.01)
+                    self.assertTrue(
+                        not c_state or c_state.startswith("Z"),
+                        f"child did not finish before watchdog resume: {c_state!r}")
+                time.sleep(2.2)
                 process.send_signal(signal.SIGCONT)
-                process.kill()
-                process.communicate(timeout=5)
-            process.stdout.close()
-            process.stderr.close()
+                stdout, stderr = process.communicate(timeout=5)
+                self.assertEqual(0, process.returncode, stderr)
+                self.assertEqual("complete\n", stdout)
+                break
+            finally:
+                if process.poll() is None:
+                    process.send_signal(signal.SIGCONT)
+                    process.kill()
+                    process.communicate(timeout=5)
+                process.stdout.close()
+                process.stderr.close()
+        else:
+            self.fail(f"watchdog always timed out before SIGSTOP froze it (last stat={state!r})")
 
     def test_child_stays_in_callers_process_group(self):
         result, _ = self.run_call("import os\nprint(os.getpgrp())\n", "5")

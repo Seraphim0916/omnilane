@@ -189,7 +189,13 @@ set -euo pipefail
                 os.close(fd)
             descriptors.extend(high)
         notice_r, notice_w, control_r, control_w = descriptors
-        self.addCleanup(lambda: [os.close(fd) for fd in descriptors])
+        def close_open_descriptors():
+            for fd in list(descriptors):
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        self.addCleanup(close_open_descriptors)
         self.env.update(FIXTURE_NOTICE_FD=str(notice_w),
                         FIXTURE_CONTROL_FD=str(control_r),
                         FIXTURE_VENDOR=vendor,
@@ -271,13 +277,23 @@ sys.exit(int(os.environ["FIXTURE_RC"]))
              f"{vendor}-default", "-", str(self.prompt), str(self.output)],
             env=self.env, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             pass_fds=(notice_w, control_r), start_new_session=True)
+        for child_fd in (notice_w, control_r):
+            os.close(child_fd)
+            descriptors.remove(child_fd)
         observed = b""
         def await_notice(expected):
             nonlocal observed
+            deadline = time.monotonic() + 15
             while expected not in observed.splitlines():
-                self.assertTrue(select.select([notice_r], [], [], 15)[0],
+                remaining = deadline - time.monotonic()
+                self.assertGreater(remaining, 0,
+                                   f"timed out waiting for {expected!r}; got {observed!r}")
+                self.assertTrue(select.select([notice_r], [], [], remaining)[0],
                                 f"missing rendezvous {expected!r}; got {observed!r}")
-                observed += os.read(notice_r, 4096)
+                chunk = os.read(notice_r, 4096)
+                self.assertTrue(chunk,
+                                f"notice pipe closed before {expected!r}; got {observed!r}")
+                observed += chunk
         prefix = b""
         payload = '{"type":"user","message":{"role":"user","content":[]}}'
         try:

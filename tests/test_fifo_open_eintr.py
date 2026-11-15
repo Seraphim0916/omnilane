@@ -107,7 +107,7 @@ class FifoOpenTests(unittest.TestCase):
         self.prompt.write_text("offline fifo open fixture\n")
         self.env.update(PROBE_ROOT=str(self.root), OMNILANE_HOME=str(self.root / "home"),
                         OMNILANE_SESSION_MODE="live", OMNILANE_LIVE_REQUIRED="1",
-                        OMNILANE_IDLE_TIMEOUT="0", OMNILANE_TIMEOUT="20", CODEX_BIN=str(codex))
+                        OMNILANE_IDLE_TIMEOUT="0", OMNILANE_TIMEOUT="60", CODEX_BIN=str(codex))
         self.process = None
         self.addCleanup(self.kill_group)
 
@@ -306,13 +306,40 @@ class FifoOpenTests(unittest.TestCase):
                 self.assertIn(" 10000000 ", self.await_helper()[1])
 
     def test_frozen_helper_before_open_ends_at_the_worker_own_deadline(self):
+        # Hold only the Perl inbox helper's internal 1s deadline until the test
+        # has discovered and stopped it with SIGSTOP; the worker's own Bash
+        # deadline (RUNNER_OPEN_TIMEOUT + 5 = 6s) runs unmodified in real time.
+        library = self.root / "hold-helper-perl/Time"
+        library.mkdir(parents=True, exist_ok=True)
+        (library / "HiRes.pm").write_text(
+            "package Time::HiRes;\n"
+            "use strict;\n"
+            "sub CLOCK_MONOTONIC () { 1 }\n"
+            "sub clock_gettime { return (@ARGV == 3 && $ENV{HOLD_HELPER_CLOCK}) ? 1000 : CORE::time() }\n"
+            "sub sleep { my ($s) = @_; CORE::select(undef, undef, undef, $s); return $s }\n"
+            "sub import { my $c = caller; no strict 'refs'; for my $n (@_[1..$#_]) { *{\"${c}::$n\"} = \\&{$n} } }\n"
+            "1;\n"
+        )
         for shell in SHELLS:
             with self.subTest(shell=shell):
-                self.start(shell, "never", OMNILANE_RUNNER_OPEN_TIMEOUT="1")
+                self.start(shell, "never", OMNILANE_RUNNER_OPEN_TIMEOUT="1",
+                           PERL5LIB=str(self.root / "hold-helper-perl"), HOLD_HELPER_CLOCK="1")
                 helper, _ = self.await_helper()
                 os.kill(helper, signal.SIGSTOP)
+                stopped = False
+                stop_deadline = time.monotonic() + 3
+                while time.monotonic() < stop_deadline:
+                    stat = subprocess.run(
+                        ["ps", "-o", "stat=", "-p", str(helper)],
+                        capture_output=True, text=True, timeout=2).stdout.strip()
+                    if stat.startswith("T"):
+                        stopped = True
+                        break
+                    time.sleep(0.01)
+                self.assertTrue(stopped, f"helper {helper} did not enter stopped state")
                 self.assertNotEqual(self.finish(14), 0)
                 self.assertIn("inbox helper stopped responding", self.stderr_path.read_text())
+                self.kill_group()
 
     def test_frozen_helper_before_open_does_not_delay_close(self):
         for shell in SHELLS:
@@ -325,6 +352,7 @@ class FifoOpenTests(unittest.TestCase):
                 self.process.send_signal(signal.SIGUSR1)
                 self.finish(CLOSE_DEADLINE)
                 self.assertLess(time.monotonic() - began, 4)
+                self.kill_group()
 
     def test_brief_helper_stall_is_not_mistaken_for_its_exit(self):
         # Bash 3.2 answers a read timeout and EOF with the same status.

@@ -70,7 +70,8 @@ class JobFinalizationTests(unittest.TestCase):
         self.env["FIXTURE_RECEIPT_FAILURE"] = "1" if receipt_failure else "0"
         gate = self.bins / "gate"
         gate.write_text('#!/bin/bash\ntrap "" TERM\nsleep 30 &\n'
-                        'printf "%s %s\\n" "$$" "$!" > "$FIXTURE_ROOT/gate.pids"\n'
+                        'printf "%s %s\\n" "$$" "$!" > "$FIXTURE_ROOT/gate.pids.tmp" && '
+                        '"$FIXTURE_REAL_MV" "$FIXTURE_ROOT/gate.pids.tmp" "$FIXTURE_ROOT/gate.pids"\n'
                         + ('wait\n' if exit_code == 124 else f'exit {exit_code}\n'))
         gate.chmod(0o755)
         (self.home / "routing.local.yaml").write_text(f"fixture: exec {shlex.quote(str(gate))} -\n")
@@ -82,7 +83,7 @@ from pathlib import Path
 root = Path(os.environ['FIXTURE_ROOT'])
 if Path(sys.argv[-1]).parent == Path(os.environ['OMNILANE_HOME']) / 'inbox':
     (root / 'publish.waiting').touch()
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 120
     while not (root / 'publish.release').exists():
         if time.monotonic() >= deadline:
             raise SystemExit(98)
@@ -100,10 +101,20 @@ os.execv(os.environ['FIXTURE_REAL_MV'], ['mv', *sys.argv[1:]])
         self.assertEqual(result.returncode, 0, result.stderr)
         job_id = result.stdout.strip()
         job_dir = self.home / "jobs" / job_id
-        self.wait_for(lambda: (job_dir / "pid").exists(), "controller pid")
-        self.pids.append(int((job_dir / "pid").read_text()))
-        self.wait_for(lambda: (self.root / "gate.pids").exists(), "workload pids")
-        self.pids.extend(int(pid) for pid in (self.root / "gate.pids").read_text().split())
+        self.wait_for(
+            lambda: (job_dir / "pid").exists() and (job_dir / "pid").read_text().strip().isdigit(),
+            "controller pid")
+        controller_pid = int((job_dir / "pid").read_text().strip())
+        self.assertGreater(controller_pid, 0)
+        self.pids.append(controller_pid)
+        gate_pids_path = self.root / "gate.pids"
+        self.wait_for(
+            lambda: gate_pids_path.exists() and len(gate_pids_path.read_text().split()) == 2,
+            "workload pids")
+        workload_pids = [int(pid) for pid in gate_pids_path.read_text().split()]
+        self.assertEqual(len(workload_pids), 2)
+        self.assertTrue(all(pid > 0 for pid in workload_pids), workload_pids)
+        self.pids.extend(workload_pids)
         self.wait_for(lambda: (self.root / "publish.waiting").exists(), "receipt publication")
         if exit_code == 124:
             self.assertFalse((job_dir / "exit").exists(), "exit published before receipt finalization")

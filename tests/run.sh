@@ -1759,10 +1759,10 @@ test_job_timeout_supervisor_forwards_term() {
   dir="$TEST_ROOT/supervisor-term"; mkdir -p "$dir"; pidfile="$dir/pids"
 
   perl "$helper" 30 /bin/sh -c \
-    'trap "" TERM; sleep 30 & echo "$$ $!" > "$1"; wait' _ "$pidfile" \
+    'trap "" TERM; sleep 30 & printf "%s %s\n" "$$" "$!" > "$1.tmp" && mv "$1.tmp" "$1"; wait' _ "$pidfile" \
     >/dev/null 2>&1 &
   helper_pid=$!
-  while [[ ! -f "$pidfile" && "$ticks" -lt 20 ]]; do sleep 0.1; ticks=$((ticks + 1)); done
+  while [[ ! -s "$pidfile" && "$ticks" -lt 100 ]]; do sleep 0.1; ticks=$((ticks + 1)); done
   kill -TERM "$helper_pid" 2>/dev/null || true
   ticks=0
   while kill -0 "$helper_pid" 2>/dev/null && [[ "$ticks" -lt 30 ]]; do
@@ -1781,7 +1781,9 @@ test_job_timeout_supervisor_forwards_term() {
   [[ "$child_alive" == yes ]] && kill "$child_pid" 2>/dev/null || true
   [[ "$worker_alive" == yes ]] && kill "$worker_pid" 2>/dev/null || true
 
-  if [[ "$rc" -ne 143 ]]; then
+  if [[ ! "$worker_pid" =~ ^[1-9][0-9]*$ || ! "$child_pid" =~ ^[1-9][0-9]*$ ]]; then
+    fail "$name" "supervisor child pids were not recorded before TERM"
+  elif [[ "$rc" -ne 143 ]]; then
     fail "$name" "expected forwarded TERM exit 143, got $rc"
   elif [[ "$worker_alive" == yes || "$child_alive" == yes ]]; then
     fail "$name" "TERM forwarding left a process alive"

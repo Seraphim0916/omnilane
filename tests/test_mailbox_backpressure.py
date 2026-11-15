@@ -19,6 +19,10 @@ HARD_TIMEOUT = 12
 STARTUP_TIMEOUT = 30
 
 
+class _PreObservationWriteTimeout(Exception):
+    """Raised when jobs.sh's 5s write timeout fires before test observation."""
+
+
 class MailboxBackpressureTests(unittest.TestCase):
     def setUp(self):
         # offline_env directs tempfile to the suite's isolated temporary root.
@@ -52,7 +56,7 @@ class MailboxBackpressureTests(unittest.TestCase):
             return False
         return True
 
-    def cleanup_processes(self):
+    def cleanup_sender(self):
         if self.process is not None:
             # Every sender gets a private group. Never use name-based pkill.
             try:
@@ -60,6 +64,12 @@ class MailboxBackpressureTests(unittest.TestCase):
             except ProcessLookupError:
                 pass
             self.process.wait(timeout=2)
+            self.process = None
+        if hasattr(self, "writer_pid"):
+            delattr(self, "writer_pid")
+
+    def cleanup_processes(self):
+        self.cleanup_sender()
         if self.reader is not None:
             os.close(self.reader)
             self.reader = None
@@ -115,23 +125,67 @@ class MailboxBackpressureTests(unittest.TestCase):
             time.sleep(0.01)
         self.fail("send did not reach FIFO write readiness within startup timeout (30s)")
 
+    def _assert_sender_alive_before_observation(self, message):
+        rc = self.process.poll()
+        if rc is None:
+            return
+        elapsed = time.monotonic() - self.started
+        if rc == 124 and elapsed >= 4.0:
+            raise _PreObservationWriteTimeout(
+                f"{message} after {elapsed:.2f}s (write_fifo_with_timeout 5s budget expired)"
+            )
+        self.fail(
+            f"{message} (rc={rc}, elapsed={elapsed:.2f}s, "
+            f"out={self.output_path.read_text()!r}, err={self.trace_path.read_text()!r})"
+        )
+
     def wait_for_blocked_writer(self):
         # Observe the real writer PID and its printf attempt without requiring ps
         # (process enumeration is denied in the macOS execution sandbox).
-        # Allow scheduling delays up to the existing outer hard deadline;
-        # elapsed time alone must never count as evidence of backpressure.
+        # write_fifo_with_timeout in scripts/jobs.sh holds a fixed 5s bash
+        # SECONDS budget; poll closely and distinguish scheduling overrun (rc=124
+        # after >=4s) from premature exit.
         deadline = self.started + HARD_TIMEOUT
         while time.monotonic() < deadline:
-            self.assertIsNone(self.process.poll(), "send exited before backpressure")
+            self._assert_sender_alive_before_observation("send exited before backpressure")
             trace = self.trace_path.read_text()
             match = re.search(r"^\+ writer_pid=(\d+)$", trace, re.MULTILINE)
             if match and re.search(r"^\+ printf .*codex-user", trace, re.MULTILINE):
                 self.writer_pid = int(match[1])
-                os.kill(self.writer_pid, 0)
-                self.assertIsNone(self.process.poll(), "send exited before backpressure")
+                try:
+                    os.kill(self.writer_pid, 0)
+                except ProcessLookupError:
+                    self._assert_sender_alive_before_observation(
+                        "writer_pid exited before observation completed"
+                    )
+                    time.sleep(0.01)
+                    continue
+                self._assert_sender_alive_before_observation("send exited before backpressure")
                 return
-            time.sleep(0.1)
+            time.sleep(0.01)
         self.fail("did not observe a persistent FIFO writer child within hard timeout (12s)")
+
+    def start_and_observe_blocked_writer(self, writer_opened=None):
+        last_timeout = None
+        for _attempt in range(3):
+            if writer_opened is not None and writer_opened.exists():
+                writer_opened.unlink()
+            try:
+                self.start_send()
+                self.wait_for_blocked_writer()
+                if writer_opened is not None:
+                    deadline = self.started + HARD_TIMEOUT
+                    while not writer_opened.exists() and time.monotonic() < deadline:
+                        self._assert_sender_alive_before_observation(
+                            "send exited before write-side open"
+                        )
+                        time.sleep(0.01)
+                    self.assertTrue(writer_opened.exists(), "writer did not confirm write-side open")
+                return
+            except _PreObservationWriteTimeout as exc:
+                last_timeout = exc
+                self.cleanup_sender()
+        self.fail(f"send hit 5s FIFO timeout before observation across 3 attempts: {last_timeout}")
 
     def finish(self, expected):
         try:
@@ -160,15 +214,13 @@ class MailboxBackpressureTests(unittest.TestCase):
         return elapsed
 
     def test_no_reader_times_out_and_reaps_writer(self):
-        self.start_send()
-        self.wait_for_blocked_writer()
+        self.start_and_observe_blocked_writer()
         self.assertGreaterEqual(self.finish(124), 4)
 
     def test_reader_stops_consuming_full_fifo(self):
         self.open_reader()
         self.assertGreater(self.fill_fifo(), 0)
-        self.start_send()
-        self.wait_for_blocked_writer()
+        self.start_and_observe_blocked_writer()
         self.assertGreaterEqual(self.finish(124), 4)
 
     def test_reader_disappears_during_blocked_write(self):
@@ -206,13 +258,7 @@ class MailboxBackpressureTests(unittest.TestCase):
         self.addCleanup(cleanup_reader)
         os.close(self.reader)
         self.reader = None
-        self.start_send()
-        self.wait_for_blocked_writer()
-        deadline = self.started + HARD_TIMEOUT
-        while not writer_opened.exists() and time.monotonic() < deadline:
-            self.assertIsNone(self.process.poll(), "send exited before write-side open")
-            time.sleep(0.01)
-        self.assertTrue(writer_opened.exists(), "writer did not confirm write-side open")
+        self.start_and_observe_blocked_writer(writer_opened=writer_opened)
         reader_process.communicate(b"q", timeout=2)
         self.assertEqual(reader_process.returncode, 0)
         # SIGPIPE proves the writer opened the FIFO before its reader vanished;

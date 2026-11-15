@@ -19,6 +19,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 JOB_ID = "20261026-074500-12345-1"
+GENEROUS = 60
 
 # On SIGUSR1 the fixture holder writes the exit receipt the way the supervisor
 # does (temp file, then rename) and stops; it never runs a provider.
@@ -99,10 +100,14 @@ FAKE_HIRES = textwrap.dedent("""
     sub sleep {
         my ($seconds) = @_;
         $now //= 0;
+        if ($ENV{FAKE_HOLD_RELEASE} && !-e $ENV{FAKE_HOLD_RELEASE}) {
+            CORE::select(undef, undef, undef, $seconds);
+            return $seconds;
+        }
         my $step = int($seconds * 1000 + 0.5);
         _fire($now / 1000, ($now + $step) / 1000);
         $now += $step;
-        CORE::select(undef, undef, undef, 0.002);
+        CORE::select(undef, undef, undef, $ENV{FAKE_HOLD_RELEASE} ? $seconds : 0.002);
         return $seconds;
     }
     sub import {
@@ -160,32 +165,60 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         tmp.write_text(f"{self.holder.pid}\n")
         os.replace(tmp, self.job / "inbox.holder.pid")
 
-    def close(self):
-        return subprocess.Popen(["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
-                                env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    def close(self, hold_release=None):
+        env = dict(self.env)
+        if hold_release is not None:
+            lib = self.home / "fake-perl" / "Time"
+            lib.mkdir(parents=True, exist_ok=True)
+            (lib / "HiRes.pm").write_text(FAKE_HIRES)
+            env["PERL5LIB"] = str(self.home / "fake-perl")
+            env["FAKE_HOLD_RELEASE"] = str(hold_release)
+        closer = subprocess.Popen(
+            ["/bin/bash", str(ROOT / "scripts/jobs.sh"), "close", JOB_ID],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        def cleanup_closer():
+            if closer.poll() is None:
+                closer.kill()
+                closer.wait(timeout=5)
+            for stream in (closer.stdout, closer.stderr):
+                if stream and not stream.closed:
+                    stream.close()
+        self.addCleanup(cleanup_closer)
+        return closer
 
-    def wait_for_receipt_poller(self, closer):
-        end = time.monotonic() + 5
-        while time.monotonic() < end:
-            self.assertIsNone(closer.poll(), "close returned before entering its receipt wait")
-            listing = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="],
-                                     capture_output=True, text=True, timeout=5).stdout
-            for line in listing.splitlines():
+    def wait_for_receipt_poller(self, closer, timeout=GENEROUS):
+        end = time.monotonic() + timeout
+        while True:
+            if closer.poll() is not None:
+                try:
+                    out, err = closer.communicate(timeout=GENEROUS)
+                except subprocess.TimeoutExpired:
+                    out, err = "", "(output pipes still held open after close returned)"
+                self.fail(("close returned before waiting for the exit receipt", closer.returncode, out, err))
+            ps = subprocess.run(["ps", "-A", "-ww", "-o", "ppid=,command="],
+                                capture_output=True, text=True,
+                                timeout=max(0.1, end - time.monotonic()))
+            if ps.returncode != 0:
+                self.fail(f"ps failed with exit {ps.returncode}: {ps.stderr.strip()!r}")
+            for line in ps.stdout.splitlines():
                 fields = line.split(None, 1)
                 if (len(fields) == 2 and fields[0] == str(closer.pid)
                         and str(self.job / "exit") in fields[1]):
                     return
+            self.assertLess(time.monotonic(), end, "close never entered its receipt wait")
             time.sleep(0.02)
-        self.fail("close never entered its receipt wait")
 
     def test_holder_pid_written_after_close_started(self):
         self.start_holder()
-        closer = self.close()
+        hold_release = self.home / "hold-release"
+        closer = self.close(hold_release=hold_release)
         self.wait_for_receipt_poller(closer)
         self.assertIsNone(closer.poll(), "close returned before the holder PID existed")
         self.publish_pid()
         started = time.monotonic()
-        out, err = closer.communicate(timeout=15)
+        hold_release.write_text("1")
+        out, err = closer.communicate(timeout=GENEROUS)
         self.assertEqual(closer.returncode, 0, (out, err))
         self.assertIn(f"closed {JOB_ID}", out)
         self.assertLess(time.monotonic() - started, 5, "close did not signal the holder once it appeared")
@@ -210,12 +243,14 @@ class CloseBeforeHolderPidTests(unittest.TestCase):
         self.assertFalse((self.job / "exit").exists())
 
     def test_exit_receipt_without_holder_is_already_closed(self):
-        closer = self.close()
+        hold_release = self.home / "hold-release"
+        closer = self.close(hold_release=hold_release)
         self.wait_for_receipt_poller(closer)
         tmp = self.job / ".exit.tmp"
         tmp.write_text("0\n")
         os.replace(tmp, self.job / "exit")
-        out, err = closer.communicate(timeout=15)
+        hold_release.write_text("1")
+        out, err = closer.communicate(timeout=GENEROUS)
         self.assertEqual(closer.returncode, 0, (out, err))
         self.assertEqual(out, "already closed (exit 0)\n")
 
