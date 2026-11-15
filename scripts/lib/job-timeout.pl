@@ -6,6 +6,9 @@ use Time::HiRes qw(clock_gettime CLOCK_MONOTONIC sleep);
 
 my $POLL_SECONDS = 0.05;
 my $TERM_GRACE_SECONDS = 1.0;
+# Leave time inside jobs cancel's five-second grace for group shutdown and
+# completion publication. A helper may fork its replacement while handling TERM.
+my $MARKED_CLEANUP_SECONDS = 2.0;
 
 sub usage_error {
     print STDERR "usage: job-timeout.pl SECONDS|--no-deadline COMMAND [ARG...]\n";
@@ -36,6 +39,9 @@ sub reap_nonblocking {
 
 sub terminate_group {
     my ($pgid, $pid, $already_reaped) = @_;
+    # A supervisor killed during cleanup cannot publish its final observation.
+    # Persist uncertainty before the first signal; reap_marked replaces it later.
+    record_leftovers('unknown', 'unknown');
     # A signal can arrive in the tiny fork-to-setsid window. Signal the child
     # PID as well as the future group until it is reaped; after reaping, avoid
     # the positive PID because the kernel may reuse it for an unrelated process.
@@ -113,30 +119,48 @@ sub reap_marked {
         record_leftovers('unknown', 'unknown');
         return;
     }
-    my $count = scalar keys %$found;
     if (!$stop) {
-        record_leftovers(0, $count);
+        record_leftovers(0, scalar keys %$found);
         return;
     }
-    kill 'TERM', keys %$found if $count;
-    my $grace_deadline = monotonic_now() + $TERM_GRACE_SECONDS;
-    my %pending = %$found;
-    while (%pending && monotonic_now() < $grace_deadline) {
-        delete @pending{ grep { !kill(0, $_) } keys %pending };
-        sleep($POLL_SECONDS) if %pending;
-    }
-    if (%pending) {
+    my %seen;
+    my $cleanup_deadline = monotonic_now() + $MARKED_CLEANUP_SECONDS;
+    while (%$found) {
+        $seen{"$_:$found->{$_}"} = 1 for keys %$found;
+        my $last_pass = monotonic_now() >= $cleanup_deadline;
+        my %pending = %$found;
+        if (!$last_pass) {
+            kill 'TERM', keys %pending;
+            my $grace_deadline = monotonic_now() + $TERM_GRACE_SECONDS;
+            $grace_deadline = $cleanup_deadline if $grace_deadline > $cleanup_deadline;
+            while (%pending && monotonic_now() < $grace_deadline) {
+                delete @pending{ grep { !kill(0, $_) } keys %pending };
+                sleep($POLL_SECONDS) if %pending;
+            }
+        }
         # SIGKILL only a PID listed again with the same start time; a reused PID is left alone.
         my $again = marked_processes();
-        my @kill = defined $again ? same_process($again, \%pending) : ();
+        if (!defined $again) {
+            record_leftovers(scalar(keys %seen), 'unknown');
+            return;
+        }
+        my @kill = same_process($again, \%pending);
         kill 'KILL', @kill if @kill;
         sleep($POLL_SECONDS * 4) if @kill;
+        last if $last_pass;
+        # Include replacements born during TERM handling. They have the same
+        # exact job marker, but are not in the preceding PID/start snapshot.
+        $found = marked_processes();
+        if (!defined $found) {
+            record_leftovers(scalar(keys %seen), 'unknown');
+            return;
+        }
     }
-    # Count everything the last listing still finds, including processes started
-    # after the first listing (a helper can answer TERM by starting a replacement).
+    # A failed listing or a continuously forking job must never be reported as
+    # quiescent. Keep the last observation, even after the bounded kill pass.
     my $after = marked_processes();
     my $remaining = defined $after ? scalar(keys %$after) : 'unknown';
-    record_leftovers($count, $remaining);
+    record_leftovers(scalar(keys %seen), $remaining);
 }
 my $forwarded_exit;
 $SIG{HUP}  = sub { $forwarded_exit = 129; };

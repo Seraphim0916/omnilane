@@ -1342,6 +1342,55 @@ appends `leftovers=M` when any remain. On macOS a helper that is a platform
 binary such as `/bin/bash` hides its environment and is not found, nor is a
 process that clears its environment.
 
+### Verify cleanup after cancellation or whole-job timeout
+
+A helper can start a replacement while handling TERM. Cancellation and whole-job
+timeout rescan the exact job marker within a two-second cleanup window, then make
+a final identity-checked KILL pass if needed. Each KILL requires the same PID and
+start time in a fresh marker scan; a process name or a reused PID is not ownership.
+Nested dispatches have their own marker and are not part of their parent's cleanup.
+Normal successful completion still only counts detached helpers; it does not stop
+an intentionally backgrounded helper.
+
+For a particular job, check all of the following rather than treating the cancel
+command's exit code as proof that every helper stopped:
+
+```sh
+JOB_ID='<the-job-id>'
+omnilane jobs cancel "$JOB_ID"
+omnilane jobs --json status "$JOB_ID"
+JOB_DIR="${OMNILANE_HOME:-$HOME/.omnilane}/jobs/$JOB_ID"
+WORKER_PID="$(cat "$JOB_DIR/pid")"
+ps -o pid=,ppid=,pgid=,lstart=,stat= -p "$WORKER_PID"
+```
+
+- The terminal result should preserve the job's actual exit code (normally 143
+  after cancellation, 124 after whole-job timeout). If completion inbox records
+  are enabled, the job's inbox receipt must report that same result. A receipt
+  records the result; it is not by itself proof of process quiescence.
+- `leftovers.remaining` must be `0`. `reaped` counts distinct marked process
+  identities encountered during cleanup, including replacement helpers. The
+  counts are the supervisor's final observation, not a new live scan by `status`.
+  Missing or `unknown` counts are not zero; a nonzero count means cleanup was
+  incomplete within the bounded window.
+  Before sending its first cleanup TERM, the supervisor atomically records
+  `reaped=unknown remaining=unknown`; the final observation replaces it. If the
+  supervisor is killed partway through cleanup, `status` retains these unknown
+  counts instead of hiding the leftovers field.
+- Wait for the recorded worker to disappear. If its PID is present, compare
+  `lstart` with `pid.start` before drawing conclusions or sending any signal: a
+  reused PID may belong to another job. Zombies do not perform further writes.
+- For a file owned by this job, compare its size and modification time twice
+  after the terminal result. Continued writes are a failed cleanup check, even
+  when the original worker is gone. This also checks helpers that hide or clear
+  their environment, which the marker scan cannot identify.
+
+If any check is inconclusive, retain that job's metadata and investigate only its
+confirmed process identities. Repeating cancel on an already terminal job is a
+no-op, not a new residual-process sweep. Do not use a global vendor/process-name
+kill or print process environments to find a token; neither identifies this job
+safely and the latter can expose credentials.
+
 `--thread NAME` continues named Claude, Codex, Grok, or Gemini conversations across
 single-shot dispatches. In 0.33.0 it pins vendor, model, effort, and physical
 workdir; use `jobs.sh threads`, `threads show NAME`, or `threads rm NAME` to
