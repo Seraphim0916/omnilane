@@ -69,6 +69,11 @@ omnilane jobs result JOB_ID
 | 退出码 60：`partially-re-signed` | 通过的选择参数已安装；保留项待复查，不能派发任务。需要处理的退出码 20 优先。 | `omnilane resign --vendor VENDOR` — 待原因解除后执行 |
 | 退出码 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤销标志 | 这是操作者决策，不是助手可以自行批准的权限。 | `omnilane doctor` — 由人工检查证据，再在终端执行指定操作 |
 
+## v0.63.1 新功能
+
+- **Antigravity 桌面版身份来源标注（0.63.1）：** 在 Antigravity 桌面版对话中调用时，仍由该对话最新一条已保存的型号行识别；`omnilane whoami` 与派工输出现在会标明“当前轮次绑定未验证”。调用者上下文文件会记录 `identity_source` 区块，并按对话分文件保存，不会覆盖命令行的上下文文件。车道与策略都没有变化，不需要重签。
+- 升级：`npm i -g omnilane@0.63.1`。
+
 ## v0.63.0 新功能
 
 - **只能显式指定的型号（0.63.0）：** `--vendor gemini --model gemini-pro-orchestrator-g1-pro` 的派工代理分数为 **54 = max(Argon high 50, Hydrogen xhigh 54)**，不是 AA 实测。没有分数的低强度行取同厂商、同型号较高强度中最低的计分行作为上限（Argon medium/low：50）。两类都不进入车道或价值排序，人工豁免也需要主机传输证明。快照 `aa-v5.0.1-2026-11-13-v2` 有 75 行实测与 23 行衍生分数。见[设计与限制](docs/reports/aa-orchestrator-2026-11-13.md)。

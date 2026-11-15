@@ -69,6 +69,11 @@ omnilane jobs result JOB_ID
 | 종료 코드 60: `partially-re-signed` | 통과한 선택자는 설치되었습니다. 보존된 행은 재확인 대기 중이며 디스패치할 수 없습니다. 종료 코드 20에 해당하는 보류가 우선합니다. | `omnilane resign --vendor VENDOR` — 대기 원인이 해결된 뒤 실행 |
 | 종료 코드 20: `operator-or-login-needed`, 또는 다음 단계에 `--approve`, `--allow-shrink`, `--record-signers` 또는 신뢰／철회 플래그가 있음 | 운영자의 판단 사항이며 어시스턴트가 자신을 승인할 수 있다는 뜻이 아닙니다. | `omnilane doctor` — 사람이 증거를 검토하고 지정된 동작을 터미널에서 실행 |
 
+## v0.63.1 새 기능
+
+- **Antigravity 데스크톱 신원 출처 표시 (0.63.1):** Antigravity 데스크톱 대화 안에서의 호출은 계속 해당 대화에 마지막으로 저장된 모델 행으로 식별합니다. 이제 `omnilane whoami`와 디스패치 출력에 "현재 턴 연결 미검증"이 표시됩니다. 호출자 컨텍스트 파일에는 `identity_source` 블록을 기록하고 대화별로 따로 저장하므로 CLI 컨텍스트를 덮어쓰지 않습니다. 레인과 정책 변경은 없으며 재서명이 필요하지 않습니다.
+- 업그레이드: `npm i -g omnilane@0.63.1`.
+
 ## v0.63.0 새 기능
 
 - **명시적으로만 선택 (0.63.0):** `--vendor gemini --model gemini-pro-orchestrator-g1-pro`의 대리 점수는 **54 = max(Argon high 50, Hydrogen xhigh 54)**이며 AA 실측이 아닙니다. 점수가 없는 낮은 추론 강도는 같은 공급자와 모델의 높은 강도 중 최소 점수를 상한으로 사용합니다(Argon medium/low: 50). 차선이나 가치 순위에는 포함하지 않으며 사람 면제에도 호스트 전송 증명이 필요합니다. `aa-v5.0.1-2026-11-13-v2`에는 실측 75행과 파생 23행이 있습니다. [설계 및 제한](docs/reports/aa-orchestrator-2026-11-13.md).

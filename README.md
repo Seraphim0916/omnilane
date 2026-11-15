@@ -69,6 +69,11 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 | Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
 | Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
 
+## What's new in v0.63.1
+
+- **Antigravity Desktop identity provenance (0.63.1):** callers inside an Antigravity Desktop conversation are still identified from that conversation's latest persisted model row, now labelled "current-turn binding unverified" in `omnilane whoami` and dispatch output. Caller-context files record an `identity_source` block and are kept per conversation, so they never overwrite CLI contexts. No routing or policy change; no re-sign needed.
+- Upgrade: `npm i -g omnilane@0.63.1`.
+
 ## What's new in v0.63.0
 
 - **Explicit-only models (0.63.0):** `--vendor gemini --model gemini-pro-orchestrator-g1-pro` uses a proxy ceiling of **54 = max(Argon high 50, Hydrogen xhigh 54)**, not an AA measurement. Unscored lower efforts use the minimum scored higher-effort bound of the same vendor/model (Argon medium/low: 50). Neither kind enters lanes or value ranking; both require host transport proof, even for a human exemption. Snapshot `aa-v5.0.1-2026-11-13-v2` contains 75 measured rows plus 23 derived rows. See [design and limits](docs/reports/aa-orchestrator-2026-11-13.md).

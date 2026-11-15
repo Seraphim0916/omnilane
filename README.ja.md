@@ -69,6 +69,11 @@ omnilane jobs result JOB_ID
 | 終了コード 60：`partially-re-signed` | 合格したセレクターは導入済みです。保持された行は再確認待ちで、ディスパッチできません。終了コード 20 の保留が優先されます。 | `omnilane resign --vendor VENDOR` — 待機原因の解決後に実行 |
 | 終了コード 20：`operator-or-login-needed`、または次の手順に `--approve`、`--allow-shrink`、`--record-signers`、信頼／取消フラグがある | 操作者の判断が必要であり、アシスタントが自己承認してよいという意味ではありません。 | `omnilane doctor` — 人間が証拠を確認してから、指定操作をターミナルで実行 |
 
+## v0.63.1 の新機能
+
+- **Antigravity デスクトップの識別元の明示（0.63.1）：** Antigravity デスクトップの会話内からの呼び出しは、引き続きその会話で最後に保存されたモデル行から識別します。`omnilane whoami` とディスパッチの出力には「現在のターンとの結び付けは未検証」と表示されるようになりました。呼び出し元コンテキストファイルには `identity_source` ブロックを記録し、会話ごとに分けて保存するため、CLI のコンテキストを上書きしません。レーンとポリシーに変更はなく、再署名は不要です。
+- アップグレード：`npm i -g omnilane@0.63.1`。
+
 ## v0.63.0 の新機能
 
 - **明示指定のみ（0.63.0）：** `--vendor gemini --model gemini-pro-orchestrator-g1-pro` の代理スコアは **54 = max(Argon high 50, Hydrogen xhigh 54)** です。AA の実測値ではありません。未採点の低い推論強度には、同じベンダー・モデルの上位強度にある最低スコアを上限として使います（Argon medium/low: 50）。車線や価値順位には加えず、人間の免除でもホストの転送証明が必要です。`aa-v5.0.1-2026-11-13-v2` は実測 75 行と派生 23 行です。[設計と制限](docs/reports/aa-orchestrator-2026-11-13.md)。

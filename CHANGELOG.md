@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.63.1] - 2026-11-15
+
+### Changed
+- **Antigravity Desktop caller identity is now labelled with its provenance.** The model is still read from the conversation's latest persisted `executor_metadata` row (protobuf path `10.1.28`), and the existing refusals for missing or malformed data are unchanged. Provenance printed by `omnilane whoami` and dispatch now reads "latest persisted row for this conversation; current-turn binding unverified". The persisted row is host-reported metadata and does not prove which turn is calling, so concurrent turns or an unflushed mid-session model switch remain known limitations.
+- Caller-context files written from Antigravity Desktop carry an `identity_source` block (`kind: antigravity-executor-metadata`, `conversation_id`, `selection: latest persisted row for this conversation`, `model_field: 10.1.28`, `current_turn_binding_verified: false`). The block is validated field by field on read; any other shape is refused.
+- Desktop caller-context files are scoped per conversation (`<model-id>--antigravity-desktop--<conversation-uuid>.json`), so they never overwrite a CLI context or another conversation's context for the same model and effort. CLI context paths are unchanged.
+
+### Tests
+- New contract tests run against the live 98-row policy (75 measured, 23 derived or authority-ineligible rows) and pin the Antigravity Desktop provenance and refusal invariants.
+- Synthetic protobuf varint encoders in the tests refuse negative, boolean and out-of-range (beyond unsigned 64-bit) inputs.
+
 ## [0.63.0] - 2026-11-14
 
 ### Added
@@ -1957,7 +1968,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.0...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.1...HEAD
+[0.63.1]: https://github.com/Seraphim0916/omnilane/compare/v0.63.0...v0.63.1
 [0.63.0]: https://github.com/Seraphim0916/omnilane/compare/v0.62.0...v0.63.0
 [0.62.0]: https://github.com/Seraphim0916/omnilane/compare/v0.61.0...v0.62.0
 [0.61.0]: https://github.com/Seraphim0916/omnilane/compare/v0.60.1...v0.61.0
