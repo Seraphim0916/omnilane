@@ -411,7 +411,7 @@ check("wrapper with an extra line keeps the plain exec and reports its copy", wr
 python_bin = base / "cleanup-python-bin"
 python_bin.mkdir()
 (base / "hang.py").write_text("import os, pathlib, signal, time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\npathlib.Path(os.environ[\"HANG_PID\"]).write_text(str(os.getpid()))\ntime.sleep(3600)\n")
-(python_bin / "python3").write_text("#!/bin/bash\ncase \"$*\" in\n  *.cleanup-*)\n    if [[ -n \"${HANG_PID:-}\" ]]; then exec \"$REAL_PYTHON\" -I \"" + str(base / "hang.py") + "\"; fi\n    : > \"$SLOW_MARKER\"\n    /bin/sleep .3 ;;\nesac\nexec \"$REAL_PYTHON\" \"$@\"\n")
+(python_bin / "python3").write_text("#!/bin/bash\ncase \"$*\" in\n  *.cleanup-*)\n    if [[ -n \"${HANG_PID:-}\" ]]; then exec \"$REAL_PYTHON\" -I \"" + str(base / "hang.py") + "\"; fi\n    : > \"$SLOW_MARKER\"\n    deadline=$((SECONDS + 120))\n    while [[ ! -f \"${SLOW_RELEASE:?}\" && $SECONDS -lt $deadline ]]; do /bin/sleep .05; done\n    [[ -f \"$SLOW_RELEASE\" ]] || { echo fixture_cleanup_rendezvous_timed_out >&2; exit 97; } ;;\nesac\nexec \"$REAL_PYTHON\" \"$@\"\n")
 (python_bin / "python3").chmod(0o755)
 def cleanup_env(job, **extra):
     return environment(job, PATH=str(python_bin) + os.pathsep + os.environ["PATH"], REAL_PYTHON=shutil.which("python3"), CLAUDE_BIN=str(base / "fake-claude"), **extra)
@@ -458,7 +458,8 @@ def signal_during_cleanup_case():
     job = new_job("cleanup-signal", 4096)
     marker = job / "slow-marker"
     path = variant("job-worker-long-limit.sh", ("PROMPT_CLEANUP_LIMIT=1\n", "PROMPT_CLEANUP_LIMIT=30\n"))
-    env = cleanup_env(job, SLOW_MARKER=str(marker))
+    release = job / "slow-release"
+    env = cleanup_env(job, SLOW_MARKER=str(marker), SLOW_RELEASE=str(release))
     process = subprocess.Popen(command("claude", job, path), env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     try:
         deadline = time.monotonic() + 20
@@ -466,6 +467,7 @@ def signal_during_cleanup_case():
             time.sleep(.01)
         assert marker.exists(), "cleanup never reached"
         os.killpg(process.pid, signal.SIGTERM)
+        release.touch()
         _, stderr = process.communicate(timeout=20)
     finally:
         try: os.killpg(process.pid, signal.SIGKILL)

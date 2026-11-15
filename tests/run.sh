@@ -1361,10 +1361,11 @@ test_jobs_wait_removal_after_pid_read() {
   cat > "$home/hook.sh" <<'HOOK'
           if [[ -n "${OMNILANE_TEST_AFTER_PID_READ:-}" && ! -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]]; then
             : > "$OMNILANE_TEST_AFTER_PID_READ.reached"
-            for ((hook_try = 0; hook_try < 200; hook_try++)); do
+            for ((hook_try = 0; hook_try < 2400; hook_try++)); do
               [[ -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]] && break
               sleep 0.05
             done
+            [[ -e "$OMNILANE_TEST_AFTER_PID_READ.go" ]] || { echo "fixture rendezvous timed out: pid read" >&2; exit 97; }
           fi
 HOOK
   awk -v anchor="$anchor" -v hook="$home/hook.sh" '
@@ -1388,6 +1389,12 @@ HOOK
       [[ -e "$hook.reached" ]] && break
       sleep 0.05
     done
+    if [[ ! -e "$hook.reached" ]]; then
+      : > "$hook.go"
+      wait "$waiter" 2>/dev/null || true
+      fail "$name" "$case_name: pid-read rendezvous not reached"
+      return
+    fi
     if [[ "$case_name" == dir ]]; then
       mv "$home/jobs/$id" "$home/removed-job"
     else
@@ -1425,10 +1432,11 @@ test_jobs_state_read_removal_and_finish_windows() {
   cat > "$base/hook.sh" <<'HOOK'
   if [[ -n "${OMNILANE_TEST_STATE_HOOK:-}" && ! -e "$OMNILANE_TEST_STATE_HOOK.go" ]]; then
     : > "$OMNILANE_TEST_STATE_HOOK.reached"
-    for ((hook_try = 0; hook_try < 200; hook_try++)); do
+    for ((hook_try = 0; hook_try < 2400; hook_try++)); do
       [[ -e "$OMNILANE_TEST_STATE_HOOK.go" ]] && break
       sleep 0.05
     done
+    [[ -e "$OMNILANE_TEST_STATE_HOOK.go" ]] || { echo "fixture rendezvous timed out: state read" >&2; exit 97; }
   fi
 HOOK
   state_read_copy() { # point, before|after, anchor line in read_cli_job_state
@@ -2350,13 +2358,16 @@ test_background_job_records_live_worker_pid() {
   mkdir -p "$home" "$workdir"
   cat > "$gate" <<'EOF'
 #!/usr/bin/env bash
-sleep 3
+# Keep the live state observable until the test has inspected it.
+deadline=$((SECONDS + 60))
+while [[ ! -f "$GATE_RELEASE" && "$SECONDS" -lt "$deadline" ]]; do sleep 0.05; done
+[[ -f "$GATE_RELEASE" ]] || exit 1
 printf 'finished\n' > "$5"
 EOF
   chmod +x "$gate"
   printf 'probe: exec %s -\n' "$gate" > "$home/routing.local.yaml"
 
-  job_id="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/dispatch.sh" \
+  job_id="$(OMNILANE_HOME="$home" GATE_RELEASE="$home/release" bash "$ROOT/scripts/dispatch.sh" \
     --background --workdir "$workdir" probe x)"
   job_dir="$home/jobs/$job_id"
   deadline=$((SECONDS + 5))
@@ -2364,6 +2375,7 @@ EOF
   pid="$(cat "$job_dir/pid" 2>/dev/null || true)"
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && pid_live=1
   running="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"
+  : > "$home/release"
   deadline=$((SECONDS + 10))
   while [[ ! -f "$job_dir/exit" && "$SECONDS" -lt "$deadline" ]]; do sleep 1; done
   finished="$(OMNILANE_HOME="$home" bash "$ROOT/scripts/jobs.sh" status "$job_id" 2>&1)"

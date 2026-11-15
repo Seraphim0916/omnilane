@@ -26,10 +26,11 @@ printf() {
     for exit_hook_file in "$OMNILANE_HOME"/jobs/*/exit "$OMNILANE_HOME"/jobs/*/exit.tmp.*; do
       if [[ -f "$exit_hook_file" && ! -L "$exit_hook_file" && ! -s "$exit_hook_file" ]]; then
         : > "$EXIT_HOOK.reached"
-        for ((exit_hook_try = 0; exit_hook_try < 300; exit_hook_try++)); do
+        for ((exit_hook_try = 0; exit_hook_try < 2400; exit_hook_try++)); do
           [[ -e "$EXIT_HOOK.go" ]] && break
           sleep 0.05
         done
+        [[ -e "$EXIT_HOOK.go" ]] || { echo "fixture rendezvous timed out: $EXIT_HOOK.go" >&2; exit 97; }
         break
       fi
     done
@@ -98,7 +99,8 @@ class CancelExitTests(IdentityTestCase):
         self.assertEqual(source.count(anchor), 1, "the cancel anchor moved")
         hook = self.home / "late-hook"
         pause = (f'      : > "{hook}.reached"\n'
-                 f'      for ((late_try = 0; late_try < 300; late_try++)); do [[ -e "{hook}.go" ]] && break; sleep 0.05; done\n')
+                 f'      for ((late_try = 0; late_try < 2400; late_try++)); do [[ -e "{hook}.go" ]] && break; sleep 0.05; done\n'
+                 f'      [[ -e "{hook}.go" ]] || {{ echo "fixture rendezvous timed out: {hook}.go" >&2; exit 97; }}\n')
         jobs.write_text(source.replace(anchor, pause + anchor))
         process = self.dying_worker()
         cancel = subprocess.Popen(["/bin/bash", str(jobs), "cancel", JOB_ID], env=self.env,
