@@ -129,9 +129,9 @@ class JobEnvMarkerReapTests(unittest.TestCase):
         for proc in self.decoys:
             proc.wait(timeout=5)
 
-    def dispatch(self, tag, *extra, env_extra=None):
+    def dispatch(self, tag, *extra, env_extra=None, repo=ROOT):
         env = dict(self.env, FIXTURE_TAG=tag, **(env_extra or {}))
-        done = subprocess.run(["bash", str(ROOT / "scripts/dispatch.sh"), "--background", "--single-shot", *extra,
+        done = subprocess.run(["bash", str(repo / "scripts/dispatch.sh"), "--background", "--single-shot", *extra,
                                "fixture", "offline marker fixture " + tag],
                               env=env, text=True, capture_output=True, timeout=20)
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -196,6 +196,16 @@ class JobEnvMarkerReapTests(unittest.TestCase):
         self.assert_reaped(control_id, control, 143)
 
     def test_killed_supervisor_preserves_unknown_cleanup_status(self):
+        # Freeze a private copy immediately after the real unknown publication.
+        # This preserves the interruption point even if the test is descheduled.
+        repo = self.root / "fixture-repo"
+        shutil.copytree(ROOT, repo, ignore=shutil.ignore_patterns(".git", ".test-scratch", "__pycache__"))
+        supervisor_script = repo / "scripts/lib/job-timeout.pl"
+        original = supervisor_script.read_text(encoding="utf-8")
+        needle = "    record_leftovers('unknown', 'unknown');\n    # A signal can arrive"
+        self.assertEqual(original.count(needle), 1, "supervisor seam changed")
+        supervisor_script.write_text(original.replace(
+            needle, "    record_leftovers('unknown', 'unknown');\n    kill 'STOP', $$; # fixture rendezvous\n    # A signal can arrive"), encoding="utf-8")
         helper = self.root / "term-hold-helper.py"
         helper.write_text(
             "import signal, sys, time\nfrom pathlib import Path\n"
@@ -204,7 +214,7 @@ class JobEnvMarkerReapTests(unittest.TestCase):
             "    (root / 'term-received').write_text('received')\n"
             "signal.signal(signal.SIGTERM, on_term)\n"
             "while True:\n    time.sleep(0.05)\n", encoding="utf-8")
-        job_id, _ = self.dispatch("interrupted-cleanup", env_extra={"FIXTURE_HELPER_SCRIPT": str(helper)})
+        job_id, _ = self.dispatch("interrupted-cleanup", env_extra={"FIXTURE_HELPER_SCRIPT": str(helper)}, repo=repo)
         job_dir = self.home / "jobs" / job_id
         wrapper = int((job_dir / "pid").read_text())
         listing = subprocess.run(["ps", "-axo", "pid=,ppid=,comm="], text=True,
