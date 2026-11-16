@@ -71,10 +71,12 @@ class ExplicitProxyTests(unittest.TestCase):
         self.assertEqual(3, result.returncode, result.stdout + result.stderr)
         self.assertIn('target-transport', result.stderr)
 
-    def test_f_argon_medium_bound(self):
-        for ceiling, expected in [(52, 0), (49, 3)]:
-            result = self.dry('gemini-4-argon-medium', ceiling)
-            self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
+    def test_f_argon_medium_measured_and_low_bound(self):
+        for selector in ('gemini-4-argon-medium', 'gemini-4-argon-low'):
+            for ceiling, expected in [(48, 0), (47, 3)]:
+                with self.subTest(selector=selector, ceiling=ceiling):
+                    result = self.dry(selector, ceiling)
+                    self.assertEqual(expected, result.returncode, result.stdout + result.stderr)
 
     def test_decision_records_proxy_provenance(self):
         from tests.test_aa_policy import aa_policy
@@ -151,15 +153,15 @@ class DerivedBuildTests(unittest.TestCase):
             capture = d / 'extract.json'; capture.write_text(json.dumps(extract))
             source = d / 'base.json'; source.write_text(json.dumps(base))
             target = d / 'policy.json'
-            args = SimpleNamespace(extract=str(capture), base=str(source), as_of='2026-11-13',
-                                   revision=2, approval='approved')
+            args = SimpleNamespace(extract=str(capture), base=str(source), as_of='2026-11-17',
+                                   revision=1, approval='approved')
             with patch.object(build, 'REGISTRY', target), patch.object(build, 'REPO', d), \
                     contextlib.redirect_stdout(io.StringIO()):
                 build.cmd_build(args)
             return json.loads(target.read_text())
 
     def test_e_recompute_and_idempotence(self):
-        extract = json.loads((ROOT / 'docs/reports/aa-v5.0.1-extract-2026-11-13.json').read_text())
+        extract = json.loads((ROOT / 'docs/reports/aa-v5.0.1-extract-2026-11-17.json').read_text())
         base = json.loads((ROOT / 'config/aa-model-policy.json').read_text())
         extract['records']['gemini-4-hydrogen']['intelligenceIndex'] = 60.2
         result = self.rebuild(extract, base)

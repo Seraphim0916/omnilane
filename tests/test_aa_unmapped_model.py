@@ -25,7 +25,8 @@ class UnmappedModelTests(unittest.TestCase):
                       if r["catalog_model"] in ("gemini-4-argon", "gemini-4-argon-high"))
         legacy.update(catalog_model="gemini-4-argon", catalog_source="scripts/aa_rebaseline.py",
                       source_kind="aa_model_not_runtime_identity")
-        base["scored_configs"] = [r for r in base["scored_configs"] if r["id"] != cid]
+        base["scored_configs"] = [r for r in base["scored_configs"]
+                                  if r["id"] not in (cid, "gemini/gemini-4-argon-medium")]
         base["aliases"] = [r for r in base["aliases"] if not r["catalog_model"].startswith("gemini-4-argon")]
         base["aliases"].append(legacy)
         with tempfile.TemporaryDirectory(prefix="aa-unmapped-") as temp:
@@ -33,8 +34,8 @@ class UnmappedModelTests(unittest.TestCase):
             registry.write_text(json.dumps(base))
             args = argparse.Namespace(
                 base=str(registry),
-                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-13.json"),
-                as_of="2026-11-10", revision=1, approval="proposed",
+                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-17.json"),
+                as_of="2026-11-17", revision=1, approval="proposed",
             )
             with patch.object(aa, "REGISTRY", registry), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(aa.cmd_build(args), 0)
@@ -55,13 +56,17 @@ class UnmappedModelTests(unittest.TestCase):
         self.assertEqual(alias["status"], "unknown")
         self.assertIsNone(alias["resolved_config_id"])
         self.assertFalse(alias["runtime_verified"])
+        med = next(r for r in result["scored_configs"] if r["id"] == "gemini/gemini-4-argon-medium")
+        self.assertEqual((med["score_raw"], med["score"], med["estimated"]), (47.6, 48, False))
+        self.assertEqual(med["transport_mapping"]["candidate_model_ids"], ["gemini-4-argon-medium"])
+        self.assertFalse(med["transport_mapping"]["runtime_verified"])
         argon = [r for r in result["scored_configs"] if r["model"] == "gemini-4-argon"]
-        self.assertEqual([r["effort"] for r in argon if not r.get("score_source")], ["high"])
+        self.assertEqual([r["effort"] for r in argon if not r.get("score_source")], ["high", "medium"])
         bounded = [r for r in argon if r.get("score_source") == "upper-bound"]
-        self.assertEqual({r["effort"] for r in bounded}, {"medium", "low"})
+        self.assertEqual({r["effort"] for r in bounded}, {"low"})
         for bound in bounded:
-            self.assertEqual(bound["bound_from"], cid)
-            self.assertEqual(bound["score"], row["score"])
+            self.assertEqual(bound["bound_from"], "gemini/gemini-4-argon-medium")
+            self.assertEqual(bound["score"], med["score"])
             self.assertFalse(bound["authority_eligible"])
             self.assertFalse(bound["transport_mapping"]["runtime_verified"])
             self.assertNotIn(bound, aa.value_pool(result["scored_configs"]))

@@ -211,6 +211,7 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 (CONV_UUID, b"gemini-4-carbon-medium", "gemini-4-carbon", "medium"),
                 (OTHER_UUID, b"gemini-4-hydrogen-medium", "gemini-4-hydrogen", "medium"),
                 ("11111111-2222-3333-4444-555555555555", b"gemini-4-argon-high", "gemini-4-argon", "high"),
+                ("33333333-2222-3333-4444-555555555555", b"gemini-4-argon-medium", "gemini-4-argon", "medium"),
             ):
                 _write_synthetic_db(agy_dir, cid, [(0, _build_executor_metadata(raw))])
                 launcher, selector, source = self._read_persisted(agy_dir, conv_id=cid)
@@ -221,12 +222,12 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                 self.assertIsNotNone(row, reason)
                 self.assertEqual(row["vendor"], "gemini")
 
-            # In v1 policy, argon has no medium row (NO_ROW); in v2 (bda3c2e), argon/medium is a derived
-            # upper-bound row (estimated=True, authority_eligible=False, score_source="upper-bound").
-            # Either way it must be cleanly refused as a caller identity.
-            argon_med_cid = "22222222-2222-3333-4444-555555555555"
-            _write_synthetic_db(agy_dir, argon_med_cid, [(0, _build_executor_metadata(b"gemini-4-argon-medium"))])
-            _, selector, _ = self._read_persisted(agy_dir, conv_id=argon_med_cid)
+            # argon/low remains a derived upper-bound row (estimated=True,
+            # authority_eligible=False, score_source="upper-bound") and must be
+            # cleanly refused as a caller identity.
+            argon_low_cid = "22222222-2222-3333-4444-555555555555"
+            _write_synthetic_db(agy_dir, argon_low_cid, [(0, _build_executor_metadata(b"gemini-4-argon-low"))])
+            _, selector, _ = self._read_persisted(agy_dir, conv_id=argon_low_cid)
             row, reason = caller_identity.resolve(self.registry, *selector)
             if row is not None:
                 self.assertFalse(caller_identity.is_authority_eligible_row(row))
@@ -236,26 +237,26 @@ class AntigravityCallerIdentityTests(unittest.TestCase):
                     reason,
                 )
 
-            # With a synthetic policy table that replaces any existing argon/medium row with a measured
-            # authority-eligible one, it resolves cleanly in both v1 and v2 schemas.
+            # With a synthetic policy table that replaces any existing argon/low row with a measured
+            # authority-eligible one, it resolves cleanly.
             synthetic_registry = copy.deepcopy(self.registry)
             synthetic_registry["scored_configs"] = [
                 r for r in synthetic_registry["scored_configs"]
-                if not (r["vendor"] == "gemini" and r["model"] == "gemini-4-argon" and r["effort"] == "medium")
+                if not (r["vendor"] == "gemini" and r["model"] == "gemini-4-argon" and r["effort"] == "low")
             ]
             synthetic_registry["scored_configs"].append({
-                "id": "gemini/gemini-4-argon-medium",
+                "id": "gemini/gemini-4-argon-low",
                 "vendor": "gemini",
                 "model": "gemini-4-argon",
-                "effort": "medium",
-                "score": 47,
+                "effort": "low",
+                "score": 45,
                 "estimated": False,
                 "authority_eligible": True,
             })
             row2, reason2 = caller_identity.resolve(synthetic_registry, *selector)
             self.assertIsNotNone(row2, reason2)
             self.assertTrue(caller_identity.is_authority_eligible_row(row2))
-            self.assertEqual(row2["id"], "gemini/gemini-4-argon-medium")
+            self.assertEqual(row2["id"], "gemini/gemini-4-argon-low")
 
     def test_auxiliary_field_interference_does_not_misfire(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -57,6 +57,7 @@ PROVEN["grok/grok-4-7-low"] = ("cli_reasoning_effort", "grok-4.7", "gk-grok-4_7-
 
 for cid, rid, ev in [
     ("gemini/gemini-4-argon", "gemini-4-argon-high", "agy-gemini-4-argon-high"),
+    ("gemini/gemini-4-argon-medium", "gemini-4-argon-medium", "agy-gemini-4-argon-medium"),
     ("gemini/gemini-3-8-flash", "gemini-3.8-flash-high", "agy-gemini-3_8-flash-high"),
     ("gemini/gemini-3-8-flash-medium", "gemini-3.8-flash-medium", "agy-gemini-3_8-flash-medium"),
     ("gemini/gemini-3-8-flash-low", "gemini-3.8-flash-low", "agy-gemini-3_8-flash-low"),

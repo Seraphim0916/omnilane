@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 126,
+    "catalogEntries": 127,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1176,6 +1176,30 @@
         "gemini-4-argon"
       ],
       "mappingReason": "AA v4.3.2 snapshot aa-v4.3.2-2026-10-14-v1 was approved by the operator on 2026-10-18 and measures Gemini 4 Argon (High); agy encodes high in its selector. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-argon-medium",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-argon-medium"
+      ],
+      "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-17-v1 (approved 2026-11-17) scores Gemini 4 Argon (Medium) at 48 (raw 47.60), replacing its conservative High bound; agy encodes medium in its selector for Google AI Ultra sign-ins. Placed by `aa_rebaseline.py value` at #2 in ui-draft and in hardest-coding's Gemini tail after Hydrogen High; host transport proof still required; absent from the historical v4.2 aaModels capture."
     },
     {
       "vendor": "gemini",

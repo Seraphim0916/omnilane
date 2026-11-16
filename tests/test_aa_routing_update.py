@@ -42,8 +42,8 @@ EXPECTED_DEFAULTS = {
     "arbitrate": "off - -",
 }
 CARBON_FIRST = {"hardest-coding": ["gemini gemini-4-carbon-high -", "gemini gemini-4-carbon-low -"],
-                "ui-draft": ["gemini gemini-4-carbon-medium -"]}
-# Next value rung in line on a host without Carbon proof (2026-11-13 AA v5.0.1 value rerank).
+                "ui-draft": ["gemini gemini-4-carbon-medium -", "gemini gemini-4-argon-medium -"]}
+# Next value rung in line on a host without Carbon / Argon-medium Ultra proof.
 BEFORE_CARBON = {"hardest-coding": "claude claude-opus-5-5 high", "ui-draft": "claude claude-opus-5-5 high"}
 
 

@@ -6,6 +6,9 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Changed
+- **AA v5.0.1 snapshot `aa-v5.0.1-2026-11-17-v1` (approved 2026-11-17):** scores **Gemini 4 Argon Medium** (`gemini/gemini-4-argon-medium`, Antigravity selector `gemini-4-argon-medium`) at **48** (`score_raw` 47.60), replacing its 2026-11-13 conservative High bound of 50 and tightening `gemini/gemini-4-argon/low/unspecified`'s upper bound to 48 (76 measured rows + 1 proxy + 21 upper bounds = 98 scored, 60 unknown, 1 reference, 64 aliases). `scripts/aa_rebaseline.py value` places `gemini-4-argon-medium` at #2 in `ui-draft` (ceiling 48–57, right behind `gemini-4-carbon-medium`, keeping existing non-Ultra rungs directly behind it); in `hardest-coding` it sits right after `gemini-4-hydrogen-high` in the Gemini tail (#33, ahead of `gemini-3.8-flash-medium`) rather than #5 so `--vendor gemini` callers at ceiling 50–53 continue selecting `gemini-4-argon-high` (50) while ceiling 48–49 reaches `gemini-4-argon-medium` (48). Refreshes AA's 50% API price cut on Gemini 4 Carbon and Argon (`$4/$20` → `$2/$10` per 1M tokens) and newly published `mlcrOverall` (`0.211`) on `gemini-4-hydrogen` (xhigh), with same-version `briefcaseBreakdown` subfields filled from the 2026-11-13 v5.0.1 extract where AA's live pages omit them. Hosts must run `omnilane resign` after merging (`docs/reports/aa-rebaseline-2026-11-17.md`).
+
 ## [0.63.2] - 2026-11-15
 
 ### Fixed

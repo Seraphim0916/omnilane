@@ -752,8 +752,8 @@ class ResignTests(unittest.TestCase):
         entries = [e for e in probe_sweep.plan("gemini") if "argon" in e["model"]]
         self.assertEqual([(e["config_id"], e["model"], e["effort"]) for e in entries],
                          [("gemini/gemini-4-argon", "gemini-4-argon-high", None),
-                          ("gemini/gemini-4-argon/low/unspecified", "gemini-4-argon-low", None),
-                          ("gemini/gemini-4-argon/medium/unspecified", "gemini-4-argon-medium", None)])
+                          ("gemini/gemini-4-argon-medium", "gemini-4-argon-medium", None),
+                          ("gemini/gemini-4-argon/low/unspecified", "gemini-4-argon-low", None)])
         mapping = next(m for m in self.vendor_mappings("gemini")
                        if m["config_id"] == "gemini/gemini-4-argon")
         self.assertEqual((mapping["runtime_model"], mapping["runtime_effort"]),

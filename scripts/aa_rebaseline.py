@@ -144,6 +144,10 @@ NEW_ROWS = [
     *[(f"gemini/gemini-4-hydrogen{suffix}", "gemini", "gemini-4-hydrogen", effort, "unspecified",
        f"gemini-4-hydrogen{suffix}", "gemini/gemini-3-8-flash" + ("" if effort in ("xhigh", "high") else suffix))
       for effort in ("xhigh", "high", "medium", "low") for suffix in ["" if effort == "xhigh" else f"-{effort}"]],
+    # Gemini 4 Argon Medium (2026-11-17): AA v5.0.1 now publishes an independent score for
+    # gemini-4-argon-medium (47.60 -> 48), replacing its 2026-11-13 conservative High bound (50).
+    ("gemini/gemini-4-argon-medium", "gemini", "gemini-4-argon", "medium", "unspecified",
+     "gemini-4-argon-medium", "gemini/gemini-3-8-flash-medium"),
 ]
 # Scored by AA but with no runtime selector the vendor has published: kept in
 # reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
@@ -153,6 +157,7 @@ NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
                "gemini-4-argon-high": "gemini-3.8-flash-high",
+               "gemini-4-argon-medium": "gemini-3.8-flash-medium",
                "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra",
                "claude-fable-5-2": "claude-fable-5-1",
                **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
@@ -346,13 +351,21 @@ def cmd_fill(args) -> int:
     in the extract so the evidence report can cite it.
     """
     extract = json.loads(Path(args.extract).read_text())
-    earlier = json.loads(Path(args.earlier).read_text())["records"]
+    earlier_doc = json.loads(Path(args.earlier).read_text())
+    if earlier_doc.get("benchmark_version") != extract.get("benchmark_version"):
+        sys.exit("fill: benchmark versions differ")
+    earlier = earlier_doc["records"]
     filled = []
     for slug, record in extract["records"].items():
         for field, value in (earlier.get(slug) or {}).items():
             if value not in (None, {}, []) and record.get(field) in (None, {}, []):
-                record[field] = value
+                record[field] = copy.deepcopy(value)
                 filled.append({"slug": slug, "field": field})
+            elif isinstance(value, dict) and isinstance(record.get(field), dict):
+                for subkey, subval in value.items():
+                    if subval not in (None, {}, []) and record[field].get(subkey) in (None, {}, []):
+                        record[field][subkey] = copy.deepcopy(subval)
+                        filled.append({"slug": slug, "field": f"{field}.{subkey}"})
     extract["filled_from_earlier_capture"] = {
         "source": str(Path(args.earlier).resolve().relative_to(REPO)), "fields": filled}
     Path(args.out).write_bytes(dump(extract))
@@ -490,10 +503,10 @@ def cmd_build(args) -> int:
         rescore(row, records[slug], version, as_of, report(vendor))
         scored.append(row)
     for row in scored:
-        if row["model"] in RUNTIME_SELECTORS:
+        if row.get("aa_slug") in RUNTIME_SELECTORS:
             row["transport_mapping"] = {
                 "status": "unknown",
-                "candidate_model_ids": [RUNTIME_SELECTORS[row["model"]]],
+                "candidate_model_ids": [RUNTIME_SELECTORS[row["aa_slug"]]],
                 "runtime_verified": False,
                 "reason": "Known agy selector; successful host transport probe and model access are still required",
             }
@@ -523,7 +536,8 @@ def cmd_build(args) -> int:
     # Seed known scoreless selectors; derive_scores may assign conservative bounds.
     for effort in ("medium", "low"):
         cid = f"gemini/gemini-4-argon/{effort}/unspecified"
-        if not any(row["id"] == cid for row in unknown):
+        if ("gemini", "gemini-4-argon", effort, "unspecified") not in added \
+                and not any(row["id"] == cid for row in unknown):
             unknown.append({
                 "id": cid, "vendor": "gemini", "model": "gemini-4-argon",
                 "effort": effort, "reasoning": "unspecified", "fallback": None,
@@ -583,8 +597,8 @@ def cmd_build(args) -> int:
             clone = copy.deepcopy(template)
             clone["catalog_model"] = model
             # a gemini selector carries the effort (gemini-4-carbon-medium), as target_row reads it
-            clone["candidate_config_ids"] = [cid for cid, v, m, e, *_ in NEW_ROWS
-                                             if RUNTIME_SELECTORS.get(m, m) == model
+            clone["candidate_config_ids"] = [cid for cid, v, m, e, _, slug, _ in NEW_ROWS
+                                             if RUNTIME_SELECTORS.get(slug, m) == model
                                              or (v == "gemini" and f"{m}-{e}" == model)]
             new["aliases"].insert(new["aliases"].index(template), clone)
 
@@ -637,8 +651,10 @@ def cmd_report(args) -> int:
                          f"{before['score'] if before else 'new'} | "
                          f"{row.get('score_source', 'AA measured')}: "
                          f"{row.get('bound_from', row.get('proxy_of', row['source_urls'][0]))} |")
+        new_identities = {(r["vendor"], r["model"], r["effort"], r["reasoning"]) for r in new["scored_configs"]}
         gone = [cid for cid, row in old.items() if row["vendor"] == vendor
-                and cid not in {r["id"] for r in new["scored_configs"]}]
+                and cid not in {r["id"] for r in new["scored_configs"]}
+                and (row["vendor"], row["model"], row["effort"], row["reasoning"]) not in new_identities]
         retired = [cid for cid in gone if cid in RETIRED_ROWS]
         withdrawn = [cid for cid in gone if cid not in RETIRED_ROWS]
         if withdrawn:

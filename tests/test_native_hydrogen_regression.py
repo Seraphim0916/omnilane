@@ -222,7 +222,9 @@ class VendorPinSkipsUnprovenRowsTests(unittest.TestCase):
                 self.assertIn(self.candidate(lane, self.ARGON), dry.stdout)
                 self.assertIn(self.SKIP, dry.stderr)
                 self.assertIn("runtime-mapping-unverified", dry.stderr)
-                skipped = [spec for spec in self.lanes[lane] if "gemini-4-carbon" in spec]
+                before_argon = self.lanes[lane][:self.lanes[lane].index(self.ARGON)]
+                skipped = [spec for spec in before_argon
+                           if "gemini-4-carbon" in spec or "gemini-4-argon-medium" in spec]
                 self.assertEqual(len(skipped), dry.stderr.count(self.SKIP))
 
     def test_proven_carbon_is_still_selected(self):

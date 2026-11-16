@@ -517,8 +517,8 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-13-v2`
-(2026-11-13 full-lane `value` rerank; derived explicit-only bounds cannot
+Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-17-v1`
+(2026-11-17 AA v5.0.1 refresh; derived explicit-only bounds cannot
 authorize caller ceilings).
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
 can still move the chain further down.
@@ -596,15 +596,19 @@ can still move the chain further down.
   bulk-mechanical at Sol low, hard-judgment at Flash high and taste-final at Grok 4.7
   high itself. Grok 4.6 (xhigh 31) is in no lane. Verify API signatures and cited
   facts before shipping.
-- **Gemini 4 Argon:** High is measured (50 in v5.0.1) and selectable as
-  `gemini-4-argon-high` on Antigravity with Google AI Ultra. It is in every lane
-  except arbitrate, normally in the Gemini slot right before Flash; since the
-  2026-11-10 re-rank hardest-coding places it in the Gemini tail. UI/long-context
+- **Gemini 4 Argon:** High (50) and Medium (48, added in `aa-v5.0.1-2026-11-17-v1`)
+  are measured in v5.0.1 and selectable as `gemini-4-argon-high` and
+  `gemini-4-argon-medium` on Antigravity with Google AI Ultra. High is in every lane
+  except arbitrate, normally in the Gemini slot right before Hydrogen High and Flash;
+  Medium is placed by `value` at #2 in ui-draft (right behind Carbon Medium) and sits
+  right after Hydrogen High in hardest-coding's Gemini tail (so `--vendor gemini` at
+  ceiling 50–53 keeps Argon High while ceiling 48–49 reaches Argon Medium ahead of
+  Flash, requiring host transport proof on every path including the human exemption). UI/long-context Argon High
   placements provide access without claiming measured superiority. Grok remains
   first for native X search and Codex-quota relief; Argon is a generic-web
   fallback. `consult --vendor gemini` selects Argon without crossing vendors. Since
   2026-11-13 Gemini 4 Hydrogen High sits right after Argon in every lane that lists
-  it. A successful host probe is required. Medium/Low are unscored.
+  it. A successful host probe is required. Low remains unscored (bounded at 48 for explicit selection only).
 - **Gemini 3.8 Flash:** the cross-vendor fallback after Argon (high 31, medium 30,
   low 23). Do not infer visual taste or controller authority from coding
   benchmarks.
@@ -635,7 +639,11 @@ can still move the chain further down.
 
 ### Model aliases
 
-Current approved snapshot `aa-v5.0.1-2026-11-13-v2` (2026-11-13, approved by the operator on 2026-11-14; 75 measured rows plus 23 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-13-v2.md`):
+Current approved snapshot `aa-v5.0.1-2026-11-17-v1` (2026-11-17, approved by the operator on 2026-11-17; 76 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-17.md`):
+
+- Scores `gemini/gemini-4-argon-medium` (`gemini-4-argon-medium`) at 48 (`score_raw` 47.60), replacing its conservative 50 bound and tightening `gemini-4-argon-low`'s explicit-only upper bound to 48; `aa_rebaseline.py value` places `gemini-4-argon-medium` at #2 in `ui-draft` and `hardest-coding` places it right after `gemini-4-hydrogen-high` in the Gemini tail (gated on host transport proof like Carbon and Hydrogen). Refreshes Carbon and Argon's `$2/$10` API pricing and Hydrogen xhigh's `mlcrOverall` (`0.211`).
+
+Previous approved snapshot `aa-v5.0.1-2026-11-13-v2` (2026-11-13, approved by the operator on 2026-11-14; 75 measured rows plus 23 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-13-v2.md`):
 
 - Explicit only: `--vendor gemini --model gemini-pro-orchestrator-g1-pro` uses proxy ceiling 54 (not AA measured); unscored lower efforts use same-model higher-effort bounds (Argon medium/low 50). No lane/value entry; host transport proof remains required, including human exemption. See `docs/reports/aa-orchestrator-2026-11-13.md`.
 - 0.63.0 full-lane rerank (against `docs/reports/aa-v5.0.1-extract-2026-11-13.json`): all six `value` lanes place the complete `aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its head from `gpt-6.1-sol medium` to `gpt-6.1-sol xhigh`), `coding-overflow` drops unscored `kimi`/`qwen`/`opencode` rows, and `fast-agentic` keeps its order while time-to-first-token is unpublished. See `docs/reports/aa-lane-rerank-2026-11-13.md`.
@@ -694,6 +702,7 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Grok 4.7 | grok | grok-4.7 | - |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
 | Gemini 4 Argon High | gemini | gemini-4-argon-high | - |
+| Gemini 4 Argon Medium | gemini | gemini-4-argon-medium | - |
 | Gemini 4 Carbon High | gemini | gemini-4-carbon-high | - |
 | Gemini 4 Carbon Medium | gemini | gemini-4-carbon-medium | - |
 | Gemini 4 Carbon Low | gemini | gemini-4-carbon-low | - |
