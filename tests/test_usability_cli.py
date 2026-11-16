@@ -29,7 +29,7 @@ class UsabilityCLITests(unittest.TestCase):
             (lib / name).symlink_to(ROOT / "scripts/lib" / name)
         result = subprocess.run(["/bin/bash", "-c", script, "fixture", str(repo),
                                  self.env["OMNILANE_HOME"], decision], env=self.env,
-                                capture_output=True, text=True, timeout=20)
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         human, raw, summary = result.stderr.splitlines()
         assert_private_line(self, human)
@@ -40,7 +40,7 @@ class UsabilityCLITests(unittest.TestCase):
         legacy = subprocess.run(["/bin/bash", "-c", script, "fixture", str(repo),
                                  self.env["OMNILANE_HOME"], decision],
                                 env=dict(self.env, OMNILANE_REFUSAL_JSON_ONLY="1"),
-                                capture_output=True, text=True, timeout=20)
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
         self.assertEqual(legacy.returncode, 0)
         self.assertEqual(legacy.stderr, decision + "\nomnilane refusal: failed_gate=" + PRIVATE_FIXTURE
                          + ' code=deny reason="' + PRIVATE_FIXTURE + '" quote="' + PRIVATE_FIXTURE + '"\n')
@@ -80,7 +80,8 @@ class UsabilityCLITests(unittest.TestCase):
 
     def run_cli(self, *args):
         return subprocess.run(["/bin/bash", str(ROOT / "bin/omnilane"), *args],
-                              env=self.env, capture_output=True, text=True, timeout=60)
+                              env=self.env, stdin=subprocess.DEVNULL,
+                              capture_output=True, text=True, timeout=60)
 
     def test_refusal_starts_with_readable_line_then_json(self):
         result = self.run_cli("route", "--dry-run", "consult", "fixture task")
@@ -131,7 +132,7 @@ class UsabilityCLITests(unittest.TestCase):
         env = dict(self.env, OMNILANE_REFUSAL_JSON_ONLY="1")
         result = subprocess.run(["/bin/bash", "-c", script, "fixture", str(repo),
                                  self.env["OMNILANE_HOME"], decision], env=env,
-                                capture_output=True, text=True, timeout=20)
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, decision + '\nomnilane refusal: failed_gate=gate code=deny reason="reason" quote="message"\n')
 

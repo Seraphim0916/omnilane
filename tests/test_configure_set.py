@@ -54,7 +54,8 @@ class ConfigureSetTests(unittest.TestCase):
             environment["PATH"] = str(self.bins) + ":" + self.env["PATH"]
         return subprocess.run([self.real_bash, str(ROOT / "scripts" / script), *args],
                               cwd=self.work, env=environment, text=True,
-                              capture_output=True, timeout=20, umask=umask)
+                              stdin=subprocess.DEVNULL, capture_output=True,
+                              timeout=20, umask=umask)
 
     def validation_fixture(self, status, stdout="", stderr="fixture validator output\n"):
         observation = self.root / "observation.json"

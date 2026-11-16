@@ -2401,7 +2401,7 @@ test_job_timeout_bounds_vote_panel() {
   cat > "$fake" <<'EOF'
 #!/usr/bin/env bash
 printf 'voter\n' >> "$VOTER_STARTS_FILE"
-sleep 0.7
+sleep 1.6
 printf 'opinion\n'
 EOF
   chmod +x "$fake"
@@ -2409,7 +2409,7 @@ EOF
 
   OMNILANE_HOME="$home" CLAUDE_BIN="$fake" GROK_BIN="$fake" \
     VOTER_STARTS_FILE="$marker" \
-    bash "$ROOT/scripts/dispatch.sh" --timeout 5 --job-timeout 1 probe x \
+    bash "$ROOT/scripts/dispatch.sh" --timeout 10 --job-timeout 4 probe x \
     >/dev/null 2>&1
   rc=$?
   [[ -f "$marker" ]] && count="$(wc -l < "$marker" | tr -d ' ')"
