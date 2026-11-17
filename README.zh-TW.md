@@ -69,6 +69,13 @@ omnilane jobs result JOB_ID
 | 結束碼 60：`partially-re-signed` | 通過的選擇參數已安裝；保留項目待重查，不能派工。需要處理的結束碼 20 優先。 | `omnilane resign --vendor VENDOR` — 待原因解除後執行 |
 | 結束碼 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤銷旗標 | 這是操作者決策，不是助理可自行核准的權限。 | `omnilane doctor` — 由真人檢查證據，再於終端機執行指定動作 |
 
+## v0.63.3 新功能
+
+- **升級後請執行 `omnilane resign`：**核准的評分政策快照已換成 `aa-v5.0.1-2026-11-17-v1`，派工前須更新主機傳輸證明。
+- **AA 快照更新（0.63.3）：**Gemini 4 Argon Medium 新增實測分數 48（原始分數 47.60），取代原先的保守上限 50；Argon Low 僅限明確指定的上限同步改為 48。Carbon 與 Argon API 單價下調 50%，每百萬輸入／輸出 token 為 `$2/$10`；Hydrogen xhigh 補上 `mlcrOverall` 0.211。
+- **更新兩條車道的順序（0.63.3）：**Argon Medium 排在 `ui-draft` 第 2 順位，並接在 `hardest-coding` Gemini 尾段的 Hydrogen High 後方。各車道首選不變，仍須通過主機傳輸證明及呼叫者分數上限檢查。
+- 升級：`npm i -g omnilane@0.63.3`。
+
 ## v0.63.2 新功能
 
 - **取消與逾時收尾會停掉替身輔助程序（0.63.2）：** 輔助程序在處理 TERM 時啟動替身，現在會在兩秒視窗內依該工作的專屬標記重新掃描，最後再補一次 KILL；KILL 必須在新掃描中看到相同的 PID 與啟動時間才會送出。`reaped` 計的是收尾期間看過的不同程序身分，`remaining` 是最後一次觀察。車道與政策都沒變，不需要重簽。

@@ -69,6 +69,13 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 | Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
 | Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
 
+## What's new in v0.63.3
+
+- **After upgrading, run `omnilane resign`:** the approved scoring-policy snapshot changed to `aa-v5.0.1-2026-11-17-v1`; refresh host transport proof before dispatching.
+- **AA snapshot refresh (0.63.3):** Gemini 4 Argon Medium now has a measured score of 48 (raw 47.60), replacing its conservative bound of 50; Argon Low's explicit-only bound becomes 48. Carbon and Argon API prices drop 50% to `$2/$10` per million input/output tokens, and Hydrogen xhigh gains `mlcrOverall` 0.211.
+- **Two lane chains updated (0.63.3):** Argon Medium is second in `ui-draft` and follows Hydrogen High in the `hardest-coding` Gemini tail. Lane heads stay unchanged; existing host-proof and caller-ceiling gates still apply.
+- Upgrade: `npm i -g omnilane@0.63.3`.
+
 ## What's new in v0.63.2
 
 - **Cancel and timeout cleanup now stops replacement helpers (0.63.2):** a helper that starts a replacement while handling TERM is rescanned by its exact job marker within a two-second window, then stopped by a final KILL that requires the same PID and start time. `reaped` counts distinct process identities and `remaining` is the last observation. No routing or policy change; no re-sign needed.

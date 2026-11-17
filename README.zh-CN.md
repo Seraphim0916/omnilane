@@ -69,6 +69,13 @@ omnilane jobs result JOB_ID
 | 退出码 60：`partially-re-signed` | 通过的选择参数已安装；保留项待复查，不能派发任务。需要处理的退出码 20 优先。 | `omnilane resign --vendor VENDOR` — 待原因解除后执行 |
 | 退出码 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤销标志 | 这是操作者决策，不是助手可以自行批准的权限。 | `omnilane doctor` — 由人工检查证据，再在终端执行指定操作 |
 
+## v0.63.3 新功能
+
+- **升级后请执行 `omnilane resign`：**获批的评分政策快照已换为 `aa-v5.0.1-2026-11-17-v1`，派工前须更新主机传输证明。
+- **AA 快照更新（0.63.3）：**Gemini 4 Argon Medium 新增实测分数 48（原始分数 47.60），替代原先的保守上限 50；Argon Low 仅限显式指定的上限同步改为 48。Carbon 与 Argon API 单价下调 50%，每百万输入／输出 token 为 `$2/$10`；Hydrogen xhigh 补上 `mlcrOverall` 0.211。
+- **更新两条通道的顺序（0.63.3）：**Argon Medium 排在 `ui-draft` 第 2 位，并接在 `hardest-coding` Gemini 尾部的 Hydrogen High 之后。各通道首选不变，仍须通过主机传输证明及调用者分数上限检查。
+- 升级：`npm i -g omnilane@0.63.3`。
+
 ## v0.63.2 新功能
 
 - **取消与超时清理会停掉替身辅助进程（0.63.2）：** 辅助进程在处理 TERM 时启动替身，现在会在两秒窗口内按该任务的专属标记重新扫描，最后再补一次 KILL；KILL 必须在新扫描中看到相同的 PID 与启动时间才会发送。`reaped` 统计的是清理期间见到的不同进程身份，`remaining` 是最后一次观察。车道与策略都没变，不需要重新签名。
