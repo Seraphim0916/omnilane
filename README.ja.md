@@ -69,6 +69,13 @@ omnilane jobs result JOB_ID
 | 終了コード 60：`partially-re-signed` | 合格したセレクターは導入済みです。保持された行は再確認待ちで、ディスパッチできません。終了コード 20 の保留が優先されます。 | `omnilane resign --vendor VENDOR` — 待機原因の解決後に実行 |
 | 終了コード 20：`operator-or-login-needed`、または次の手順に `--approve`、`--allow-shrink`、`--record-signers`、信頼／取消フラグがある | 操作者の判断が必要であり、アシスタントが自己承認してよいという意味ではありません。 | `omnilane doctor` — 人間が証拠を確認してから、指定操作をターミナルで実行 |
 
+## v0.63.4 の新機能
+
+- **更新後に `omnilane resign` を実行：**承認済みのスコアポリシースナップショットが `aa-v5.0.1-2026-11-18-v1` に変わり、`gpt-6.2-astra` と `gpt-6.2-sol` の実測 10 行が追加されました。ディスパッチ前にホストのトランスポート証明を更新してください（変更のない既存証明は引き継がれ、新しい `codex` 10 行はプローブが必要です）。
+- **GPT-6.2 Astra と GPT-6.2 Sol を追加（0.63.4）：**`aa-v5.0.1-2026-11-18-v1` で OpenAI `gpt-6.2-astra` を **62 / 62 / 60 / 57 / 46**（`max`/`xhigh`/`high`/`medium`/`low`、入力／出力 100 万トークンあたり `$8/$40`）、`gpt-6.2-sol` を **57 / 56 / 55 / 53 / 41**（100 万トークンあたり `$2/$10`、どちらも `reasoning.effort: "none"` を拒否）として収録し、既存の GPT-6 / GPT-6.1 行も維持します。
+- **4 つのレーンの先頭を更新・CI 強化（0.63.4）：**`hardest-coding`、`long-context`、`consult` の先頭が `codex gpt-6.2-astra xhigh` に（Gemini 4 Carbon High/Low は `hardest-coding` の 2・3 番目を維持）、`bulk-mechanical` の先頭が `codex gpt-6.2-sol medium`（スコア 53、1 件 3.1 分、`$405`）になり、`hard-judgment`、`taste-final`、`ui-draft`、`fast-agentic` のフォールバックにも `max` 以外の GPT-6.2 行を追加しました。CI は Python マトリックスを並列化し、実ブラウザテストが実行されない場合は失敗します（#202）。
+- アップグレード：`npm i -g omnilane@0.63.4`。
+
 ## v0.63.3 の新機能
 
 - **更新後に `omnilane resign` を実行：**承認済みのスコアポリシースナップショットが `aa-v5.0.1-2026-11-17-v1` に変わったため、ディスパッチ前にホストのトランスポート証明を更新してください。

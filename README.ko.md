@@ -69,6 +69,13 @@ omnilane jobs result JOB_ID
 | 종료 코드 60: `partially-re-signed` | 통과한 선택자는 설치되었습니다. 보존된 행은 재확인 대기 중이며 디스패치할 수 없습니다. 종료 코드 20에 해당하는 보류가 우선합니다. | `omnilane resign --vendor VENDOR` — 대기 원인이 해결된 뒤 실행 |
 | 종료 코드 20: `operator-or-login-needed`, 또는 다음 단계에 `--approve`, `--allow-shrink`, `--record-signers` 또는 신뢰／철회 플래그가 있음 | 운영자의 판단 사항이며 어시스턴트가 자신을 승인할 수 있다는 뜻이 아닙니다. | `omnilane doctor` — 사람이 증거를 검토하고 지정된 동작을 터미널에서 실행 |
 
+## v0.63.4 새 기능
+
+- **업그레이드 후 `omnilane resign` 실행:** 승인된 점수 정책 스냅샷이 `aa-v5.0.1-2026-11-18-v1`로 바뀌어 `gpt-6.2-astra`와 `gpt-6.2-sol` 실측 10개 행이 추가되었으므로 디스패치 전에 호스트 전송 증명을 갱신하세요(변경 없는 기존 증명은 유지되며 새 `codex` 10개 행은 프로브가 필요합니다).
+- **GPT-6.2 Astra 및 GPT-6.2 Sol 추가 (0.63.4):** `aa-v5.0.1-2026-11-18-v1`에서 OpenAI `gpt-6.2-astra`를 **62 / 62 / 60 / 57 / 46** (`max`/`xhigh`/`high`/`medium`/`low`, 입력／출력 백만 토큰당 `$8/$40`), `gpt-6.2-sol`을 **57 / 56 / 55 / 53 / 41** (백만 토큰당 `$2/$10`, 두 모델 모두 `reasoning.effort: "none"` 거부)로 수록하며 기존 GPT-6 및 GPT-6.1 행을 모두 유지합니다.
+- **네 레인의 첫 선택 갱신 및 CI 강화 (0.63.4):** `hardest-coding`, `long-context`, `consult`의 첫 선택이 `codex gpt-6.2-astra xhigh`로(Gemini 4 Carbon High/Low는 `hardest-coding` 2·3번째 유지), `bulk-mechanical`의 첫 선택이 `codex gpt-6.2-sol medium` (점수 53, 작업당 3.1분, `$405`)으로 올라갔으며, `hard-judgment`, `taste-final`, `ui-draft`, `fast-agentic` 대체 경로에도 `max` 이외의 GPT-6.2 행이 추가되었습니다. CI는 Python 매트릭스를 병렬 실행하고 실제 브라우저 테스트가 실행되지 않으면 실패하도록 강화했습니다 (#202).
+- 업그레이드: `npm i -g omnilane@0.63.4`.
+
 ## v0.63.3 새 기능
 
 - **업그레이드 후 `omnilane resign` 실행:** 승인된 점수 정책 스냅샷이 `aa-v5.0.1-2026-11-17-v1`로 바뀌었으므로 디스패치 전에 호스트 전송 증명을 갱신하세요.

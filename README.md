@@ -69,6 +69,13 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 | Exit 60: `partially-re-signed` | Verified selectors are installed; retained selectors are pending re-check and cannot dispatch. Exit 20 holds take precedence. | `omnilane resign --vendor VENDOR` — after the pending cause clears |
 | Exit 20: `operator-or-login-needed`, or next step includes `--approve`, `--allow-shrink`, `--record-signers` or a trust/revoke flag | This is an operator decision, not permission for an assistant to approve itself. | `omnilane doctor` — a human reviews the evidence and runs the indicated action in a terminal |
 
+## What's new in v0.63.4
+
+- **After upgrading, run `omnilane resign`:** the approved scoring-policy snapshot changed to `aa-v5.0.1-2026-11-18-v1`, adding 10 measured `gpt-6.2-astra` and `gpt-6.2-sol` rows; refresh host transport proof before dispatching (existing unchanged proofs carry over, while the 10 new `codex` rows require probing).
+- **GPT-6.2 Astra and GPT-6.2 Sol (0.63.4):** `aa-v5.0.1-2026-11-18-v1` scores OpenAI `gpt-6.2-astra` at **62 / 62 / 60 / 57 / 46** (`max`/`xhigh`/`high`/`medium`/`low`, `$8/$40` per million input/output tokens) and `gpt-6.2-sol` at **57 / 56 / 55 / 53 / 41** (`$2/$10` per million tokens; both reject `reasoning.effort: "none"`), retaining all existing GPT-6 and GPT-6.1 rows.
+- **Four lane heads upgraded and CI hardened (0.63.4):** `hardest-coding`, `long-context` and `consult` move their heads to `codex gpt-6.2-astra xhigh` (with Gemini 4 Carbon high/low staying #2/#3 in `hardest-coding`), and `bulk-mechanical` moves its head to `codex gpt-6.2-sol medium` (score 53, 3.1 min/task, `$405`), with non-max GPT-6.2 fallbacks added to `hard-judgment`, `taste-final`, `ui-draft` and `fast-agentic`; CI runs the Python matrix in parallel and requires real browser tests to execute (#202).
+- Upgrade: `npm i -g omnilane@0.63.4`.
+
 ## What's new in v0.63.3
 
 - **After upgrading, run `omnilane resign`:** the approved scoring-policy snapshot changed to `aa-v5.0.1-2026-11-17-v1`; refresh host transport proof before dispatching.

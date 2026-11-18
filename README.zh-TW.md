@@ -69,6 +69,13 @@ omnilane jobs result JOB_ID
 | 結束碼 60：`partially-re-signed` | 通過的選擇參數已安裝；保留項目待重查，不能派工。需要處理的結束碼 20 優先。 | `omnilane resign --vendor VENDOR` — 待原因解除後執行 |
 | 結束碼 20：`operator-or-login-needed`，或下一步包含 `--approve`、`--allow-shrink`、`--record-signers` 或信任／撤銷旗標 | 這是操作者決策，不是助理可自行核准的權限。 | `omnilane doctor` — 由真人檢查證據，再於終端機執行指定動作 |
 
+## v0.63.4 新功能
+
+- **升級後請執行 `omnilane resign`：**核准的評分政策快照已換成 `aa-v5.0.1-2026-11-18-v1`（新增 10 筆 `gpt-6.2-astra` 與 `gpt-6.2-sol` 實測列），派工前須更新主機傳輸證明（未變動的既有證明會自動沿用，新增的 10 筆 `codex` 列須完成探測）。
+- **新增 GPT-6.2 Astra 與 GPT-6.2 Sol（0.63.4）：**`aa-v5.0.1-2026-11-18-v1` 收錄 OpenAI `gpt-6.2-astra` 實測分數 **62／62／60／57／46**（`max`／`xhigh`／`high`／`medium`／`low`，每百萬輸入／輸出 token 為 `$8/$40`）與 `gpt-6.2-sol` 實測分數 **57／56／55／53／41**（每百萬輸入／輸出 token 為 `$2/$10`；兩款皆拒絕 `none` 推理強度），並完整保留既有 GPT-6 與 GPT-6.1 型號列。
+- **升級四條車道首選與 CI 強化（0.63.4）：**`hardest-coding`、`long-context` 與 `consult` 首選升為 `codex gpt-6.2-astra xhigh`（Gemini 4 Carbon High／Low 維持 `hardest-coding` 第 2、3 順位），`bulk-mechanical` 首選升為 `codex gpt-6.2-sol medium`（53 分、每題 3.1 分鐘、指數成本 `$405`），並將非 `max` 的 GPT-6.2 列補入 `hard-judgment`、`taste-final`、`ui-draft` 與 `fast-agentic` 備援鏈；CI 同步改為平行執行 Python 矩陣，並強制瀏覽器測試實際跑過才算通過（#202）。
+- 升級：`npm i -g omnilane@0.63.4`。
+
 ## v0.63.3 新功能
 
 - **升級後請執行 `omnilane resign`：**核准的評分政策快照已換成 `aa-v5.0.1-2026-11-17-v1`，派工前須更新主機傳輸證明。

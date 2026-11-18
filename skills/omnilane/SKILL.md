@@ -547,7 +547,7 @@ can still move the chain further down.
   live-search and fast-agentic. Running at medium your ceiling is 48:
   hardest-coding and hard-judgment start at Opus 5.5 medium itself, bulk-mechanical
   and fast-agentic at GPT-6.1 Sol medium, ui-draft at Argon medium (with Ultra proof)
-  or GPT-6.1 Terra high, and long-context at GPT-6.2 Sol low. Running at xhigh (57)
+  or GPT-6.1 Sol medium, and long-context at GPT-6.2 Sol low. Running at xhigh (57)
   hardest-coding starts at Carbon low (with Carbon proof) or Opus 5.5 high
   (without), bulk-mechanical at GPT-6.2 Sol medium, and hard-judgment at Fable 5.2
   medium.
@@ -595,7 +595,7 @@ can still move the chain further down.
   hardest-coding, bulk-mechanical, hard-judgment and taste-final. A host has to
   prove it with `omnilane resign` first.
 - **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol: second and third in
-  fast-agentic (medium, low), fourth and fifth in bulk-mechanical (high, medium,
+  fast-agentic (medium, low), #3 and #6 in bulk-mechanical (high, medium,
   with low in the fallback tail), and rungs of
   hardest-coding, ui-draft and taste-final. It leads no lane. Max and the
   non-reasoning row are explicit-only.
@@ -607,10 +607,10 @@ can still move the chain further down.
   not at all.
 - **Grok 4.7:** first in live-search for native X/web search and in coding-overflow
   for Codex-quota relief, third in taste-final (`value` pick at high, with low at
-  #10 in the fallback tail) and third in consult, and the Grok fallback tail of
+  #16 in the fallback tail) and fifth (#5) in consult, and the Grok fallback tail of
   hardest-coding and hard-judgment (with low also ending bulk-mechanical, ui-draft
-  and long-context). At high (ceiling 35) hardest-coding starts at Opus 5.5 low,
-  bulk-mechanical at Sol low, hard-judgment at Flash high and taste-final at Grok 4.7
+  and long-context). At high (ceiling 35) hardest-coding and hard-judgment start at
+  Opus 5.5 low, bulk-mechanical at GPT-6.1 Sol low, and taste-final at Grok 4.7
   high itself. Grok 4.6 (xhigh 31) is in no lane. Verify API signatures and cited
   facts before shipping.
 - **Gemini 4 Argon:** High (50) and Medium (48, added in `aa-v5.0.1-2026-11-17-v1`)
@@ -635,8 +635,9 @@ can still move the chain further down.
   sign-ins only). The selector strings are inferred from agy's effort-in-model-id
   convention, not published by Google; a host probe at `omnilane resign` confirms
   them. Without that proof Carbon is never dispatched, even under the human-operator
-  exemption. The value rule puts high first and low second in hardest-coding
-  and medium first in ui-draft; it is in no other lane. A host that has not proven
+  exemption. The value rule puts high second and low third in hardest-coding
+  (right behind GPT-6.2 Astra xhigh) and medium first in ui-draft; it is in no
+  other lane. A host that has not proven
   it with `omnilane resign` skips it and selects as before.
 - **Gemini 4 Hydrogen:** scored in the approved `aa-v5.0.1-2026-11-13-v1` snapshot
   (xhigh 54, high 51, medium 41, low 27) and selectable as `gemini-4-hydrogen-xhigh`,
