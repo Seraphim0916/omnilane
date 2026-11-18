@@ -28,8 +28,8 @@ MAX_BYTES = 1_048_576
 # governance change, never a caller argument/environment override.
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "5.0.1"
-APPROVED_AS_OF = "2026-11-17"
-APPROVED_REGISTRY_SHA256 = "843f50e3da589fa6887df4c1ef5169b3d8be9c082691b4ce3f7c16921d4803d7"
+APPROVED_AS_OF = "2026-11-18"
+APPROVED_REGISTRY_SHA256 = "42ac3db913098e902762f27cb76d6b83ca4f0223e77553cc9c18ed4dd14a9673"
 
 # Google sells Gemini 4 Carbon only to AI Ultra / ADC sign-ins (agy 1.5.5), so an installed agy
 # says nothing about whether this host may run it. The human-operator exemption lifts the

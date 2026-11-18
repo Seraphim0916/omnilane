@@ -517,36 +517,40 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-17-v1`
-(2026-11-17 AA v5.0.1 refresh; derived explicit-only bounds cannot
+Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-18-v1`
+(2026-11-18 AA v5.0.1 refresh adding GPT-6.2 Astra and GPT-6.2 Sol; derived explicit-only bounds cannot
 authorize caller ceilings).
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
 can still move the chain further down.
 
 - **Claude Fable 5.2:** leads hard-judgment (xhigh, then medium and low) and is
-  the first fallback after the ten `value` picks in hardest-coding (xhigh); it
+  the first fallback after the eleven `value` picks in hardest-coding (xhigh); it
   appears in no other lane. Claude Code 2.1.321 or later is required, and `fable`
   resolves to 5.2 only from 2.1.321. As the main model, at max, xhigh or high your
   ceiling is 65/62/62 and every lane row is reachable; hard-judgment starts on
-  Fable 5.2 itself (same model, not a reason to self-execute), while hardest-coding
-  starts at Carbon high on hosts that have proven Carbon and at Opus 5.5 high
-  otherwise. At medium (56) hardest-coding starts at Carbon low (with Carbon proof)
-  or Opus 5.5 high (without) and hard-judgment at Fable 5.2 medium; at low (54)
+  Fable 5.2 itself (same model, not a reason to self-execute), while hardest-coding,
+  consult and long-context start on GPT-6.2 Astra xhigh (62) and bulk-mechanical
+  starts on GPT-6.2 Sol medium (53). At medium (56) hardest-coding starts at
+  Carbon low (with Carbon proof) or Opus 5.5 high (without), bulk-mechanical at
+  GPT-6.2 Sol medium, hard-judgment at Fable 5.2 medium, consult at GPT-6 Astra
+  xhigh and long-context at GPT-6 Astra medium; at low (54) hardest-coding starts
+  at Carbon low (with Carbon proof) or Opus 5.5 high (without), bulk-mechanical at
+  GPT-6.2 Sol medium, hard-judgment at Fable 5.2 low and consult at Grok 4.7. The
+  `vote` Claude voter is Fable 5.2 low.
+- **Claude Opus 5.5:** third in ui-draft (high, right behind Carbon medium and Argon
+  medium) and fourth in hardest-coding (high, right behind GPT-6.2 Astra xhigh and
+  Carbon high/low, so first for ceilings 52–53 or hosts without Codex and Carbon
+  proof); medium is sixth in hardest-coding, fifth in hard-judgment (`value` pick at
+  ceiling 48) and the first Claude fallback in bulk-mechanical; xhigh is in the
+  hardest-coding fallback tail, the Claude row in consult and a Claude rung of
+  long-context; low is the eighth rung in ui-draft and the Claude fallback in
+  live-search and fast-agentic. Running at medium your ceiling is 48:
+  hardest-coding and hard-judgment start at Opus 5.5 medium itself, bulk-mechanical
+  and fast-agentic at GPT-6.1 Sol medium, ui-draft at Argon medium (with Ultra proof)
+  or GPT-6.1 Terra high, and long-context at GPT-6.2 Sol low. Running at xhigh (57)
   hardest-coding starts at Carbon low (with Carbon proof) or Opus 5.5 high
-  (without), hard-judgment at Fable 5.2 low and consult at Grok 4.7. The `vote`
-  Claude voter is Fable 5.2 low.
-- **Claude Opus 5.5:** second in ui-draft (high, right behind Carbon medium) and
-  third in hardest-coding (high, right behind Carbon high and low, so first on
-  hosts without Carbon proof); medium is fifth in hardest-coding, fifth in
-  hard-judgment (`value` pick at ceiling 48) and the first Claude fallback in
-  bulk-mechanical; xhigh is in the hardest-coding fallback tail, the Claude row in
-  consult and a Claude rung of long-context; low is the seventh `value` rung in
-  ui-draft and the Claude fallback in live-search and fast-agentic. Running at
-  medium your ceiling is 48: hardest-coding and hard-judgment start at Opus 5.5
-  medium itself, bulk-mechanical, ui-draft and long-context at GPT-6.1 Sol medium.
-  Running at xhigh (57) hardest-coding starts at Carbon low (with Carbon proof) or
-  Opus 5.5 high (without), bulk-mechanical at GPT-6.1 Sol xhigh, and hard-judgment
-  at Fable 5.2 medium.
+  (without), bulk-mechanical at GPT-6.2 Sol medium, and hard-judgment at Fable 5.2
+  medium.
 - **Claude Sonnet 5.5:** leads taste-final at xhigh, followed directly by high;
   `value` rungs of hardest-coding (xhigh, high) with medium and low in the fallback
   tail, Claude fallbacks in bulk-mechanical (high, medium), lower rungs of
@@ -567,16 +571,29 @@ can still move the chain further down.
   No fast-agentic or ui-draft placement. Haiku 4.5 stays only as the last
   low-ceiling / unproven-host fallback; max stays explicit-only.
 - **Claude Sonnet 5:** unscored in v5.0.1 and in no lane; do not route to it.
-- **GPT-6 Astra:** leads consult (xhigh) and long-context (medium); low is third
-  in long-context and a fallback in hard-judgment and fast-agentic (with medium),
+- **GPT-6.2 Astra:** OpenAI's frontier reasoning model (`gpt-6.2-astra`; max 62,
+  xhigh 62, high 60, medium 57, low 46). xhigh leads hardest-coding, long-context
+  and consult (with high at #2 in consult for ceiling 60–61); low is the `value`
+  pick at ceiling 46 in hardest-coding and #4 in bulk-mechanical; high, medium and
+  low also serve as fallbacks in hard-judgment, taste-final, ui-draft, long-context
+  and fast-agentic. It rejects `reasoning.effort: "none"`; max stays explicit-only.
+  A host has to prove it with `omnilane resign` first.
+- **GPT-6.2 Sol:** OpenAI's everyday coding and agentic model (`gpt-6.2-sol`;
+  max 57, xhigh 56, high 55, medium 53, low 41). medium leads bulk-mechanical
+  (TB4.0 0.561, 3.1 min/task, $405), low is #3 in long-context (ceiling 41–51) and
+  #5 in bulk-mechanical, and xhigh/high/medium/low sit in the fallback chains of
+  hardest-coding, hard-judgment, taste-final and fast-agentic (omitted from
+  ui-draft while MMMU-Pro is unpublished). Rejects `none`; needs `omnilane resign`.
+- **GPT-6 Astra:** #2 in long-context (medium, serving ceilings 52–61) and #3 in
+  consult (xhigh, serving ceilings 55–59 and hosts not yet re-signed for 6.2); low
+  remains a fallback in hard-judgment, long-context and fast-agentic (with medium),
   and xhigh is in the fallback tails of hardest-coding and taste-final. Resolve
   your real effort first; an explicit higher effort does not bypass the ceiling.
-- **GPT-6.1 Sol:** leads bulk-mechanical (xhigh, followed by high and medium) and
-  fast-agentic (medium); medium is a `value` rung of hardest-coding (with xhigh,
-  high and low in the fallback tail), xhigh is Codex's first fallback in
-  hard-judgment, high, xhigh and medium are #3–#5 in ui-draft, medium and low are
-  #2 and #4 in long-context, and xhigh, high and medium are in taste-final's
-  fallback tail. A host has to prove it with `omnilane resign` first.
+- **GPT-6.1 Sol:** leads fast-agentic (medium) and is #2 in bulk-mechanical (medium,
+  serving ceilings 46–52); high, xhigh and medium are #4–#6 in ui-draft, low is #4
+  in long-context, and xhigh/high/medium/low remain scored fallbacks across
+  hardest-coding, bulk-mechanical, hard-judgment and taste-final. A host has to
+  prove it with `omnilane resign` first.
 - **GPT-6.1 Terra:** the value Codex rows below GPT-6.1 Sol: second and third in
   fast-agentic (medium, low), fourth and fifth in bulk-mechanical (high, medium,
   with low in the fallback tail), and rungs of
@@ -639,7 +656,11 @@ can still move the chain further down.
 
 ### Model aliases
 
-Current approved snapshot `aa-v5.0.1-2026-11-17-v1` (2026-11-17, approved by the operator on 2026-11-17; 76 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-17.md`):
+Current approved snapshot `aa-v5.0.1-2026-11-18-v1` (2026-11-18, 86 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-18.md`):
+
+- Adds **GPT-6.2 Astra** (`gpt-6.2-astra`: max 62, xhigh 62, high 60, medium 57, low 46) and **GPT-6.2 Sol** (`gpt-6.2-sol`: max 57, xhigh 56, high 55, medium 53, low 41). `aa_rebaseline.py value` moves `hardest-coding` and `long-context` heads to `codex gpt-6.2-astra xhigh` and `bulk-mechanical`'s head to `codex gpt-6.2-sol medium`, while `consult` upgrades its Codex lead to `codex gpt-6.2-astra xhigh` (followed by `high` and `gpt-6-astra xhigh`). Existing 76 measured rows and 22 derived bounds are unchanged; hosts must run `omnilane resign`.
+
+Previous approved snapshot `aa-v5.0.1-2026-11-17-v1` (2026-11-17, approved by the operator on 2026-11-17; 76 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-17.md`):
 
 - Scores `gemini/gemini-4-argon-medium` (`gemini-4-argon-medium`) at 48 (`score_raw` 47.60), replacing its conservative 50 bound and tightening `gemini-4-argon-low`'s explicit-only upper bound to 48; `aa_rebaseline.py value` places `gemini-4-argon-medium` at #2 in `ui-draft` and `hardest-coding` places it right after `gemini-4-hydrogen-high` in the Gemini tail (gated on host transport proof like Carbon and Hydrogen). Refreshes Carbon and Argon's `$2/$10` API pricing and Hydrogen xhigh's `mlcrOverall` (`0.211`).
 
@@ -694,6 +715,8 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Haiku / Haiku 4.5 (legacy) | claude | claude-haiku-4-5 | - |
 | Terra | codex | gpt-5.6-terra | max |
 | Luna | codex | gpt-5.6-luna | max |
+| GPT-6.2 Astra | codex | gpt-6.2-astra | xhigh |
+| GPT-6.2 Sol | codex | gpt-6.2-sol | medium |
 | Astra | codex | gpt-6-astra | xhigh |
 | GPT-6.1 Sol | codex | gpt-6.1-sol | xhigh |
 | GPT-6.1 Terra | codex | gpt-6.1-terra | high |

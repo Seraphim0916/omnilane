@@ -6,6 +6,12 @@ semantic version tags.
 
 ## [Unreleased]
 
+### Added
+- **OpenAI GPT-6.2 Astra (`gpt-6.2-astra`) and GPT-6.2 Sol (`gpt-6.2-sol`)** in AA v5.0.1 snapshot `aa-v5.0.1-2026-11-18-v1` (approved 2026-11-18; 86 measured rows + 1 proxy + 21 upper bounds = 108 scored, 60 unknown, 1 reference, 66 aliases). Scores five measured reasoning efforts each (`max`/`xhigh`/`high`/`medium`/`low`; both models reject `reasoning.effort: "none"`): **GPT-6.2 Astra** at **62 / 62 / 60 / 57 / 46** (`score_raw` `62.14 / 61.56 / 60.09 / 57.00 / 45.65`, `$8/$40` per 1M input/output tokens) and **GPT-6.2 Sol** at **57 / 56 / 55 / 53 / 41** (`score_raw` `57.26 / 55.74 / 54.89 / 52.68 / 40.55`, `$2/$10` per 1M tokens). Adds both selectors to `scripts/configure.sh`, `scripts/lib/build_overlay.py`, `docs/aa-model-coverage-2026-09-05.json` and `config/transport-compatibility.json` while retaining all existing GPT-6 / GPT-6.1 configurations.
+
+### Changed
+- **Lane updates on `aa-v5.0.1-2026-11-18-v1`:** `scripts/aa_rebaseline.py value` moves three value-lane heads — `hardest-coding` to **`codex gpt-6.2-astra xhigh`** (score 62, Terminal-Bench 4.0 `0.641` within `0.02` of Carbon high's `0.652` at `$2,484` vs `$5,333`, keeping Carbon high/low at #2/#3 for ceiling 54–61 and `--vendor gemini`, and placing `gpt-6.2-astra low` at ceiling 46), `bulk-mechanical` to **`codex gpt-6.2-sol medium`** (score 53, TB4.0 `0.561`, `3.1` min/task, `$405` vs GPT-6.1 Sol xhigh's `0.540`, `9.9` min, `$718`), and `long-context` to **`codex gpt-6.2-astra xhigh`** (`mlcrOverall` `0.378` within `0.02` of GPT-6 Astra medium's `0.383` at `$2,484` vs `$2,638`, keeping `gpt-6-astra medium` at #2 for ceiling 52–61 and placing `gpt-6.2-sol low` at #3 for ceiling 41–51). Purpose-ordered `consult` upgrades its Codex lead to **`codex gpt-6.2-astra xhigh`** followed by `gpt-6.2-astra high` and `gpt-6-astra xhigh`. `hard-judgment`, `taste-final`, `ui-draft` and `fast-agentic` retain their heads while GPT-6.2 HLE, Briefcase analytical/presentation Elo, Sol MMMU-Pro and per-effort TTFT remain unpublished in AA v5.0.1, adding the scored non-max GPT-6.2 rows to their fallback chains. Hosts must run `omnilane resign` after merging (`docs/reports/aa-rebaseline-2026-11-18.md`).
+
 ## [0.63.3] - 2026-11-17
 
 ### Changed

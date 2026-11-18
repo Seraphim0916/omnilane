@@ -148,6 +148,14 @@ NEW_ROWS = [
     # gemini-4-argon-medium (47.60 -> 48), replacing its 2026-11-13 conservative High bound (50).
     ("gemini/gemini-4-argon-medium", "gemini", "gemini-4-argon", "medium", "unspecified",
      "gemini-4-argon-medium", "gemini/gemini-3-8-flash-medium"),
+    # GPT-6.2 Astra and GPT-6.2 Sol (2026-11-18): OpenAI API and Codex reject reasoning.effort
+    # "none", and AA v5.0.1 scores the five reasoning efforts (max/xhigh/high/medium/low).
+    *[(f"codex/gpt-6-2-astra{suffix}", "codex", "gpt-6.2-astra", effort, "reasoning",
+       f"gpt-6-2-astra{suffix}", f"codex/gpt-6-astra{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
+    *[(f"codex/gpt-6-2-sol{suffix}", "codex", "gpt-6.2-sol", effort, "reasoning",
+       f"gpt-6-2-sol{suffix}", f"codex/gpt-6-1-sol{suffix}")
+      for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
 # Scored by AA but with no runtime selector the vendor has published: kept in
 # reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
@@ -163,6 +171,7 @@ NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
                **{f"gemini-4-hydrogen-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
                   for e in ("xhigh", "high", "medium", "low")},
+               "gpt-6.2-astra": "gpt-6-astra", "gpt-6.2-sol": "gpt-6.1-sol",
                }  # catalog selector -> alias to clone
 # AA labels every Fable 5.2 row "Default Fallback", as it does Fable 5.1.
 NEW_ROW_FALLBACKS = {"claude-fable-5-2": "default"}
@@ -776,7 +785,8 @@ STRICT_LANES = {"hardest-coding", "hard-judgment", "taste-final", "long-context"
 # AA v5.0.1 scores no below-max reasoning row of claude-opus-5, claude-sonnet-5, gpt-6-sol
 # or gpt-5.6-sol/luna/terra, so those families left the rule with that snapshot.
 VALUE_FAMILIES = {"claude-opus-5-5", "claude-fable-5-2", "claude-fable-5-1", "claude-sonnet-5-5",
-                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
+                  "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6.2-astra", "gpt-6.2-sol",
+                  "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon",
                   "gemini-4-carbon", "gemini-4-hydrogen"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}

@@ -886,7 +886,7 @@ test_consult_lane_and_configurator() {
     bash "$ROOT/scripts/configure.sh" > "$home/configure.out" 2>&1
 
   if [[ "$listed" != *'consult:'* ||
-        "$listed" != *'codex gpt-6-astra xhigh'* ]]; then
+        "$listed" != *'codex gpt-6.2-astra xhigh'* ]]; then
     fail "$name" "consult lane missing from effective routing"
   elif grep -Eq '^  [0-9]+\) consult$' "$home/configure.out"; then
     fail "$name" "single-candidate configurator exposed consult"
@@ -4621,7 +4621,9 @@ test_configure_model_catalogs() {
       return
     fi
   done <<'EOF'
-codex|1|13|1|gpt-5.3-codex-spark
+codex|1|1|1|gpt-6.2-astra
+codex|1|2|1|gpt-6.2-sol
+codex|1|15|1|gpt-5.3-codex-spark
 claude|2|16|1|claude-haiku-5-5
 claude|2|25|1|claude-haiku-4-5-20251001
 grok|3|3||grok-4.3-official

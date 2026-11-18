@@ -23,27 +23,27 @@ DISPATCH = ROOT / "scripts" / "dispatch.sh"
 # and ui-draft (with Opus 5.5 high next), Fable 5.2 xhigh heads hard-judgment, GPT-6.1 Sol xhigh
 # heads bulk-mechanical, and GPT-6 Astra medium heads long-context.
 EXPECTED_DEFAULTS = {
-    # 2026-11-13 (0.63.0): full-lane AA v5.0.1 value rerank moves bulk-mechanical's head to
-    # GPT-6.1 Sol xhigh and places Opus 5.5 high right after Carbon in hardest-coding.
-    # Hydrogen high sits right after Argon high in every lane that lists Argon and heads no lane.
-    # 2026-11-12: Carbon heads hardest-coding and ui-draft. --list shows chain heads only; a host without
-    # Carbon transport proof skips it at dispatch (test_human_lane_dispatch_skips_unproven_carbon).
-    "hardest-coding": "gemini gemini-4-carbon-high -",
-    "bulk-mechanical": "codex gpt-6.1-sol xhigh",
+    # 2026-11-18 (aa-v5.0.1-2026-11-18-v1): GPT-6.2 Astra xhigh heads hardest-coding, long-context
+    # and consult, and GPT-6.2 Sol medium heads bulk-mechanical; Carbon stays #2/#3 in hardest-coding
+    # (for ceiling 54-61 and --vendor gemini) and heads ui-draft.
+    "hardest-coding": "codex gpt-6.2-astra xhigh",
+    "bulk-mechanical": "codex gpt-6.2-sol medium",
     "triage": "codex gpt-6-luna high",
     "hard-judgment": "claude claude-fable-5-2 xhigh",
     "taste-final": "claude claude-sonnet-5-5 xhigh",
-    "consult": "codex gpt-6-astra xhigh",
+    "consult": "codex gpt-6.2-astra xhigh",
     "ui-draft": "gemini gemini-4-carbon-medium -",
-    "long-context": "codex gpt-6-astra medium",
+    "long-context": "codex gpt-6.2-astra xhigh",
     "fast-agentic": "codex gpt-6.1-sol medium",
     "live-search": "grok grok-4.7 high",
     "coding-overflow": "grok grok-4.7 high",
     "arbitrate": "off - -",
 }
-CARBON_FIRST = {"hardest-coding": ["gemini gemini-4-carbon-high -", "gemini gemini-4-carbon-low -"],
-                "ui-draft": ["gemini gemini-4-carbon-medium -", "gemini gemini-4-argon-medium -"]}
-# Next value rung in line on a host without Carbon / Argon-medium Ultra proof.
+CARBON_PREFIX = {
+    "hardest-coding": ["codex gpt-6.2-astra xhigh", "gemini gemini-4-carbon-high -", "gemini gemini-4-carbon-low -"],
+    "ui-draft": ["gemini gemini-4-carbon-medium -", "gemini gemini-4-argon-medium -"],
+}
+# Next value rung in line once unproven Carbon / Argon-medium Ultra rows are skipped.
 BEFORE_CARBON = {"hardest-coding": "claude claude-opus-5-5 high", "ui-draft": "claude claude-opus-5-5 high"}
 
 
@@ -156,17 +156,26 @@ class AARoutingUpdateTests(unittest.TestCase):
             match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
             if match:
                 lanes[match.group(1)] = [item.strip() for item in match.group(2).split("|")]
-        for lane, head in CARBON_FIRST.items():
+        for lane, head in CARBON_PREFIX.items():
             self.assertEqual(head + [BEFORE_CARBON[lane]], lanes[lane][:len(head) + 1], lane)
         for lane, chain in lanes.items():
-            if lane not in CARBON_FIRST:
+            if lane not in CARBON_PREFIX:
                 self.assertFalse(any("gemini-4-carbon" in item for item in chain), lane)
 
     def test_human_lane_dispatch_skips_unproven_carbon(self) -> None:
+        # With Codex installed, hardest-coding selects GPT-6.2 Astra xhigh; without Codex, it
+        # skips unproven Carbon high/low and lands on Opus 5.5 high, matching ui-draft.
+        dry_default = self._run("--dry-run", "hardest-coding", "fixture")
+        self.assertEqual(0, dry_default.returncode, dry_default.stdout + dry_default.stderr)
+        self.assertIn("model=gpt-6.2-astra\n", dry_default.stdout)
+        self.assertIn("effort=xhigh\n", dry_default.stdout)
+        no_codex = self.env.copy()
+        no_codex["CODEX_BIN"] = str(self.bin / "not-installed")
         expected = {"hardest-coding": ("claude-opus-5-5", "high"), "ui-draft": ("claude-opus-5-5", "high")}
         for lane, (model, effort) in expected.items():
             with self.subTest(lane=lane):
-                dry = self._run("--dry-run", lane, "fixture")
+                env = no_codex if lane == "hardest-coding" else self.env
+                dry = self._run("--dry-run", lane, "fixture", env=env)
                 self.assertEqual(0, dry.returncode, dry.stdout + dry.stderr)
                 self.assertIn(f"model={model}\n", dry.stdout)
                 self.assertIn(f"effort={effort}\n", dry.stdout)

@@ -34,8 +34,8 @@ class UnmappedModelTests(unittest.TestCase):
             registry.write_text(json.dumps(base))
             args = argparse.Namespace(
                 base=str(registry),
-                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-17.json"),
-                as_of="2026-11-17", revision=1, approval="proposed",
+                extract=str(ROOT / "docs/reports/aa-v5.0.1-extract-2026-11-18.json"),
+                as_of="2026-11-18", revision=1, approval="proposed",
             )
             with patch.object(aa, "REGISTRY", registry), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(aa.cmd_build(args), 0)

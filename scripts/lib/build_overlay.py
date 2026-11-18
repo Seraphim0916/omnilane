@@ -39,7 +39,8 @@ PROVEN: dict[str, tuple[str, str, str]] = {}
 # AA v5.0.1 (2026-11-10) scores only the max row of gpt-6-sol, gpt-5.6-luna and
 # gpt-5.6-terra, and no row of gpt-5.6-sol; unscored rows have nothing to prove.
 ALL_EFFORTS = ["max", "xhigh", "high", "medium", "low"]
-for model, efforts in [("gpt-6-astra", ALL_EFFORTS), ("gpt-6.1-sol", ALL_EFFORTS), ("gpt-6-sol", ["max"]),
+for model, efforts in [("gpt-6.2-astra", ALL_EFFORTS), ("gpt-6.2-sol", ALL_EFFORTS),
+                       ("gpt-6-astra", ALL_EFFORTS), ("gpt-6.1-sol", ALL_EFFORTS), ("gpt-6-sol", ["max"]),
                        ("gpt-6-luna", ALL_EFFORTS),
                        ("gpt-5.6-luna", ["max"]),
                        ("gpt-5.6-terra", ["max"]), ("gpt-6.1-terra", ALL_EFFORTS)]:

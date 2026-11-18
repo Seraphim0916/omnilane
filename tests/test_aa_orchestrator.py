@@ -153,7 +153,7 @@ class DerivedBuildTests(unittest.TestCase):
             capture = d / 'extract.json'; capture.write_text(json.dumps(extract))
             source = d / 'base.json'; source.write_text(json.dumps(base))
             target = d / 'policy.json'
-            args = SimpleNamespace(extract=str(capture), base=str(source), as_of='2026-11-17',
+            args = SimpleNamespace(extract=str(capture), base=str(source), as_of='2026-11-18',
                                    revision=1, approval='approved')
             with patch.object(build, 'REGISTRY', target), patch.object(build, 'REPO', d), \
                     contextlib.redirect_stdout(io.StringIO()):
@@ -161,7 +161,7 @@ class DerivedBuildTests(unittest.TestCase):
             return json.loads(target.read_text())
 
     def test_e_recompute_and_idempotence(self):
-        extract = json.loads((ROOT / 'docs/reports/aa-v5.0.1-extract-2026-11-17.json').read_text())
+        extract = json.loads((ROOT / 'docs/reports/aa-v5.0.1-extract-2026-11-18.json').read_text())
         base = json.loads((ROOT / 'config/aa-model-policy.json').read_text())
         extract['records']['gemini-4-hydrogen']['intelligenceIndex'] = 60.2
         result = self.rebuild(extract, base)
