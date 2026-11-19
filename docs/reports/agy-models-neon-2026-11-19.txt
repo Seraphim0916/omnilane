@@ -1,0 +1,5 @@
+gemini-4-neon-high	Gemini 4 Neon (High)
+gemini-4-neon-xhigh	Gemini 4 Neon (XHigh)
+gemini-4-neon-medium	Gemini 4 Neon (Medium)
+gemini-4-neon-low	Gemini 4 Neon (Low)
+gemini-pro-orchestrator-neon	Orchestrator (Neon)

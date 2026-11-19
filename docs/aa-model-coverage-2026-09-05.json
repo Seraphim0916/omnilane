@@ -35,7 +35,7 @@
   },
   "counts": {
     "aaRows": 643,
-    "catalogEntries": 129,
+    "catalogEntries": 134,
     "namedAliases": 18
   },
   "namedAliases": [
@@ -1509,6 +1509,125 @@
         "gemini-4-hydrogen-low"
       ],
       "mappingReason": "AA v5.0.1 snapshot aa-v5.0.1-2026-11-13-v1 (approved 2026-11-13) scores Gemini 4 Hydrogen (Low); agy 1.5.7 listed this selector on the build host on 2026-11-13 and encodes the effort in it. No lane lists it because `aa_rebaseline.py value` places it nowhere; explicit selection only. Host proof still required; absent from the historical v4.2 aaModels capture."
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-neon-xhigh",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-neon"
+      ],
+      "mappingReason": "AA v5.0.1 已核准快照 aa-v5.0.1-2026-11-19-v1（approved）；agy 選取器已列出，仍須主機傳輸證明。僅供明確指定，未列入預設車道。"
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-neon-high",
+      "lifecycle": "active",
+      "disposition": "fallback",
+      "routeRefs": [
+        {
+          "lane": "hardest-coding",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "bulk-mechanical",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "triage",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "hard-judgment",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "taste-final",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "consult",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "ui-draft",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "long-context",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "fast-agentic",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "live-search",
+          "position": "fallback",
+          "effort": "-"
+        },
+        {
+          "lane": "coding-overflow",
+          "position": "fallback",
+          "effort": "-"
+        }
+      ],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-neon-high"
+      ],
+      "mappingReason": "AA v5.0.1 已核准快照 aa-v5.0.1-2026-11-19-v1（approved）；agy 選取器已列出，仍須主機傳輸證明。high 在 Hydrogen high 後作備援，未獲 value 選入。"
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-neon-medium",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-neon-medium"
+      ],
+      "mappingReason": "AA v5.0.1 已核准快照 aa-v5.0.1-2026-11-19-v1（approved）；agy 選取器已列出，仍須主機傳輸證明。僅供明確指定，未列入預設車道。"
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-4-neon-low",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "exact-configuration",
+      "aaSlugs": [
+        "gemini-4-neon-low"
+      ],
+      "mappingReason": "AA v5.0.1 已核准快照 aa-v5.0.1-2026-11-19-v1（approved）；agy 選取器已列出，仍須主機傳輸證明。僅供明確指定，未列入預設車道。"
+    },
+    {
+      "vendor": "gemini",
+      "access": "cli",
+      "catalogModel": "gemini-pro-orchestrator-neon",
+      "lifecycle": "active",
+      "disposition": "explicit-consult",
+      "routeRefs": [],
+      "mappingStatus": "no-aa-row",
+      "aaSlugs": [],
+      "mappingReason": "2026-11-19 agy 選取器清單可見；無 AA 獨立列與內部模型組合證據，不沿用舊 Orchestrator 代理分數，模型呼叫端無法依分數派工；真人豁免仍依既有政策。"
     },
     {
       "vendor": "gemini",

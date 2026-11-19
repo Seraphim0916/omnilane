@@ -63,6 +63,31 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(first["records"]["model"]["score"], 1)
         self.assertEqual(len(first["sources"]), 2)
 
+    def test_append_preserves_base_records_and_provenance(self):
+        old = self.page("old", {"old": {"score": 40, "detail": {"quality": 8}}})
+        base = aa.merge_extracts([old])
+        base["filled_from_earlier_capture"] = {"source": "earlier.json", "fields": []}
+        new = self.page("new", {"old": {"score": 42}, "new": {"score": 61}})
+        other = self.page("other", {"new": {"score": 60}})
+        incoming = aa.merge_extracts([other, new])
+        result = aa.append_extract(base, incoming)
+        self.assertEqual(result["records"]["old"], base["records"]["old"])
+        self.assertEqual(result["record_sources"]["old"], base["record_sources"]["old"])
+        self.assertEqual(result["sources"][:1], base["sources"])
+        self.assertEqual(result["filled_from_earlier_capture"], base["filled_from_earlier_capture"])
+        self.assertEqual(result["records"]["new"], {"score": 61})
+        self.assertEqual(result["record_sources"]["new"]["fields"]["score"], "page-002")
+        conflict = next(c for c in result["conflicts"] if c["slug"] == "new")
+        self.assertEqual(conflict["selected_page"], "page-002")
+        self.assertEqual({sid for o in conflict["observations"] for sid in o["pages"]},
+                         {"page-002", "page-003"})
+        self.assertEqual(result["append_rule"]["preserved_slugs"], ["old"])
+        self.assertEqual(result["append_rule"]["added_slugs"], ["new"])
+        self.assertEqual(len(base["sources"]), 1)
+        wrong = dict(incoming, benchmark_version="different")
+        with self.assertRaisesRegex(ValueError, "versions differ"):
+            aa.append_extract(base, wrong)
+
     def test_rejects_mixed_versions_ambiguous_capture_and_missing_timezone(self):
         a = self.page("page-a", {"model": {"score": 1}})
         b = self.page("page-b", {}, version="4.2")

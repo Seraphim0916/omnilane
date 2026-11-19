@@ -22,6 +22,7 @@ DISPATCH = ROOT / "scripts" / "dispatch.sh"
 # six value lanes place the full aa_rebaseline.py value chain first; Carbon heads hardest-coding
 # and ui-draft (with Opus 5.5 high next), Fable 5.2 xhigh heads hard-judgment, GPT-6.1 Sol xhigh
 # heads bulk-mechanical, and GPT-6 Astra medium heads long-context.
+# 2026-11-19：Neon high 僅加入備援，十二條車道首選維持不變。
 EXPECTED_DEFAULTS = {
     # 2026-11-18 (aa-v5.0.1-2026-11-18-v1): GPT-6.2 Astra xhigh heads hardest-coding, long-context
     # and consult, and GPT-6.2 Sol medium heads bulk-mechanical; Carbon stays #2/#3 in hardest-coding
@@ -109,8 +110,8 @@ class AARoutingUpdateTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(EXPECTED_DEFAULTS, self._listed(result.stdout))
 
-    def test_argon_and_hydrogen_precede_flash_under_expected_lane_heads(self) -> None:
-        """Verify bulk-mechanical (0.63.0 value head Sol xhigh) and four purpose lanes keep EXPECTED_DEFAULTS[lane] first and Argon high -> Hydrogen high -> Flash in order."""
+    def test_argon_hydrogen_and_neon_precede_flash_under_expected_lane_heads(self) -> None:
+        """Verify bulk-mechanical (0.63.0 value head Sol xhigh) and four purpose lanes keep EXPECTED_DEFAULTS[lane] first and Argon high -> Hydrogen high -> Neon high -> Flash in order."""
         lanes = {}
         for line in (ROOT / "routing.yaml").read_text(encoding="utf-8").splitlines():
             match = re.match(r"^([a-z-]+):\s*([^#]+)", line)
@@ -123,9 +124,10 @@ class AARoutingUpdateTests(unittest.TestCase):
                 self.assertEqual(1, chain.count(argon))
                 flash = next(i for i, item in enumerate(chain)
                              if item.startswith("gemini gemini-3.8-flash-"))
-                # 2026-11-13: Gemini 4 Hydrogen high sits between Argon high and Flash.
-                self.assertEqual("gemini gemini-4-hydrogen-high -", chain[flash - 1])
-                self.assertEqual(flash - 2, chain.index(argon))
+                # 2026-11-19：Argon → Hydrogen → Neon → Flash，既有首選不變。
+                self.assertEqual("gemini gemini-4-hydrogen-high -", chain[flash - 2])
+                self.assertEqual("gemini gemini-4-neon-high -", chain[flash - 1])
+                self.assertEqual(flash - 3, chain.index(argon))
                 self.assertEqual(EXPECTED_DEFAULTS[lane], chain[0])
 
     def test_agy_only_host_selects_argon_in_every_flash_lane(self) -> None:

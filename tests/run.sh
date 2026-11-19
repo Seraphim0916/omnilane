@@ -4631,7 +4631,12 @@ gemini|4|1||gemini-4-argon-high
 gemini|4|2||gemini-4-argon-medium
 gemini|4|4||gemini-4-carbon-medium
 gemini|4|6||gemini-4-hydrogen-xhigh
-gemini|4|17||gpt-oss-120b-medium
+gemini|4|10||gemini-4-neon-xhigh
+gemini|4|11||gemini-4-neon-high
+gemini|4|12||gemini-4-neon-medium
+gemini|4|13||gemini-4-neon-low
+gemini|4|14||gemini-pro-orchestrator-neon
+gemini|4|22||gpt-oss-120b-medium
 kimi|5|5||kimi-k2.5
 qwen|6|9||qwen3-coder-flash
 opencode|7|13||openrouter/qwen/qwen3-coder-plus

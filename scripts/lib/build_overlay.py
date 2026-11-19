@@ -70,6 +70,9 @@ for cid, rid, ev in [
     # agy 1.5.7 listed gemini-4-hydrogen-{xhigh,high,medium,low} on 2026-11-13; AA's unsuffixed row is xhigh.
     *[("gemini/gemini-4-hydrogen" + ("" if effort == "xhigh" else f"-{effort}"), f"gemini-4-hydrogen-{effort}",
        f"agy-gemini-4-hydrogen-{effort}") for effort in ("xhigh", "high", "medium", "low")],
+    # 2026-11-19 agy 選單證據；AA 無後綴列對應 -xhigh，不表示主機已通過探測。
+    *[("gemini/gemini-4-neon" + ("" if effort == "xhigh" else f"-{effort}"), f"gemini-4-neon-{effort}",
+       f"agy-gemini-4-neon-{effort}") for effort in ("xhigh", "high", "medium", "low")],
 ]:
     PROVEN[cid] = ("model_id_encoded_effort", rid, ev)
 

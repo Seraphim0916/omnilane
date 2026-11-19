@@ -144,6 +144,10 @@ NEW_ROWS = [
     *[(f"gemini/gemini-4-hydrogen{suffix}", "gemini", "gemini-4-hydrogen", effort, "unspecified",
        f"gemini-4-hydrogen{suffix}", "gemini/gemini-3-8-flash" + ("" if effort in ("xhigh", "high") else suffix))
       for effort in ("xhigh", "high", "medium", "low") for suffix in ["" if effort == "xhigh" else f"-{effort}"]],
+    # Neon：AA 無後綴列是 xhigh；agy 選取器一律帶思考強度後綴。
+    *[(f"gemini/gemini-4-neon{suffix}", "gemini", "gemini-4-neon", effort, "unspecified",
+       f"gemini-4-neon{suffix}", "gemini/gemini-3-8-flash" + ("" if effort in ("xhigh", "high") else suffix))
+      for effort in ("xhigh", "high", "medium", "low") for suffix in ["" if effort == "xhigh" else f"-{effort}"]],
     # Gemini 4 Argon Medium (2026-11-17): AA v5.0.1 now publishes an independent score for
     # gemini-4-argon-medium (47.60 -> 48), replacing its 2026-11-13 conservative High bound (50).
     ("gemini/gemini-4-argon-medium", "gemini", "gemini-4-argon", "medium", "unspecified",
@@ -170,6 +174,8 @@ NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "claude-fable-5-2": "claude-fable-5-1",
                **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
                **{f"gemini-4-hydrogen-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
+                  for e in ("xhigh", "high", "medium", "low")},
+               **{f"gemini-4-neon-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
                   for e in ("xhigh", "high", "medium", "low")},
                "gpt-6.2-astra": "gpt-6-astra", "gpt-6.2-sol": "gpt-6.1-sol",
                }  # catalog selector -> alias to clone
@@ -341,9 +347,56 @@ def merge_extracts(paths: list[Path]) -> dict:
     }
 
 
+def append_extract(base: dict, incoming: dict) -> dict:
+    """同版加列：保留既有量測及來源，只納入新抽取中尚未存在的模型。"""
+    if base["benchmark_version"] != incoming["benchmark_version"]:
+        raise ValueError("merge: benchmark versions differ")
+    result = copy.deepcopy(base)
+    added = sorted(incoming["records"].keys() - base["records"].keys())
+    # 來源編號重新配置，舊紀錄、衝突與回填證據原樣保留。
+    used = {source["id"] for source in result["sources"]}
+    remap = {}
+    number = 1
+    for source in incoming["sources"]:
+        while f"page-{number:03d}" in used:
+            number += 1
+        sid = f"page-{number:03d}"
+        used.add(sid)
+        remap[source["id"]] = sid
+        result["sources"].append(dict(source, id=sid))
+    for slug in added:
+        result["records"][slug] = copy.deepcopy(incoming["records"][slug])
+        provenance = incoming["record_sources"][slug]
+        result["record_sources"][slug] = {
+            "preferred_page": remap[provenance["preferred_page"]],
+            "fields": {field: remap[sid] for field, sid in provenance["fields"].items()},
+        }
+    for conflict in incoming["conflicts"]:
+        if conflict["slug"] not in added:
+            continue
+        conflict = copy.deepcopy(conflict)
+        conflict["selected_page"] = remap[conflict["selected_page"]]
+        for observation in conflict["observations"]:
+            observation["pages"] = [remap[sid] for sid in observation["pages"]]
+        result["conflicts"].append(conflict)
+    result["fetched_at"] = max(
+        datetime.fromisoformat(item["fetched_at"].replace("Z", "+00:00"))
+        for item in (base, incoming)).astimezone(timezone.utc).isoformat(timespec="seconds")
+    result["append_rule"] = {
+        "id": "preserve-base-add-new-slugs-v1",
+        "base_sha256": hashlib.sha256(dump(base)).hexdigest(),
+        "added_slugs": added,
+        "preserved_slugs": sorted(incoming["records"].keys() & base["records"].keys()),
+    }
+    return result
+
+
 def cmd_merge(args) -> int:
     try:
         merged = merge_extracts([Path(path) for path in args.inputs])
+        if args.base:
+            merged = append_extract(json.loads(Path(args.base).read_text()), merged)
+            merged["append_rule"]["base_extract"] = args.base
     except (KeyError, ValueError) as exc:
         sys.exit(str(exc))
     Path(args.out).write_bytes(dump(merged))
@@ -788,7 +841,7 @@ VALUE_FAMILIES = {"claude-opus-5-5", "claude-fable-5-2", "claude-fable-5-1", "cl
                   "claude-haiku-5-5", "claude-haiku-4-5", "gpt-6.2-astra", "gpt-6.2-sol",
                   "gpt-6-astra", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna",
                   "grok-4.7", "grok-4.6", "gemini-3.8-flash", "gemini-4-argon",
-                  "gemini-4-carbon", "gemini-4-hydrogen"}
+                  "gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-neon"}
 LOWER_IS_BETTER = {"minutes / task", "first answer token (s)", "hallucination rate"}
 
 
@@ -935,6 +988,7 @@ def main() -> int:
     merge = sub.add_parser("merge")
     merge.add_argument("--inputs", nargs="+", required=True, help="saved single-page extracts")
     merge.add_argument("--out", required=True)
+    merge.add_argument("--base", help="同版加列：保留此合併抽取的既有紀錄，只新增模型")
     build = sub.add_parser("build")
     build.add_argument("--extract", required=True)
     build.add_argument("--as-of", required=True)

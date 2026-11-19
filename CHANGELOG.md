@@ -6,6 +6,17 @@ semantic version tags.
 
 ## [Unreleased]
 
+## [0.63.5] - 2026-11-19
+
+### Added
+
+- 已核准的 AA 快照 `aa-v5.0.1-2026-11-19-v1`（`approved`）新增 Gemini 4 Neon 四列實測分數：xhigh 61、high 60、medium 55、low 44。AA 的 `gemini-4-neon` 對應 agy 的 `gemini-4-neon-xhigh`。目前共有 90 列實測、22 列推導分數、70 個別名。已同步探測目標、選單與能力文件。`gemini-pro-orchestrator-neon` 僅列入選單，沒有 AA 對應列。
+- `aa_rebaseline.py merge --base` 支援同版追加新模型，保留舊抽取資料、來源與回填證據。
+
+### Changed
+
+- 十一條啟用車道在 Hydrogen high 後加入 Neon high 作為備援。十二條車道的首選及 `value` 輸出維持原樣。升級後請在每台主機執行 `omnilane resign`，更新本機傳輸證明。
+
 ## [0.63.4] - 2026-11-18
 
 ### Added
@@ -1998,7 +2009,8 @@ work to the wrong model, and records the evidence behind the shipped defaults.
 - Initial shared routing table, cross-vendor dispatcher, runners, installer,
   and baseline lint fixes.
 
-[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.4...HEAD
+[Unreleased]: https://github.com/Seraphim0916/omnilane/compare/v0.63.5...HEAD
+[0.63.5]: https://github.com/Seraphim0916/omnilane/compare/v0.63.4...v0.63.5
 [0.63.4]: https://github.com/Seraphim0916/omnilane/compare/v0.63.3...v0.63.4
 [0.63.3]: https://github.com/Seraphim0916/omnilane/compare/v0.63.2...v0.63.3
 [0.63.2]: https://github.com/Seraphim0916/omnilane/compare/v0.63.1...v0.63.2

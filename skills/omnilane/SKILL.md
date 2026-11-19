@@ -66,6 +66,8 @@ The table lists lanes and their purposes only; `omnilane list` shows the live
 table with one resolved target per lane. For a lane's ordered candidate chain,
 run `omnilane route --explain <lane>`; local overrides take precedence. `--dry-run` prints the decision without calling.
 
+已核准的 Neon 快照（`approved`）保留下表十二條車道及首選；十一條啟用車道的備援鏈在 Hydrogen high 後加入 Neon high。模型鏈以 `routing.yaml` 與五語 README 為準。
+
 | Lane | Use for |
 |---|---|
 | hardest-coding | Hardest implementation, deep root-cause debug, correctness-critical edits |
@@ -517,8 +519,8 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-18-v1`
-(2026-11-18 AA v5.0.1 refresh adding GPT-6.2 Astra and GPT-6.2 Sol; derived explicit-only bounds cannot
+Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-19-v1`
+(2026-11-19 refresh adding Gemini 4 Neon; derived explicit-only bounds cannot
 authorize caller ceilings).
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
 can still move the chain further down.
@@ -618,7 +620,7 @@ can still move the chain further down.
   `gemini-4-argon-medium` on Antigravity with Google AI Ultra. High is in every lane
   except arbitrate, normally in the Gemini slot right before Hydrogen High and Flash;
   Medium is placed by `value` at #2 in ui-draft (right behind Carbon Medium) and sits
-  right after Hydrogen High in hardest-coding's Gemini tail (so `--vendor gemini` at
+  after Hydrogen High and Neon High in hardest-coding's Gemini tail (so `--vendor gemini` at
   ceiling 50–53 keeps Argon High while ceiling 48–49 reaches Argon Medium ahead of
   Flash, requiring host transport proof on every path including the human exemption). UI/long-context Argon High
   placements provide access without claiming measured superiority. Grok remains
@@ -650,6 +652,7 @@ can still move the chain further down.
   `--model` never moves. It leads no lane. xhigh, medium and low are explicit-only.
   Without host proof from `omnilane resign` it is never dispatched, even under the
   human-operator exemption; lanes then skip it and select as before.
+- **Gemini 4 Neon：** 已核准快照 `aa-v5.0.1-2026-11-19-v1`，xhigh 61、high 60、medium 55、low 44；AA 無後綴 slug `gemini-4-neon` 對應 agy 的 `gemini-4-neon-xhigh`。high 在全部十一條啟用車道接於 Hydrogen high 後，其餘三檔僅供明確指定；首選與既有相對順序不變。依本輪提供的官方資訊：2026-11-18 一般開放、100 萬脈絡、high 預設、Antigravity 付費訂閱可用。各檔均須主機傳輸證明，真人豁免也不跳過。`gemini-pro-orchestrator-neon` 無 AA 對應列，選單可見不代表模型呼叫端可依分數派工。
 - **Gemini 3.1 Pro:** reference row only, kept for comparison: it has no approved
   local mapping, is in no lane and has no alias.
 
@@ -657,7 +660,9 @@ can still move the chain further down.
 
 ### Model aliases
 
-Current approved snapshot `aa-v5.0.1-2026-11-18-v1` (2026-11-18, 86 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-18.md`):
+目前的已核准快照 `aa-v5.0.1-2026-11-19-v1`：90 列實測、22 列推導分數、70 個別名；`approval.status` 為 `approved`。核准與雜湊驗證見 `docs/reports/aa-rebaseline-2026-11-19.md`。
+
+Previous approved snapshot `aa-v5.0.1-2026-11-18-v1` (2026-11-18, 86 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-18.md`):
 
 - Adds **GPT-6.2 Astra** (`gpt-6.2-astra`: max 62, xhigh 62, high 60, medium 57, low 46) and **GPT-6.2 Sol** (`gpt-6.2-sol`: max 57, xhigh 56, high 55, medium 53, low 41). `aa_rebaseline.py value` moves `hardest-coding` and `long-context` heads to `codex gpt-6.2-astra xhigh` and `bulk-mechanical`'s head to `codex gpt-6.2-sol medium`, while `consult` upgrades its Codex lead to `codex gpt-6.2-astra xhigh` (followed by `high` and `gpt-6-astra xhigh`). Existing 76 measured rows and 22 derived bounds are unchanged; hosts must run `omnilane resign`.
 
@@ -734,6 +739,10 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Gemini 4 Hydrogen High | gemini | gemini-4-hydrogen-high | - |
 | Gemini 4 Hydrogen Medium | gemini | gemini-4-hydrogen-medium | - |
 | Gemini 4 Hydrogen Low | gemini | gemini-4-hydrogen-low | - |
+| Gemini 4 Neon Xhigh | gemini | gemini-4-neon-xhigh | - |
+| Gemini 4 Neon High | gemini | gemini-4-neon-high | - |
+| Gemini 4 Neon Medium | gemini | gemini-4-neon-medium | - |
+| Gemini 4 Neon Low | gemini | gemini-4-neon-low | - |
 | Gemini 3.8 Flash Medium | gemini | gemini-3.8-flash-medium | - |
 | Gemini 3.8 Flash Low | gemini | gemini-3.8-flash-low | - |
 | Kimi | kimi | kimi-code/k3 | - |
