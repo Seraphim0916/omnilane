@@ -50,14 +50,14 @@ class GPT62AstraSolTests(unittest.TestCase):
                 cls.lanes[match.group(1)] = [item.strip() for item in match.group(2).split("|")]
 
     def test_snapshot_identity_and_counts(self) -> None:
-        self.assertEqual(self.registry["snapshot"]["id"], "aa-v5.0.1-2026-11-19-v1")
+        self.assertEqual(self.registry["snapshot"]["id"], "aa-v5.0.1-2026-11-19-v2")
         self.assertEqual(self.registry["snapshot"]["benchmark_version"], "5.0.1")
         self.assertEqual(self.registry["snapshot"]["as_of"], "2026-11-19")
-        self.assertEqual(len(self.registry["scored_configs"]), 112)
+        self.assertEqual(len(self.registry["scored_configs"]), 110)
         self.assertEqual(self.registry["coverage"]["by_vendor"], {
-            "codex": 49, "claude": 31, "gemini": 25, "grok": 7,
+            "codex": 49, "claude": 31, "gemini": 23, "grok": 7,
         })
-        self.assertEqual(self.registry["coverage"]["aliases"], 70)
+        self.assertEqual(self.registry["coverage"]["aliases"], 68)
 
     def test_ten_measured_gpt_6_2_rows_and_no_non_reasoning_rows(self) -> None:
         for model, expected in (("gpt-6.2-astra", EXPECTED_ASTRA_62), ("gpt-6.2-sol", EXPECTED_SOL_62)):

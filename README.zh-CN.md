@@ -71,8 +71,9 @@ omnilane jobs result JOB_ID
 
 ## v0.63.5 新功能
 
-- 升级后请在每台主机上运行 `omnilane resign`，为已批准的新评分快照 `aa-v5.0.1-2026-11-19-v1` 更新传输证明。
-- Gemini 4 Neon 新增四项 AA 实测分数：xhigh 61、high 60、medium 55、low 44。十一条已启用的车道在 Hydrogen high 后加入 Neon high 作为备选，十二条车道均保留原来的首选模型。
+- 升级后，在各主机运行 `omnilane resign`，更新已批准 v2 快照的传输证明。
+- v2 快照有 88 项实测、22 项推导分数、68 个别名和 3 项比较数据。Gemini 4 Neon high（60）、medium（55）、low（44）仍参与评分；Neon XHigh（61）与 Hydrogen XHigh（54）因 agy 拒绝选择器而仅作比较。
+- Neon high 在 11 条启用车道中接在 Hydrogen high 后作为备选；12 条车道的首选都不变。
 - 升级：`npm i -g omnilane@0.63.5`。
 
 ## v0.63.4 新功能
@@ -832,7 +833,7 @@ flowchart LR
 
 AA `aa-v5.0.1-2026-11-13-v2`：**已批准（操作者 2026-11-14 批准）**；75 行实测计分加 23 行仅限显式指定的衍生上限。下表依据这份快照与 0.63.0 全车道价值重排排列：六条价值车道（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）前段完整采用 `scripts/aa_rebaseline.py value` 链，备援尾段保留其余计分行的原有相对顺序（`bulk-mechanical` 首选由 GPT-6.1 Sol medium 升为 GPT-6.1 Sol xhigh；`hardest-coding` 与 `ui-draft` 在 Carbon 之后紧接 Claude Opus 5.5 high），`coding-overflow` 移除未计分的 Kimi／Qwen／OpenCode，`fast-agentic` 因 AA v5.0.1 未公布首字延迟保持原顺序。`gemini-pro-orchestrator-g1-pro`（代理上限 54）与 22 行低强度上限行仅限显式指定、不进入任何车道、不能授权调用方上限，且即使在人工豁免下也必须有 `omnilane resign` 的主机传输证明。[重测报告](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 设计](docs/reports/aa-orchestrator-2026-11-13.md) · [全车道重排报告](docs/reports/aa-lane-rerank-2026-11-13.md)。
 
-AA `aa-v5.0.1-2026-11-13-v1`：**已批准（2026-11-13）**；75 行计分。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）纳入计分，可用 `gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` 指定；2026-11-13 在构建这份快照的主机上，agy 1.5.7 能列出这四个。价值规则没有选出任何一行。Hydrogen High 加入每条含 Argon High 的车道，排在 Argon 正后方：这样现在由 Argon 处理的 `--vendor gemini` 调用仍交给 Argon（锁定厂商会跳过同厂商没有证明或超过调用方上限的行，不跨厂商）。排在 Argon 后面，它可以服务不能用 Argon（仅限 Google AI Ultra）的主机。v1 单独加入 Hydrogen 时各车道首选未变（随后已由上方 `aa-v5.0.1-2026-11-13-v2` 的 0.63.0 全车道重排取代）。和 Carbon 一样，没有 `omnilane resign` 的主机实测证明就不会派出，人工豁免也一样；在此之前车道会跳过它。
+AA `aa-v5.0.1-2026-11-13-v1` 于 2026-11-13 批准，当时有 75 行计分。就原始版本而言，Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）纳入计分；当时构建该快照的主机上，agy 1.5.7 列出了四个选择器，包括 `gemini-4-hydrogen-xhigh`。价值规则当时没有选中任何 Hydrogen 行。Hydrogen High 当时加入每条包含 Argon High 的车道，排在 Argon 后面；当时由 Argon 处理的 `--vendor gemini` 调用仍会选择 Argon；Hydrogen 只服务无法使用 Argon 的主机（仅限 Google AI Ultra）。以上仅描述 2026-11-13 的历史状态：从 `aa-v5.0.1-2026-11-19-v2` 起，Gemini 4 Hydrogen XHigh 与 Gemini 4 Neon XHigh 仅供比较、不可派工，历史分数保留。与 Carbon 一样，Hydrogen 当时需要 `omnilane resign` 的主机证明才会派出；未证明的主机会跳过它。
 
 AA `aa-v5.0.1-2026-11-12-v1`：**approved（操作者 2026-11-12 批准）**；沿用同一份 AA v5.0.1 抓取，71 行计分。Gemini 4 Carbon（high 60、medium 58、low 54；Google AI Ultra 在 Antigravity 可用，agy 1.5.5）由仅供比较改为计分行，可用 `gemini-4-carbon-high`／`-medium`／`-low` 指定。这三个选择器字符串是按 agy 把强度写进型号的惯例推断的，Google 没有公布，也还没有主机实测；需由有 Ultra（ADC）权限的主机运行 `omnilane resign` 确认。价值规则把 Carbon high（其次 low）排在 hardest-coding 首位、Carbon medium 排在 ui-draft 首位；其他顺位不变，尚未用 `omnilane resign` 证明 Carbon 的主机会跳过它，选到的与之前相同。[证据](docs/reports/aa-rebaseline-2026-11-12.md)。
 
@@ -842,7 +843,7 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当�
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
-AA 快照 `aa-v5.0.1-2026-11-19-v1` 已批准（`approved`）。各主机须先取得传输证明才能使用 Neon。菜单中可以选择 `gemini-pro-orchestrator-neon`，但它没有可供模型调度使用的 AA 分数。
+AA 快照 `aa-v5.0.1-2026-11-19-v2` 已批准（`approved`）。各主机须先取得传输证明才能使用 Neon。Hydrogen XHigh 与 Neon XHigh 仅供比较、不可派工；历史分数保留。菜单中可以选择 `gemini-pro-orchestrator-neon`，但它没有可供模型调度使用的 AA 分数。
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
 |---|---|---|---|

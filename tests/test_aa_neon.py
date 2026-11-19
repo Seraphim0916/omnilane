@@ -1,4 +1,4 @@
-"""Neon 已核准快照：同版加列、選取器及未證明傳輸的拒絕測試。"""
+"""Neon 評分快照：同版加列、選取器及未證明傳輸的拒絕測試。"""
 from __future__ import annotations
 
 import offline_env
@@ -36,14 +36,13 @@ class NeonTests(unittest.TestCase):
             "gemini-4-neon", "gemini-4-neon-high", "gemini-4-neon-medium", "gemini-4-neon-low",
         })
 
-    def test_four_measured_rows_aliases_and_probe_targets(self):
+    def test_three_dispatchable_rows_aliases_and_probe_targets(self):
         rows = {r["id"]: r for r in self.registry["scored_configs"]}
         aliases = {a["catalog_model"]: a for a in self.registry["aliases"]}
         planned = {p["model"] for p in probe_sweep.plan("gemini")}
-        self.assertEqual(self.registry["snapshot"]["approval"]["status"], "approved")
-        for effort, raw, score in (("xhigh", 61.40, 61), ("high", 59.62, 60),
+        for effort, raw, score in (("high", 59.62, 60),
                                    ("medium", 54.86, 55), ("low", 44.08, 44)):
-            cid = "gemini/gemini-4-neon" + ("" if effort == "xhigh" else "-" + effort)
+            cid = "gemini/gemini-4-neon-" + effort
             selector = "gemini-4-neon-" + effort
             with self.subTest(effort=effort):
                 row = rows[cid]
@@ -55,6 +54,30 @@ class NeonTests(unittest.TestCase):
                 self.assertEqual(build_overlay.PROVEN[cid][1], selector)
                 self.assertIn(selector, planned)
                 self.assertIn(cid, aa_policy.HUMAN_TRANSPORT_PROOF_REQUIRED)
+
+    def test_unavailable_xhigh_stays_reference_only(self):
+        refs = {r["id"]: r for r in self.registry["reference_configs"]}
+        planned = {p["model"] for p in probe_sweep.plan("gemini")}
+        aliases = {a["catalog_model"] for a in self.registry["aliases"]}
+        chains = aa.lane_table(ROOT / "routing.yaml")
+        for family, score in (("hydrogen", 54), ("neon", 61)):
+            model = "gemini-4-" + family
+            cid, selector = "gemini/" + model, model + "-xhigh"
+            row = refs[cid]
+            self.assertEqual((row["effort"], row["score"]), ("xhigh", score))
+            self.assertFalse(row["authority_eligible"])
+            self.assertEqual(row["transport_mapping"]["candidate_model_ids"], [])
+            self.assertNotIn(cid, build_overlay.PROVEN)
+            self.assertNotIn(selector, aliases | planned)
+            self.assertFalse(any(v == selector for chain in chains.values() for _,v,_ in chain))
+            for name, effort, target in ((selector, None, None), (model,"xhigh",None),
+                                         (model,None,cid)):
+                for human in (True, False):
+                    result = aa_policy.decide(self.registry, "fixture", vendor="gemini",
+                        model=name, effort=effort, target_config=target, caller=None,
+                        caller_sha256=None, operator_asserted_human=human)
+                    self.assertFalse(result["allowed"])
+                    self.assertEqual(result["code"], "selector-unavailable")
 
     def test_human_needs_transport_proof_and_orchestrator_is_not_scored(self):
         registry = copy.deepcopy(self.registry)

@@ -71,8 +71,9 @@ omnilane jobs result JOB_ID
 
 ## v0.63.5 새 기능
 
-- 업그레이드한 뒤 각 호스트에서 `omnilane resign`을 실행해 새로 승인된 점수 스냅샷 `aa-v5.0.1-2026-11-19-v1`에 맞게 전송 증명을 갱신하세요.
-- Gemini 4 Neon의 AA 실측 점수는 xhigh 61, high 60, medium 55, low 44입니다. 활성 레인 11개에서 Hydrogen high 다음 대체 후보로 Neon high를 추가했습니다. 전체 레인 12개의 1순위 모델은 그대로입니다.
+- 업그레이드 후 각 호스트에서 `omnilane resign`을 실행해 승인된 v2 스냅샷의 전송 검증 결과를 갱신하세요.
+- v2 스냅샷은 실측 88개, 추정 22개, 별칭 68개, 비교 전용 3개입니다. Gemini 4 Neon의 high (60), medium (55), low (44)는 계속 점수에 포함됩니다. Neon XHigh (61)와 Hydrogen XHigh (54)는 agy가 선택자를 거부하여 비교 전용입니다.
+- Neon high는 활성 레인 11개에서 Hydrogen high 다음 대체 후보이며, 12개 레인의 1순위 모델은 그대로입니다.
 - 업그레이드: `npm i -g omnilane@0.63.5`.
 
 ## v0.63.4 새 기능
@@ -882,7 +883,7 @@ flowchart LR
 
 AA `aa-v5.0.1-2026-11-13-v2`: **승인됨(2026-11-14 운영자 승인)**. 실측 구성 75개와 명시 지정 전용 파생 상한 23개를 포함합니다. 아래 표는 이 스냅샷과 0.63.0 전 레인 가치 재정렬을 따릅니다. 여섯 개 가치 레인(`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`)은 맨 앞에 `scripts/aa_rebaseline.py value` 체인 전체를 두고 나머지 점수 행을 기존 상대 순서대로 뒤에 잇습니다(`bulk-mechanical`의 1순위는 GPT-6.1 Sol medium에서 GPT-6.1 Sol xhigh로 변경, `hardest-coding`과 `ui-draft`에서는 Carbon 바로 뒤에 Claude Opus 5.5 high가 배치됨). `coding-overflow`는 점수가 없는 Kimi／Qwen／OpenCode 행을 제거했고, `fast-agentic`은 AA v5.0.1에서 첫 응답 토큰 지연이 공개되지 않아 기존 순서를 유지합니다. `gemini-pro-orchestrator-g1-pro`(대리 상한 54)와 22개 저강도 상한 행은 명시 지정 전용으로 어느 레인에도 들어가지 않으며 호출자 상한을 승인할 수 없고, 사람 운영자 예외에서도 `omnilane resign`의 호스트 전송 증명이 필요합니다. [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 설계](docs/reports/aa-orchestrator-2026-11-13.md) · [전 레인 재정렬 보고서](docs/reports/aa-lane-rerank-2026-11-13.md).
 
-AA `aa-v5.0.1-2026-11-13-v1`: **승인됨(2026-11-13)**. 점수가 있는 구성은 75개입니다. Gemini 4 Hydrogen(xhigh 54, high 51, medium 41, low 27)이 점수에 들어가며 `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`로 지정할 수 있습니다. 2026-11-13 이 스냅샷을 만든 호스트에서 agy 1.5.7이 네 가지를 모두 표시했습니다. 가치 규칙은 어느 행도 고르지 않습니다. Hydrogen High는 Argon High가 있는 모든 레인에서 Argon 바로 뒤에 들어갑니다. 이렇게 하면 지금 Argon이 받는 `--vendor gemini` 호출은 계속 Argon으로 갑니다(벤더 고정은 증명이 없거나 호출자 상한을 넘는 같은 벤더의 행을 건너뛰며 벤더를 넘지 않습니다). Argon 뒤에 두면 Argon을 쓸 수 없는(Google AI Ultra 전용) 호스트에서 쓰입니다. v1에서 Hydrogen만 추가했을 때는 각 레인의 첫 선택이 바뀌지 않았습니다(이후 위 `aa-v5.0.1-2026-11-13-v2`의 0.63.0 전 레인 재정렬로 갱신됨). Carbon과 마찬가지로 `omnilane resign`의 호스트 증명이 없으면 사람 운영자 예외에서도 디스패치되지 않으며, 그 전까지 레인은 건너뜁니다.
+AA `aa-v5.0.1-2026-11-13-v1`은 2026-11-13에 승인되었으며 당시 점수가 있는 구성은 75개였습니다. 2026-11-13 당시 원래 스냅샷에는 Gemini 4 Hydrogen(xhigh 54, high 51, medium 41, low 27)이 점수에 포함되었고, 이 스냅샷을 만든 호스트의 agy 1.5.7은 `gemini-4-hydrogen-xhigh`를 포함한 네 선택자를 표시했습니다. 가치 규칙은 당시 Hydrogen 행을 하나도 선택하지 않았습니다. Hydrogen High는 당시 Argon High가 있는 모든 레인에서 Argon 바로 뒤에 놓였습니다. 그 시점에는 Argon이 받던 `--vendor gemini` 호출이 계속 Argon을 선택했고, Hydrogen은 Argon을 쓸 수 없는 호스트(Google AI Ultra 전용)에서만 사용되었습니다. 이 내용은 2026-11-13의 과거 상태만 설명합니다. `aa-v5.0.1-2026-11-19-v2`부터 Gemini 4 Hydrogen XHigh와 Gemini 4 Neon XHigh는 비교 전용이며 디스패치할 수 없습니다. 과거 점수는 유지됩니다. Carbon과 마찬가지로 당시 Hydrogen은 `omnilane resign`의 호스트 증명이 없으면 디스패치되지 않았고, 증명되지 않은 호스트의 레인은 이를 건너뛰었습니다.
 
 AA `aa-v5.0.1-2026-11-12-v1`: **approved (2026-11-12 운영자 승인)**. 같은 AA v5.0.1 수집본을 쓰며 점수가 있는 구성은 71개입니다. Gemini 4 Carbon(high 60, medium 58, low 54; Antigravity의 Google AI Ultra, agy 1.5.5)이 비교 전용에서 점수 행으로 바뀌어 `gemini-4-carbon-high`/`-medium`/`-low`로 지정할 수 있습니다. 이 셀렉터 문자열은 강도를 모델 ID에 넣는 agy 관례에서 추정한 것으로, Google이 공개하지 않았고 아직 어떤 호스트에서도 실측되지 않았습니다. Ultra(ADC) 권한이 있는 호스트에서 `omnilane resign`을 실행해 확인합니다. 가치 규칙에 따라 Carbon high(다음 low)가 hardest-coding, Carbon medium이 ui-draft의 첫 후보가 됩니다. 다른 순위는 그대로이며, `omnilane resign`으로 Carbon을 증명하지 않은 호스트는 이를 건너뛰고 이전과 같이 선택합니다. [근거](docs/reports/aa-rebaseline-2026-11-12.md).
 
@@ -892,7 +893,7 @@ AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-AA 스냅샷 `aa-v5.0.1-2026-11-19-v1`의 상태는 승인됨(`approved`)입니다. 각 호스트에서 전송을 검증한 뒤 Neon을 사용할 수 있습니다. `gemini-pro-orchestrator-neon`은 메뉴에 표시되지만 모델이 작업을 위임할 때 사용할 AA 점수는 없습니다.
+AA 스냅샷 `aa-v5.0.1-2026-11-19-v2`의 상태는 승인됨(`approved`)입니다. 각 호스트에서 전송을 검증한 뒤 Neon을 사용할 수 있습니다. Hydrogen XHigh와 Neon XHigh는 비교 전용이며 디스패치할 수 없습니다. 과거 점수는 유지됩니다. `gemini-pro-orchestrator-neon`은 메뉴에 표시되지만 모델이 작업을 위임할 때 사용할 AA 점수는 없습니다.
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|

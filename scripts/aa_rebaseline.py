@@ -161,10 +161,17 @@ NEW_ROWS = [
        f"gpt-6-2-sol{suffix}", f"codex/gpt-6-1-sol{suffix}")
       for effort in ("max", "xhigh", "high", "medium", "low") for suffix in ["" if effort == "max" else f"-{effort}"]],
 ]
-# Scored by AA but with no runtime selector the vendor has published: kept in
+# AA comparison rows without a usable transport are kept in
 # reference_configs for comparison, like gemini-3-1-pro-preview, so no lane, alias
 # or caller resolves to them. (config id, vendor, model, effort, reasoning, AA slug, reason)
 REFERENCE_ROWS: list[tuple] = []
+
+# Retain these measured scores for comparison and Orchestrator's conservative
+# bound. A listed agy selector returned INVALID_ARGUMENT on real requests.
+UNAVAILABLE_AGY = {
+    "gemini/gemini-4-hydrogen": "gemini-4-hydrogen-xhigh",
+    "gemini/gemini-4-neon": "gemini-4-neon-xhigh",
+}
 NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-6-luna": "gpt-6-astra", "gpt-6.1-sol": "gpt-6-sol",
                "claude-sonnet-5-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-sonnet-5-5",
@@ -173,10 +180,10 @@ NEW_ALIASES = {"grok-4.7": "grok-4.6", "gpt-6-sol": "gpt-6-astra",
                "gpt-5.4-mini": "gpt-5.4", "gpt-6.1-terra": "gpt-5.6-terra",
                "claude-fable-5-2": "claude-fable-5-1",
                **{f"gemini-4-carbon-{e}": f"gemini-3.8-flash-{e}" for e in ("high", "medium", "low")},
-               **{f"gemini-4-hydrogen-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
-                  for e in ("xhigh", "high", "medium", "low")},
-               **{f"gemini-4-neon-{e}": "gemini-3.8-flash-" + ("high" if e == "xhigh" else e)
-                  for e in ("xhigh", "high", "medium", "low")},
+               **{f"gemini-4-hydrogen-{e}": "gemini-3.8-flash-" + e
+                  for e in ("high", "medium", "low")},
+               **{f"gemini-4-neon-{e}": "gemini-3.8-flash-" + e
+                  for e in ("high", "medium", "low")},
                "gpt-6.2-astra": "gpt-6-astra", "gpt-6.2-sol": "gpt-6.1-sol",
                }  # catalog selector -> alias to clone
 # AA labels every Fable 5.2 row "Default Fallback", as it does Fable 5.1.
@@ -451,13 +458,16 @@ PROXY_OF = ("gemini/gemini-4-argon", "gemini/gemini-4-hydrogen")
 EFFORT_ORDER = {effort: rank for rank, effort in enumerate(("low", "medium", "high", "xhigh", "max"))}
 
 
-def derive_scores(scored: list[dict], unknown: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Derive dispatch bounds from measured rows, never from other bounds."""
+def derive_scores(scored: list[dict], unknown: list[dict],
+                  comparison: list[dict] | None = None) -> tuple[list[dict], list[dict]]:
+    """Use measured dispatch rows for bounds and measured comparison rows for the proxy."""
     measured = {row["id"]: row for row in scored}
-    missing = set(PROXY_OF) - measured.keys()
+    proxy_sources = {row["id"]: row for row in (comparison or [])}
+    proxy_sources.update(measured)
+    missing = set(PROXY_OF) - proxy_sources.keys()
     if missing:
         sys.exit(f"build: missing proxy sources: {', '.join(sorted(missing))}")
-    sources = [measured[cid] for cid in PROXY_OF]
+    sources = [proxy_sources[cid] for cid in PROXY_OF]
     proxy = copy.deepcopy(sources[0])
     proxy.update(id=PROXY_ID, model=PROXY_MODEL, effort=None, aa_slug=None,
                  score_source="proxy", proxy_of=list(PROXY_OF),
@@ -611,7 +621,19 @@ def cmd_build(args) -> int:
                 "transport_mapping": {"status": "unknown", "runtime_verified": False,
                                       "resolved_config_id": None},
             })
-    scored, unknown = derive_scores(scored, unknown)
+    comparison_sources = []
+    for row in new.get("reference_configs", []):
+        if row["id"] not in PROXY_OF:
+            continue
+        record = records.get(row.get("aa_slug"))
+        if record is None:
+            continue
+        source = copy.deepcopy(row)
+        rescore(source, record, version, as_of, report(source["vendor"]))
+        comparison_sources.append(source)
+    scored, unknown = derive_scores(scored, unknown, comparison_sources)
+    unavailable = [row for row in scored if row["id"] in UNAVAILABLE_AGY]
+    scored = [row for row in scored if row["id"] not in UNAVAILABLE_AGY]
     scored.sort(key=lambda row: (-row["score"], -row["score_raw"], row["id"]))
     new["scored_configs"] = scored
     new["unknown_configs"] = unknown
@@ -638,6 +660,14 @@ def cmd_build(args) -> int:
         rescore(row, records[slug], version, as_of, report(vendor))
         new["reference_configs"].append(row)
 
+    for row in unavailable:
+        selector = UNAVAILABLE_AGY[row["id"]]
+        row.update(authority_eligible=False, unavailable_selector=selector,
+                   reference_reason="agy rejected XHigh; retained as an AA comparison only")
+        row["transport_mapping"]["candidate_model_ids"] = []
+        new["reference_configs"].append(row)
+    new["aliases"] = [alias for alias in new["aliases"]
+                      if alias["catalog_model"] not in UNAVAILABLE_AGY.values()]
     live_ids = {row["id"] for row in scored}
     # An alias made entirely of retired rows also leaves the configure catalog.
     new["aliases"] = [alias for alias in new["aliases"]
@@ -677,13 +707,18 @@ def cmd_build(args) -> int:
                       pages=extract["sources"], merge_rule=extract["merge_rule"])
     else:
         source.update(page_url=extract["source_url"], page_sha256=extract["page_sha256"])
+    approval = {"status": args.approval, "scope": f"aa-v{version}-rebaseline",
+                "source": f"docs/reports/aa-rebaseline-{tag}.md",
+                "estimated_scores": "approved_provisional" if args.approval == "approved"
+                else "provisional_pending_review"}
+    approval_basis = getattr(args, "approval_basis", None)
+    if approval_basis:
+        if args.approval != "approved":
+            sys.exit("build: --approval-basis requires --approval approved")
+        approval["basis"] = approval_basis
     new["snapshot"].update(
         id=f"aa-v{version}-{as_of}-v{args.revision}", benchmark_version=version, as_of=as_of,
-        source=source,
-        approval={"status": args.approval, "scope": f"aa-v{version}-rebaseline",
-                  "source": f"docs/reports/aa-rebaseline-{tag}.md",
-                  "estimated_scores": "approved_provisional" if args.approval == "approved"
-                  else "provisional_pending_review"})
+        source=source, approval=approval)
     new.setdefault("schema_notes", {})["score_rounding"] = (
         "score is score_raw rounded half-up to an integer; score_raw is the AA index to two decimals")
     REGISTRY.write_bytes(dump(new))
@@ -702,8 +737,11 @@ def cmd_report(args) -> int:
     for vendor in new["coverage"]["by_vendor"]:
         lines = [f"# AA v{version} evidence: {vendor} ({as_of})", "",
                  f"Generated by `scripts/aa_rebaseline.py report` from `{new['snapshot']['source']['extract']}` "
-                 f"(source sha256 `{new['snapshot']['source'].get('extract_sha256', new['snapshot']['source'].get('page_sha256'))[:16]}…`).", "",
-                 "| config | effort | raw | score | estimated | previous | source |", "|---|---|---|---|---|---|---|"]
+                 f"(source sha256 `{new['snapshot']['source'].get('extract_sha256', new['snapshot']['source'].get('page_sha256'))[:16]}…`).", ""]
+        approval = new["snapshot"].get("approval", {})
+        if approval.get("basis"):
+            lines += [f"Operator approval ({approval.get('status', 'unknown')}): {approval['basis']}", ""]
+        lines += ["| config | effort | raw | score | estimated | previous | source |", "|---|---|---|---|---|---|---|"]
         for row in new["scored_configs"]:
             if row["vendor"] != vendor:
                 continue
@@ -718,7 +756,10 @@ def cmd_report(args) -> int:
                 and cid not in {r["id"] for r in new["scored_configs"]}
                 and (row["vendor"], row["model"], row["effort"], row["reasoning"]) not in new_identities]
         retired = [cid for cid in gone if cid in RETIRED_ROWS]
-        withdrawn = [cid for cid in gone if cid not in RETIRED_ROWS]
+        unavailable = [cid for cid in gone if cid in UNAVAILABLE_AGY]
+        if unavailable:
+            lines += ["", "Provider rejected XHigh; retained in reference_configs: " + ", ".join(unavailable)]
+        withdrawn = [cid for cid in gone if cid not in RETIRED_ROWS and cid not in UNAVAILABLE_AGY]
         if withdrawn:
             lines += ["", "No longer listed by AA, moved to unknown_configs: " + ", ".join(withdrawn)]
         if retired:
@@ -995,6 +1036,7 @@ def main() -> int:
     build.add_argument("--base", default=str(REGISTRY),
                        help="the registry to re-score; pass the previous snapshot to rebuild from scratch")
     build.add_argument("--approval", default="proposed", choices=("proposed", "approved"))
+    build.add_argument("--approval-basis", help="operator/date/quoted approval recorded in the snapshot")
     build.add_argument("--revision", type=int, default=1, help="snapshot number within the as-of day")
     fill = sub.add_parser("fill")
     fill.add_argument("--extract", required=True, help="the fresh capture")

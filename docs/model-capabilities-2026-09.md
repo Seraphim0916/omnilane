@@ -1,10 +1,18 @@
 # Model capabilities — AA routing snapshots
 
-## 已核准快照 — 2026-11-19 Gemini 4 Neon
+## Gemini XHigh transport correction (approved, 2026-11-19)
 
-`aa-v5.0.1-2026-11-19-v1` 的核准狀態為 `approved`：新增四列（xhigh 61、high 60、medium 55、low 44），舊 86 列實測與 22 列推導分數不變。`merge --base` 保留舊抽取的量測、來源、衝突與回填證據，只新增四個 Neon slug；未重新擷取網頁。依本輪提供的官方資訊：2026-11-18 一般開放，模型 ID `gemini-4-neon`，low／medium／high（預設）／xhigh，100 萬脈絡，Antigravity 付費訂閱可用；本輪未連網重新查證。
+The approved v2 snapshot keeps the Hydrogen and Neon XHigh AA measurements for comparison only. The provider rejected both XHigh selectors, so neither is a dispatch score, alias, or transport-probe target. High, Medium, and Low remain separate probe candidates. See the [snapshot report](reports/aa-rebaseline-2026-11-19-v2.md).
 
-`value` 改前改後輸出完全相同。Neon 的 HLE、MMMU-Pro、長脈絡量測與 Briefcase 分項尚未公布，不據此調升首選；high 比照 Hydrogen 加在其後作通用備援，維持十二條車道首選與所有舊列的相對順序。xhigh／medium／low 僅供明確指定。`gemini-pro-orchestrator-neon` 只有 agy 選單證據，無 AA 列或內部組合證據，不套用舊 Orchestrator 代理分數。完整指令、分數、車道差異與驗收見 [Neon 報告](reports/neon-rebaseline-2026-11-19-REPORT.md)。
+## 已核准快照 — 2026-11-19 Gemini 4 Neon（v2）
+
+`aa-v5.0.1-2026-11-19-v2` 已於 2026-11-19 核准：88 列實測、22 列推導分數、68 個別名、3 列比較資料。Neon high（60）、medium（55）、low（44）參與評分；Neon XHigh（61）與 Hydrogen XHigh（54）移到比較列。`merge --base` 保留舊抽取的量測、來源、衝突與回填證據；本次沒有重新擷取網頁。核准原話與雜湊見 [v2 快照報告](reports/aa-rebaseline-2026-11-19-v2.md)。
+
+`value` 改前改後輸出完全相同。Neon 的 HLE、MMMU-Pro、長脈絡量測與 Briefcase 分項尚未公布，不據此調升首選；high 比照 Hydrogen 加在其後作通用備援，維持十二條車道首選與所有舊列的相對順序。medium／low 僅供明確指定；XHigh 僅作比較。`gemini-pro-orchestrator-neon` 只有 agy 選單證據，無 AA 列或內部組合證據，不套用舊 Orchestrator 代理分數。完整指令、分數、車道差異與驗收見 [Neon 報告](reports/neon-rebaseline-2026-11-19-REPORT.md)。
+
+## 上一份快照 — 2026-11-19 Gemini 4 Neon（v1）
+
+上一份已核准快照 `aa-v5.0.1-2026-11-19-v1` 有 90 列實測、22 列推導分數與 70 個別名，當時新增 Neon xhigh／high／medium／low 四列。v2 將 Hydrogen 與 Neon XHigh 移到比較資料，並移除兩個對應別名；此處保留 v1 作歷史紀錄。
 
 
 ## 只能明確指定的型號（2026-11-13 v2）
@@ -179,7 +187,7 @@ Generated from `docs/reports/aa-v5.0.1-extract-2026-11-13.json` with `aa_rebasel
 
 ### Current lane measurements
 
-由 `python3 scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v5.0.1-extract-2026-11-19.json` 產生；對應已核准快照 `aa-v5.0.1-2026-11-19-v1`（approved）。
+由 `python3 scripts/aa_rebaseline.py lanes --extract docs/reports/aa-v5.0.1-extract-2026-11-19.json` 產生；對應已核准快照 `aa-v5.0.1-2026-11-19-v2`（approved）。
 
 **hardest-coding**
 

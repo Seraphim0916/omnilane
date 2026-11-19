@@ -21,8 +21,7 @@ from tests import test_native_executor as fixtures
 aa_policy = policy_tests.aa_policy
 
 # config id -> agy selector; AA's unsuffixed gemini-4-hydrogen row is the xhigh thinking level.
-HYDROGEN = (("gemini/gemini-4-hydrogen", "gemini-4-hydrogen-xhigh"),
-            ("gemini/gemini-4-hydrogen-high", "gemini-4-hydrogen-high"),
+HYDROGEN = (("gemini/gemini-4-hydrogen-high", "gemini-4-hydrogen-high"),
             ("gemini/gemini-4-hydrogen-medium", "gemini-4-hydrogen-medium"),
             ("gemini/gemini-4-hydrogen-low", "gemini-4-hydrogen-low"))
 
@@ -31,9 +30,9 @@ class HydrogenRegistryTests(unittest.TestCase):
     def setUp(self):
         self.registry = json.loads((fixtures.ROOT / "config/aa-model-policy.json").read_text())
 
-    def test_four_scored_rows_with_encoded_selectors(self):
+    def test_three_dispatchable_rows_with_encoded_selectors(self):
         rows = {row["id"]: row for row in self.registry["scored_configs"]}
-        expected = {"gemini/gemini-4-hydrogen": ("xhigh", 54), "gemini/gemini-4-hydrogen-high": ("high", 51),
+        expected = {"gemini/gemini-4-hydrogen-high": ("high", 51),
                     "gemini/gemini-4-hydrogen-medium": ("medium", 41), "gemini/gemini-4-hydrogen-low": ("low", 27)}
         for config_id, selector in HYDROGEN:
             with self.subTest(config_id=config_id):
@@ -355,7 +354,7 @@ class VendorPinSkipsUnprovenRowsTests(unittest.TestCase):
 
 
 class NativeHydrogenProofTests(unittest.TestCase):
-    EFFORTS = ("xhigh", "high", "medium", "low")
+    EFFORTS = ("high", "medium", "low")
 
     def setUp(self):
         self.fixture = fixtures.NativeExecutorTests("test_native_eligible_and_pending")

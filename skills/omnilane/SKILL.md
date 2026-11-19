@@ -519,7 +519,7 @@ start|status|url|stop` runs a read-only board of jobs; it cannot dispatch.
 These never widen what you may execute yourself. With no matching row, use the
 lane table; do not assume an older model is equivalent.
 
-Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-19-v1`
+Ceilings below are the measured AA v5.0.1 scores in `aa-v5.0.1-2026-11-19-v2`
 (2026-11-19 refresh adding Gemini 4 Neon; derived explicit-only bounds cannot
 authorize caller ceilings).
 They are score-only: an inherited ceiling, a failed host probe or a vendor quota
@@ -642,17 +642,17 @@ can still move the chain further down.
   other lane. A host that has not proven
   it with `omnilane resign` skips it and selects as before.
 - **Gemini 4 Hydrogen:** scored in the approved `aa-v5.0.1-2026-11-13-v1` snapshot
-  (xhigh 54, high 51, medium 41, low 27) and selectable as `gemini-4-hydrogen-xhigh`,
-  `-high`, `-medium` or `-low` (agy 1.5.7 listed all four on the build host on 2026-11-13).
+  (xhigh 54, high 51, medium 41, low 27); XHigh is comparison-only. Select `gemini-4-hydrogen-high`,
+  `-medium` or `-low` (agy 1.5.7 listed all four on the build host on 2026-11-13).
   The value rule places none of them. High sits right after Argon High in every
   lane that lists Argon, so it serves hosts that cannot use Argon (Ultra only);
   it is not first, so every `--vendor gemini` call Argon serves today stays on
   Argon. A vendor pin never crosses vendors; it skips same-vendor rows this host
   has no proof for or that score above the caller's ceiling, and an explicit
-  `--model` never moves. It leads no lane. xhigh, medium and low are explicit-only.
+  `--model` never moves. It leads no lane. Medium and low are explicit-only.
   Without host proof from `omnilane resign` it is never dispatched, even under the
   human-operator exemption; lanes then skip it and select as before.
-- **Gemini 4 Neon：** 已核准快照 `aa-v5.0.1-2026-11-19-v1`，xhigh 61、high 60、medium 55、low 44；AA 無後綴 slug `gemini-4-neon` 對應 agy 的 `gemini-4-neon-xhigh`。high 在全部十一條啟用車道接於 Hydrogen high 後，其餘三檔僅供明確指定；首選與既有相對順序不變。依本輪提供的官方資訊：2026-11-18 一般開放、100 萬脈絡、high 預設、Antigravity 付費訂閱可用。各檔均須主機傳輸證明，真人豁免也不跳過。`gemini-pro-orchestrator-neon` 無 AA 對應列，選單可見不代表模型呼叫端可依分數派工。
+- **Gemini 4 Neon：** 已核准快照 `aa-v5.0.1-2026-11-19-v2` 中 high 60、medium 55、low 44 參與評分；xhigh 61 僅保留比較，因 agy 拒絕 `gemini-4-neon-xhigh`。AA 無後綴 slug `gemini-4-neon` 對應該 XHigh 紀錄，不是可派工的模型別名。high 在十一條啟用車道接於 Hydrogen high 後，medium、low 僅供明確指定；十二條車道首選及相對順序不變。依本輪提供的官方資訊：2026-11-18 一般開放、100 萬脈絡、high 預設、Antigravity 付費訂閱可用。各檔均須主機傳輸證明，真人豁免也不跳過。`gemini-pro-orchestrator-neon` 無 AA 對應列，選單可見不代表模型呼叫端可依分數派工。
 - **Gemini 3.1 Pro:** reference row only, kept for comparison: it has no approved
   local mapping, is in no lane and has no alias.
 
@@ -660,7 +660,7 @@ can still move the chain further down.
 
 ### Model aliases
 
-目前的已核准快照 `aa-v5.0.1-2026-11-19-v1`：90 列實測、22 列推導分數、70 個別名；`approval.status` 為 `approved`。核准與雜湊驗證見 `docs/reports/aa-rebaseline-2026-11-19.md`。
+目前的已核准快照 `aa-v5.0.1-2026-11-19-v2`：88 列實測、22 列推導分數、68 個別名、3 列比較資料；`approval.status` 為 `approved`。Neon XHigh 與 Hydrogen XHigh 僅保留比較，不進派工、別名或傳輸探測。核准依據與雜湊見 `docs/reports/aa-rebaseline-2026-11-19-v2.md`。
 
 Previous approved snapshot `aa-v5.0.1-2026-11-18-v1` (2026-11-18, 86 measured rows plus 22 derived explicit-only bounds; see `docs/reports/aa-rebaseline-2026-11-18.md`):
 
@@ -735,11 +735,9 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | Gemini 4 Carbon High | gemini | gemini-4-carbon-high | - |
 | Gemini 4 Carbon Medium | gemini | gemini-4-carbon-medium | - |
 | Gemini 4 Carbon Low | gemini | gemini-4-carbon-low | - |
-| Gemini 4 Hydrogen XHigh | gemini | gemini-4-hydrogen-xhigh | - |
 | Gemini 4 Hydrogen High | gemini | gemini-4-hydrogen-high | - |
 | Gemini 4 Hydrogen Medium | gemini | gemini-4-hydrogen-medium | - |
 | Gemini 4 Hydrogen Low | gemini | gemini-4-hydrogen-low | - |
-| Gemini 4 Neon Xhigh | gemini | gemini-4-neon-xhigh | - |
 | Gemini 4 Neon High | gemini | gemini-4-neon-high | - |
 | Gemini 4 Neon Medium | gemini | gemini-4-neon-medium | - |
 | Gemini 4 Neon Low | gemini | gemini-4-neon-low | - |

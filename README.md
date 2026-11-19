@@ -71,8 +71,9 @@ In this table, replace `VENDOR` and `MODEL` with the names in your diagnostic. R
 
 ## What's new in v0.63.5
 
-- After upgrading, run `omnilane resign` on each host to refresh transport proofs for the approved scoring snapshot `aa-v5.0.1-2026-11-19-v1`.
-- Gemini 4 Neon adds four measured AA scores: xhigh 61, high 60, medium 55 and low 44. All 11 active lanes can fall back to Neon high after Hydrogen high. All 12 lanes keep their first choice.
+- After upgrading, run `omnilane resign` on each host to refresh transport proofs for the approved v2 snapshot.
+- The v2 snapshot has 88 measured scores, 22 derived scores, 68 aliases and 3 comparison-only entries. Gemini 4 Neon High (60), Medium (55) and Low (44) remain scored; Neon XHigh (61) and Hydrogen XHigh (54) are comparison-only because agy rejects those selectors.
+- Neon High is a fallback after Hydrogen High in 11 active lanes; all 12 lanes keep their first choice.
 - Upgrade: `npm i -g omnilane@0.63.5`.
 
 ## What's new in v0.63.4
@@ -1033,7 +1034,7 @@ AA `aa-v5.0.1-2026-11-17-v1`: **approved by the operator on 2026-11-17**; 76 mea
 
 AA `aa-v5.0.1-2026-11-13-v2`: **approved by the operator on 2026-11-14**; 75 measured configurations plus 23 explicit-only derived bounds. The table below follows this snapshot and the 0.63.0 full-lane value rerank: all six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) place the complete `scripts/aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its first choice from GPT-6.1 Sol medium to GPT-6.1 Sol xhigh; Claude Opus 5.5 high sits right behind Carbon in `hardest-coding` and `ui-draft`), `coding-overflow` drops unscored Kimi/Qwen/OpenCode rows, and `fast-agentic` keeps its order while AA v5.0.1 publishes no time-to-first-token. `gemini-pro-orchestrator-g1-pro` (proxy ceiling 54) and 22 lower-effort upper-bound rows stay explicit-only, enter no lane, cannot authorize caller ceilings, and require host transport proof from `omnilane resign` even under the human-operator exemption. [Rebaseline](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator](docs/reports/aa-orchestrator-2026-11-13.md) · [Lane rerank](docs/reports/aa-lane-rerank-2026-11-13.md).
 
-AA `aa-v5.0.1-2026-11-13-v1`: **approved on 2026-11-13**; 75 scored configurations. Gemini 4 Hydrogen (xhigh 54, high 51, medium 41, low 27) is scored and selectable as `gemini-4-hydrogen-xhigh`/`-high`/`-medium`/`-low`; on 2026-11-13 agy 1.5.7 listed all four on the host that built this snapshot. The value rule places none of them. Hydrogen High joins every lane that lists Argon High, right after it: after Argon, every `--vendor gemini` call that Argon serves today still goes to Argon (a pin skips same-vendor rows without proof or above the caller's ceiling and never crosses vendors). After Argon, it serves hosts that cannot use Argon (Google AI Ultra only). When v1 added Hydrogen alone, no lane's first choice changed (superseded by the 0.63.0 full-lane rerank in `aa-v5.0.1-2026-11-13-v2` above). Like Carbon, Hydrogen is never dispatched without host proof from `omnilane resign`, even under the human-operator exemption; until then lanes skip it.
+AA `aa-v5.0.1-2026-11-13-v1` was approved on 2026-11-13 with 75 scored configurations. In that original snapshot, Gemini 4 Hydrogen had scores of xhigh 54, high 51, medium 41 and low 27; the host that built it listed all four selectors in agy 1.5.7, including `gemini-4-hydrogen-xhigh`. The value rule selected none of those Hydrogen rows. Hydrogen High was placed after Argon High in every lane that listed Argon High; at that time, `--vendor gemini` calls served by Argon continued to choose Argon, and Hydrogen served only hosts unable to use Argon (Google AI Ultra). This describes the 2026-11-13 state only: starting with `aa-v5.0.1-2026-11-19-v2`, Gemini 4 Hydrogen XHigh and Gemini 4 Neon XHigh are comparison-only and not dispatchable; their historical scores are retained. Like Carbon, Hydrogen required host proof from `omnilane resign` before dispatch, and lanes skipped it until then.
 
 AA `aa-v5.0.1-2026-11-12-v1`: **approved by the operator on 2026-11-12**; same AA v5.0.1 capture, 71 scored configurations. Gemini 4 Carbon (high 60, medium 58, low 54; Google AI Ultra in Antigravity, agy 1.5.5) moves from comparison-only to scored, selectable as `gemini-4-carbon-high`/`-medium`/`-low`. Those selector strings are inferred from agy's effort-in-model-id convention, not published by Google or probed yet; `omnilane resign` on a host with Ultra (ADC) access confirms them. The value rule puts Carbon high (then low) first in hardest-coding and Carbon medium first in ui-draft; every other rung is unchanged, and a host that has not proven Carbon with `omnilane resign` skips it and selects exactly as before. [Evidence](docs/reports/aa-rebaseline-2026-11-12.md).
 
@@ -1043,7 +1044,7 @@ AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, act
 
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
-AA snapshot `aa-v5.0.1-2026-11-19-v1` is `approved`. Each host needs transport proof before it can use Neon. The `gemini-pro-orchestrator-neon` selector appears in the menu but has no AA score for model-initiated dispatch.
+AA snapshot `aa-v5.0.1-2026-11-19-v2` is `approved`. Each host needs transport proof before it can use Neon. Hydrogen XHigh and Neon XHigh are comparison-only and not dispatchable; their historical scores are retained. The `gemini-pro-orchestrator-neon` selector appears in the menu but has no AA score for model-initiated dispatch.
 
 | Lane | First choice | Backup | When |
 |---|---|---|---|

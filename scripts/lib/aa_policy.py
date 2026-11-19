@@ -29,7 +29,7 @@ MAX_BYTES = 1_048_576
 # scripts/aa_rebaseline.py regenerates the registry; it never touches this pin.
 APPROVED_BENCHMARK_VERSION = "5.0.1"
 APPROVED_AS_OF = "2026-11-19"
-APPROVED_REGISTRY_SHA256 = "2e8ba8b802fac7ddd18f137ce72a5e5b040f10e67a8b2bb84ac0c7a4572b319f"
+APPROVED_REGISTRY_SHA256 = "78670f983091212c3f090fefe369b1f22affa3abd48b212314c12f93bde293fc"
 
 # Google sells Gemini 4 Carbon only to AI Ultra / ADC sign-ins (agy 1.5.5), so an installed agy
 # says nothing about whether this host may run it. The human-operator exemption lifts the
@@ -661,6 +661,14 @@ def decide(registry: dict[str, Any], registry_sha256: str, *,
         "child_context": None,
         "evidence_limit": "workflow metadata and selected model arguments do not prove actual provider identity",
     }
+    for row in registry.get("reference_configs", []):
+        selector = row.get("unavailable_selector")
+        if selector and vendor == row["vendor"] and (
+                model == selector or target_config == row["id"] or
+                (model, effort) == (row["model"], row["effort"])):
+            base.update(code="selector-unavailable", failed_gate="target-transport",
+                        message=row["reference_reason"])
+            return base
     if operator_asserted_human:
         if _requires_human_transport_proof(registry, vendor, model, target_config):
             target_row, mapping_code, detail = _runtime_target(

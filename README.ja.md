@@ -71,8 +71,9 @@ omnilane jobs result JOB_ID
 
 ## v0.63.5 の新機能
 
-- アップグレード後は、各ホストで `omnilane resign` を実行し、承認済みの新しいスコアスナップショット `aa-v5.0.1-2026-11-19-v1` に合わせて通信の検証記録を更新してください。
-- Gemini 4 Neon の AA 実測スコアは xhigh 61、high 60、medium 55、low 44 です。有効な 11 レーンでは Hydrogen high の次の代替候補に Neon high を追加しました。全 12 レーンの第一候補は従来どおりです。
+- アップグレード後、各ホストで `omnilane resign` を実行し、承認済み v2 スナップショットの転送証明を更新してください。
+- v2 スナップショットは実測 88 行、推定 22 行、別名 68 件、比較専用 3 行です。Gemini 4 Neon の high（60）、medium（55）、low（44）は引き続きスコア対象です。Neon XHigh（61）と Hydrogen XHigh（54）は agy が選択子を拒否するため比較専用です。
+- Neon high は有効な 11 レーンで Hydrogen high の次の代替候補です。12 レーンの第一候補は変わりません。
 - アップグレード：`npm i -g omnilane@0.63.5`。
 
 ## v0.63.4 の新機能
@@ -888,7 +889,7 @@ flowchart LR
 
 AA `aa-v5.0.1-2026-11-13-v2`：**承認済み（2026-11-14 に操作者が承認）**。実測済み構成 75 件と明示指定専用の派生上限 23 件を含みます。下の表はこのスナップショットと 0.63.0 全レーン価値再順位に従います。6 つの価値レーン（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）は先頭に `scripts/aa_rebaseline.py value` のチェーン全体を置き、残りの採点済み候補を従来の相対順で後ろに続けます（`bulk-mechanical` の第一候補は GPT-6.1 Sol medium から GPT-6.1 Sol xhigh に変更、`hardest-coding` と `ui-draft` では Carbon の直後に Claude Opus 5.5 high が入ります）。`coding-overflow` は未採点の Kimi／Qwen／OpenCode 行を外し、`fast-agentic` は AA v5.0.1 で初回トークン遅延が未公表のため従来の順序を維持します。`gemini-pro-orchestrator-g1-pro`（代理上限 54）と 22 件の低強度上限行は明示指定専用で、どのレーンにも入らず呼び出し元の上限を根拠付けられず、人間オペレーター免除の下でも `omnilane resign` によるホスト証明が必要です。[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 設計](docs/reports/aa-orchestrator-2026-11-13.md) · [全レーン再順位報告](docs/reports/aa-lane-rerank-2026-11-13.md)。
 
-AA `aa-v5.0.1-2026-11-13-v1`：**承認済み（2026-11-13）**。採点済み構成は 75 件。Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）を採点し、`gemini-4-hydrogen-xhigh`／`-high`／`-medium`／`-low` で指定できます。2026-11-13 にこのスナップショットを作ったホストでは、agy 1.5.7 がこの 4 つを一覧に出しました。価値ルールはどの行も選びません。Hydrogen High は Argon High を含む各レーンで Argon の直後に入ります。こうすると、今 Argon が受けている `--vendor gemini` の呼び出しは引き続き Argon に届きます（ベンダー固定は証明のない行や呼び出し元の上限を超える同じベンダーの行を飛ばし、ベンダーはまたぎません）。Argon の後ろなら、Argon を使えない（Google AI Ultra 限定）ホストで使われます。v1 で Hydrogen を単独追加した時点では各レーンの第一候補は変わりませんでした（その後、上の `aa-v5.0.1-2026-11-13-v2` における 0.63.0 全レーン再順位で更新されています）。Carbon と同じく、`omnilane resign` によるホストでの証明がなければ、人間オペレーター免除の下でも派遣されず、それまでレーンはスキップします。
+AA `aa-v5.0.1-2026-11-13-v1` は2026-11-13に承認され、当時の採点済み構成は75件でした。2026-11-13当時の元スナップショットでは、Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）が採点され、これを作成したホスト上のagy 1.5.7は4つのセレクターを一覧表示していました（`gemini-4-hydrogen-xhigh`を含む）。価値ルールは当時Hydrogenのどの行も選びませんでした。Hydrogen Highは当時、Argon Highを含む各レーンでその直後に置かれていました。その時点ではArgonが受けていた`--vendor gemini`呼び出しは引き続きArgonを選び、HydrogenはArgonを使えないホスト（Google AI Ultraのみ）に限って選択可能でした。これは2026-11-13の履歴のみです。`aa-v5.0.1-2026-11-19-v2`以降、Gemini 4 Hydrogen XHighとGemini 4 Neon XHighは比較専用で、派遣対象外です。過去のスコアは保持します。Carbonと同様に、Hydrogenは当時`omnilane resign`によるホスト証明がなければ派遣されず、証明のないホストではレーンがスキップしていました。
 
 AA `aa-v5.0.1-2026-11-12-v1`：**approved（2026-11-12 に操作者が承認）**。同じ AA v5.0.1 の取得データを使い、採点済み構成は 71 件。Gemini 4 Carbon（high 60、medium 58、low 54。Antigravity の Google AI Ultra 向け、agy 1.5.5）を比較専用から採点対象に移し、`gemini-4-carbon-high`／`-medium`／`-low` で指定できます。これらのセレクター文字列は、強度をモデル ID に含める agy の慣例から推定したもので、Google は公表しておらず、まだどのホストでも実測されていません。Ultra（ADC）権限のあるホストで `omnilane resign` を実行して確認します。価値ルールにより Carbon high（次に low）が hardest-coding、Carbon medium が ui-draft の先頭になります。その他の順位は変わらず、`omnilane resign` で Carbon を証明していないホストはスキップして従来どおり選びます。[証拠](docs/reports/aa-rebaseline-2026-11-12.md)。
 
@@ -898,7 +899,7 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り�
 
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
-AA スナップショット `aa-v5.0.1-2026-11-19-v1` は承認済み（`approved`）です。Neon を使うにはホストごとに通信の検証が必要です。`gemini-pro-orchestrator-neon` はメニューに表示されますが、モデルからの委任に使える AA スコアはありません。
+AA スナップショット `aa-v5.0.1-2026-11-19-v2` は承認済み（`approved`）です。Neon を使うにはホストごとに通信の検証が必要です。Hydrogen XHigh と Neon XHigh は比較専用で、派遣対象外です。過去のスコアは保持します。`gemini-pro-orchestrator-neon` はメニューに表示されますが、モデルからの委任に使える AA スコアはありません。
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|

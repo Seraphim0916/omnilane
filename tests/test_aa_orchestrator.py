@@ -177,11 +177,23 @@ class DerivedBuildTests(unittest.TestCase):
         unknown = copy.deepcopy(next(r for r in registry['scored_configs'] if r.get('score_source') == 'upper-bound'))
         unknown.update(vendor='gemini', model='gemini-4-hydrogen', effort='low', id='fixture/low')
         mystery = dict(unknown, id='fixture/unknown', model='unknown')
-        scored, remaining = build.derive_scores(measured, [unknown, mystery])
+        scored, remaining = build.derive_scores(
+            measured, [unknown, mystery], registry.get('reference_configs', []))
         bounded = next(r for r in scored if r['id'] == 'fixture/low')
         self.assertEqual(41, bounded['score'])
         self.assertEqual('gemini/gemini-4-hydrogen-medium', bounded['bound_from'])
         self.assertEqual([mystery], remaining)
+
+    def test_proxy_uses_comparison_only_measured_sources(self):
+        registry = json.loads((ROOT / 'config/aa-model-policy.json').read_text())
+        measured = [r for r in registry['scored_configs'] if not r.get('score_source')]
+        comparison = registry.get('reference_configs', [])
+        scored, remaining = build.derive_scores(measured, [], comparison)
+        proxy = next(r for r in scored if r['id'] == build.PROXY_ID)
+        source_rows = {r['id']: r for r in measured + comparison}
+        self.assertEqual(max(source_rows[cid]['score'] for cid in build.PROXY_OF), proxy['score'])
+        self.assertEqual(list(build.PROXY_OF), proxy['proxy_of'])
+        self.assertEqual([], remaining)
 
 
 if __name__ == '__main__':
