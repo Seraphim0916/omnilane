@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "aa-v5.0.1-2026-11-19-v2",
+  "registry_sha256": "38175697bc42a767c5fef5b49d0118a75c4cdeba5eb04cb8e71f5809ae329cee",
+  "measurements": [
+    {
+      "lane": "hardest-coding",
+      "measure_id": "terminal-bench-4.0",
+      "config_id": "claude/claude-fable-5-2",
+      "value": 0.595959595959596,
+      "unit": "ratio",
+      "observed_at": "2026-11-18",
+      "source_ref": "docs/reports/aa-v5.0.1-extract-2026-11-19.json#/records/claude-fable-5-2/terminalBench40",
+      "evidence_kind": "measured",
+      "missing_reason": null
+    },
+    {
+      "lane": "hardest-coding",
+      "measure_id": "scicode",
+      "config_id": "claude/claude-fable-5-2",
+      "value": 0.677083333333333,
+      "unit": "ratio",
+      "observed_at": "2026-11-18",
+      "source_ref": "docs/reports/aa-v5.0.1-extract-2026-11-19.json#/records/claude-fable-5-2/scicode",
+      "evidence_kind": "measured",
+      "missing_reason": null
+    },
+    {
+      "lane": "hardest-coding",
+      "measure_id": "terminal-bench-4.0",
+      "config_id": "codex/gpt-6-2-astra",
+      "value": 0.641414141414141,
+      "unit": "ratio",
+      "observed_at": "2026-11-18",
+      "source_ref": "docs/reports/aa-v5.0.1-extract-2026-11-19.json#/records/gpt-6-2-astra/terminalBench40",
+      "evidence_kind": "measured",
+      "missing_reason": null
+    },
+    {
+      "lane": "hardest-coding",
+      "measure_id": "scicode",
+      "config_id": "codex/gpt-6-2-astra",
+      "value": null,
+      "unit": "ratio",
+      "observed_at": "2026-11-18",
+      "source_ref": "docs/reports/aa-v5.0.1-extract-2026-11-19.json#/records/gpt-6-2-astra/scicode",
+      "evidence_kind": "unknown",
+      "missing_reason": "The archived AA extract contains null for this field."
+    }
+  ],
+  "vendor_claims": [
+    {
+      "vendor": "codex",
+      "product": "GPT-5.2 Thinking (gpt-5.2)",
+      "effort": "xhigh",
+      "summary": "OpenAI reported 55.6% on the public SWE-Bench Pro evaluation.",
+      "official_url": "https://openai.com/index/introducing-gpt-5-2/#coding",
+      "verified_at": "2026-11-22",
+      "surface": "OpenAI API research evaluation",
+      "plan": "Not specified for this evaluation",
+      "region": "Not specified for this evaluation",
+      "limitations": "Vendor-reported launch result (2025-12-11) on the public benchmark; no AA score or transport implication."
+    }
+  ]
+}

@@ -22,9 +22,11 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -502,6 +504,10 @@ def derive_scores(scored: list[dict], unknown: list[dict],
 
 
 def cmd_build(args) -> int:
+    output = getattr(args, "out", None)
+    domain_strength = getattr(args, "domain_strength", None)
+    if domain_strength is not None and output is None:
+        sys.exit("build: --domain-strength requires a new --out path")
     overlap = set(RETIRED_ROWS) & {row[0] for row in NEW_ROWS}
     if overlap:
         sys.exit(f"build: retired rows cannot also be in NEW_ROWS: {', '.join(sorted(overlap))}")
@@ -721,10 +727,40 @@ def cmd_build(args) -> int:
         source=source, approval=approval)
     new.setdefault("schema_notes", {})["score_rounding"] = (
         "score is score_raw rounded half-up to an integer; score_raw is the AA index to two decimals")
-    REGISTRY.write_bytes(dump(new))
+    # A rebuilt snapshot cannot inherit a pointer bound to the previous payload.
+    new["snapshot"].pop("domain_strength", None)
+    if domain_strength is not None:
+        if __package__:
+            from .aa_domain_projection import companion_path, load_companion
+            from .lib import aa_domain_metadata
+        else:
+            from aa_domain_projection import companion_path, load_companion
+            from lib import aa_domain_metadata
+
+        try:
+            companion = companion_path(domain_strength, "companion.path")
+            _, digest = load_companion(companion, new)
+            pointer = {"path": companion.relative_to(REPO).as_posix(),
+                       "schema_version": aa_domain_metadata.SCHEMA_VERSION, "sha256": digest}
+            aa_domain_metadata.validate_pointer(pointer)
+        except ValueError as exc:
+            sys.exit(f"build: {exc}")
+        new["snapshot"]["domain_strength"] = pointer
+    if output is None:
+        output = REGISTRY
+        output.write_bytes(dump(new))
+    else:
+        try:
+            # Publish complete bytes without replacing an existing output, even on retry.
+            with tempfile.TemporaryDirectory(prefix=".aa-candidate-", dir=output.parent) as directory:
+                complete = Path(directory) / "registry.json"
+                complete.write_bytes(dump(new))
+                os.link(complete, output)
+        except OSError as exc:
+            sys.exit(f"build: --out: {exc}")
     print(f"build: {len(scored)} scored ({sum(r['estimated'] for r in scored)} estimated), "
           f"{len(unknown)} unknown, dropped {[r['id'] for r in dropped]}")
-    print(f"build: sha256 {hashlib.sha256(REGISTRY.read_bytes()).hexdigest()}")
+    print(f"build: sha256 {hashlib.sha256(output.read_bytes()).hexdigest()}")
     return 0
 
 
@@ -1038,6 +1074,9 @@ def main() -> int:
     build.add_argument("--approval", default="proposed", choices=("proposed", "approved"))
     build.add_argument("--approval-basis", help="operator/date/quoted approval recorded in the snapshot")
     build.add_argument("--revision", type=int, default=1, help="snapshot number within the as-of day")
+    build.add_argument("--out", type=Path, help="write to a new candidate file instead of updating the registry")
+    build.add_argument("--domain-strength", type=Path,
+                       help="bind a companion for the rebuilt snapshot (requires --out)")
     fill = sub.add_parser("fill")
     fill.add_argument("--extract", required=True, help="the fresh capture")
     fill.add_argument("--earlier", required=True, help="a tracked earlier capture to take withdrawn values from")
