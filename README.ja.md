@@ -24,13 +24,13 @@ omnilane は、Claude Code、Codex、Grok Build、Antigravity からのタスク
 npm i -g omnilane &&
 omnilane resign --init &&
 omnilane doctor &&
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
-omnilane route --mode advise --workdir "$PWD" triage "ファイルを変更せず、このプロジェクトの概要を説明してください"
+env OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 \
+  omnilane route --mode advise --workdir "$PWD" consult "ファイルを変更せず、このプロジェクトの概要を説明してください"
 ```
 
 初期化が成功し、doctor で必要な対象が利用可能と確認できてから、ディスパッチを続けてください。`--init` は最初のローカルオーバーレイ（CLI セレクターがどのモデルに到達するかの検証記録）を作成・検証し、初回の信頼済み署名者を記録して、バックアップ後の `local.sh` に登録します。既存のオーバーレイがある場合は拒否されるため、アップグレード時は `omnilane resign` を使ってください。初期化には対話型ターミナルが必要です。変更済み・安全でない署名者を承認することはできず、ローカルの自己署名 CLI は別途、人間の確認が必要です。
 
-環境変数の指定は、**ターミナルを操作する人間としての宣言**です。AI アシスタントは自分の呼び出し元情報を使い、この変数や `--operator-asserted-human` を自分で指定してはいけません。設定方法は後半のリファレンスを参照してください。すべてのベンダーは必要ありません。利用できない候補はスキップされ、呼び出し元のスコア上限とローカル検証も確認されます。
+環境変数の指定は、**ターミナルを操作する人間としての宣言**です。AI アシスタントは自分の呼び出し元情報を使い、この変数や `--operator-asserted-human` を自分で指定してはいけません。設定方法は後半のリファレンスを参照してください。すべてのベンダーは必要ありません。利用できない候補はスキップされ、呼び出し元のスコア上限とローカル検証も確認されます。 この例の環境変数はそのコマンドだけに適用されます。
 
 ## 日常の使い方
 
@@ -40,7 +40,7 @@ omnilane route --mode advise --workdir "$PWD" triage "ファイルを変更せ�
 omnilane list
 omnilane route --mode advise --workdir "$PWD" triage "プロジェクトを調べ、主なリスクを列挙してください"
 omnilane route --mode work --workdir "$PWD" bulk-mechanical "README.md の指摘済みの誤字を修正してください"
-omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "テストを実行し、失敗した項目を修正してください"
+omnilane route --background --single-shot --mode work --workdir "$PWD" bulk-mechanical "テストを実行し、失敗した項目を修正してください"
 omnilane jobs list
 omnilane jobs wait JOB_ID --timeout 60
 omnilane jobs result JOB_ID
@@ -843,7 +843,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.omnilane.resign.plis
 
 既存のスレッドを起こす Codex のオートメーションは effort を記録しません。omnilane はその呼び出し元を拒否する代わりに、そのモデルの最低スコアに制限します。安いレーンはそのまま動き、高いレーンはどの effort なら届くかを教えます。
 
-完了したディスパッチは `$OMNILANE_HOME/inbox/` に非公開の完了記録を保存します。Claude Code プラグインの `SessionStart` は、フックが渡すコントローラーのセッション ID を実行中のプロセス祖先に結び付けます。`UserPromptSubmit` は次のプロンプトで、そのセッションが所有する記録を最大十件、原子的に配信します。セッション ID のない旧記録は元のディスパッチの `workdir` を範囲とし、取得した記録は `inbox/consumed/` に移動します。ディスパッチに `OMNILANE_INBOX=0` を設定すると記録作成を無効化できます。既定では有効です。スキルのリンクだけではプラグインの通知機能は入りません。
+完了したディスパッチは `$OMNILANE_HOME/inbox/` に非公開の完了記録を保存します。Claude Code プラグインの `SessionStart` は、フックが渡すコントローラーのセッション ID を実行中のプロセス祖先に結び付けます。`UserPromptSubmit` は次のプロンプトで、そのセッションが所有する記録を最大十件、原子的に配信します。セッション ID のない旧記録は元のディスパッチの `workdir` を範囲とし、取得した記録は `inbox/consumed/` に移動します。ディスパッチに `OMNILANE_INBOX=0` を設定すると記録作成を無効化できます。既定では有効です。スキルのリンクだけではプラグインの通知機能は入りません。 [完了通知の SessionStart／UserPromptSubmit フック](README.md#foreman-completion-inbox)も参照してください。
 
 ## 🧭 仕組み
 
@@ -887,7 +887,7 @@ flowchart LR
 
 ## 🛤️ レーン一覧(デフォルト。実効値は `scripts/dispatch.sh --list` で確認)
 
-AA `aa-v5.0.1-2026-11-13-v2`：**承認済み（2026-11-14 に操作者が承認）**。実測済み構成 75 件と明示指定専用の派生上限 23 件を含みます。下の表はこのスナップショットと 0.63.0 全レーン価値再順位に従います。6 つの価値レーン（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）は先頭に `scripts/aa_rebaseline.py value` のチェーン全体を置き、残りの採点済み候補を従来の相対順で後ろに続けます（`bulk-mechanical` の第一候補は GPT-6.1 Sol medium から GPT-6.1 Sol xhigh に変更、`hardest-coding` と `ui-draft` では Carbon の直後に Claude Opus 5.5 high が入ります）。`coding-overflow` は未採点の Kimi／Qwen／OpenCode 行を外し、`fast-agentic` は AA v5.0.1 で初回トークン遅延が未公表のため従来の順序を維持します。`gemini-pro-orchestrator-g1-pro`（代理上限 54）と 22 件の低強度上限行は明示指定専用で、どのレーンにも入らず呼び出し元の上限を根拠付けられず、人間オペレーター免除の下でも `omnilane resign` によるホスト証明が必要です。[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 設計](docs/reports/aa-orchestrator-2026-11-13.md) · [全レーン再順位報告](docs/reports/aa-lane-rerank-2026-11-13.md)。
+AA `aa-v5.0.1-2026-11-13-v2`：**承認済み（2026-11-14 に操作者が承認）**。実測済み構成 75 件と明示指定専用の派生上限 23 件を含みます。以下はこのスナップショットにおける 0.63.0 当時の再順位付けです：6 つの価値レーン（`hardest-coding`、`bulk-mechanical`、`hard-judgment`、`taste-final`、`ui-draft`、`long-context`）は先頭に `scripts/aa_rebaseline.py value` のチェーン全体を置き、残りの採点済み候補を従来の相対順で後ろに続けます（`bulk-mechanical` の第一候補は GPT-6.1 Sol medium から GPT-6.1 Sol xhigh に変更、`hardest-coding` と `ui-draft` では Carbon の直後に Claude Opus 5.5 high が入ります）。`coding-overflow` は未採点の Kimi／Qwen／OpenCode 行を外し、`fast-agentic` は AA v5.0.1 で初回トークン遅延が未公表のため従来の順序を維持します。`gemini-pro-orchestrator-g1-pro`（代理上限 54）と 22 件の低強度上限行は明示指定専用で、どのレーンにも入らず呼び出し元の上限を根拠付けられず、人間オペレーター免除の下でも `omnilane resign` によるホスト証明が必要です。[再ベースライン報告](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 設計](docs/reports/aa-orchestrator-2026-11-13.md) · [全レーン再順位報告](docs/reports/aa-lane-rerank-2026-11-13.md)。
 
 AA `aa-v5.0.1-2026-11-13-v1` は2026-11-13に承認され、当時の採点済み構成は75件でした。2026-11-13当時の元スナップショットでは、Gemini 4 Hydrogen（xhigh 54、high 51、medium 41、low 27）が採点され、これを作成したホスト上のagy 1.5.7は4つのセレクターを一覧表示していました（`gemini-4-hydrogen-xhigh`を含む）。価値ルールは当時Hydrogenのどの行も選びませんでした。Hydrogen Highは当時、Argon Highを含む各レーンでその直後に置かれていました。その時点ではArgonが受けていた`--vendor gemini`呼び出しは引き続きArgonを選び、HydrogenはArgonを使えないホスト（Google AI Ultraのみ）に限って選択可能でした。これは2026-11-13の履歴のみです。`aa-v5.0.1-2026-11-19-v2`以降、Gemini 4 Hydrogen XHighとGemini 4 Neon XHighは比較専用で、派遣対象外です。過去のスコアは保持します。Carbonと同様に、Hydrogenは当時`omnilane resign`によるホスト証明がなければ派遣されず、証明のないホストではレーンがスキップしていました。
 
@@ -900,27 +900,26 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り�
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 AA スナップショット `aa-v5.0.1-2026-11-19-v2` は承認済み（`approved`）です。Neon を使うにはホストごとに通信の検証が必要です。Hydrogen XHigh と Neon XHigh は比較専用で、派遣対象外です。過去のスコアは保持します。`gemini-pro-orchestrator-neon` はメニューに表示されますが、モデルからの委任に使える AA スコアはありません。
+表は上の過去のスナップショットではなく、0.63.5 の [routing.yaml](routing.yaml) に同梱されたチェーンを示します。
 
 | レーン | 第一候補 | バックアップ | 用途 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
+| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 (high) → Grok 4.7 (low) | 最難関の実装、深い根本原因調査、正確性が重要な修正 |
 | 🏗️ bulk-mechanical | GPT-6.2 Sol (medium) | GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.2 Astra (low) → GPT-6.2 Sol (low) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | リファクタリング、移行、テスト、大規模レビュー——機械的な持久作業 |
 | 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 大量スキャン、一次選別 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | アーキテクチャ判断、深い推論、セカンドオピニオン |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
-| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 (high) → Grok 4.7 (low) | アーキテクチャ判断、深い推論、セカンドオピニオン |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 (high) → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | ユーザー向け文章、プロンプト／文書の仕上げ、文体判断 |
+| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | 指名モデルへの直接相談。フォールバック防止のため `--vendor` を維持 |
 | 🎨 ui-draft | Gemini 4 Carbon (Medium) | Gemini 4 Argon (Medium) → Claude Opus 5.5 (high) → GPT-6.1 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → Claude Opus 5.5 (medium) → GPT-6.2 Astra (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | デザインシステム／参照画像がある場合だけの UI ドラフト |
 | 📚 long-context | GPT-6.2 Astra (xhigh) | GPT-6 Astra (medium) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → GPT-6 Luna (high) → GPT-6 Luna (low) → GPT-6.2 Astra (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.2 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 長文書の抽出と統合。AA-LCR、コスト、スループット順 |
 | ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6.2 Sol (medium) → GPT-6.2 Sol (low) → GPT-6.2 Astra (medium) → GPT-6.2 Astra (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 高速なマルチステップ agentic ループ、マルチモーダル確認 |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Codex クォータ不足時の中級コーディング逃がし弁 |
+| 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | リアルタイム X／Web 検索とソーシャル文脈 |
+| 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Codex クォータ不足時の中級コーディング逃がし弁 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 重大判断用の内蔵意見パネル。デフォルト無効、`routing.local.yaml` で有効化し、投票者・ラウンドごとに 1 コール |
 
-Argon High は Flash を含むすべてのレーンに入り、Google AI Ultra とホストのトランスポート検証が必要です。2026-11-13 以降、Argon High を含む各レーンではその直後に Gemini 4 Hydrogen High が続き、その後に Gemini 3.8 Flash が並びます。bulk-mechanical、triage、fast-agentic、live-search、coding-overflow では Argon High と Hydrogen High が Gemini 3.8 Flash の直前に置かれ、bulk-mechanical の第一候補は 0.63.0 で価値最上位の GPT-6.1 Sol (xhigh) に昇格し、残りの 4 つの用途レーンは従来の第一候補を維持します。2026-11-10 の並べ替え以降、Argon は hardest-coding で 2 番手ではなくなり、そこや他の価値レーンでは Gemini の末尾に置かれます。UI／長文レーンでの配置は実測上の優位を意味しません。リアルタイム X／Web 検索と Codex クォータ緩和の先頭は引き続き Grok で、Argon は一般 Web 検索のフォールバックを担います。`consult --vendor gemini` は Gemini 内で Argon を選びます。Medium／Low には AA 実測スコアがありません（明示指定専用の上限 50 のみで、どのレーンにも入りません）。
+有効な 11 レーンすべてで、Gemini の候補は Argon High → Hydrogen High → Neon High の順です。その後の候補はレーンごとに異なります。Argon Medium は実測値 48 で `ui-draft` と `hardest-coding` に含まれます。Argon Low は明示指定専用の上限 48 で、レーンには入りません。Gemini はホストのトランスポート検証が必要です。`consult --vendor gemini` は他ベンダーに切り替わらず、未検証または上限を超える候補を飛ばすことがあります。
 
-**バックアップ**はチェーンの次の候補——第一候補のベンダー CLI が未インストールの
-ときにディスパッチが降格する先です。どのレーンもこうしたチェーンで、チェーン内に
-何もインストールされていなければレーンは `off` に降格します。
+表のフォールバック欄は設定された候補であり、ホストで選ばれた結果ではありません。`omnilane list` は各レーンについて利用可能性に基づく結果を 1 件表示し、`omnilane route --explain LANE` は候補を順に表示します。呼び出し元、モード、トランスポートの条件は、ベンダーを呼び出さない `omnilane route --dry-run [flags] LANE "TASK"` で確認します。
 
 > **0.63.0 全レーン価値再順位（`aa-v5.0.1-2026-11-13-v2`）：** Gemini 4 Carbon (High) が `hardest-coding` の先頭（Carbon 未証明ホストでは Claude Opus 5.5 (high) が第一候補）、Claude Fable 5.2 (xhigh) が `hard-judgment` の先頭、GPT-6.1 Sol (xhigh) が `bulk-mechanical` の先頭、Gemini 4 Carbon (Medium) が `ui-draft` の先頭です。変更前後のチェーンとスコアは[全レーン再順位報告](docs/reports/aa-lane-rerank-2026-11-13.md)と [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md) を参照してください。レーンごとのトレードオフは [FAQ](#-faq) にあります。
 
@@ -948,6 +947,8 @@ Argon High は Flash を含むすべてのレーンに入り、Google AI Ultra �
 ネイティブエージェントを使えるのは、呼び出し側がモデル、effort、モード、作業
 ディレクトリ、ツール、分離方式、ライフサイクルがすべて一致すると明示した場合だけで、
 それ以外は CLI を使います。コントローラーは編成と検証を担い、ワーカーは再委任しません。
+以下は 0.63.0 当時の例です。現在の既定値は上のレーン表、呼び出し元の上限は[スキル](skills/omnilane/SKILL.md#notes-for-your-main-model)を参照してください。
+
 以下の開始位置は AA v5.0.1 の実測スコア上限だけから求めたものです（`aa-v5.0.1-2026-11-13-v2`、0.63.0 全レーン価値再順位。明示指定専用の派生上限は呼び出し元の上限に使えません）。
 継承された上限、ホストでのプローブ失敗、クォータによって、チェーンがさらに下へ進む
 ことがあります。
@@ -1027,7 +1028,7 @@ omnilane ui stop     # 正常に停止
 画面は英語・日本語・韓国語・繁体字中国語・簡体字中国語で読めます。初回はブラウザ
 の言語に従い、ヘッダーの切り替えで上書きでき、選んだ言語はローカルに記憶されます。
 
-コアルーティングに Python は不要で、この UI のみ Python 3.9 以降が必要です。
+Live Board、呼び出し元の識別、トランスポートの再署名には Python 3.9 以降が必要です。通常のセットアップとディスパッチに Bash ラッパーだけでは足りません。
 
 ## 📦 インストール
 
@@ -1122,9 +1123,9 @@ omnilane ui start
 omnilane ui status
 omnilane ui url
 omnilane ui stop
-omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]
+omnilane doctor [--json] [--strict] [--probe V [--probe-timeout SEC]]
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD]
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--live|--single-shot] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]
             LANE "TASK"
@@ -1139,9 +1140,13 @@ jobs.sh rm ID
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]
 jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
 jobs.sh audit [--last N] [--json]
-jobs.sh prune [--keep N] [--apply]
+jobs.sh prune [--keep N] [--older-than DAYS] [--apply]
 configure.sh
-configure.sh set|get|unset|list|diff LANE [SPEC]
+omnilane configure set LANE SPEC
+omnilane configure get LANE
+omnilane configure unset LANE
+omnilane configure list
+omnilane configure diff
 ```
 
 `configure diff` は両方の表示で `local.sh` の同じマシン固有の利用可否設定を保持し、ローカルバイナリの設定欠落ではなくルーティング上書きの差分を比較します。 どちらかの確認に失敗すると、比較結果を表示せず、その終了ステータスを返して失敗した段階を示します。
@@ -1178,6 +1183,10 @@ Gemini 会話を継続します。0.33.0 ではベンダー、モデル、effort
 バックグラウンドジョブには、プロセスグループ全体を取り消すための Perl 監視プロセスが必要です。監視だけではジョブ全体の期限は追加されず、未設定の `job_timeout` は `null` のままです。呼び出しごとの制限は別の `scripts/lib/call-timeout.pl` が管理し、期限切れは 142、ジョブ全体の期限切れは 124 を返します。`jobs close` はグループの後処理を含めて最大 11 秒待ちます。
 
 監視対象はランダムな `OMNILANE_JOB_TOKEN` と `OMNILANE_JOB_ID` を継承します。取消・ジョブ全体の期限切れ後は、完全一致のトークンを持ち、ジョブより後に起動したプロセスも確認し、`setsid` などでグループを離れた残存プロセスを処理します。通常終了時は数えるだけです。`jobs --json status` は `"leftovers":{"reaped":N,"remaining":M}` を返し、通常表示も残存時に `leftovers=M` を付けます。macOS の `/bin/bash` など環境を隠すプラットフォームバイナリや、環境を消したプロセスはこの方法では検出できません。
+
+### キャンセル後またはジョブ全体のタイムアウト後に確認する
+
+キャンセルの終了コードだけでは残存プロセスがないとは言えません。`omnilane jobs --json status JOB_ID` で実際の終了コード（通常、キャンセルは 143、ジョブ全体のタイムアウトは 124）と `leftovers.remaining` を確認してください。ゼロだけが監督プロセスの最終走査時に残存なしを意味し、非ゼロ、欠落、`unknown` は同じ意味ではありません。再走査は 2 秒の枠内で行い、最後の KILL は PID と開始時刻を再確認します。[確認コマンドと制限事項](README.md#verify-cleanup-after-cancellation-or-whole-job-timeout)。
 
 `jobs recommend` は検証済み公開メタデータと終了コードだけを読み、成功率・サンプル数・名前の順に並べます。既定では完了ジョブが三つ以上必要で、タスクや結果の本文を読まず、ルーティングも変えません。`doctor --probe V` だけが時間制限付きの advise 呼び出しを一度行い、可用性・モデル・所要時間・応答バイト数だけを返します。`--probe` なしではオフラインです。`benchmark` は `benchmarks/workloads.tsv` を使い、既定では予行のみです。`--run` で初めてベンダーを呼び、費用は指定した `--cost-per-call` だけに基づく見積もりです。
 
@@ -1246,7 +1255,9 @@ scripts/jobs.sh retry "$ID" --background
 
 フォアグラウンドのディスパッチと `jobs retry` は、ジョブが失敗した場合も保存済みの公開出力を表示し、その非ゼロ終了コードを返します。バックグラウンドのディスパッチは従来どおりジョブ ID を出力します。
 
-`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。Grok はさらに `--mode sysops --workdir DIR` が必要で、ACP が制限モードの境界を強制しないため advise／work のライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
+`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。ACP が制限モードの境界を強制しないため、Grok の advise／work ライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
+
+Grok のライブには明示的な `--mode sysops` が必要です。作業ディレクトリの既定値は現在のディレクトリで、`--workdir DIR` で指定できます。
 
 アイドル中は API 呼び出しも料金も発生しません。既定では、新しい受信メッセージまたは結果イベントが 900 秒間なければ worker が自動で終了し、ジョブ全体タイムアウトは外側の上限として残ります。やり取りが終わったら早めに `close` できます。終了済み、またはライブでないジョブへの `jobs.sh send` は明確なエラーで失敗します。送った後に追跡しない作業、ライブ対応していないベンダー、クリーンな状態からの再実行が必要な場合には使わず、新しいディスパッチ（または完了後の `retry`）を使ってください。
 
@@ -1257,9 +1268,15 @@ scripts/jobs.sh retry "$ID" --background
 ```bash
 GOAL_ID="$(omnilane goal open "不安定な決済統合を修正する" \
   --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --single-shot --mode work hardest-coding \
   "決済エラーを再現し、最小修正を実装して検証する")"
 omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane jobs result "$JOB_ID"
+```
+
+成功を記録したりゴールを閉じたりする前に、wait の終了コードと `omnilane jobs result "$JOB_ID"` を確認し、変更を検証してください。
+
+```bash
 omnilane goal note "$GOAL_ID" "決済統合テストが成功した"
 omnilane goal close "$GOAL_ID" --summary "決済統合は安定した"
 ```
@@ -1448,6 +1465,10 @@ v0.42.6 より前にプローブしたマッピングはすべてこれになり
 </details>
 
 ## 📊 デフォルト値と出典
+
+0.63.5 の承認済みスナップショットは `aa-v5.0.1-2026-11-19-v2`（実測 88 件、派生スコア 22 件、別名 68 件、比較 3 件）です。[承認根拠](docs/reports/aa-rebaseline-2026-11-19-v2.md) · [同梱チェーン](routing.yaml)。
+
+0.63.0 当時のベースライン：
 
 デフォルトのレーン割当は Artificial Analysis Intelligence Index v5.0.1 の
 スナップショット `aa-v5.0.1-2026-11-13-v2`（2026-11-14 に運用者が承認）

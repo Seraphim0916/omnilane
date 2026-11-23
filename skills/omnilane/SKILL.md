@@ -50,21 +50,22 @@ Never raise a declared effort to unblock a target. Never pass
 ## Step 2 — Pick the lane
 
 Split the work into subtasks; give each one lane. `omnilane list` shows the live
-table (local overrides win). Each chain is ordered value-first on the measurement
-that fits the lane's kind of work, and dispatch takes the first candidate that is
-installed, proven on this host and within your ceiling; a chain steps down through
-the score range so that whatever your ceiling, the first one you can reach is the
-best-value one you can reach. When a task fits two lanes, pick by what failure
-costs: unknown root cause or correctness-critical → `hardest-coding`; a change you
-could specify line by line → `bulk-mechanical`.
+table (local overrides win). Value lanes start with measurement-based picks and
+then keep additional fallbacks; purpose-ordered lanes such as `consult` have a
+different ordering. Dispatch checks local availability, transport proof, the
+requested mode and your score ceiling before choosing an eligible candidate.
+When a task fits two lanes, pick by what failure costs: unknown root cause or
+correctness-critical → `hardest-coding`; a change you could specify line by
+line → `bulk-mechanical`.
 
-The table shows no scores, and you cannot tell from it whether a target is within
-your ceiling. Ask: add `--dry-run` to the dispatch in Step 3. It prints the
-decision and calls nothing. A refusal names the lanes you *can* reach (Step 4).
-
-The table lists lanes and their purposes only; `omnilane list` shows the live
-table with one resolved target per lane. For a lane's ordered candidate chain,
-run `omnilane route --explain <lane>`; local overrides take precedence. `--dry-run` prints the decision without calling.
+The table below describes lane purposes. `omnilane list` prints an option line
+and one availability-based result per lane, such as
+`hard-judgment: codex gpt-6.2-astra xhigh # fallback (9/37)` or
+`arbitrate: off - -`. Use `omnilane route --list --json` for the versioned
+envelope (`lines`), or `omnilane route --explain LANE` for the ordered
+candidates. These inspection commands do not prove that you can dispatch to a
+row. Preview with `omnilane route --dry-run [flags] LANE "TASK"` to check the
+actual dispatch gates without a provider call.
 
 已核准的 Neon 快照（`approved`）保留下表十二條車道及首選；十一條啟用車道的備援鏈在 Hydrogen high 後加入 Neon high。模型鏈以 `routing.yaml` 與五語 README 為準。
 
@@ -83,17 +84,14 @@ run `omnilane route --explain <lane>`; local overrides take precedence. `--dry-r
 | coding-overflow | Explicit Codex-quota relief; no automatic cross-vendor retry after provider failure |
 | arbitrate | Disabled by default. The operator enables it with `arbitrate: vote codex,claude,grok -` in routing.local.yaml (1-4 voters; a `2` in place of the final `-` adds a rebuttal round). One quota hit PER VOTER PER ROUND; you chair and own the decision |
 
-Chains are ordered value-first: for each caller ceiling, the cheapest row whose
-quality on the lane's own measurement is close to the best that ceiling can reach.
-"Close" is a near-tie in hardest-coding, hard-judgment, taste-final, long-context
-and coding-overflow, and a wider band in the throughput lanes. No chain contains a
-max row; ask for one only explicitly with `--vendor … --effort max`. There is no
-automatic effort escalation, and a higher effort never bypasses your ceiling.
+No shipped chain contains a max row. If the operator requests one, pass the
+exact vendor, model and effort explicitly; neither an override nor a higher effort
+bypasses the score ceiling or runtime proof.
 
 **When the operator names a model or asks a question:**
 
 1. "Which model is good at X?" → answer from `omnilane list` (reading the table is your own work); do **not** dispatch.
-2. A vendor name (`Claude`, `Codex`, `Grok`, `Gemini`, `OpenCode`) → `omnilane route --vendor <vendor> consult "<task>"`.
+2. A vendor in the effective `consult` chain (`claude`, `codex`, `grok`, `gemini` by default) → `omnilane route --vendor V consult "TASK"`. For any other vendor, check the effective chain with `omnilane route --explain consult` and ask the operator if it is absent; the vendor flag alone cannot add a candidate.
 3. A model alias → pass its vendor, model and effort from the alias table at the end. Never substitute another family.
 4. No named target → classify into a lane and dispatch.
 5. Unknown or ambiguous nickname → ask; do not guess or run.
@@ -154,7 +152,9 @@ Useful flags:
 | `--job-timeout N` | one fuse over the whole dispatch incl. lock wait, retries, voters; off by default, 7200–14400 for full-repo audits, expiry returns 124 |
 | `--thread NAME` | later dispatches must keep earlier context; a thread pins vendor, model, effort and workdir (`omnilane jobs threads`, `threads show NAME`, `threads rm NAME`) |
 | `--vendor V [--model M] [--effort E]` | an explicit target; still subject to your ceiling |
-| `--live` | keep a Codex or Grok background job open for follow-up messages (Claude and Gemini background jobs already are) |
+| `--live` | require a resident session; only with `--background`. Grok live also requires explicit `--mode sysops` (current directory by default; override with `--workdir DIR`); never switch out of advise/work just to make a live request run. |
+| `--single-shot` | one-shot background job; use this with `jobs wait` when no follow-up is needed. Mutually exclusive with `--live`. |
+| `--idle-timeout SECONDS` | resident-session idle cap (default 900; 0 disables) |
 | `--caller-context FILE` | only when you were handed a context as a worker, or for the last-resort fallback in Step 1 |
 | `--mode sysops` | unrestricted native policy for service/host operations; per dispatch only, never a default, and the brief must name the allowed operations |
 | `--dry-run` | print the decision without calling anything |
@@ -220,7 +220,7 @@ Pass `--inherits-caller-runtime` only if it is true of your tool:
 | Grok Build | you call `spawn_subagent` with no `model` argument and `[subagents.models]` pins nothing for the agent type (the bundled `general-purpose` is `model: inherit`). Model and effort inheritance observed on grok 1.0.41: parent grok-4.7/high, child grok-4.7/high. Harness name `grok-build` |
 | Hermes | `delegation.model` is not configured: `delegate_task` takes no model argument, and the child then runs the parent's model. omnilane cannot read a Hermes caller; state it as described below |
 | OpenClaw | you call `sessions_spawn` with no `model` or `thinking` argument, and no `agents.defaults.subagents.model` or `.thinking` pin (or per-agent pin) differs from your own. omnilane cannot read an OpenClaw caller; state it as described below. No cycle has been run |
-| Antigravity | Antigravity Desktop (`antigravity-desktop`) caller identity is read from `/Applications/Antigravity.app/Contents/Resources/bin/language_server` (direct parent `/Applications/Antigravity.app/Contents/MacOS/Antigravity`), `ANTIGRAVITY_CONVERSATION_ID`, and `~/.gemini/antigravity/conversations/<uuid>.db` (`executor_metadata` unique maximum `idx`, SQL-bounded `data`, protobuf path `10.1.28` validated against known `gemini-*` models in the local policy table) for measured, authority-eligible Gemini models; derived bounds, unrecognized selectors, and non-Gemini models are refused without echoing untrusted field text. Neither macOS `KERN_PROCARGS2` nor Linux `/proc/<pid>/environ` offers a single-key environment syscall, so that block and the size-bounded `executor_metadata.data` BLOB are parsed in local process memory to retain only `ANTIGRAVITY_CONVERSATION_ID` and `10.1.28` (never persisted, printed, or echoed in errors); maximum-`idx` selection assumes the latest persisted row matches the active turn (concurrent or unpersisted turns are a known limitation). `agy` CLI 1.2.12 still exposes only a session-level `--agent` and no sub-agent tool; do not assert CLI sub-agent inheritance |
+| Antigravity | Antigravity Desktop (`antigravity-desktop`) caller identity is read from `/Applications/Antigravity.app/Contents/Resources/bin/language_server` (direct parent `/Applications/Antigravity.app/Contents/MacOS/Antigravity`), `ANTIGRAVITY_CONVERSATION_ID`, and `~/.gemini/antigravity/conversations/<uuid>.db` (`executor_metadata` unique maximum `idx`, SQL-bounded `data`, protobuf path `10.1.28` validated against known `gemini-*` models in the local policy table) for measured, authority-eligible Gemini models; derived bounds, unrecognized selectors, and non-Gemini models are refused without echoing untrusted field text. Neither macOS `KERN_PROCARGS2` nor Linux `/proc/<pid>/environ` offers a single-key environment syscall, so that block and the size-bounded `executor_metadata.data` BLOB are parsed in local process memory to retain only `ANTIGRAVITY_CONVERSATION_ID` and `10.1.28` (never persisted, printed, or echoed in errors); maximum-`idx` selection uses the latest persisted row for the conversation, with current-turn binding explicitly unverified (0.63.1); concurrent or unpersisted turns are a known limitation. `agy` CLI 1.2.12 still exposes only a session-level `--agent` and no sub-agent tool; do not assert CLI sub-agent inheritance |
 
 Here the lane is only a label for what kind of work it is; it is not checked
 against your ceiling, because no lane target runs. The handoff says
@@ -453,7 +453,7 @@ After two failed attempts at a task, reassess the scope; an upward move needs th
 A job id, a PENDING handoff, exit 0 or "scheduled" is **not** completion.
 
 ```sh
-omnilane jobs wait JOB_ID       # block until it ends
+omnilane jobs wait JOB_ID       # wait for a one-shot job or an already-closing live session
 omnilane jobs status JOB_ID
 omnilane jobs result JOB_ID     # the worker's public result
 ```
@@ -469,10 +469,10 @@ refused with exit 1 and the worker PID: end those from the shell or tool call th
 started them, not with `kill` on a process group);
 `send JOB_ID "<text>"` and `close JOB_ID` for a live session (Claude and Gemini
 background jobs stay resident; Codex and Grok are single-shot unless `--live`,
-and Grok live needs `--mode sysops`); `retry JOB_ID --caller-context FILE` (keeps
+and Grok live needs explicit `--mode sysops`, with the current directory as the default workdir); `retry JOB_ID --caller-context FILE` (keeps
 the original target and never inherits an earlier human exemption);
 `recommend`, `stats`, `audit` (read-only, never change routing);
-`prune --keep N [--apply]`.
+`prune [--keep N] [--older-than DAYS] [--apply]` (preview unless explicitly applied).
 
 How you hear about a background job finishing:
 
@@ -728,7 +728,7 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | GPT-6.1 Terra | codex | gpt-6.1-terra | high |
 | GPT-6 Sol | codex | gpt-6-sol | max |
 | GPT-6 Luna | codex | gpt-6-luna | high |
-| Grok 4.7 | grok | grok-4.7 | - |
+| Grok 4.7 | grok | grok-4.7 | high |
 | Gemini 3.8 Flash High | gemini | gemini-3.8-flash-high | - |
 | Gemini 4 Argon High | gemini | gemini-4-argon-high | - |
 | Gemini 4 Argon Medium | gemini | gemini-4-argon-medium | - |
@@ -748,9 +748,12 @@ Do not infer dispatchability from these AA scores; host transport probes are sti
 | OpenCode | opencode | provider/model form, or `-` for its own default | - |
 | OpenRouter | openrouter | explicit OpenRouter slug (e.g. anthropic/claude-sonnet-5) | - |
 
-OpenCode is a multi-provider CLI, work-capable, selectable explicitly with `--vendor opencode` (removed from the default `coding-overflow` chain in 0.63.0 because it is unscored).
-OpenRouter is direct API (`OPENROUTER_API_KEY`), **advise/consult only**, and its
-slug is mandatory: `omnilane route --vendor openrouter --model <slug> consult "<task>"`.
+OpenCode was removed from the default `coding-overflow` chain in 0.63.0 because
+it is unscored. Neither OpenCode nor OpenRouter is in the shipped `consult`
+chain. They require a matching candidate in the effective lane and are still
+subject to policy. OpenRouter is advise-only, uses its own API key, and requires
+an explicit model slug. Do not substitute another vendor if the requested one
+is missing.
 
 Examples: "Ask Opus to challenge this architecture" →
 `omnilane route --vendor claude --model claude-opus-5 --effort max consult "challenge this architecture"`.
