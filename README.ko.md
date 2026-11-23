@@ -24,13 +24,13 @@ omnilane은 Claude Code, Codex, Grok Build, Antigravity의 작업을 작업 종�
 npm i -g omnilane &&
 omnilane resign --init &&
 omnilane doctor &&
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
-omnilane route --mode advise --workdir "$PWD" triage "파일을 변경하지 말고 이 프로젝트의 용도를 요약하세요"
+env OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 \
+  omnilane route --mode advise --workdir "$PWD" consult "파일을 변경하지 말고 이 프로젝트의 용도를 요약하세요"
 ```
 
 초기화가 성공하고 doctor에서 필요한 대상이 사용 가능하다고 확인된 뒤 디스패치를 계속하세요. `--init`은 최초 로컬 오버레이(CLI 선택자가 실제로 어떤 모델에 도달하는지 보여 주는 검증 기록)를 만들고 검증한 다음, 최초 신뢰 서명자를 기록하고 `local.sh`를 백업한 후 등록합니다. 기존 오버레이가 있으면 거절하므로 업그레이드 시에는 `omnilane resign`을 사용하세요. 초기화에는 대화형 터미널이 필요하며, 변경되었거나 안전하지 않은 서명자를 승인할 수 없습니다. 로컬 자체 서명 CLI는 사람이 별도로 검토해야 합니다.
 
-이 환경 변수는 **터미널을 직접 조작하는 사람이라는 선언**입니다. AI 어시스턴트는 자신의 호출자 정보를 사용해야 하며, 이 변수나 `--operator-asserted-human`을 스스로 지정하면 안 됩니다. 설정 방법은 뒤의 참고 자료에 있습니다. 모든 벤더가 필요한 것은 아닙니다. 사용할 수 없는 후보는 건너뛰며, 호출자의 점수 상한과 로컬 검증도 적용됩니다.
+이 환경 변수는 **터미널을 직접 조작하는 사람이라는 선언**입니다. AI 어시스턴트는 자신의 호출자 정보를 사용해야 하며, 이 변수나 `--operator-asserted-human`을 스스로 지정하면 안 됩니다. 설정 방법은 뒤의 참고 자료에 있습니다. 모든 벤더가 필요한 것은 아닙니다. 사용할 수 없는 후보는 건너뛰며, 호출자의 점수 상한과 로컬 검증도 적용됩니다. 이 예의 환경 변수는 해당 명령에만 적용됩니다.
 
 ## 일상적인 사용
 
@@ -40,7 +40,7 @@ omnilane route --mode advise --workdir "$PWD" triage "파일을 변경하지 말
 omnilane list
 omnilane route --mode advise --workdir "$PWD" triage "프로젝트를 검토하고 주요 위험을 나열하세요"
 omnilane route --mode work --workdir "$PWD" bulk-mechanical "README.md에서 지적된 오타를 수정하세요"
-omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "테스트를 실행하고 실패 항목을 수정하세요"
+omnilane route --background --single-shot --mode work --workdir "$PWD" bulk-mechanical "테스트를 실행하고 실패 항목을 수정하세요"
 omnilane jobs list
 omnilane jobs wait JOB_ID --timeout 60
 omnilane jobs result JOB_ID
@@ -838,7 +838,7 @@ argparse 사용법 오류도 2 를 반환합니다. 설정되었지만 읽을 �
 
 기존 스레드를 깨우는 Codex 자동화는 effort 를 기록하지 않습니다. omnilane 은 그 호출자를 거부하는 대신 해당 모델의 최저 점수로 제한합니다. 저렴한 레인은 계속 동작하고, 비싼 레인은 어떤 effort 면 닿는지 알려 줍니다.
 
-완료된 디스패치는 `$OMNILANE_HOME/inbox/`에 비공개 완료 기록을 저장합니다. Claude Code 플러그인의 `SessionStart`는 훅이 제공한 컨트롤러 세션 ID를 실행 중인 프로세스 조상에 연결합니다. `UserPromptSubmit`은 다음 프롬프트에서 해당 세션 소유의 기록을 최대 열 개까지 원자적으로 전달합니다. 세션 ID가 없는 이전 기록은 원래 디스패치의 `workdir` 범위를 사용하며, 가져온 기록은 `inbox/consumed/`로 이동합니다. 디스패치에 `OMNILANE_INBOX=0`을 지정하면 기록 생성을 끌 수 있고 기본값은 활성화입니다. 스킬 링크만으로는 플러그인 알림 기능이 설치되지 않습니다.
+완료된 디스패치는 `$OMNILANE_HOME/inbox/`에 비공개 완료 기록을 저장합니다. Claude Code 플러그인의 `SessionStart`는 훅이 제공한 컨트롤러 세션 ID를 실행 중인 프로세스 조상에 연결합니다. `UserPromptSubmit`은 다음 프롬프트에서 해당 세션 소유의 기록을 최대 열 개까지 원자적으로 전달합니다. 세션 ID가 없는 이전 기록은 원래 디스패치의 `workdir` 범위를 사용하며, 가져온 기록은 `inbox/consumed/`로 이동합니다. 디스패치에 `OMNILANE_INBOX=0`을 지정하면 기록 생성을 끌 수 있고 기본값은 활성화입니다. 스킬 링크만으로는 플러그인 알림 기능이 설치되지 않습니다. [완료 알림의 SessionStart／UserPromptSubmit 훅](README.md#foreman-completion-inbox)도 참조하세요.
 
 ## 🧭 동작 방식
 
@@ -881,7 +881,7 @@ flowchart LR
 
 ## 🛤️ 레인 목록(기본값. 실효값은 `scripts/dispatch.sh --list`)
 
-AA `aa-v5.0.1-2026-11-13-v2`: **승인됨(2026-11-14 운영자 승인)**. 실측 구성 75개와 명시 지정 전용 파생 상한 23개를 포함합니다. 아래 표는 이 스냅샷과 0.63.0 전 레인 가치 재정렬을 따릅니다. 여섯 개 가치 레인(`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`)은 맨 앞에 `scripts/aa_rebaseline.py value` 체인 전체를 두고 나머지 점수 행을 기존 상대 순서대로 뒤에 잇습니다(`bulk-mechanical`의 1순위는 GPT-6.1 Sol medium에서 GPT-6.1 Sol xhigh로 변경, `hardest-coding`과 `ui-draft`에서는 Carbon 바로 뒤에 Claude Opus 5.5 high가 배치됨). `coding-overflow`는 점수가 없는 Kimi／Qwen／OpenCode 행을 제거했고, `fast-agentic`은 AA v5.0.1에서 첫 응답 토큰 지연이 공개되지 않아 기존 순서를 유지합니다. `gemini-pro-orchestrator-g1-pro`(대리 상한 54)와 22개 저강도 상한 행은 명시 지정 전용으로 어느 레인에도 들어가지 않으며 호출자 상한을 승인할 수 없고, 사람 운영자 예외에서도 `omnilane resign`의 호스트 전송 증명이 필요합니다. [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 설계](docs/reports/aa-orchestrator-2026-11-13.md) · [전 레인 재정렬 보고서](docs/reports/aa-lane-rerank-2026-11-13.md).
+AA `aa-v5.0.1-2026-11-13-v2`: **승인됨(2026-11-14 운영자 승인)**. 실측 구성 75개와 명시 지정 전용 파생 상한 23개를 포함합니다. 아래 설명은 해당 스냅샷에 따른 0.63.0 당시의 재정렬입니다: 여섯 개 가치 레인(`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`)은 맨 앞에 `scripts/aa_rebaseline.py value` 체인 전체를 두고 나머지 점수 행을 기존 상대 순서대로 뒤에 잇습니다(`bulk-mechanical`의 1순위는 GPT-6.1 Sol medium에서 GPT-6.1 Sol xhigh로 변경, `hardest-coding`과 `ui-draft`에서는 Carbon 바로 뒤에 Claude Opus 5.5 high가 배치됨). `coding-overflow`는 점수가 없는 Kimi／Qwen／OpenCode 행을 제거했고, `fast-agentic`은 AA v5.0.1에서 첫 응답 토큰 지연이 공개되지 않아 기존 순서를 유지합니다. `gemini-pro-orchestrator-g1-pro`(대리 상한 54)와 22개 저강도 상한 행은 명시 지정 전용으로 어느 레인에도 들어가지 않으며 호출자 상한을 승인할 수 없고, 사람 운영자 예외에서도 `omnilane resign`의 호스트 전송 증명이 필요합니다. [리베이스라인 보고서](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator 설계](docs/reports/aa-orchestrator-2026-11-13.md) · [전 레인 재정렬 보고서](docs/reports/aa-lane-rerank-2026-11-13.md).
 
 AA `aa-v5.0.1-2026-11-13-v1`은 2026-11-13에 승인되었으며 당시 점수가 있는 구성은 75개였습니다. 2026-11-13 당시 원래 스냅샷에는 Gemini 4 Hydrogen(xhigh 54, high 51, medium 41, low 27)이 점수에 포함되었고, 이 스냅샷을 만든 호스트의 agy 1.5.7은 `gemini-4-hydrogen-xhigh`를 포함한 네 선택자를 표시했습니다. 가치 규칙은 당시 Hydrogen 행을 하나도 선택하지 않았습니다. Hydrogen High는 당시 Argon High가 있는 모든 레인에서 Argon 바로 뒤에 놓였습니다. 그 시점에는 Argon이 받던 `--vendor gemini` 호출이 계속 Argon을 선택했고, Hydrogen은 Argon을 쓸 수 없는 호스트(Google AI Ultra 전용)에서만 사용되었습니다. 이 내용은 2026-11-13의 과거 상태만 설명합니다. `aa-v5.0.1-2026-11-19-v2`부터 Gemini 4 Hydrogen XHigh와 Gemini 4 Neon XHigh는 비교 전용이며 디스패치할 수 없습니다. 과거 점수는 유지됩니다. Carbon과 마찬가지로 당시 Hydrogen은 `omnilane resign`의 호스트 증명이 없으면 디스패치되지 않았고, 증명되지 않은 호스트의 레인은 이를 건너뛰었습니다.
 
@@ -895,26 +895,26 @@ AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 
 
 AA 스냅샷 `aa-v5.0.1-2026-11-19-v2`의 상태는 승인됨(`approved`)입니다. 각 호스트에서 전송을 검증한 뒤 Neon을 사용할 수 있습니다. Hydrogen XHigh와 Neon XHigh는 비교 전용이며 디스패치할 수 없습니다. 과거 점수는 유지됩니다. `gemini-pro-orchestrator-neon`은 메뉴에 표시되지만 모델이 작업을 위임할 때 사용할 AA 점수는 없습니다.
 
+표에는 위의 과거 스냅샷이 아니라 0.63.5에 포함된 [routing.yaml](routing.yaml)의 후보 순서가 나옵니다.
+
 | 레인 | 1순위 모델 | 백업 | 용도 |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
+| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 (high) → Grok 4.7 (low) | 가장 어려운 구현, 근본 원인 디버깅, 정확성이 핵심인 수정 |
 | 🏗️ bulk-mechanical | GPT-6.2 Sol (medium) | GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.2 Astra (low) → GPT-6.2 Sol (low) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 리팩터링, 마이그레이션, 테스트, 대량 스윕——기계적 지구력 작업 |
 | 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | 대량 스캔과 1차 선별 |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | 아키텍처 판정, 심층 추론, 2차 의견 |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
-| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 (high) → Grok 4.7 (low) | 아키텍처 판정, 심층 추론, 2차 의견 |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 (high) → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | 사용자 대상 문장, 프롬프트／문서 다듬기, 스타일 판정 |
+| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | 지정 모델 직접 상담. 폴백 방지를 위해 `--vendor` 유지 |
 | 🎨 ui-draft | Gemini 4 Carbon (Medium) | Gemini 4 Argon (Medium) → Claude Opus 5.5 (high) → GPT-6.1 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → Claude Opus 5.5 (medium) → GPT-6.2 Astra (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 디자인 시스템／참조 이미지가 있을 때만 UI 초안 |
 | 📚 long-context | GPT-6.2 Astra (xhigh) | GPT-6 Astra (medium) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → GPT-6 Luna (high) → GPT-6 Luna (low) → GPT-6.2 Astra (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.2 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | 장문 추출과 종합. AA-LCR, 비용, 처리량 순 |
 | ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6.2 Sol (medium) → GPT-6.2 Sol (low) → GPT-6.2 Astra (medium) → GPT-6.2 Astra (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | 빠른 멀티스텝 agentic 루프, 멀티모달 확인 |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
+| 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | 실시간 X／웹 검색과 소셜 맥락 |
+| 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Codex 쿼터 소진 시 중급 코딩 안전 밸브 |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | 중대한 판단을 위한 내장 의견 패널. 기본 비활성, `routing.local.yaml` 에서 활성화하며 투표자·라운드당 1회 호출 |
 
-Argon High는 Flash가 포함된 모든 레인에 들어가며 Google AI Ultra와 호스트 전송 증명이 필요합니다. 2026-11-13부터 Argon High가 있는 모든 레인에서는 그 바로 뒤에 Gemini 4 Hydrogen High가 오고 그 뒤에 Gemini 3.8 Flash가 이어집니다. bulk-mechanical, triage, fast-agentic, live-search, coding-overflow에서는 Argon High와 Hydrogen High가 Gemini 3.8 Flash 바로 앞에 놓이며, bulk-mechanical의 1순위는 0.63.0에서 가치 선택인 GPT-6.1 Sol (xhigh)로 올라갔고 나머지 네 목적 레인은 기존 1순위를 유지합니다. 2026-11-10 재정렬 이후 Argon은 hardest-coding에서 더 이상 2순위가 아니며, 그곳과 다른 가치 레인에서는 Gemini 꼬리에 놓입니다. UI／장문 레인 배치는 실측 우위를 뜻하지 않습니다. 실시간 X／웹 검색과 Codex 쿼터 완화에서는 여전히 Grok이 1순위이며 Argon은 일반 웹 검색 폴백을 제공합니다. `consult --vendor gemini`는 Gemini 안에서만 Argon을 고릅니다. Medium／Low에는 AA 실측 점수가 없습니다(명시 지정 전용 상한 50만 있으며 어느 레인에도 들어가지 않음).
+활성화된 11개 레인 모두 Gemini 후보 순서는 Argon High → Hydrogen High → Neon High입니다. 그 뒤의 후보는 레인마다 다릅니다. Argon Medium은 실측 48점이며 `ui-draft`와 `hardest-coding`에 포함됩니다. Argon Low는 명시 선택 전용 상한 48점으로 레인에 들어가지 않습니다. Gemini를 사용하려면 호스트 전송 검증이 필요합니다. `consult --vendor gemini`는 다른 벤더로 전환하지 않지만, 미검증 또는 상한을 넘는 후보는 건너뛸 수 있습니다.
 
-**백업**은 체인의 다음 후보입니다——1순위 벤더 CLI 가 설치되지 않았을 때
-디스패치가 강등되는 대상입니다. 모든 레인이 이런 체인이며, 체인에 아무것도
-설치되어 있지 않으면 레인은 `off` 로 강등됩니다.
+표의 폴백은 설정된 후보이며 호스트에서 선택된 결과가 아닙니다. `omnilane list`는 레인별로 가용성에 따른 결과 한 건을, `omnilane route --explain LANE`은 후보 순서를 보여 줍니다. 호출자, 모드, 전송 조건은 벤더를 호출하지 않는 `omnilane route --dry-run [flags] LANE "TASK"`로 확인하세요.
 
 > **0.63.0 전 레인 가치 재정렬(`aa-v5.0.1-2026-11-13-v2`):** Gemini 4 Carbon (High)이 `hardest-coding`의 맨 앞(Carbon 미증명 호스트에서는 Claude Opus 5.5 (high)가 1순위)이고, Claude Fable 5.2 (xhigh)가 `hard-judgment`, GPT-6.1 Sol (xhigh)가 `bulk-mechanical`, Gemini 4 Carbon (Medium)이 `ui-draft`의 맨 앞입니다. 변경 전후 체인과 점수는 [전 레인 재정렬 보고서](docs/reports/aa-lane-rerank-2026-11-13.md)와 [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md)에 있고, 레인별 비교는 [FAQ](#-faq)에 있습니다.
 
@@ -942,6 +942,8 @@ Argon High는 Flash가 포함된 모든 레인에 들어가며 Google AI Ultra�
 네이티브 에이전트는 호출자가 모델, effort, 모드, 작업 디렉터리, 도구, 격리 방식,
 수명 주기가 모두 일치한다고 명시했을 때만 쓸 수 있고, 그 밖에는 CLI 를 씁니다.
 컨트롤러는 조율과 검증을 맡고, 워커는 다시 위임하지 않습니다.
+아래는 0.63.0 당시의 예시입니다. 현재 기본값은 위 레인 표를, 호출자 상한은 [스킬](skills/omnilane/SKILL.md#notes-for-your-main-model)을 참조하세요.
+
 아래 시작 위치는 AA v5.0.1 실측 점수 상한만으로 계산한 것입니다(`aa-v5.0.1-2026-11-13-v2`, 0.63.0 전 레인 가치 재정렬; 명시 지정 전용 파생 상한은 호출자 상한을 승인할 수 없음). 상속된
 상한, 호스트 프로브 실패, 쿼터 때문에 체인이 더 아래로 내려갈 수 있습니다.
 
@@ -1018,7 +1020,7 @@ omnilane ui stop     # 정상 중지
 화면은 영어, 일본어, 한국어, 번체 중국어, 간체 중국어로 볼 수 있습니다. 처음에는
 브라우저 언어를 따르고, 헤더의 선택기로 바꿀 수 있으며 선택은 로컬에 기억됩니다.
 
-핵심 라우팅에는 Python 이 필요 없고, 이 UI 에만 Python 3.9 이상이 필요합니다.
+Live Board, 호출자 식별, 전송 재서명에는 Python 3.9 이상이 필요합니다. 일반 설치와 디스패치에 Bash 래퍼만으로는 충분하지 않습니다.
 
 ## 📦 설치
 
@@ -1109,9 +1111,9 @@ omnilane ui start
 omnilane ui status
 omnilane ui url
 omnilane ui stop
-omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]
+omnilane doctor [--json] [--strict] [--probe V [--probe-timeout SEC]]
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD]
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--live|--single-shot] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]
             LANE "TASK"
@@ -1126,9 +1128,13 @@ jobs.sh rm ID
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]
 jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]
 jobs.sh audit [--last N] [--json]
-jobs.sh prune [--keep N] [--apply]
+jobs.sh prune [--keep N] [--older-than DAYS] [--apply]
 configure.sh
-configure.sh set|get|unset|list|diff LANE [SPEC]
+omnilane configure set LANE SPEC
+omnilane configure get LANE
+omnilane configure unset LANE
+omnilane configure list
+omnilane configure diff
 ```
 
 `configure diff`는 두 보기 모두에서 `local.sh`의 동일한 머신별 가용성 설정을 유지하므로, 로컬 바이너리 설정 누락이 아니라 라우팅 재정의의 차이를 비교합니다. 어느 한 조회라도 실패하면 비교 결과를 출력하지 않고 해당 종료 상태와 실패한 단계를 알립니다.
@@ -1164,6 +1170,10 @@ CLI 를 사용할 수 없음, `5` 1라운드 성공 투표자 부족, `6` 2라�
 백그라운드 작업에는 프로세스 그룹 전체를 취소하기 위한 Perl 감독 프로세스가 필요합니다. 감독만으로 전체 작업 기한이 추가되지는 않으며, 미설정 `job_timeout`은 `null`입니다. 호출별 제한은 별도 `scripts/lib/call-timeout.pl`이 관리하며 만료 시 142, 전체 작업 만료 시 124를 반환합니다. `jobs close`는 그룹 정리를 포함해 최대 11초 기다립니다.
 
 감독 대상 작업은 무작위 `OMNILANE_JOB_TOKEN`과 `OMNILANE_JOB_ID`를 상속합니다. 취소 또는 전체 작업 만료 후에는 정확히 일치하는 토큰을 가지고 작업보다 늦게 시작한 프로세스도 확인하여 `setsid` 등으로 그룹을 벗어난 잔여 프로세스를 처리합니다. 정상 종료 시에는 수만 셉니다. `jobs --json status`는 `"leftovers":{"reaped":N,"remaining":M}`를 반환하며, 일반 상태에도 잔여 프로세스가 있으면 `leftovers=M`을 붙입니다. 환경을 숨기는 macOS `/bin/bash` 같은 플랫폼 바이너리나 환경을 지운 프로세스는 이 방법으로 찾지 못합니다.
+
+### 취소 또는 전체 작업 시간 초과 후 정리 확인
+
+취소 명령의 종료 코드만으로 잔여 프로세스가 없다고 판단하지 마세요. `omnilane jobs --json status JOB_ID`에서 실제 종료 코드(보통 취소는 143, 전체 작업 시간 초과는 124)와 `leftovers.remaining`을 확인하세요. 0은 감독 프로세스의 마지막 검사에서 남은 프로세스가 없다는 뜻이며, 값이 없거나 `unknown`이면 0이 아닙니다. 2초 동안 다시 검사하고, 마지막 KILL 전에 PID와 시작 시간을 재확인합니다. [확인 명령과 제한 사항](README.md#verify-cleanup-after-cancellation-or-whole-job-timeout).
 
 `jobs recommend`는 검증된 공개 메타데이터와 종료 코드만 읽고 성공률, 표본 수, 이름 순서로 정렬합니다. 기본값은 완료 작업 최소 세 개이며 작업／결과 본문을 읽거나 라우팅을 바꾸지 않습니다. `doctor --probe V`만 시간 제한이 있는 advise 호출을 한 번 보내며 가용성, 모델, 소요 시간, 응답 바이트 수만 반환합니다. `--probe`가 없으면 오프라인입니다. `benchmark`는 `benchmarks/workloads.tsv`를 사용하고 기본값은 예행 실행입니다. `--run`에서만 벤더를 호출하며 비용은 제공한 `--cost-per-call`만으로 추정합니다.
 
@@ -1232,6 +1242,8 @@ scripts/jobs.sh retry "$ID" --background
 
 `watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. Grok 은 추가로 `--mode sysops --workdir DIR` 가 필요합니다. ACP 가 제한 모드 경계를 강제하지 않으므로 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
 
+Grok 라이브 작업에는 명시적으로 `--mode sysops --workdir DIR`도 필요합니다. Grok 라이브에서는 advise와 work를 지원하지 않습니다.
+
 유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
 
 ## 🎯 목표 오케스트레이션
@@ -1241,9 +1253,15 @@ scripts/jobs.sh retry "$ID" --background
 ```bash
 GOAL_ID="$(omnilane goal open "불안정한 결제 통합 수정" \
   --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --single-shot --mode work hardest-coding \
   "결제 오류를 재현하고 최소 수정 후 검증")"
 omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane jobs result "$JOB_ID"
+```
+
+성공 메모를 남기거나 목표를 닫기 전에 wait 종료 코드와 `omnilane jobs result "$JOB_ID"`를 확인하고 변경을 검증하세요.
+
+```bash
 omnilane goal note "$GOAL_ID" "결제 통합 테스트 통과"
 omnilane goal close "$GOAL_ID" --summary "결제 통합이 안정화됨"
 ```
@@ -1425,6 +1443,10 @@ v0.42.6 이전에 프로브한 매핑은 모두 이 등급입니다. 디스패�
 </details>
 
 ## 📊 기본값과 출처
+
+0.63.5의 승인된 스냅샷은 `aa-v5.0.1-2026-11-19-v2`(실측 88개, 파생 점수 22개, 별칭 68개, 비교 3개)입니다. [승인 근거](docs/reports/aa-rebaseline-2026-11-19-v2.md) · [기본 체인](routing.yaml).
+
+0.63.0 당시 기준:
 
 기본 레인 배치는 Artificial Analysis Intelligence Index v5.0.1 스냅샷
 `aa-v5.0.1-2026-11-13-v2`(2026-11-14 운영자 승인)에 근거합니다.

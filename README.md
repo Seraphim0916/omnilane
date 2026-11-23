@@ -24,13 +24,13 @@ Install and sign in to at least one supported vendor CLI (`codex`, `claude`, `gr
 npm i -g omnilane &&
 omnilane resign --init &&
 omnilane doctor &&
-export OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 &&
-omnilane route --mode advise --workdir "$PWD" triage "Summarize this project without changing files"
+env OMNILANE_AA_OPERATOR_ASSERTED_HUMAN=1 \
+  omnilane route --mode advise --workdir "$PWD" consult "Summarize this project without changing files"
 ```
 
 Continue to dispatch only after initialization succeeds and doctor reports the targets you need as ready. `--init` creates the first local transport overlay (proof of which model each CLI selector reaches), verifies it, records first-trust signers and backs up `local.sh` before registering it; it refuses an existing overlay. If you are upgrading, use `omnilane resign` instead. Initialization requires an interactive terminal; it cannot approve changed or unsafe signers, and locally self-signed CLIs require separate human review.
 
-The export identifies **you, a human at the terminal**. An AI assistant must use its own caller identity, never that export or `--operator-asserted-human`; see the assistant setup in the reference below. You do not need every vendor: unavailable candidates are skipped, subject to the caller's score ceiling and local verification.
+The environment flag identifies **you, a human at the terminal**, for that command only. An AI assistant must use its own caller identity, never this flag or `--operator-asserted-human`. See the assistant setup in the reference below. You do not need every vendor: unavailable candidates are skipped, subject to the caller's score ceiling and local verification.
 
 ## Everyday use
 
@@ -40,7 +40,7 @@ Run `omnilane list` to see your effective lanes. Use `triage` for a first look, 
 omnilane list
 omnilane route --mode advise --workdir "$PWD" triage "Review the project and list the main risks"
 omnilane route --mode work --workdir "$PWD" bulk-mechanical "Fix the documented typo in README.md"
-omnilane route --background --mode work --workdir "$PWD" bulk-mechanical "Run the tests and fix the failing cases"
+omnilane route --background --single-shot --mode work --workdir "$PWD" bulk-mechanical "Run the tests and fix the failing cases"
 omnilane jobs list
 omnilane jobs wait JOB_ID --timeout 60
 omnilane jobs result JOB_ID
@@ -1032,7 +1032,7 @@ actually resolves.
 
 AA `aa-v5.0.1-2026-11-17-v1`: **approved by the operator on 2026-11-17**; 76 measured configurations plus 22 explicit-only derived bounds. Gemini 4 Argon Medium is now AA-measured at 48 (`score_raw` 47.60, tightening Argon Low's bound to 48), placed by `aa_rebaseline.py value` at #2 in `ui-draft` and after Hydrogen High in `hardest-coding`'s Gemini tail (gated on host transport proof); Carbon and Argon API prices drop 50% (`$2/$10`), and Hydrogen xhigh gains `mlcrOverall` `0.211`.
 
-AA `aa-v5.0.1-2026-11-13-v2`: **approved by the operator on 2026-11-14**; 75 measured configurations plus 23 explicit-only derived bounds. The table below follows this snapshot and the 0.63.0 full-lane value rerank: all six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) place the complete `scripts/aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its first choice from GPT-6.1 Sol medium to GPT-6.1 Sol xhigh; Claude Opus 5.5 high sits right behind Carbon in `hardest-coding` and `ui-draft`), `coding-overflow` drops unscored Kimi/Qwen/OpenCode rows, and `fast-agentic` keeps its order while AA v5.0.1 publishes no time-to-first-token. `gemini-pro-orchestrator-g1-pro` (proxy ceiling 54) and 22 lower-effort upper-bound rows stay explicit-only, enter no lane, cannot authorize caller ceilings, and require host transport proof from `omnilane resign` even under the human-operator exemption. [Rebaseline](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator](docs/reports/aa-orchestrator-2026-11-13.md) · [Lane rerank](docs/reports/aa-lane-rerank-2026-11-13.md).
+AA `aa-v5.0.1-2026-11-13-v2`: **approved by the operator on 2026-11-14**; 75 measured configurations plus 23 explicit-only derived bounds. This is historical: the 0.63.0 rerank at this snapshot used the following rules: all six value lanes (`hardest-coding`, `bulk-mechanical`, `hard-judgment`, `taste-final`, `ui-draft`, `long-context`) place the complete `scripts/aa_rebaseline.py value` chain first followed by their remaining scored fallbacks in prior relative order (`bulk-mechanical` moves its first choice from GPT-6.1 Sol medium to GPT-6.1 Sol xhigh; Claude Opus 5.5 high sits right behind Carbon in `hardest-coding` and `ui-draft`), `coding-overflow` drops unscored Kimi/Qwen/OpenCode rows, and `fast-agentic` keeps its order while AA v5.0.1 publishes no time-to-first-token. `gemini-pro-orchestrator-g1-pro` (proxy ceiling 54) and 22 lower-effort upper-bound rows stay explicit-only, enter no lane, cannot authorize caller ceilings, and require host transport proof from `omnilane resign` even under the human-operator exemption. [Rebaseline](docs/reports/aa-rebaseline-2026-11-13-v2.md) · [Orchestrator](docs/reports/aa-orchestrator-2026-11-13.md) · [Lane rerank](docs/reports/aa-lane-rerank-2026-11-13.md).
 
 AA `aa-v5.0.1-2026-11-13-v1` was approved on 2026-11-13 with 75 scored configurations. In that original snapshot, Gemini 4 Hydrogen had scores of xhigh 54, high 51, medium 41 and low 27; the host that built it listed all four selectors in agy 1.5.7, including `gemini-4-hydrogen-xhigh`. The value rule selected none of those Hydrogen rows. Hydrogen High was placed after Argon High in every lane that listed Argon High; at that time, `--vendor gemini` calls served by Argon continued to choose Argon, and Hydrogen served only hosts unable to use Argon (Google AI Ultra). This describes the 2026-11-13 state only: starting with `aa-v5.0.1-2026-11-19-v2`, Gemini 4 Hydrogen XHigh and Gemini 4 Neon XHigh are comparison-only and not dispatchable; their historical scores are retained. Like Carbon, Hydrogen required host proof from `omnilane resign` before dispatch, and lanes skipped it until then.
 
@@ -1046,26 +1046,26 @@ AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 
 
 AA snapshot `aa-v5.0.1-2026-11-19-v2` is `approved`. Each host needs transport proof before it can use Neon. Hydrogen XHigh and Neon XHigh are comparison-only and not dispatchable; their historical scores are retained. The `gemini-pro-orchestrator-neon` selector appears in the menu but has no AA score for model-initiated dispatch.
 
+The table uses the shipped 0.63.5 chains in [routing.yaml](routing.yaml), not the historical snapshots above.
+
 | Lane | First choice | Backup | When |
 |---|---|---|---|
-| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
+| 🔥 hardest-coding | GPT-6.2 Astra (xhigh) | Gemini 4 Carbon (High) → Gemini 4 Carbon (Low) → Claude Opus 5.5 (high) → Claude Sonnet 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → GPT-6.2 Astra (low) → GPT-6.1 Terra (xhigh) → Claude Sonnet 5.5 (high) → Claude Fable 5.1 (low) → Claude Fable 5.2 (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (low) → Claude Opus 5.5 (low) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6.1 Terra (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 4 Argon (Medium) → Gemini 3.8 Flash (Medium) → Grok 4.7 (high) → Grok 4.7 (low) | Hardest implementation, deep root-cause debug, correctness-critical edits |
 | 🏗️ bulk-mechanical | GPT-6.2 Sol (medium) | GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → GPT-6.2 Astra (low) → GPT-6.2 Sol (low) → GPT-6.1 Terra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (high) → GPT-6.1 Sol (low) → Claude Sonnet 5.5 (medium) → Claude Haiku 5.5 (low) → GPT-6.1 Terra (low) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Refactors, migrations, tests, review sweeps — mechanical endurance |
 | 🧹 triage | GPT-6 Luna (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 | High-volume scans, first-pass filtering |
-| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
-| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
-| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
+| ⚖️ hard-judgment | Claude Fable 5.2 (xhigh) | Claude Fable 5.2 (medium) → Claude Fable 5.2 (low) → Claude Fable 5.1 (xhigh) → Claude Opus 5.5 (medium) → Claude Fable 5.1 (high) → Claude Fable 5.1 (medium) → Claude Fable 5.1 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.1 Sol (xhigh) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → GPT-6.2 Sol (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (low) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → Gemini 3.8 Flash (High) → Claude Sonnet 5.5 (medium) → Gemini 3.8 Flash (Medium) → Claude Haiku 5.5 (high) → Claude Sonnet 5.5 (low) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Grok 4.7 (high) → Grok 4.7 (low) | Architecture arbitration, deep reasoning, second opinions |
+| ✒️ taste-final | Claude Sonnet 5.5 (xhigh) | Claude Sonnet 5.5 (high) → Grok 4.7 (high) → GPT-6.2 Astra (xhigh) → GPT-6.2 Sol (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Sol (high) → GPT-6.2 Sol (medium) → GPT-6 Astra (xhigh) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (high) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (xhigh) → GPT-6.2 Sol (low) → Claude Haiku 5.5 (xhigh) → Grok 4.7 (low) → Claude Haiku 5.5 (high) → Claude Haiku 5.5 (medium) → GPT-6 Luna (xhigh) → GPT-6 Luna (high) → GPT-6 Luna (medium) → GPT-6 Luna (low) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) | User-facing prose and style arbitration; benchmarks do not prove visual or editorial taste |
+| 💬 consult | GPT-6.2 Astra (xhigh) | GPT-6.2 Astra (high) → GPT-6 Astra (xhigh) → Claude Opus 5.5 (xhigh) → Grok 4.7 (high) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) | Direct named-model consultation; keep `--vendor` to prevent fallback |
 | 🎨 ui-draft | Gemini 4 Carbon (Medium) | Gemini 4 Argon (Medium) → Claude Opus 5.5 (high) → GPT-6.1 Sol (high) → GPT-6.1 Sol (xhigh) → GPT-6.1 Sol (medium) → GPT-6.1 Terra (high) → Claude Opus 5.5 (low) → GPT-6.2 Astra (xhigh) → GPT-6.2 Astra (high) → GPT-6.2 Astra (medium) → Claude Opus 5.5 (medium) → GPT-6.2 Astra (low) → GPT-6.1 Terra (medium) → GPT-6.1 Sol (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → GPT-6.1 Terra (low) → GPT-6 Luna (xhigh) → GPT-6 Luna (low) → Claude Haiku 4.5 → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | UI drafts only with a design system or reference images; no aesthetic benchmark claim |
 | 📚 long-context | GPT-6.2 Astra (xhigh) | GPT-6 Astra (medium) → GPT-6.2 Sol (low) → GPT-6.1 Sol (low) → GPT-6 Luna (high) → GPT-6 Luna (low) → GPT-6.2 Astra (high) → GPT-6.2 Sol (xhigh) → GPT-6.2 Sol (high) → GPT-6.2 Astra (medium) → GPT-6.1 Sol (medium) → GPT-6.2 Sol (medium) → GPT-6.2 Astra (low) → GPT-6 Astra (low) → Claude Opus 5.5 (xhigh) → Claude Opus 5.5 (medium) → Claude Sonnet 5.5 (low) → Claude Haiku 5.5 (medium) → Claude Haiku 5.5 (low) → Claude Haiku 4.5 → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Grok 4.7 (low) | Long-document synthesis; context size alone does not prove task quality |
 | ⚡ fast-agentic | GPT-6.1 Sol (medium) | GPT-6.1 Terra (medium) → GPT-6.1 Terra (low) → GPT-6 Astra (medium) → GPT-6.1 Sol (low) → GPT-6 Astra (low) → GPT-6.2 Sol (medium) → GPT-6.2 Sol (low) → GPT-6.2 Astra (medium) → GPT-6.2 Astra (low) → Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (Medium) → Claude Sonnet 5.5 (medium) → Claude Opus 5.5 (low) | Fast multi-step tool loops and multimodal checks |
-| 📡 live-search | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
-| 🚰 coding-overflow | Grok 4.7 | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
+| 📡 live-search | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → Claude Opus 5.5 (low) → off | Realtime X/web search; backups provide generic web search, not equivalent X context |
+| 🚰 coding-overflow | Grok 4.7 (high) | Gemini 4 Argon (High) → Gemini 4 Hydrogen (High) → Gemini 4 Neon (High) → Gemini 3.8 Flash (High) → off | Explicit Codex-quota relief; provider failure does not auto-retry another vendor |
 | 🗳️ arbitrate | off (opt-in vote panel) | — | Built-in opinion panel for big calls — disabled by default; enable it in `routing.local.yaml`, one call per voter per round |
 
-Argon High is included in every Flash-bearing lane and requires Google AI Ultra plus successful host transport proof. Since 2026-11-13 Gemini 4 Hydrogen High sits immediately after Argon High (ahead of Gemini 3.8 Flash) in every lane that lists Argon. In bulk-mechanical, triage, fast-agentic, live-search and coding-overflow, Argon High and Hydrogen High sit immediately before Gemini 3.8 Flash, while bulk-mechanical starts with its 0.63.0 value pick GPT-6.1 Sol (xhigh) and the four purpose lanes keep their defaults first. Since the 2026-11-10 re-rank Argon is no longer second in hardest-coding: it sits in the Gemini tail there and in the other value lanes; UI/long-context access does not imply measured superiority. Grok remains first for realtime X/web search and Codex-quota relief; Argon provides generic web search as a fallback. `consult --vendor gemini` selects Argon within Gemini only. Medium/Low have no AA measurement (explicit-only upper bound 50; in no lane).
+The Gemini fallback sequence is Argon High → Hydrogen High → Neon High in all eleven active lanes. Later candidates vary by lane. Argon Medium is measured (48) and appears in `ui-draft` and `hardest-coding`; Argon Low is an explicit-only bound (48), not a lane candidate. Gemini selection requires local transport proof. `consult --vendor gemini` stays within Gemini, but can skip an unproven or above-ceiling row.
 
-The **backup** is the next candidate in the lane's `routing.yaml` chain — what
-dispatch falls back to when the first-choice vendor CLI is not installed. Every
-lane is such a chain; when nothing in it is installed the lane degrades to `off`.
+The backup column lists the remaining configured candidates, not the host's resolved choices. `omnilane list` shows one availability-based result per lane; `omnilane route --explain LANE` shows the ordered candidates. Neither authorizes a dispatch. Use `omnilane route --dry-run [flags] LANE "TASK"` to check the caller, mode and transport gates without a provider call.
 
 > **0.63.0 full-lane value rerank (`aa-v5.0.1-2026-11-13-v2`):** Gemini 4 Carbon (High) leads `hardest-coding` (`Claude Opus 5.5 (high)` first on hosts without Carbon proof), Claude Fable 5.2 (xhigh) leads `hard-judgment`, GPT-6.1 Sol (xhigh) leads `bulk-mechanical`, and Gemini 4 Carbon (Medium) leads `ui-draft`. Before/after chains and scores are in the [lane rerank report](docs/reports/aa-lane-rerank-2026-11-13.md) and [`docs/model-capabilities-2026-09.md`](docs/model-capabilities-2026-09.md); key trade-offs are in [FAQ](#-faq).
 
@@ -1146,6 +1146,8 @@ hints, not self-execution exemptions: even a same-model task is delegated.
 A native agent is eligible only when the caller explicitly confirms the exact
 model, effort, mode, workdir, tools, isolation and lifecycle. Otherwise use CLI.
 The commander orchestrates and validates; workers do not delegate again.
+Historical examples below use 0.63.0. For current defaults see the lane table above and for current caller-ceiling notes see [the skill](skills/omnilane/SKILL.md#notes-for-your-main-model).
+
 Starting rows below come from the measured AA v5.0.1 score ceiling alone
 (`aa-v5.0.1-2026-11-13-v2`, 0.63.0 full-lane value rerank; derived explicit-only
 bounds cannot authorize caller ceilings); an inherited ceiling, a failed host
@@ -1202,7 +1204,7 @@ The board reads in English, Japanese, Korean, Traditional Chinese and Simplified
 Chinese. It follows the browser language on first load; the switcher in the
 header overrides that and the choice is remembered locally.
 
-Core routing does not need Python; only this UI requires Python 3.9 or newer.
+The Live Board, caller identity and transport re-signing require Python 3.9 or newer; the Bash wrapper alone is not sufficient for normal setup and dispatch.
 
 ### Foreman completion inbox
 
@@ -1292,7 +1294,7 @@ Three layers, all optional:
    future models), and writes the result to `~/.omnilane/routing.local.yaml`.
    It intentionally skips the multi-vendor `consult` lane; edit that one by
    hand if needed. `install.sh` offers to run the menu at the end of a normal install.
-   For scripting, `configure set|get|unset|list|diff LANE [SPEC]` edits or inspects the same file
+   For scripting, `configure set LANE SPEC`, `configure get LANE`, `configure unset LANE`, `configure list` and `configure diff` edit or inspect the same file
    without a tty — `set` validates the lane and rejects an unsafe or structurally
    invalid spec, rolling back on failure.
 2. **`~/.omnilane/routing.local.yaml`** — hand-edited overrides, same format
@@ -1320,10 +1322,10 @@ omnilane ui start                              # start/reuse the local Live UI; 
 omnilane ui status                             # report whether the Live UI is running
 omnilane ui url                                # print the current authenticated local URL
 omnilane ui stop                               # stop the Live UI
-omnilane doctor [--json] [--strict] [--probe V] [--probe-timeout SEC]  # live probe is opt-in
+omnilane doctor [--json] [--strict] [--probe V [--probe-timeout SEC]]  # live probe is opt-in
                                                # transport-overlay: path mismatch FAIL; vendor hash or runner drift WARN
 omnilane benchmark [--json] [--run] [--vendor V] [--cost-per-call V=USD] # dry-run by default
-dispatch.sh [--background] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
+dispatch.sh [--background] [--live|--single-shot] [--dry-run] [--thread NAME] [--mode advise|work|sysops] [--workdir DIR]
             [--vendor V] [--model M] [--effort E] [--timeout SEC] [--job-timeout SEC]
             [--caller-context FILE | --operator-asserted-human]   # who is asking
             LANE "TASK"                              # "-" reads task from stdin
@@ -1338,9 +1340,13 @@ jobs.sh rm ID                                     # move one finished/dead job t
 jobs.sh [--json] stats [--last N] [--lane L] [--vendor V]  # local success and routing aggregates
 jobs.sh [--json] recommend [--last N] [--lane L] [--min-samples N]  # evidence-gated vendor suggestion
 jobs.sh audit [--last N] [--json]                  # read-only job integrity/privacy check
-jobs.sh prune [--keep N] [--apply]                # preview by default; completed jobs only; --apply moves them to ~/.Trash
+jobs.sh prune [--keep N] [--older-than DAYS] [--apply]                # preview by default; completed jobs only; --apply moves them to ~/.Trash
 configure.sh                                        # interactive lane menu
-configure.sh set|get|unset|list|diff LANE [SPEC]    # script/inspect routing.local.yaml, no tty
+omnilane configure set LANE SPEC
+omnilane configure get LANE
+omnilane configure unset LANE
+omnilane configure list
+omnilane configure diff
 ```
 
 `configure diff` keeps the same machine-specific availability settings from `local.sh` in both views, so its comparison reflects routing overrides rather than missing local binaries. If either inspection fails, it returns that exit status and names the failed stage instead of printing a comparison.
@@ -1534,6 +1540,8 @@ Foreground dispatch and foreground `jobs retry` print the stored public output e
 
 `watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude, Gemini, Codex, and Grok. Automatic selection remains single-shot for Codex/Grok; only explicit `--live` opts them in. Grok advise rejects `--live` because ACP does not enforce its read-only boundary; normal advise uses single-shot native tool allow/deny rules. `--live` fails fast for unsupported vendors. `--single-shot` forces one-shot execution for every vendor. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
 
+Grok live jobs also require explicit `--mode sysops --workdir DIR`; neither advise nor work is supported for Grok live.
+
 An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
 
 ## 🎯 Goal orchestration
@@ -1543,9 +1551,15 @@ An idle mailbox makes no API calls and incurs no API spend. By default it closes
 ```bash
 GOAL_ID="$(omnilane goal open "Fix the flaky checkout integration" \
   --budget-jobs 4 --budget-seconds 900 --workdir /path/to/repo)"
-JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --mode work hardest-coding \
+JOB_ID="$(omnilane goal dispatch "$GOAL_ID" --single-shot --mode work hardest-coding \
   "Reproduce the checkout failure and implement the smallest verified fix")"
 omnilane jobs wait "$JOB_ID" --timeout 900
+omnilane jobs result "$JOB_ID"
+```
+
+Check the wait exit status, read `omnilane jobs result "$JOB_ID"`, and verify the change before recording a success note or closing the goal.
+
+```bash
 omnilane goal note "$GOAL_ID" "Fix verified by the checkout integration test"
 omnilane goal close "$GOAL_ID" --summary "Checkout integration is stable"
 ```
@@ -1763,6 +1777,10 @@ next sweep with no change to omnilane.
 </details>
 
 ## 📊 Defaults and provenance
+
+The approved 0.63.5 snapshot is `aa-v5.0.1-2026-11-19-v2` (88 measured rows, 22 derived scores, 68 aliases and three comparison rows). [Approval evidence](docs/reports/aa-rebaseline-2026-11-19-v2.md) · [Shipped chains](routing.yaml).
+
+Historical 0.63.0 baseline:
 
 Default lane assignments follow the Artificial Analysis Intelligence Index
 v5.0.1 snapshot `aa-v5.0.1-2026-11-13-v2` (approved by the operator on
