@@ -81,18 +81,62 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(two.returncode, 0, two.stderr.decode())
         self.assertEqual(one.stdout, two.stdout)
         self.assertEqual(before, {f: sha256(f.read_bytes()) for f in before})
-        projected = json.loads(one.stdout)
         evidence = json.loads(companion.read_bytes())
-        self.assertEqual(projected["schema_version"], 1)
-        self.assertIs(projected["dispatch_eligible"], False)
-        self.assertEqual(projected["companion_sha256"], before[companion])
-        self.assertEqual(projected["scored_configs"], registry["scored_configs"])
-        self.assertEqual(projected["policy"], registry["policy"])
-        self.assertEqual(projected["vendor_claims"], evidence["vendor_claims"])
-        for kind, rows in projected["measurements"].items():
-            self.assertEqual(rows, [row for row in evidence["measurements"] if row["evidence_kind"] == kind])
-            self.assertTrue(rows)
-        self.assertIsNone(projected["measurements"]["unknown"][0]["value"])
+        expected = {
+            "schema_version": 1,
+            "snapshot_id": registry["snapshot"]["id"],
+            "registry_sha256": evidence["registry_sha256"],
+            "companion_sha256": before[companion],
+            "dispatch_eligible": False,
+            "policy": registry["policy"],
+            "scored_configs": registry["scored_configs"],
+            "measurements": {kind: [r for r in evidence["measurements"] if r["evidence_kind"] == kind]
+                             for kind in ("measured", "estimated", "derived", "unknown")},
+            "vendor_claims": evidence["vendor_claims"],
+        }
+        serialized = json.dumps(expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        self.assertEqual(one.stdout, (serialized + "\n").encode("utf-8"))
+        self.assertTrue(all(expected["measurements"].values()))
+        self.assertIsNone(expected["measurements"]["unknown"][0]["value"])
+
+    def test_conflicting_observation_never_emits_projection(self):
+        companion = json.loads(COMPANION.read_bytes())
+        row = companion["measurements"][0]
+        companion["measurements"].append(dict(row, value=0 if row["value"] else 1))
+        path = write_json(self.directory / "conflict.json", companion)
+        result = run_script(CLI, "--registry", REGISTRY, "--companion", path)
+        self.assertEqual(result.returncode, 2, result.stderr.decode())
+        self.assertEqual(result.stdout, b"")
+        self.assertIn(b"conflicting values", result.stderr)
+
+    def project_source_pair(self, first, second):
+        companion = json.loads(COMPANION.read_bytes())
+        seed = companion["measurements"][0]
+        companion["measurements"] = [
+            dict(seed, source_ref=first, value=0.5),
+            dict(seed, source_ref=second, value=0.75),
+        ]
+        path = write_json(self.directory / "sources.json", companion)
+        return run_script(CLI, "--registry", REGISTRY, "--companion", path)
+
+    def test_https_host_case_conflict(self):
+        result = self.project_source_pair("https://example.org/score", "HTTPS://EXAMPLE.ORG/score")
+        self.assertEqual(result.returncode, 2, result.stderr.decode())
+        self.assertEqual(result.stdout, b"")
+        self.assertIn(b"conflicting values", result.stderr)
+
+    def test_https_default_port_conflict(self):
+        result = self.project_source_pair("https://example.org/score", "https://example.org:443/score")
+        self.assertEqual(result.returncode, 2, result.stderr.decode())
+        self.assertEqual(result.stdout, b"")
+        self.assertIn(b"conflicting values", result.stderr)
+
+    def test_https_path_case_preserves_both_original_sources(self):
+        sources = ["HTTPS://EXAMPLE.ORG:443/score?Q=A#Model", "https://example.org/Score?Q=A#Model"]
+        result = self.project_source_pair(*sources)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        rows = json.loads(result.stdout)["measurements"]["measured"]
+        self.assertEqual([row["source_ref"] for row in rows], sources)
 
     def test_explicit_companion_for_unmodified_registry(self):
         result = run_script(CLI, "--registry", REGISTRY, "--companion", COMPANION)

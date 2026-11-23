@@ -44,6 +44,7 @@ VENDOR_DOMAINS = {
 MEASUREMENT_FIELDS = {
     "lane", "measure_id", "value", "unit", "observed_at", "source_ref", "evidence_kind", "missing_reason",
 }
+OBSERVATION_KEY_FIELDS = ("lane", "measure_id", "config_id", "observed_at", "source_ref", "evidence_kind")
 CLAIM_FIELDS = {
     "vendor", "product", "effort", "summary", "official_url", "verified_at", "surface",
     "plan", "region", "limitations",
@@ -123,6 +124,18 @@ def _source(value, field):
         relative_path(path, field)
         if separator and not fragment:
             raise ValueError(f"{field}: empty source fragment")
+
+
+def _observation_key(row):
+    fields = {name: row.get(name) for name in OBSERVATION_KEY_FIELDS}
+    source = fields["source_ref"]
+    if "://" in source:
+        # Validation permits only HTTPS and its default port. Keep the raw suffix,
+        # including empty query or fragment delimiters, and leave the input row intact.
+        parsed = urlsplit(source)
+        suffix = source[len("https://") + len(parsed.netloc):]
+        fields["source_ref"] = f"https://{parsed.hostname}{suffix}"
+    return tuple(fields.values())
 
 
 def _measurement(row, field, config_ids):
@@ -252,7 +265,18 @@ def validate_companion(companion: dict, registry: dict) -> None:
         raise ValueError("companion.registry_sha256: does not match registry payload")
     _array(companion["measurements"], "companion.measurements")
     _array(companion["vendor_claims"], "companion.vendor_claims")
+    observations = {}
     for index, row in enumerate(companion["measurements"]):
-        _measurement(row, f"companion.measurements[{index}]", config_ids)
+        field = f"companion.measurements[{index}]"
+        _measurement(row, field, config_ids)
+        key = _observation_key(row)
+        if key in observations:
+            identity = ", ".join(f"{name}={value!r}" for name, value in zip(OBSERVATION_KEY_FIELDS, key))
+            previous = observations[key]
+            if previous != row["value"]:
+                raise ValueError(f"{field}.value: conflicting values for observation ({identity}): "
+                                 f"{previous!r} and {row['value']!r}")
+            raise ValueError(f"{field}: duplicate observation ({identity})")
+        observations[key] = row["value"]
     for index, row in enumerate(companion["vendor_claims"]):
         _claim(row, f"companion.vendor_claims[{index}]")

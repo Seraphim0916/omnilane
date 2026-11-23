@@ -73,6 +73,32 @@ class MetadataTests(unittest.TestCase):
         metadata.validate_companion(self.companion, self.registry)
         self.assertEqual(self.companion, original)
 
+    def test_conflicting_values_report_the_observation_and_both_values(self):
+        self.companion["measurements"].append(dict(self.row, value=0.75))
+        with self.assertRaises(ValueError) as caught:
+            metadata.validate_companion(self.companion, self.registry)
+        message = str(caught.exception)
+        for text in ("companion.measurements[1].value", "conflicting values", "0.25", "0.75",
+                     "hardest-coding", "scicode", "codex/model", "2024-02-29",
+                     "docs/extract.json#/records/model/scicode", "measured"):
+            self.assertIn(text, message)
+
+    def test_exact_duplicate_is_rejected_even_for_unknown_values(self):
+        for row in (self.row, dict(self.row, evidence_kind="unknown", value=None,
+                                   missing_reason="Unpublished")):
+            with self.subTest(kind=row["evidence_kind"]):
+                self.companion["measurements"] = [row, row.copy()]
+                with self.assertRaisesRegex(ValueError, r"measurements\[1\]: duplicate observation"):
+                    metadata.validate_companion(self.companion, self.registry)
+
+    def test_each_observation_key_field_distinguishes_measurements(self):
+        for field, other in (("lane", "coding"), ("measure_id", "gpqa"), ("config_id", None),
+                             ("observed_at", "2024-03-01"), ("source_ref", "docs/other.json"),
+                             ("evidence_kind", "estimated")):
+            with self.subTest(field=field):
+                self.companion["measurements"] = [self.row, dict(self.row, value=0.75, **{field: other})]
+                metadata.validate_companion(self.companion, self.registry)
+
     def test_invalid_measurements_name_the_rejected_field(self):
         cases = (
             ("evidence_kind", "vendor-claim"),
