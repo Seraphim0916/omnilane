@@ -123,8 +123,34 @@ jobs:
           python -m unittest -v tests.test_ui.FrontendBrowserBehaviorTests 2>&1 | tee "$log"
           python -c 'import pathlib, re, sys; s = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"); blocks = re.findall(r"^Ran (\d+) tests? in [0-9.]+s\r?\n\r?\n([^\r\n]+)$", s, re.M); assert blocks, f"missing unittest summary block:\n{s}"; count, status = blocks[-1]; assert int(count) > 0 and status == "OK" and "skipped=" not in status, f"expected >=1 unskipped browser tests, got count={count} status={status!r}:\n{s}"' "$log"
 
-  # Both hosts that run omnilane are macOS; this job runs the behaviour checks on macOS (BSD tools).
+  # Both hosts that run omnilane are macOS. Keep the existing check name as
+  # the gate while Python and shell checks run on separate macOS runners.
   macos-behavior:
+    runs-on: ubuntu-24.04
+    needs: [macos-python, macos-shell]
+    if: always()
+    steps:
+      - name: require both macOS suites to pass
+        env:
+          PYTHON_RESULT: ${{ needs.macos-python.result }}
+          SHELL_RESULT: ${{ needs.macos-shell.result }}
+        run: |
+          printf 'macos-python=%s macos-shell=%s\n' "$PYTHON_RESULT" "$SHELL_RESULT"
+          test "$PYTHON_RESULT" = success && test "$SHELL_RESULT" = success
+
+  macos-python:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: set up Python 3.9
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.9"
+      - name: Python unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py'
+
+  macos-shell:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -165,10 +191,8 @@ jobs:
           fi
           python -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["strict"]' \
             < "$acceptance/doctor.json"
-      - name: Python unit tests
-        run: python -m unittest discover -s tests -p 'test_*.py'
       - name: shell unit tests
-        # Report shell results even when Python unit tests failed; skip on cancel.
+        # Report shell results even if an earlier smoke check failed; skip on cancel.
         if: success() || failure()
         run: |
           OMNILANE_DEPTH=1 OMNILANE_TIMEOUT=1800 OMNILANE_TIMEOUT_PROBE=99 \
