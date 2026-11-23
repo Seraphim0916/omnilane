@@ -1045,7 +1045,6 @@ AA `aa-v4.3.2-2026-10-27-v1`: **approved on 2026-10-27** (by the controller, act
 AA `aa-v4.3.2-2026-10-08-v1`: **approved by the operator on 2026-10-08**; Haiku 5.5's `claude-haiku-5-5` ID and five effort levels were officially confirmed on 2026-10-08; host transport probes are still pending. [Evidence](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
 AA snapshot `aa-v5.0.1-2026-11-19-v2` is `approved`. Each host needs transport proof before it can use Neon. Hydrogen XHigh and Neon XHigh are comparison-only and not dispatchable; their historical scores are retained. The `gemini-pro-orchestrator-neon` selector appears in the menu but has no AA score for model-initiated dispatch.
-
 The table uses the shipped 0.63.5 chains in [routing.yaml](routing.yaml), not the historical snapshots above.
 
 | Lane | First choice | Backup | When |
@@ -1524,7 +1523,7 @@ keeps exit 142, reported as `CALL_TIMEOUT`; `jobs.sh stats` includes it in both
 `failed` and the `call_timed_out` sub-count. Read the answer and use
 `jobs close ID` promptly, or use `--single-shot` for one-shot background work.
 
-A live mailbox is a resident background dispatch, not a one-shot dispatch. Claude and Gemini retain their existing automatic live behavior with `--background`. Codex and Grok default to single-shot; opt in with `--background --live` (Grok additionally requires `--mode sysops --workdir DIR`). The foreman can send another instruction while it is running and is responsible for closing it with `jobs.sh close ID`. The idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
+A live mailbox is a resident background dispatch, not a one-shot dispatch. Claude and Gemini retain their existing automatic live behavior with `--background`. Codex and Grok default to single-shot; opt in with `--background --live` (Grok additionally requires `--mode sysops`; the working directory defaults to the current directory, and you can set it with `--workdir DIR`). The foreman can send another instruction while it is running and is responsible for closing it with `jobs.sh close ID`. The idle cap and configured whole-job timeout (`--job-timeout`) can still end it.
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "Review the timeout failure"
@@ -1539,8 +1538,6 @@ scripts/jobs.sh retry "$ID" --background
 Foreground dispatch and foreground `jobs retry` print the stored public output even when the job fails, then return its nonzero exit code. Background dispatch keeps its job-ID output.
 
 `watch` follows `$JOB_DIR/events.jsonl`; `tail` reads the public `out.txt`. Live mailbox support covers Claude, Gemini, Codex, and Grok. Automatic selection remains single-shot for Codex/Grok; only explicit `--live` opts them in. Grok advise rejects `--live` because ACP does not enforce its read-only boundary; normal advise uses single-shot native tool allow/deny rules. `--live` fails fast for unsupported vendors. `--single-shot` forces one-shot execution for every vendor. `--idle-timeout SECONDS` sets the inactivity cap (default 900; `0` disables it).
-
-Grok live jobs also require explicit `--mode sysops --workdir DIR`; neither advise nor work is supported for Grok live.
 
 An idle mailbox makes no API calls and incurs no API spend. By default it closes after 900 seconds without a new inbox message or result event, while the whole-job timeout remains the outer cap. Close it sooner when its exchange is finished. `jobs.sh send` to a finished job or a job that is not live fails with a clear error. Do not use this for fire-and-forget work, vendors without live support, or a clean-slate rerun; start a fresh dispatch (or retry a completed job) instead.
 

@@ -860,7 +860,6 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控依操作者當�
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已於 2026-10-08 核准）**；2026-10-08 已由官方確認 Haiku 5.5 的 `claude-haiku-5-5` 代號與五種強度，仍待主機傳輸探測。[證據](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 AA 快照 `aa-v5.0.1-2026-11-19-v2` 已核准（`approved`）。各主機須先取得傳輸證明才能使用 Neon。Hydrogen XHigh 與 Neon XHigh 僅供比較、不可派工；歷史分數保留。`gemini-pro-orchestrator-neon` 已列入選單，目前沒有可供模型派工的 AA 分數。
-
 下表採用 0.63.5 隨附的 [routing.yaml](routing.yaml) 候選順序，不是上方的歷史快照。
 
 | 通道 | 首選模型 | 備選模型 | 用途 |
@@ -1152,7 +1151,7 @@ codex/claude/grok/gemini 自選 1-4 個評審。開了之後,同一個問題丟�
 
 ### 確認取消或整份工作逾時後的收尾
 
-取消指令結束不代表沒有殘留程序。用 `omnilane jobs --json status JOB_ID` 檢查實際結束碼（通常取消是 143、整份工作逾時是 124）與 `leftovers.remaining`。0 代表監督程序最後一次掃描時沒有殘留；缺值、`unknown` 或非零都不能當成 0。收尾會在兩秒內重新掃描，最後一次 KILL 前會再次核對 PID 與啟動時間。[驗證指令與限制](README.md#verify-cleanup-after-cancellation-or-whole-job-timeout)。
+取消指令結束不代表沒有殘留行程。用 `omnilane jobs --json status JOB_ID` 檢查實際結束碼（通常取消是 143、整份工作逾時是 124）與 `leftovers.remaining`。0 代表監督行程最後一次掃描時沒有殘留；缺值、`unknown` 或非零都不能當成 0。收尾會在兩秒內重新掃描，最後一次 KILL 前會再次核對 PID 與啟動時間。[驗證指令與限制](README.md#verify-cleanup-after-cancellation-or-whole-job-timeout)。
 
 ## 🎭 模式
 
@@ -1199,7 +1198,7 @@ macOS 上的 Grok work：操作者可以只在 `routing.local.yaml` 加上 `opti
 
 單次呼叫的 `--timeout` 涵蓋整個常駐工作階段，完成一輪不會停止或重設計時。Claude、Gemini 只有在所有已送出輪次都取得供應商 SUCCESS、且有可用輸出時，才將已回答後的逾時視為成功，輸出末尾標示 `closed by per-call timeout after Ns; last turn completed`；Gemini 尾端的取消錯誤不會推翻已完成輪次。仍有未回答輪次時保留結束碼 142，標示 `CALL_TIMEOUT`，`jobs.sh stats` 同時計入 `failed` 與 `call_timed_out`。讀完回答請儘快用 `jobs close ID` 關閉；一次性的背景工作可用 `--single-shot`。
 
-即時信箱是常駐背景派工，不是一次性派工。Claude 與 Gemini 保留 `--background` 自動使用即時信箱的既有行為；Codex 與 Grok 預設維持一次性派工，只有明示 `--background --live` 才啟用，Grok 另須指定 `--mode sysops --workdir DIR`。派工者能補傳指示，並負責用 `jobs.sh close ID` 收尾；閒置上限或設定的整體工作逾時（`--job-timeout`）仍會使工作結束。
+即時信箱是常駐背景派工，不是一次性派工。Claude 與 Gemini 保留 `--background` 自動使用即時信箱的既有行為；Codex 與 Grok 預設維持一次性派工，只有明示 `--background --live` 才啟用。派工者能補傳指示，並負責用 `jobs.sh close ID` 收尾；閒置上限或設定的整體工作逾時（`--job-timeout`）仍會使工作結束。
 
 ```bash
 scripts/dispatch.sh --background --vendor claude hard-judgment "檢查逾時測試失敗的原因"
@@ -1215,7 +1214,7 @@ scripts/jobs.sh retry "$ID" --background
 
 `watch` 追隨 `$JOB_DIR/events.jsonl`；`tail` 讀取公開的 `out.txt`。Claude、Gemini、Codex 與 Grok 都支援即時信箱，但 Codex／Grok 自動選擇時仍是一次性派工，必須明示 `--live`。Grok 的 advise／work 即時請求會在啟動前停止，因為 ACP 未強制這些受限模式的邊界；一般 advise 採用一次性原生工具允許／拒絕規則。供應商不支援 `--live` 時立即失敗。`--single-shot` 對所有供應商強制一次性派工。`--idle-timeout SECONDS` 設定閒置上限，預設 900 秒，設為 `0` 則停用。
 
-Grok 即時工作還需明確指定 `--mode sysops --workdir DIR`；不支援 advise 或 work 即時模式。
+Grok 即時工作需要明確指定 `--mode sysops`。工作目錄預設是目前目錄，也可以用 `--workdir DIR` 指定。
 
 閒置時不會發出 API 呼叫，也不會增加 API 費用。預設若 900 秒內沒有新信箱訊息或新結果事件，工作程序會自動收尾；整體工作逾時仍是外層上限。處理完成可提早執行 `close`。對已結束或不是即時信箱的工作使用 `jobs.sh send`，會明確報錯並失敗。送出後不需追蹤的工作、沒有即時支援的供應商，或必須從乾淨狀態重跑的情況都不適用；請使用新的派工，或在工作完成後使用 `retry`。
 

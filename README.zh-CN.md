@@ -844,7 +844,6 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27 由主控按操作者当�
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（操作者已于 2026-10-08 批准）**；2026-10-08 已由官方确认 Haiku 5.5 的 `claude-haiku-5-5` 代号与五种强度，仍待主机传输探测。[证据](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 AA 快照 `aa-v5.0.1-2026-11-19-v2` 已批准（`approved`）。各主机须先取得传输证明才能使用 Neon。Hydrogen XHigh 与 Neon XHigh 仅供比较、不可派工；历史分数保留。菜单中可以选择 `gemini-pro-orchestrator-neon`，但它没有可供模型调度使用的 AA 分数。
-
 下表使用 0.63.5 随包提供的 [routing.yaml](routing.yaml) 候选顺序，不是上面的历史快照。
 
 | 通道 | 首选模型 | 备选模型 | 用途 |
@@ -1178,9 +1177,9 @@ scripts/jobs.sh retry "$ID" --background
 
 前台派发与前台 `jobs retry` 在作业失败时也会打印已保存的公开输出，再返回该作业的非零退出码。后台派发保留原有 job ID 输出。
 
-`watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 还要求 `--mode sysops --workdir DIR`，advise／work 的实时请求在启动前停止，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
+`watch` 跟随 `$JOB_DIR/events.jsonl`；`tail` 读取 `out.txt`。Claude 和 Gemini 保留受支持模式的后台自动实时行为。Codex／Grok 默认一次性，必须显式 `--background --live`；Grok 的 advise／work 实时请求会在启动前被拒绝，因为 ACP 不强制这些模式的边界。不支持实时模式的供应商立即失败。`--single-shot` 强制一次性执行。`--idle-timeout SECONDS` 默认 900 秒，`0` 禁用空闲上限。
 
-Grok 实时作业还要显式传入 `--mode sysops --workdir DIR`，不支持 advise 或 work 实时模式。
+Grok 实时作业要求显式传入 `--mode sysops`；工作目录默认是当前目录，也可以通过 `--workdir DIR` 指定。
 
 空闲时不会发出 API 调用，也不会产生 API 费用。默认若 900 秒内没有新邮箱消息或新结果事件，worker 会自动收尾；整个作业超时仍是外层上限。处理结束可提前执行 `close`。向已结束或不是实时邮箱的作业执行 `jobs.sh send` 会明确报错并失败。即发即忘的工作、没有实时支持的供应商，或需要从干净状态重新运行的情况都不适用；请新建一次派发，或在作业完成后使用 `retry`。
 

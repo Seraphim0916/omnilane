@@ -53,9 +53,10 @@ Split the work into subtasks; give each one lane. `omnilane list` shows the live
 table (local overrides win). Value lanes start with measurement-based picks and
 then keep additional fallbacks; purpose-ordered lanes such as `consult` have a
 different ordering. Dispatch checks local availability, transport proof, the
-requested mode and your score ceiling before choosing an eligible candidate. When a task fits two lanes, pick by what failure
-costs: unknown root cause or correctness-critical → `hardest-coding`; a change you
-could specify line by line → `bulk-mechanical`.
+requested mode and your score ceiling before choosing an eligible candidate.
+When a task fits two lanes, pick by what failure costs: unknown root cause or
+correctness-critical → `hardest-coding`; a change you could specify line by
+line → `bulk-mechanical`.
 
 The table below describes lane purposes. `omnilane list` prints an option line
 and one availability-based result per lane, such as
@@ -151,7 +152,7 @@ Useful flags:
 | `--job-timeout N` | one fuse over the whole dispatch incl. lock wait, retries, voters; off by default, 7200–14400 for full-repo audits, expiry returns 124 |
 | `--thread NAME` | later dispatches must keep earlier context; a thread pins vendor, model, effort and workdir (`omnilane jobs threads`, `threads show NAME`, `threads rm NAME`) |
 | `--vendor V [--model M] [--effort E]` | an explicit target; still subject to your ceiling |
-| `--live` | require a resident session; only with `--background`. Grok live also requires explicit `--mode sysops --workdir DIR`; never switch out of advise/work just to make a live request run. |
+| `--live` | require a resident session; only with `--background`. Grok live also requires explicit `--mode sysops` (current directory by default; override with `--workdir DIR`); never switch out of advise/work just to make a live request run. |
 | `--single-shot` | one-shot background job; use this with `jobs wait` when no follow-up is needed. Mutually exclusive with `--live`. |
 | `--idle-timeout SECONDS` | resident-session idle cap (default 900; 0 disables) |
 | `--caller-context FILE` | only when you were handed a context as a worker, or for the last-resort fallback in Step 1 |
@@ -468,7 +469,7 @@ refused with exit 1 and the worker PID: end those from the shell or tool call th
 started them, not with `kill` on a process group);
 `send JOB_ID "<text>"` and `close JOB_ID` for a live session (Claude and Gemini
 background jobs stay resident; Codex and Grok are single-shot unless `--live`,
-and Grok live needs explicit `--mode sysops --workdir DIR`); `retry JOB_ID --caller-context FILE` (keeps
+and Grok live needs explicit `--mode sysops`, with the current directory as the default workdir); `retry JOB_ID --caller-context FILE` (keeps
 the original target and never inherits an earlier human exemption);
 `recommend`, `stats`, `audit` (read-only, never change routing);
 `prune [--keep N] [--older-than DAYS] [--apply]` (preview unless explicitly applied).

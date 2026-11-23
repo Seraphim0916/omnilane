@@ -894,7 +894,6 @@ AA `aa-v4.3.2-2026-10-27-v1`: **approved (2026-10-27, 새 모델을 넣으라는
 AA `aa-v4.3.2-2026-10-08-v1`: **approved (2026-10-08 운영자 승인)**. Haiku 5.5의 `claude-haiku-5-5` ID와 다섯 effort 단계는 2026-10-08에 공식 확인되었습니다. 호스트 전송 검증은 여전히 필요합니다. [근거](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md).
 
 AA 스냅샷 `aa-v5.0.1-2026-11-19-v2`의 상태는 승인됨(`approved`)입니다. 각 호스트에서 전송을 검증한 뒤 Neon을 사용할 수 있습니다. Hydrogen XHigh와 Neon XHigh는 비교 전용이며 디스패치할 수 없습니다. 과거 점수는 유지됩니다. `gemini-pro-orchestrator-neon`은 메뉴에 표시되지만 모델이 작업을 위임할 때 사용할 AA 점수는 없습니다.
-
 표에는 위의 과거 스냅샷이 아니라 0.63.5에 포함된 [routing.yaml](routing.yaml)의 후보 순서가 나옵니다.
 
 | 레인 | 1순위 모델 | 백업 | 용도 |
@@ -1240,9 +1239,9 @@ scripts/jobs.sh retry "$ID" --background
 
 포그라운드 dispatch와 `jobs retry`는 작업이 실패해도 저장된 공개 출력을 표시한 뒤 해당 작업의 0이 아닌 종료 코드를 반환합니다. 백그라운드 dispatch는 기존처럼 작업 ID를 출력합니다.
 
-`watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. Grok 은 추가로 `--mode sysops --workdir DIR` 가 필요합니다. ACP 가 제한 모드 경계를 강제하지 않으므로 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
+`watch` 는 `$JOB_DIR/events.jsonl` 을 따라가고 `tail` 은 `out.txt` 를 읽습니다. Claude 와 Gemini 는 지원 모드에서 기존 자동 라이브 동작을 유지합니다. Codex／Grok 은 기본적으로 단발 실행이며 `--background --live` 를 명시해야 합니다. ACP가 제한 모드 경계를 강제하지 않으므로 Grok의 advise／work 라이브 요청은 시작 전에 중단됩니다. 미지원 벤더의 라이브 요청은 즉시 실패합니다. `--single-shot` 은 단발 실행을 강제합니다. `--idle-timeout SECONDS` 의 기본값은 900초이며 `0` 은 유휴 상한을 비활성화합니다.
 
-Grok 라이브 작업에는 명시적으로 `--mode sysops --workdir DIR`도 필요합니다. Grok 라이브에서는 advise와 work를 지원하지 않습니다.
+Grok 라이브에는 명시적인 `--mode sysops`가 필요합니다. 작업 디렉터리는 기본적으로 현재 디렉터리이며 `--workdir DIR`로 지정할 수 있습니다.
 
 유휴 상태에서는 API 호출이나 비용이 발생하지 않습니다. 기본적으로 새 수신 메시지나 결과 이벤트가 900초 동안 없으면 worker가 자동으로 종료되며, 전체 작업 시간 제한은 바깥쪽 상한으로 유지됩니다. 대화가 끝나면 더 일찍 `close`할 수 있습니다. 끝났거나 라이브가 아닌 작업에 `jobs.sh send`를 실행하면 명확한 오류와 함께 실패합니다. 보낸 뒤 추적하지 않을 작업, 라이브 지원이 없는 벤더, 깨끗한 상태에서 다시 실행해야 하는 경우에는 쓰지 말고 새 dispatch 또는 완료 뒤 `retry`를 사용하세요.
 

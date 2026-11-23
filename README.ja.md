@@ -900,7 +900,6 @@ AA `aa-v4.3.2-2026-10-27-v1`：**approved（2026-10-27、新モデルを取り�
 AA `aa-v4.3.2-2026-10-08-v1`：**approved（2026-10-08 に操作者が承認済み）**。Haiku 5.5 の `claude-haiku-5-5` ID と五段階の effort は 2026-10-08 に公式確認済み。ホストのトランスポート検証は引き続き必要です。[証拠](docs/reports/aa-haiku-5-5-evidence-2026-10-08.md)。
 
 AA スナップショット `aa-v5.0.1-2026-11-19-v2` は承認済み（`approved`）です。Neon を使うにはホストごとに通信の検証が必要です。Hydrogen XHigh と Neon XHigh は比較専用で、派遣対象外です。過去のスコアは保持します。`gemini-pro-orchestrator-neon` はメニューに表示されますが、モデルからの委任に使える AA スコアはありません。
-
 表は上の過去のスナップショットではなく、0.63.5 の [routing.yaml](routing.yaml) に同梱されたチェーンを示します。
 
 | レーン | 第一候補 | バックアップ | 用途 |
@@ -1256,9 +1255,9 @@ scripts/jobs.sh retry "$ID" --background
 
 フォアグラウンドのディスパッチと `jobs retry` は、ジョブが失敗した場合も保存済みの公開出力を表示し、その非ゼロ終了コードを返します。バックグラウンドのディスパッチは従来どおりジョブ ID を出力します。
 
-`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。Grok はさらに `--mode sysops --workdir DIR` が必要で、ACP が制限モードの境界を強制しないため advise／work のライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
+`watch` は `$JOB_DIR/events.jsonl` を追跡し、`tail` は `out.txt` を読みます。Claude と Gemini は対応モードで既存の自動ライブ動作を維持します。Codex／Grok は既定で単発となり、`--background --live` の明示指定が必要です。ACP が制限モードの境界を強制しないため、Grok の advise／work ライブ要求は起動前に停止します。非対応ベンダーへのライブ要求は即時失敗します。`--single-shot` は単発実行を強制します。`--idle-timeout SECONDS` の既定値は 900 秒で、`0` でアイドル上限を無効化します。
 
-Grok のライブジョブには明示的な `--mode sysops --workdir DIR` も必要です。Grok のライブでは advise と work は使えません。
+Grok のライブには明示的な `--mode sysops` が必要です。作業ディレクトリの既定値は現在のディレクトリで、`--workdir DIR` で指定できます。
 
 アイドル中は API 呼び出しも料金も発生しません。既定では、新しい受信メッセージまたは結果イベントが 900 秒間なければ worker が自動で終了し、ジョブ全体タイムアウトは外側の上限として残ります。やり取りが終わったら早めに `close` できます。終了済み、またはライブでないジョブへの `jobs.sh send` は明確なエラーで失敗します。送った後に追跡しない作業、ライブ対応していないベンダー、クリーンな状態からの再実行が必要な場合には使わず、新しいディスパッチ（または完了後の `retry`）を使ってください。
 
