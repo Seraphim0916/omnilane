@@ -1805,6 +1805,11 @@ print(path)
       invalid|removed) die 1 "$JOB_STATE_REASON" ;;
     esac
     rc="$JOB_STATE_EXIT"
+    if [[ "$rc" -eq 137 || "$rc" -eq 143 ]]; then
+      [[ "$JSON_MODE" -eq 1 ]] || print_isolation_notice
+      python3 -I "$OMNILANE_REPO/scripts/lib/cancel_output.py" "$OMNILANE_HOME" "$2" "$rc" "$JSON_MODE" || true
+      exit "$rc"
+    fi
     if [[ "$JSON_MODE" -eq 1 ]]; then
       output_available=false
       stderr_available=false
