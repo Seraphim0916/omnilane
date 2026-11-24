@@ -1727,6 +1727,17 @@ Damaged evidence diagnostics name the affected path and explain restoration
 from a known-good backup or explicit fresh probing into a new directory.
 A provider quota refusal will not clear until that quota does.
 
+A `WARN transport-unproven` row means the local overlay lacks valid transport
+proof for that model and effort. It can appear alongside `PASS transport-overlay`
+and a zero exit status from ordinary `doctor`. In strict mode, any warning makes
+`doctor --strict` exit 1, even when the JSON summary reports zero failed checks.
+Use `omnilane doctor --json` to find the row by `config_id` and check its
+`failure_class`, `reason`, and `last_probe_at`. A missing value means there is
+no recorded value to rely on. A clean summary or a listed candidate does not
+authorize dispatch. For a refused dispatch, compare its `failed_gate` and
+`code` with the row, and ask the host operator to handle live probes, retries,
+or signing.
+
 `invalid-policy-input` with "transport contract evidence changed" — neither of
 the above. The overlay itself will not load, so *every* vendor is refused. The
 usual cause is a vendor CLI upgrade: the overlay pins each vendor's executable
