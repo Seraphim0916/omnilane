@@ -4761,28 +4761,73 @@ test_install_check_read_only
 
 test_doctor_goal_orchestrator_check() {
   local name="doctor checks goal orchestrator syntax and store permissions"
-  local home="$TEST_ROOT/doctor-goal-home"
-  local repo="$TEST_ROOT/doctor-goal-repo"
-  local out rc=0
+  local store format home goals level message out rc row mode before after
+  local -a options
 
-  mkdir -p "$repo/scripts/lib" "$home/goals"
-  chmod 700 "$home/goals"
-  cat > "$repo/scripts/dispatch.sh" <<'EOF'
-#!/usr/bin/env bash
-printf 'triage: exec /bin/true -\n'
-EOF
-  chmod +x "$repo/scripts/dispatch.sh"
-  printf 'triage: exec /bin/true -\n' > "$repo/routing.yaml"
-  printf '#!/usr/bin/env bash\ntrue\n' > "$repo/scripts/lib/goal-loop.sh"
+  for store in absent 0700 0755; do
+    level=PASS
+    case "$store" in
+      absent) message="goal-loop.sh parses; goals store is not present yet" ;;
+      0700) message="goal-loop.sh parses; goals store mode is 700" ;;
+      0755)
+        level=WARN
+        message="goal-loop.sh parses; goals store mode is 755, owner-only 700 is safer"
+        ;;
+    esac
+    for format in text json; do
+      home="$TEST_ROOT/doctor-goal-$store-$format"
+      goals="$home/.omnilane/goals"
+      mkdir -p "$home/.omnilane"
+      before=absent
+      if [[ "$store" != absent ]]; then
+        if ! mkdir "$goals" || ! chmod "$store" "$goals" || ! mode="$(file_mode "$goals")"; then
+          fail "$name" "$store/$format: could not prepare the goals fixture"; return
+        fi
+        before="0${mode#0}"
+      fi
+      if [[ "$before" != "$store" || ( "$store" == absent && ( -e "$goals" || -L "$goals" ) ) ]]; then
+        fail "$name" "$store/$format: unexpected goals fixture state ($before)"; return
+      fi
 
-  out="$(HOME="$home" OMNILANE_HOME="$home" OMNILANE_DOCTOR_REPO="$repo" \
-    /bin/bash "$ROOT/scripts/doctor.sh" --json 2>&1)" || rc=$?
-  if [[ "$rc" -ne 0 || "$out" != *'"check":"goal-orchestrator"'* ||
-        "$out" != *'"check":"goal-orchestrator","message":"goal-loop.sh parses; goals store mode is 700"'* ]]; then
-    fail "$name" "goal orchestrator doctor check missing: rc=$rc out=$out"
-  else
-    pass "$name"
-  fi
+      options=()
+      if [[ "$format" == json ]]; then options=(--json); fi
+      rc=0
+      out="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$ROOT" \
+        PATH="$OMNILANE_TEST_UTIL_PATH" /bin/bash "$ROOT/bin/omnilane" doctor ${options[@]+"${options[@]}"} 2>&1)" || rc=$?
+
+      after=absent
+      if [[ -d "$goals" && ! -L "$goals" ]]; then
+        mode="$(file_mode "$goals")" || { fail "$name" "$store/$format: could not read goals mode"; return; }
+        after="0${mode#0}"
+      elif [[ -e "$goals" || -L "$goals" ]]; then
+        after=not-a-real-directory
+      fi
+      if [[ "$before" != "$after" ]]; then
+        fail "$name" "$store/$format: doctor changed goals state ($before -> $after)"; return
+      fi
+
+      if [[ "$format" == json ]]; then
+        row="$(printf '%s\n' "$out" | python3 -c '
+import json, sys
+rows = [r for r in json.load(sys.stdin)["checks"] if r["check"] == "goal-orchestrator"]
+for row in rows:
+    print(row["level"], row["check"], row["message"])
+')" || { fail "$name" "$store/$format: invalid doctor JSON: $out"; return; }
+      else
+        row="$(printf '%s\n' "$out" | awk '$2 == "goal-orchestrator" {$1=$1; print}')"
+      fi
+      # stat can print the permission digits with or without an initial zero.
+      row="${row/ mode is 0/ mode is }"
+      if [[ "$row" != "$level goal-orchestrator $message" ]]; then
+        fail "$name" "$store/$format: expected $level goal-orchestrator $message; got: $row"; return
+      fi
+      # Ordinary doctor tolerates warnings from this row and from other checks.
+      if [[ "$rc" -ne 0 ]]; then
+        fail "$name" "$store/$format: expected ordinary doctor exit 0; got $rc: $out"; return
+      fi
+    done
+  done
+  pass "$name"
 }
 test_doctor_goal_orchestrator_check
 
