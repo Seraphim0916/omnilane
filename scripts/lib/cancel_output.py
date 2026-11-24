@@ -23,7 +23,7 @@ DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 
 
 @contextmanager
-def regular_at(directory, name):
+def regular_at(directory, name, *, allow_hardlinks=False):
     if directory is None:
         yield None
         return
@@ -34,7 +34,7 @@ def regular_at(directory, name):
         return
     try:
         info = os.fstat(fd)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        if not stat.S_ISREG(info.st_mode) or (not allow_hardlinks and info.st_nlink != 1):
             yield None
             return
         with os.fdopen(fd, "rb", closefd=False) as stream:
@@ -170,7 +170,9 @@ def render(home, job_id, code, json_mode):
             stack.callback(os.close, root)
         jobs = subdir(stack, root, "jobs")
         job = subdir(stack, jobs, job_id)
-        formal = stack.enter_context(regular_at(job, "out.txt"))
+        # The legacy result reader accepts hardlinked formal output. Keep that
+        # behavior for out.txt only, not for staging or provenance inputs.
+        formal = stack.enter_context(regular_at(job, "out.txt", allow_hardlinks=True))
         err = stack.enter_context(regular_at(job, "out.txt.stderr.log"))
         stderr_available = err is not None and os.fstat(err.fileno()).st_size > 0
         inbox = None

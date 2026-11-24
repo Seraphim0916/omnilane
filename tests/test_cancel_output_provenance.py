@@ -172,6 +172,15 @@ class CancelOutputProvenanceTests(unittest.TestCase):
         self.check(143, "partial", "out.txt.tmp", b"?[2J?" + b"x" * (8192 - 5), truncated=True)
         self.assertIn(b"temporary preview, truncated", self.cli().stderr)
 
+    def test_hardlinked_formal_output_keeps_legacy_body_and_availability(self):
+        self.exit(137)
+        answer = b"published answer with a second name\n"
+        output = self.job / "out.txt"
+        self.put(output, answer, START + 3)
+        os.link(output, self.job / "output-copy")
+        self.assertEqual(output.stat().st_nlink, 2)
+        self.check(137, "unknown", "out.txt", answer, formal=True)
+
     def test_formal_bytes_and_stderr_are_preserved_and_take_precedence(self):
         self.exit(137)
         data = bytes(range(256)) * 100
