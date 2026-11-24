@@ -173,6 +173,59 @@ class ShellIsolationTests(unittest.TestCase):
         self.assertFalse(self.marker.exists())
         self.assertFalse(self.overlay_marker.exists())
 
+    def test_doctor_reports_optional_ui_unavailable_without_python3(self):
+        warning = "python3 is absent; the optional UI is unavailable"
+        settings = json.dumps({
+            "enabledPlugins": {"omnilane@omnilane": True},
+            "extraKnownMarketplaces": {
+                "omnilane": {"source": {"source": "directory", "path": str(ROOT)}},
+            },
+        })
+        # Only remove the launcher's private Python symlinks, not the Python
+        # that runs this test. The two fake vendors satisfy availability checks
+        # without invoking a provider and keep live-ui the only warning.
+        script = r"""
+set -eu
+repo=$1; bins=$2; settings=$3; shift 3
+rm -- "$OMNILANE_TEST_UTIL_PATH/python" "$OMNILANE_TEST_UTIL_PATH/python3"
+if command -v python3 >/dev/null 2>&1; then exit 99; fi
+mkdir -m 700 "$HOME/.omnilane/jobs"
+mkdir "$HOME/.claude" "$HOME/fixture-bin"
+printf '%s\n' "$settings" > "$HOME/.claude/settings.json"
+ln -s "$bins/claude" "$bins/agy" "$HOME/fixture-bin/"
+export PATH="$HOME/fixture-bin:$PATH"
+exec /bin/bash "$repo/bin/omnilane" doctor "$@"
+"""
+        for strict in (False, True):
+            for structured in (False, True):
+                with self.subTest(strict=strict, json=structured):
+                    options = (["--json"] if structured else []) + (["--strict"] if strict else [])
+                    result = self.run_isolated([
+                        "/bin/bash", "-c", script, "fixture", str(ROOT), str(self.bins), settings,
+                        *options,
+                    ])
+                    self.assertEqual(result.returncode, int(strict), result.stdout + result.stderr)
+                    self.assertEqual(result.stderr, "")
+                    if structured:
+                        report = json.loads(result.stdout)
+                        self.assertEqual(
+                            [row for row in report["checks"] if row["level"] != "PASS"],
+                            [{"level": "WARN", "check": "live-ui", "message": warning}],
+                        )
+                        self.assertEqual(report["summary"]["failed"], 0)
+                        self.assertEqual(report["summary"]["warnings"], 1)
+                        self.assertIs(report["strict"], strict)
+                        self.assertIs(report["ok"], not strict)
+                    else:
+                        self.assertEqual(
+                            [" ".join(line.split()) for line in result.stdout.splitlines()
+                             if line.startswith(("WARN ", "FAIL "))],
+                            [f"WARN live-ui {warning}"],
+                        )
+                    self.assertFalse(self.marker.exists())
+                    self.assertFalse(self.overlay_marker.exists())
+
+
     def test_child_environment_excludes_host_configuration_and_secrets(self):
         result = self.run_isolated(["python3", "-c", "import os,json; print(json.dumps(dict(os.environ)))"])
         self.assertEqual(result.returncode, 0, result.stderr)

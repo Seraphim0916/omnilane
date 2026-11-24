@@ -519,7 +519,7 @@ if command -v python3 >/dev/null 2>&1; then
     report WARN live-ui "Python 3.9 or newer is required for the optional UI"
   fi
 else
-  report WARN live-ui "python3 is absent; model routing still works"
+  report WARN live-ui "python3 is absent; the optional UI is unavailable"
 fi
 
 if [[ "$JSON_MODE" -eq 1 ]]; then
