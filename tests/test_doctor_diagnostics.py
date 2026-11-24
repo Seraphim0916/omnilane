@@ -1,13 +1,68 @@
-"""Offline end-to-end diagnostics reached from a refused dispatch."""
+"""Offline end-to-end doctor diagnostics."""
 
-import offline_env  # noqa: F401
+import offline_env
 import json
 import os
+from pathlib import Path
+import re
 import shlex
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 from test_probe_retry import RetryFixture, ROOT
+
+
+class DoctorRoutingTests(unittest.TestCase):
+    def test_routing_distinguishes_unusable_lanes_from_an_empty_list(self):
+        cases = (
+            ("unusable", "disabled: off\nmissing: exec {home}/missing.sh\n",
+             [("disabled", "off"), ("missing", "unavailable")],
+             "WARN", "2 lanes parsed, but none is currently usable", 0),
+            ("empty", "# No lanes\n", [], "FAIL", "effective routing is empty", 1),
+        )
+        for name, routing, listed_lanes, level, message, exit_code in cases:
+            with self.subTest(case=name):
+                temporary = tempfile.TemporaryDirectory(prefix="omnilane-doctor-routing-")
+                self.addCleanup(temporary.cleanup)
+                env, network_log = offline_env.isolated_environment(Path(temporary.name), "")
+                self.addCleanup(lambda log=network_log: self.assertFalse(
+                    log.exists(), "doctor or list attempted an unmocked network command"))
+                home = Path(env["HOME"])
+                # Copy the entrypoint and its support files unchanged. Only the
+                # fixture's routing table varies; dispatch --list is not stubbed.
+                repo = home / "repo"
+                for directory in ("bin", "scripts", "config", "hooks"):
+                    shutil.copytree(ROOT / directory, repo / directory)
+                (repo / "routing.yaml").write_text(routing.format(home=home), encoding="utf-8")
+                command = ["/bin/bash", str(repo / "bin" / "omnilane")]
+                listed = subprocess.run([*command, "list"], cwd=repo, env=env,
+                                        text=True, capture_output=True, timeout=45)
+                self.assertEqual(listed.returncode, 0, listed.stdout + listed.stderr)
+                self.assertEqual(
+                    re.findall(r"^([a-z][a-z0-9-]*):[ \t]+(\S+)", listed.stdout, re.MULTILINE),
+                    listed_lanes,
+                )
+
+                for options in ((), ("--json",)):
+                    with self.subTest(options=options):
+                        result = subprocess.run([*command, "doctor", *options], cwd=repo, env=env,
+                                                text=True, capture_output=True, timeout=45)
+                        if options:
+                            report = json.loads(result.stdout)
+                            self.assertEqual(
+                                [row for row in report["checks"] if row["check"] == "routing"],
+                                [{"level": level, "check": "routing", "message": message}],
+                            )
+                            self.assertIs(report["ok"], exit_code == 0)
+                        else:
+                            self.assertEqual(
+                                re.findall(r"^(\S+)[ \t]+routing[ \t]+(.+)$",
+                                           result.stdout, re.MULTILINE),
+                                [(level, message)],
+                            )
+                        self.assertEqual(result.returncode, exit_code, result.stdout + result.stderr)
 
 
 class DoctorDiagnosticsTests(RetryFixture, unittest.TestCase):
