@@ -2533,8 +2533,10 @@ EOF
 
 test_doctor_strict_policy() {
   local name="doctor strict warning policy" home repo out json_default json
-  local rc_default rc_json_default rc_strict rc_json
+  local rc_default rc_json_default rc_strict rc_json strict_home strict_json_home
   home="$TEST_ROOT/doctor-strict-home"
+  strict_home="$TEST_ROOT/doctor-strict-text-home"
+  strict_json_home="$TEST_ROOT/doctor-strict-json-home"
   repo="$TEST_ROOT/doctor-strict-repo"
   mkdir -p "$repo/scripts/lib"
   cat > "$repo/scripts/dispatch.sh" <<'EOF'
@@ -2551,12 +2553,25 @@ EOF
   json_default="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor --json 2>&1)"
   rc_json_default=$?
-  HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+  if [[ -e "$strict_home/.omnilane" || -L "$strict_home/.omnilane" ||
+        -e "$strict_json_home/.omnilane" || -L "$strict_json_home/.omnilane" ]]; then
+    fail "$name" "strict fixtures must start without a state path"
+    return
+  fi
+  HOME="$strict_home" OMNILANE_HOME="$strict_home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor --strict > "$TEST_ROOT/doctor-strict.out" 2>&1
   rc_strict=$?
-  json="$(HOME="$home" OMNILANE_HOME="$home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
+  if [[ -e "$strict_home/.omnilane" || -L "$strict_home/.omnilane" ]]; then
+    fail "$name" "strict text doctor created the missing state path"
+    return
+  fi
+  json="$(HOME="$strict_json_home" OMNILANE_HOME="$strict_json_home/.omnilane" OMNILANE_DOCTOR_REPO="$repo" \
     /bin/bash "$ROOT/bin/omnilane" doctor --strict --json 2>&1)"
   rc_json=$?
+  if [[ -e "$strict_json_home/.omnilane" || -L "$strict_json_home/.omnilane" ]]; then
+    fail "$name" "strict JSON doctor created the missing state path"
+    return
+  fi
 
   if [[ "$rc_default" -ne 0 || "$out" != *WARN*state* ]]; then
     fail "$name" "default policy changed: rc=$rc_default out=$out"
